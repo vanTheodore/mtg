@@ -70,7 +70,9 @@ const fps = await page.evaluate(() => new Promise<number>((resolve) => {
 
 const finalMetrics = await page.locator('.metrics').innerText();
 const heap = await page.evaluate(() => (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize);
+const wasmFile = Bun.file('static/wasm/mtg_engine_wasm.wasm');
 const report = {
+  wasm_file_bytes: wasmFile.size,
   environment: { browser: 'Chromium 153 (headless)', viewport: '1440x900', scryfall: 'blocked (deterministic fallback)' },
   startup,
   initial_metrics_text: metricsText,

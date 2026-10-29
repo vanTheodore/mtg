@@ -39,17 +39,25 @@ bun run engine:build    # genera static/wasm/mtg_engine_wasm.wasm
 bun run dev
 ```
 
-En un entorno con toolchain Rust normal y target wasm32 preinstalado:
+`engine:build` usa el target `wasm32-unknown-unknown` preinstalado. Si solo
+ dispones de `rust-src` y necesitas compilar std, usa `ENGINE_BUILD_STD=1`
+ (requiere las dependencias de `library/Cargo.lock` vendorizadas).
 
-```sh
-ENGINE_BUILD_STD=0 bun run engine:build
-```
-
-Por defecto `engine:build` usa `-Z build-std` (requiere `rust-src`) porque el
-sandbox de desarrollo no podía descargar std prebuilt para el mismo nightly.
 El motor upstream usa `if let` guards experimentales; los scripts inyectan
 `feature(if_let_guard)` / `feature(let_chains)` por `RUSTFLAGS` **sin modificar
 el código de reglas**.
+
+Optimización opcional de tamaño con Binaryen (herramienta nativa externa,
+probada con 132; no es dependencia de la app):
+
+```sh
+WASM_OPT=/ruta/a/wasm-opt bun run engine:optimize
+# o integrado en el build:
+WASM_OPT=/ruta/a/wasm-opt ENGINE_OPTIMIZE=1 bun run engine:build
+```
+
+En este repositorio `-O1` redujo el artefacto de ≈46 MiB a ≈40.9 MiB y pasó la
+partida real E2E. `-Oz` puede reducir más, pero es mucho más lento.
 
 ### Verificación
 
@@ -115,3 +123,21 @@ real en `/`.
 Las pruebas e2e verifican anchos 320/375/390/768/1440, recorrido completo de una
 mano de 30 cartas, expansión de fichas, ausencia de desbordamiento horizontal,
 axe-core sin violaciones críticas/serias y una partida real que juega una tierra.
+
+## Rendimiento medido
+
+`bun scripts/measure.ts` (con `bun run dev` activo) escribe
+`docs/performance.json`. En Chromium 153 headless, 1440×900, Scryfall bloqueado
+y WASM optimizado con `wasm-opt -O1`:
+
+- Artefacto WASM: ≈40.9 MiB; compilación ≈220 ms; memoria lineal WASM ≈27.2 MiB.
+- Heap JS usado ≈18 MB; FPS en reposo ≈61.
+- Round-trip de `PassPriority` (UI → Worker → motor → snapshot → UI):
+  mediana ≈55 ms, rango ≈41–63 ms en 10 muestras.
+- Snapshot serializado ≈70 KB para 82 objetos; coste de motor por acción <1 ms
+  en este subconjunto (la serialización y el postMessage dominan).
+
+Limitaciones actuales: catálogo demo de 90 caras, sin base completa de cartas,
+sin IA, sin multijugador red, sin recuperación de partida y con artefacto WASM
+todavía grande. La prioridad es una experiencia real, verificable y accesible
+antes que ampliar cobertura.

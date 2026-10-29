@@ -33,7 +33,7 @@ const args = [
   '--profile', profile,
   '-j', '1'
 ];
-if (process.env.ENGINE_BUILD_STD !== '0') args.push('-Z', 'build-std=core,alloc,std,panic_abort');
+if (process.env.ENGINE_BUILD_STD === '1') args.push('-Z', 'build-std=core,alloc,std,panic_abort');
 if (process.env.CARGO_OFFLINE === '1') args.push('--offline', '--config', '.cargo/offline.toml');
 if (process.env.CARGO_LOCKED === '1') args.push('--locked');
 
@@ -53,3 +53,7 @@ const out = 'static/wasm/mtg_engine_wasm.wasm';
 await Bun.write(out, Bun.file(src));
 const bytes = Bun.file(out).size;
 console.log(`Wrote ${out} (${(bytes / 1024 / 1024).toFixed(2)} MiB)`);
+if (process.env.ENGINE_OPTIMIZE === '1') {
+  const opt = Bun.spawnSync(['bun', 'scripts/optimize-wasm.ts'], { stdout: 'inherit', stderr: 'inherit', env: process.env });
+  if (opt.exitCode !== 0) process.exit(opt.exitCode ?? 1);
+}
