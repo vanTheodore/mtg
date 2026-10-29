@@ -101,3 +101,32 @@ runner), no un resultado de las pruebas. Por eso:
   `bun install --frozen-lockfile`, procedencia, typecheck, unitarias, build,
   compilación WASM fijada, paridad/escenarios nativos y Chromium.
 
+## Adenda 2026-10-29: idioma es-419 y auditoría de dependencias
+
+Cambios verificados en esta sesión (misma rama, sin fusionar):
+
+- `src/app.html` declara `lang="es-419"`; la copia de `DecisionPanel` usa
+  «selecciona» en lugar de «pulsa»; Ajustes muestra el idioma y aclara que los
+  datos de carta llegan en inglés desde Phase.
+- `typeLine` en `src/lib/game/cards.ts` renderiza tipos en español con reserva
+  al inglés: `Criatura legendaria — Humano Mago`, `Tierra básica — Llanura`,
+  `Criatura artefacto — Golem`, `Ficha de criatura — Soldado`.
+- `scripts/deps-audit.ts` + `bun run deps:audit`: 88 paquetes, 10 directos,
+  24 desactualizados, 1 directo (`typescript` 6.0.3 → 7.0.2, retenido).
+
+Ejecutado en este entorno (Bun 1.4.4, `bun install --frozen-lockfile`):
+
+| Comando | Resultado |
+| --- | --- |
+| `bun run check` | 0 errores, 0 advertencias |
+| `bun test src/lib` | 40 pasan, 0 fallan (6 archivos, 105 expectativas) |
+| `bun run build` | OK (`adapter-static`, `build/`) |
+| `bun run deps:audit` | 24 desactualizados, 1 directo |
+
+No ejecutado en este paso: `bun run test:e2e`, `engine:verify`, `engine:parity`
+y `engine:scenarios`. La imagen de este sandbox es Debian 12 sin Chromium ni
+bibliotecas de navegador y sin espejo de paquetes alcanzable, y no hay toolchain
+Rust instalada; los resultados de esas suites siguen siendo los registrados
+arriba para el commit `5289568` y **no se reafirman para este commit**. Las
+pruebas unitarias citadas cubren los cambios de idioma (`locale.test.ts`,
+`cards.test.ts`).

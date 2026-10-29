@@ -25,6 +25,9 @@ Vertical slice jugable local de dos jugadores (hot-seat) con el motor real:
 - Agrupación de fichas, cartas giradas/transformadas/adjuntas.
 - Vista ampliada por ratón y teclado, controles de tamaño/densidad/tema.
 - Paso de asiento seguro: la mano del jugador anterior no se renderiza.
+- Interfaz en **español de Latinoamérica** (`es-419`): copia, decisiones, palabras
+  clave, contadores, estados y línea de tipo en español; los datos de carta del
+  motor siguen en inglés (ver [`docs/LOCALE.md`](docs/LOCALE.md)).
 
 Limitaciones actuales: sin IA, sin multijugador de red, sin recuperación de
 partidas, sin editor de mazos. El catálogo incluido es un subconjunto de demostración
@@ -139,6 +142,14 @@ Principios:
 5. **Datos mínimos**: catálogo de subconjunto (≈123 KB) + metadatos (≈35 KB);
    las imágenes se resuelven bajo demanda por `oracle_id` con deduplicación.
 
+## Dependencias
+
+`bun run deps:audit` compara cada paquete de `bun.lock` con el registro npm.
+Al 2026-10-29: 88 paquetes (10 directos), 24 desactualizados y **1 directo**
+(`typescript` 6.0.3 → 7.0.2, retenido porque el stack fijado es TS 6). El resto
+son transitorios atados al rango de su padre. Detalle en
+[`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md).
+
 ## Procedencia y licencias
 
 - Phase: commit `c2fbb7a6634a440c7c6b47e6a87a554cc7382f05`, MIT OR Apache-2.0.
@@ -158,20 +169,23 @@ real en `/`.
 
 Las pruebas e2e verifican anchos 320/375/390/768/1440, recorrido completo de una
 mano de 30 cartas, expansión de fichas, ausencia de desbordamiento horizontal,
-axe-core sin violaciones críticas/serias y una partida real que juega una tierra.
+axe-core sin violaciones críticas/serias y una partida completa ganada desde los
+controles Svelte (sin llamar al motor desde el test).
 
 ## Rendimiento medido
 
 `bun scripts/measure.ts` (con `bun run dev` activo) escribe
-`docs/performance.json`. En Chromium 153 headless, 1440×900, Scryfall bloqueado
-y WASM optimizado con `wasm-opt -O1`:
+`docs/performance.json`. Última corrida: Chromium 153 headless, 1440×900,
+Scryfall bloqueado, WASM optimizado con `wasm-opt -O1`.
 
-- Artefacto WASM: 42 922 043 B (≈40.93 MiB); compilación ≈361 ms; memoria lineal WASM ≈27.1 MiB.
-- Heap JS usado ≈18.2 MB; FPS en reposo ≈61.
-- Round-trip de `PassPriority` (UI → Worker → motor → snapshot → UI):
-  mediana ≈56 ms, rango ≈35–84 ms en 10 muestras.
-- Snapshot serializado ≈70.6 KB para 82 objetos; coste de motor por acción <1 ms
-  en este subconjunto (la serialización y el postMessage dominan).
+- Artefacto WASM: 43 036 524 B (≈41.04 MiB), SHA-256 `9ef61f91a988…`.
+- Arranque: DOMContentLoaded ≈20.5 ms, carga ≈21.2 ms, heap JS usado ≈16.1 MB.
+- Por acción (12 muestras, mediana): reglas Rust 0.7 ms, acciones legales 2.5 ms,
+  proyección 2.1 ms, serialización 0.8 ms, transporte 5.5 ms, worker 10.5 ms,
+  commit Svelte 3.9 ms, presentación ≈31 ms (proxy de dos frames).
+- Round-trip completo acción → worker → motor → snapshot → UI: mediana 92 ms,
+  p90 93 ms, máximo 106 ms (una muestra incluye el paso de asiento y se reporta).
+- FPS en reposo deliberadamente no medido: no describe ninguna interacción.
 
 Limitaciones actuales: catálogo demo de 90 caras, sin base completa de cartas,
 sin IA, sin multijugador red, sin recuperación de partida y con artefacto WASM
