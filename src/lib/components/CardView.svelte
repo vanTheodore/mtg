@@ -20,7 +20,18 @@
   } = $props();
 
   const hidden = $derived(isHidden(object));
-  const lookup = $derived(cardImageLookup(object));
+  const lookup = $derived.by(() => {
+    const base = cardImageLookup(object);
+    const oracleId = base.oracleId ?? meta?.oracle_id ?? undefined;
+    if (!oracleId) return base;
+    return {
+      ...base,
+      oracleId,
+      // Prefer the engine's stable face index for transformed cards; the
+      // printed face name may still describe the front face.
+      faceName: object.transformed ? undefined : base.faceName ?? meta?.name
+    };
+  });
   let imageUrl = $state<string | null>(null);
   let imageState = $state<'loading' | 'ready' | 'error' | 'none'>('loading');
   let retryToken = $state(0);

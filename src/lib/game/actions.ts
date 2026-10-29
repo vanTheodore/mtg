@@ -37,6 +37,16 @@ export function actionsForObject(byObject: Record<string, GameAction[]>, id: num
   return byObject[String(id)] ?? [];
 }
 
+/** Keep the safest, most common decision visible without scrolling. */
+export function actionPriority(action: GameAction): number {
+  if (action.type === 'PassPriority') return 0;
+  if (action.type === 'MulliganDecision' && action.data?.choice === 'Keep') return 0;
+  if (action.type === 'PlayLand') return 1;
+  if (action.type === 'CastSpell') return 2;
+  if (action.type === 'DeclareAttackers' || action.type === 'DeclareBlockers') return 2;
+  return 3;
+}
+
 export function isPassPriority(action: GameAction): boolean {
   return action.type === 'PassPriority';
 }

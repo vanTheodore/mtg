@@ -1,11 +1,11 @@
 <script lang="ts">
   import { session } from '#lib/game/session.svelte.ts';
-  import { actionsForObject, describeAction } from '#lib/game/actions.ts';
+  import { actionPriority, actionsForObject, describeAction } from '#lib/game/actions.ts';
   import type { GameAction } from '#lib/engine/types.ts';
 
   const snapshot = $derived(session.snapshot);
   const waiting = $derived(snapshot?.state.waiting_for);
-  const actions = $derived(snapshot?.legal.actions ?? []);
+  const actions = $derived([...(snapshot?.legal.actions ?? [])].sort((a, b) => actionPriority(a) - actionPriority(b)));
   const objects = $derived(snapshot?.state.objects ?? {});
   let showAll = $state(false);
   const visible = $derived(showAll ? actions : actions.slice(0, 8));
