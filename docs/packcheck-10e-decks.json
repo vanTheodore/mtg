@@ -1,0 +1,22 @@
+{
+  "player": { "main_deck": [
+    "Plains","Plains","Plains","Plains","Plains","Plains","Plains","Plains","Plains","Plains",
+    "Plains","Plains","Plains","Plains","Plains","Plains","Plains",
+    "Honor Guard","Honor Guard","Soul Warden","Soul Warden","Suntail Hawk",
+    "Youthful Knight","Youthful Knight","Steadfast Guard","Steadfast Guard",
+    "True Believer","True Believer","Benalish Knight","Benalish Knight",
+    "Skyhunter Skirmisher","Skyhunter Skirmisher","Wild Griffin","Wild Griffin",
+    "Aven Cloudchaser","Aven Cloudchaser","Serra Angel","Serra Angel",
+    "Angel of Mercy","Voice of All"
+  ] },
+  "opponent": { "main_deck": [
+    "Plains","Plains","Plains","Plains","Plains","Plains","Plains","Plains","Plains","Plains",
+    "Plains","Plains","Plains","Plains","Plains","Plains","Plains",
+    "Honor Guard","Honor Guard","Soul Warden","Soul Warden","Suntail Hawk",
+    "Youthful Knight","Youthful Knight","Steadfast Guard","Steadfast Guard",
+    "True Believer","True Believer","Benalish Knight","Benalish Knight",
+    "Skyhunter Skirmisher","Skyhunter Skirmisher","Wild Griffin","Wild Griffin",
+    "Aven Cloudchaser","Aven Cloudchaser","Serra Angel","Serra Angel",
+    "Angel of Mercy","Voice of All"
+  ] }
+}

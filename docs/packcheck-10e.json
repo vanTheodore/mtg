@@ -1,0 +1,44 @@
+{
+  "action_kinds": {
+    "ActivateAbility": 115,
+    "CastSpell": 16,
+    "ChooseOption": 1,
+    "DeclareAttackers": 27,
+    "DeclareBlockers": 15,
+    "MulliganDecision": 2,
+    "PassPriority": 866,
+    "PlayLand": 18,
+    "SelectCards": 3
+  },
+  "decks": "docs/packcheck-10e-decks.json",
+  "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
+  "faces": 444,
+  "game_over": {
+    "winner": 1
+  },
+  "library_counts": [
+    0,
+    17
+  ],
+  "loaded": true,
+  "pack": "static/data/catalog/packs/fixture.json,static/data/catalog/packs/10e.json",
+  "requested": {
+    "opponent": 40,
+    "player": 40
+  },
+  "resolved": {
+    "opponent": 40,
+    "player": 40
+  },
+  "seed": 7,
+  "steps": 1063,
+  "timing_ms": {
+    "deck_resolve": 0.3,
+    "engine_start": 160.4,
+    "game": 6454.5,
+    "pack_parse": 77.6,
+    "per_step": 6.072,
+    "total": 6623.2
+  },
+  "unresolved_names": []
+}

@@ -187,6 +187,55 @@ for (const tier of tiers) {
 
 rmSync(workDir, { recursive: true, force: true });
 
+// ── the catalog actually shipped: two real packs, one real deck ──────────────
+// No synthesis here: the bytes are the files in `static/data/catalog/`, the deck
+// is the one the certified game used, and the plan is what the client would run.
+const shippedIndex = JSON.parse(readFileSync('static/data/catalog/index.json', 'utf8')) as CatalogIndex;
+const shippedDeck = JSON.parse(readFileSync('docs/packcheck-10e-decks.json', 'utf8')) as { player: { main_deck: string[] } };
+const shippedPlanSamples: number[] = [];
+let shippedPlan = planLoad(shippedIndex, shippedDeck.player.main_deck);
+for (let i = 0; i < 5; i += 1) {
+  const started = performance.now();
+  shippedPlan = planLoad(shippedIndex, shippedDeck.player.main_deck);
+  shippedPlanSamples.push(performance.now() - started);
+}
+const shippedParseSamples: number[] = [];
+let shippedMergedBytes = 0;
+const shippedMergeSamples: number[] = [];
+for (let i = 0; i < 5; i += 1) {
+  const parseStarted = performance.now();
+  const packs = shippedPlan.required.map((id) =>
+    JSON.parse(readFileSync(join('static/data/catalog/packs', `${id}.json`), 'utf8')) as Catalog);
+  shippedParseSamples.push(performance.now() - parseStarted);
+  const mergeStarted = performance.now();
+  const merged: Catalog = {};
+  for (const pack of packs) for (const [name, entry] of Object.entries(pack)) if (!(name in merged)) merged[name] = entry;
+  shippedMergeSamples.push(performance.now() - mergeStarted);
+  if (i === 0) {
+    const total = shippedPlan.required.reduce((sum, id) => sum + (shippedIndex.packs.find((pack) => pack.id === id)?.bytes ?? 0), 0);
+    console.log(`catálogo real: ${Object.keys(merged).length} cartas · ${(total / 1024).toFixed(0)} KiB en ${shippedPlan.required.length} pack(s)`);
+  }
+  if (i === 0) shippedMergedBytes = Buffer.byteLength(JSON.stringify(merged));
+}
+const singleFileReal = readFileSync(source, 'utf8');
+const shipped = {
+  packs: shippedIndex.packs.map((pack) => ({ id: pack.id, core: pack.core, faces: pack.faces, bytes: pack.bytes })),
+  indexBytes: readFileSync('static/data/catalog/index.json', 'utf8').length,
+  deckNames: shippedDeck.player.main_deck.length,
+  planRequired: shippedPlan.required,
+  missing: shippedPlan.missing,
+  unverified: shippedPlan.unverified,
+  bytesFetchedForDeck: shippedPlan.required.reduce((sum, id) => sum + (shippedIndex.packs.find((pack) => pack.id === id)?.bytes ?? 0), 0),
+  planMs: Math.round(median(shippedPlanSamples) * 1000) / 1000,
+  packParseMs: Math.round(median(shippedParseSamples) * 100) / 100,
+  mergeMs: Math.round(median(shippedMergeSamples) * 100) / 100,
+  /** The 90-face catalog the pre-0.4 client downloaded for every game. */
+  legacySingleFileBytes: Buffer.byteLength(singleFileReal),
+  /** One file holding every shipped face — what a single-file client would need now. */
+  equivalentSingleFileBytes: shippedMergedBytes,
+  heapAfterMb: heapUsedMb()
+};
+
 const report = {
   generated_at: new Date().toISOString(),
   runtime: `Bun ${Bun.version}`,
@@ -199,12 +248,14 @@ const report = {
     measured: 'JSON parse, index plan and pack merge in Bun; heap is process-wide and includes the samples.',
     not_measured: 'Browser fetch, WASM catalog load inside the engine, paint. Phase 0.3 numbers for those stand on their own commit.'
   },
-  results
+  results,
+  shipped
 };
 
 const out = arg('out', 'docs/performance-catalog.json');
 writeFileSync(out, JSON.stringify(report, null, 2));
 console.log(`escrito ${out}`);
+console.log(`producto real: plan ${shipped.planMs} ms · parse ${shipped.packParseMs} ms · merge ${shipped.mergeMs} ms · ${(shipped.bytesFetchedForDeck / 1024).toFixed(0)} KiB (archivo único equivalente: ${(shipped.equivalentSingleFileBytes / 1024).toFixed(0)} KiB; 0.3: ${(shipped.legacySingleFileBytes / 1024).toFixed(0)} KiB)`);
 for (const row of results) {
   console.log(`${row.label}: ${row.names} nombres · archivo único ${(row.singleFileBytes / 1024).toFixed(0)} KiB (parse ${row.singleFileParseMs} ms) · índice ${(row.indexBytes / 1024).toFixed(1)} KiB · plan ${row.planMs} ms · merge ${row.mergeMs} ms`);
   console.log(`   packs de 4 shards: ${(row.bytesFetchedForDeck / 1024).toFixed(0)} KiB en ${row.packsFetchedForDeck} pack(s) · packs por set (~300): ${row.setPolicy.packCount} packs, ${(row.setPolicy.bytesFetchedForDeck / 1024).toFixed(0)} KiB en ${row.setPolicy.packsTouched} pack(s)`);

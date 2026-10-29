@@ -5,7 +5,11 @@
 //! This is the link between "the pack file looks right" and "the engine plays
 //! with it". Output is JSON so the certification report is reproducible.
 //!
-//! usage: packcheck <pack.json> <decks.json> [seed] [max-steps]
+//! usage: packcheck <pack.json[,pack2.json…]> <decks.json> [seed] [max-steps]
+//!
+//! Several packs may be listed: the client fetches every pack a deck needs and
+//! merges them into one flat catalog before the engine sees it, so the check
+//! merges them the same way. A later pack never overwrites an earlier one.
 use engine::database::CardDatabase;
 use engine::game::deck_loading::{resolve_deck_list, DeckList};
 use engine::game::engine::{apply_with_rejection, start_game_with_starting_player};
@@ -17,7 +21,7 @@ use engine::types::game_state::{GameState, WaitingFor};
 use engine::types::player::PlayerId;
 use engine::types::GameAction;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::time::Instant;
 
 fn choose(actions: &[GameAction], state: &GameState) -> Option<GameAction> {
     let priority = |a: &GameAction| match a {
@@ -61,10 +65,22 @@ fn main() {
         eprintln!("usage: packcheck <pack.json> <decks.json> [seed] [max-steps]");
         std::process::exit(2);
     }
+    let started = Instant::now();
     let seed: u64 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(42);
     let max_steps: usize = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(400);
 
-    let pack_text = std::fs::read_to_string(&args[1]).expect("pack file");
+    // Merge packs exactly like `mergeCatalogs` on the client: first wins.
+    let mut merged = serde_json::Map::new();
+    for path in args[1].split(',') {
+        let text = std::fs::read_to_string(path).expect("pack file");
+        let value: serde_json::Value = serde_json::from_str(&text).expect("pack json");
+        let object = value.as_object().expect("pack is a flat map");
+        for (name, face) in object {
+            merged.entry(name.clone()).or_insert_with(|| face.clone());
+        }
+    }
+    let pack_text = serde_json::Value::Object(merged).to_string();
+    let parse_started = Instant::now();
     let db = match CardDatabase::from_json_str(&pack_text) {
         Ok(db) => db,
         Err(err) => {
@@ -77,6 +93,7 @@ fn main() {
         }
     };
     let faces = db.face_iter().count();
+    let parse_ms = parse_started.elapsed().as_secs_f64() * 1000.0;
 
     let decks_text = std::fs::read_to_string(&args[2]).expect("decks file");
     let decks: DeckList = serde_json::from_str(&decks_text).expect("deck list");
@@ -89,20 +106,24 @@ fn main() {
         }
     }
 
+    let resolve_started = Instant::now();
     let payload = resolve_deck_list(&db, &decks);
-    let resolved_player: usize = payload.player.main_deck.iter().map(|entry| entry.count).sum();
-    let resolved_opponent: usize = payload.opponent.main_deck.iter().map(|entry| entry.count).sum();
+    let resolved_player: u32 = payload.player.main_deck.iter().map(|entry| entry.count).sum();
+    let resolved_opponent: u32 = payload.opponent.main_deck.iter().map(|entry| entry.count).sum();
 
+    let resolve_ms = resolve_started.elapsed().as_secs_f64() * 1000.0;
     let mut state = GameState::new(FormatConfig::limited(), 2, seed);
     load_and_hydrate_decks(&mut state, &payload, Some(&db));
     start_game_with_starting_player(&mut state, PlayerId(0));
+    let start_ms = started.elapsed().as_secs_f64() * 1000.0;
 
+    let game_started = Instant::now();
     let mut steps = 0usize;
     let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
     let mut game_over: Option<Option<usize>> = None;
     for _ in 0..max_steps {
         if let WaitingFor::GameOver { winner } = &state.waiting_for {
-            game_over = Some(winner.map(|p| p.0));
+            game_over = Some(winner.map(|p| p.0 as usize));
             break;
         }
         let viewer = turn_control::authorized_submitter(&state).unwrap_or(state.priority_player);
@@ -116,13 +137,14 @@ fn main() {
     }
     if game_over.is_none() {
         if let WaitingFor::GameOver { winner } = &state.waiting_for {
-            game_over = Some(winner.map(|p| p.0));
+            game_over = Some(winner.map(|p| p.0 as usize));
         }
     }
 
+    let game_ms = game_started.elapsed().as_secs_f64() * 1000.0;
     let filtered = filter_state_for_viewer(&state, PlayerId(0));
     let projected = mtg_engine_wasm::project_state(&filtered);
-    let library_counts: Vec<u64> = projected["state"]["players"]
+    let library_counts: Vec<u64> = projected["players"]
         .as_array()
         .map(|players| {
             players
@@ -132,6 +154,8 @@ fn main() {
         })
         .unwrap_or_default();
 
+    let unresolved_list: Vec<String> = unresolved.into_iter().collect();
+    let ok = faces > 0 && resolved_player > 0 && steps > 0 && unresolved_list.is_empty();
     let report = serde_json::json!({
         "pack": args[1],
         "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
@@ -144,14 +168,21 @@ fn main() {
             "opponent": decks.opponent.main_deck.len()
         },
         "resolved": { "player": resolved_player, "opponent": resolved_opponent },
-        "unresolved_names": unresolved.into_iter().collect::<Vec<_>>(),
+        "unresolved_names": unresolved_list,
         "steps": steps,
         "action_kinds": kinds,
         "game_over": game_over.map(|winner| serde_json::json!({ "winner": winner })),
         "library_counts": library_counts,
+        "timing_ms": {
+            "pack_parse": (parse_ms * 10.0).round() / 10.0,
+            "deck_resolve": (resolve_ms * 10.0).round() / 10.0,
+            "engine_start": (start_ms * 10.0).round() / 10.0,
+            "game": (game_ms * 10.0).round() / 10.0,
+            "per_step": if steps > 0 { ((game_ms / steps as f64) * 1000.0).round() / 1000.0 } else { 0.0 },
+            "total": (started.elapsed().as_secs_f64() * 1000.0 * 10.0).round() / 10.0,
+        },
     });
     println!("{}", serde_json::to_string_pretty(&report).unwrap());
-    let ok = faces > 0 && resolved_player > 0 && steps > 0 && unresolved.is_empty() || faces > 0 && steps > 0;
     if !ok {
         std::process::exit(1);
     }

@@ -11,6 +11,32 @@ en `docs/VERIFICATION-0.4.md`. Lo que exige recompilar el puente WASM queda
 propuesto como **PR siguiente**, con las firmas exactas de Phase que lo hacen
 posible.
 
+## 0. Estado tras 0.4.1
+
+Lo que este documento proponía ya tiene una primera prueba real: **Décima Edición
+(10E) entra al catálogo como pack certificado**, no como demo.
+
+- `data/mtgjson/10E.es.json` (MTGJSON v3, 363 cartas) → `scripts/import-set.ts` →
+  `cargo run -p mtg-engine-wasm --bin catalog` (Phase parsea con
+  `CardDatabase::from_mtgjson` y exporta con `export_subset_json`) →
+  `static/data/catalog/packs/10e.json` (363 caras, 513.3 KiB, sha256
+  `65711d59…`) → índice v2 con el pack `fixture` como `core`.
+- `cargo run -p mtg-engine-wasm --bin packcheck -- packs/fixture.json,packs/10e.json
+  docs/packcheck-10e-decks.json 7 4000` carga **esos bytes** con
+  `CardDatabase::from_json_str`, resuelve 40/40 cartas por asiento y juega 1063
+  pasos reales (`docs/packcheck-10e.json`).
+- Las tierras básicas no viajan en el set v3: las aporta el pack `core`. Un mazo
+  de 10E planifica exactamente dos packs y no descarga el resto.
+
+Lo que sigue faltando, y por qué:
+
+| Falta | Consecuencia hoy |
+| --- | --- |
+| AtomicCards completo (todas las cartas) | el catálogo son 453 caras de dos fuentes, no el juego entero |
+| `catalog_search` / `validate_deck` / `coverage` en el puente | el constructor busca en el índice y el motor no valida mazos por formato |
+| Un pack por set para N sets | la cola de sets es manual (`--append` uno por uno) |
+| Alias / nombres impresos por idioma | se busca por nombre canónico en inglés |
+
 ## 1. Qué tiene Phase hoy (leído en el código fijado `c2fbb7a`)
 
 ### Base de datos

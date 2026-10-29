@@ -1,0 +1,75 @@
+{
+  "generated_at": "2026-10-29T21:08:14.008Z",
+  "engine": "static/wasm/mtg_engine_wasm.wasm",
+  "engine_bytes": 48374605,
+  "packs": [
+    {
+      "path": "static/data/catalog/packs/fixture.json",
+      "bytes": 125111,
+      "faces": 90
+    },
+    {
+      "path": "static/data/catalog/packs/10e.json",
+      "bytes": 525607,
+      "faces": 354
+    }
+  ],
+  "catalog_faces": 444,
+  "merge_ms": 6.8,
+  "compile_ms": 823.3,
+  "instantiate_ms": 19.6,
+  "wasm_memory_mb": 33.6,
+  "init_ms": 203.2,
+  "decks": "docs/packcheck-10e-decks.json",
+  "seed": 7,
+  "requested": {
+    "player": 40,
+    "opponent": 40
+  },
+  "resolved_after_init": [
+    40,
+    40
+  ],
+  "steps": 1063,
+  "action_kinds": {
+    "MulliganDecision": 2,
+    "PassPriority": 866,
+    "PlayLand": 18,
+    "CastSpell": 16,
+    "ActivateAbility": 115,
+    "DeclareAttackers": 27,
+    "DeclareBlockers": 15,
+    "ChooseOption": 1,
+    "SelectCards": 3
+  },
+  "step_ms": {
+    "median": 10.27,
+    "p90": 12.42,
+    "max": 31.62
+  },
+  "wasm_calls": 1064,
+  "wasm_call_ms": 10819,
+  "max_response_bytes": 229758,
+  "outcome": {
+    "draw": false,
+    "winner": 1
+  },
+  "players": [
+    {
+      "id": 0,
+      "life": 0,
+      "library": 0,
+      "hand": 0,
+      "graveyard": 0,
+      "battlefield": 0
+    },
+    {
+      "id": 1,
+      "life": 19,
+      "library": 17,
+      "hand": 1,
+      "graveyard": 5,
+      "battlefield": 17
+    }
+  ]
+}

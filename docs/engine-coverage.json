@@ -21,17 +21,37 @@
       "evidence": [
         {
           "kind": "parse",
-          "detail": "static/data/cards.json (90 caras) lo escribe el binario `catalog` de mtg-engine-wasm a partir de data/mtgjson/test_fixture.json mediante CardDatabase::from_mtgjson + export_subset_json",
-          "commit": "1b2711f"
+          "detail": "static/data/cards.json (90 caras) lo escribe el binario `catalog` de mtg-engine-wasm a partir de data/mtgjson/test_fixture.json mediante CardDatabase::from_mtgjson + export_subset_json"
         },
         {
           "kind": "game",
           "detail": "docs/parity-report.json (semillas 42/7/…, 80 pasos, sin discrepancias) y docs/scenarios-report.json (goals_ok, parity_ok)",
-          "commit": "0a441e5",
           "reexecuted_this_commit": false
         }
       ],
       "note": "`exercised` es parcial: las partidas de paridad/escenarios usan el mazo demo sobre este catálogo, no las 90 caras una por una. La cobertura por carta requiere la API coverage.rs, que el puente todavía no expone."
+    },
+    {
+      "id": "10e",
+      "sha256": "65711d59439ed843f40afc4517e0c51092f7a00bbab6037e5ceb943885a9c45e",
+      "faces": 363,
+      "levels": {
+        "found": true,
+        "parsed": true,
+        "coverage_known": false,
+        "exercised": "parcial"
+      },
+      "evidence": [
+        {
+          "kind": "parse",
+          "detail": "data/mtgjson/10E.es.json (MTGJSON v3, 363 cartas) -> scripts/import-set.ts (v5) -> bin `catalog` de mtg-engine-wasm (CardDatabase::from_mtgjson + export_subset_json) escribe static/data/catalog/packs/10e.json (363 caras, sha256 65711d59...). `packcheck` vuelve a deserializarlo con CardDatabase::from_json_str, la misma funcion que usa el puente WASM."
+        },
+        {
+          "kind": "game",
+          "detail": "docs/packcheck-10e.json (nativo, semilla 7): 444 caras cargadas, 40/40 cartas resueltas por asiento, 1063 pasos, ganador asiento 1. docs/wasm-packcheck.json (WASM publicado, misma semilla): mismos 1063 pasos, mismas acciones y mismo ganador; resolved_after_init [40,40]. src/lib/game/__tests__/engine-parity.test.ts exige esa coincidencia."
+        }
+      ],
+      "note": "`exercised` es parcial: la partida ejercita 23 caras distintas de 10E. La cobertura por carta necesita la API coverage.rs, que el puente todavia no expone. El WASM se reconstruyo en este entorno (48,3 MB) y jugo la misma partida que el motor nativo; no hay evidencia de navegador (Chromium no disponible)."
     }
   ]
 }

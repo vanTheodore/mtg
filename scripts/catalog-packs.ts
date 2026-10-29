@@ -26,9 +26,12 @@
  *   --core <A,B>        names always loaded (repeated names, e.g. basic lands)
  *   --verified          mark the packs as play-certified
  *   --source <text>     provenance string recorded in the index
+ *   --append            add these packs to the index already in --out instead of
+ *                       replacing it (a real set next to the curated fixture);
+ *                       the index version increments so caches cannot go stale
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { isAtomicCardsFile, isMtgjsonV3SetFile, type AtomicCardsFile } from '../src/lib/game/catalog-source.ts';
 import type { Catalog, CatalogIndex, CatalogPackMeta } from '../src/lib/game/catalog.ts';
@@ -166,17 +169,29 @@ for (const [index, bucket] of buckets.entries()) {
 }
 
 // A name may appear in a core pack and again in a set pack; the index keeps the
-// first entry, so core packs are written first in the array order above.
+// first entry, so core packs are listed first.
+const indexPath = join(outDir, 'index.json');
+const previous: CatalogIndex | null = args.append === true && existsSync(indexPath)
+  ? JSON.parse(readFileSync(indexPath, 'utf8')) as CatalogIndex
+  : null;
+const replaced = new Set(packs.map((pack) => pack.id));
+// `--append` replaces a pack with the same id but keeps every other pack: the
+// fixture (basic lands + demo deck) has to survive adding a real set.
+const kept = (previous?.packs ?? []).filter((pack) => !replaced.has(pack.id));
+const combined = [...kept, ...packs].sort((a, b) => Number(b.core) - Number(a.core));
 const index: CatalogIndex = {
-  version: 1,
+  // The version is part of the client's pack-cache key: rebuilding any pack must
+  // change it or a tab would keep serving the previous bytes.
+  version: previous ? previous.version + 1 : 1,
   generated_at: new Date().toISOString(),
   format: 'atomic',
-  packs
+  packs: combined
 };
-writeFileSync(join(outDir, 'index.json'), JSON.stringify(index, null, 2));
+writeFileSync(indexPath, JSON.stringify(index, null, 2));
 
 const totalFaces = packs.reduce((sum, pack) => sum + pack.faces, 0);
 const totalBytes = packs.reduce((sum, pack) => sum + pack.bytes, 0);
 console.log(`${packs.length} pack(s) · ${names.length} nombres · ${totalFaces} caras · ${(totalBytes / 1024).toFixed(1)} KiB`);
+if (previous) console.log(`índice v${previous.version} → v${index.version} (${index.packs.length} packs)`);
 console.log(`índice: ${join(outDir, 'index.json')}`);
 for (const pack of packs) console.log(`  ${pack.id}: ${pack.names.length} nombres, ${(pack.bytes / 1024).toFixed(1)} KiB, verified=${pack.verified}`);

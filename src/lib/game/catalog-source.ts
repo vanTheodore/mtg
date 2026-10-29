@@ -77,7 +77,8 @@ export function atomicFromMtgjsonSet(file: MtgjsonSetFile): Record<string, Atomi
     const face: AtomicFace = {
       name: key,
       manaCost: card.manaCost,
-      manaValue: typeof card.cmc === 'number' ? card.cmc : undefined,
+      // Phase requires `manaValue`; a card without `cmc` (a land) is 0.
+      manaValue: typeof card.cmc === 'number' ? card.cmc : 0,
       colors: card.colors,
       colorIdentity: card.colorIdentity ?? card.colors,
       type: card.type,
@@ -168,9 +169,12 @@ export function mtgjsonV3ToAtomic(file: MtgjsonSetFile): AtomicFromV3Result {
     const face: AtomicFace = {
       name,
       manaCost: card.manaCost,
-      manaValue: typeof card.cmc === 'number' ? card.cmc : undefined,
-      colors: colorLetters(card.colors),
-      colorIdentity: colorLetters(card.colorIdentity) ?? colorLetters(card.colors),
+      // Phase requires `manaValue`; a card without `cmc` (a land) is 0.
+      manaValue: typeof card.cmc === 'number' ? card.cmc : 0,
+      // MTGJSON v5 always carries these two arrays; Phase rejects a card that
+      // omits `colors`, so a colorless card gets `[]`, never `undefined`.
+      colors: colorLetters(card.colors) ?? [],
+      colorIdentity: colorLetters(card.colorIdentity) ?? colorLetters(card.colors) ?? [],
       type: card.type,
       text: card.text,
       types: card.types,
