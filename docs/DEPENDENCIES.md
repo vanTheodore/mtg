@@ -61,6 +61,17 @@ bajo un compilador distinto. Se deja anotado, no aplicado.
   El registro de crates no es alcanzable en este entorno; el lock se valida
   compilando (`cargo check --offline`) y con `bun run engine:parity`.
 
+## Fase 0.4
+
+No se añadió ninguna dependencia de aplicación. Los scripts nuevos
+(`catalog-packs`, `build-impressions-es`, `measure-catalog`) usan sólo la stdlib de
+Bun/Node (`node:crypto`, `node:fs`, `node:path`). TypeScript sigue fijado en
+6.0.3 a propósito.
+
+La auditoría de este turno vuelve a dar 26 desactualizados (antes 24) porque el
+registro publicó parches nuevos de transitorios (`@rolldown/binding-*`,
+`playwright-core` alpha); el único directo sigue siendo `typescript`.
+
 ## Política de actualización
 
 1. Solo se sube un directo con verificación completa:

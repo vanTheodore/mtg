@@ -15,11 +15,18 @@ Vertical slice jugable local de dos jugadores (hot-seat) con el motor real:
   determinista verificados contra el WASM real.
 - Partida completa jugada **desde los controles Svelte**: elegir y lanzar,
   objetivos con clic en carta/jugador, maná automático o manual, atacantes con
-  destino, bloqueadoras por atacante, pila, resoluciones, daño, vida y victoria
-  (ver `docs/VERIFICATION-0.3.md`).
-- Mazos didácticos seleccionables (duelo de práctica, duelo de chispas) y los
-  mazos de demostración, con auto-paso por recomendación de Phase y paso de
-  asiento configurable.
+  destino, pila, resoluciones, daño, vida y victoria (ver
+  `docs/VERIFICATION-0.3.md`).
+- Mazos didácticos seleccionables (duelo de práctica, duelo de chispas), mazos de
+  demostración y **mazos propios**, con auto-paso por recomendación de Phase y
+  paso de asiento configurable.
+- **Catálogo por packs**: el índice mapea nombre → pack y cada partida descarga
+  sólo los packs que su mazo necesita (más los `core` de tierras básicas).
+- **Constructor de mazos** en Svelte: buscar, cantidades, guardar en el navegador,
+  importar listas Arena/MTGO y jugar con lo construido. Sólo el formato que el
+  motor configura hoy (Limited); no se anuncia ningún otro.
+- **Impresiones en español opcionales**: cuando existe una impresión publicada
+  para esa carta se muestra su texto real, con reserva al inglés.
 - Campo de batalla, mano, biblioteca, cementerio y exilio.
 - Imágenes Scryfall con fallback identificable, reintento y caché.
 - Agrupación de fichas, cartas giradas/transformadas/adjuntas.
@@ -29,9 +36,47 @@ Vertical slice jugable local de dos jugadores (hot-seat) con el motor real:
   clave, contadores, estados y línea de tipo en español; los datos de carta del
   motor siguen en inglés (ver [`docs/LOCALE.md`](docs/LOCALE.md)).
 
-Limitaciones actuales: sin IA, sin multijugador de red, sin recuperación de
-partidas, sin editor de mazos. El catálogo incluido es un subconjunto de demostración
-(90 caras del fixture upstream), no la base completa de Magic.
+### Implementado frente a verificado visualmente
+
+No es lo mismo «la interfaz lo permite» que «una prueba de Chromium lo ejecutó de
+principio a fin». Esta tabla mantiene la distinción:
+
+| Interacción | Implementada en la UI | Verificada con E2E de Chromium |
+| --- | --- | --- |
+| Iniciar partida, mulligan, mano, robo | Sí | Sí |
+| Jugar tierras y lanzar hechizos (pago automático) | Sí | Sí |
+| Elegir objetivo pulsando carta o jugador | Sí | Sí (`20 → 17` vidas con Lightning Bolt) |
+| Declarar atacantes con destino | Sí | Sí |
+| Descartar hasta siete, historial, victoria | Sí | Sí (partida completa ganada) |
+| Pago de maná: fuentes pulsables, "Elegir maná manualmente" y "Confirmar pago" | Sí | Parcial: el E2E confirma pagos, pero no hay aserción dedicada de costes genéricos multi-maná |
+| **Declarar bloqueadoras por atacante** | **Sí** (borrador por pares, `nextBlockAssignment`, quitar bloqueo) | **No por UI**: sólo está cubierto por `engine-gameplay.spec.ts`, que declara bloqueos vía `EngineClient` |
+| Paso de asiento cada cambio de jugador | Sí | Sí (modal, modo por turno) |
+| Vista ampliada, tamaño/densidad/tema | Sí | Sí (a11y y anchos 320–1440) |
+| Constructor: buscar, cantidades, guardar, importar lista | Sí | **No**: `tests/e2e/deck-builder.spec.ts` está escrito y no se ejecutó (sin Chromium/WASM en este entorno) |
+| Jugar un mazo propio y leer cartas cargadas por el motor | Sí | **No**: misma razón; la capa de datos sí está cubierta por `catalog-http.test.ts` |
+
+Sobre el bloqueo, en tres niveles distintos:
+
+1. **Reglas**: escenarios nativos de combate en el motor (300 pasos,
+   `parity_ok=true`).
+2. **Integración**: `tests/e2e/engine-gameplay.spec.ts` construye
+   `DeclareBlockers` desde los pares que el propio motor ofrece
+   (`derived.blocker_assignment_pairs`) y observa `blockers` y `combat_damage`.
+   Prueba el motor a través del cliente, **no** los controles Svelte.
+3. **Interacción visual**: la UI existe (selección atacante→bloqueadora o al
+   revés, lista de bloqueos, quitar), la lógica pura tiene pruebas unitarias,
+   pero **no hay E2E estable que la ejerza**. Requiere que el defensor tenga una
+   criatura y que a la vez se declare un atacante, y el duelo determinista tiende
+   a saltarse el emparejamiento. Por eso no se declara «bloqueo verificado
+   visualmente».
+
+Limitaciones actuales: sin IA, sin multijugador de red y sin recuperación de
+partidas. El catálogo jugable sigue siendo un subconjunto verificado (90 caras del
+fixture upstream): la tubería para sets reales existe, pero **ninguna carta nueva
+entra al juego sin pasar la puerta de cobertura del motor** (ver
+[`docs/CATALOG-PLAN.md`](docs/CATALOG-PLAN.md)). El puente aún no expone la
+validación de mazo de Phase, así que el constructor comprueba existencia en el
+catálogo y muestra lo que el motor cargó, **no** legalidad de formato.
 
 ## Requisitos
 
@@ -46,10 +91,16 @@ con `bun --bun playwright`.
 
 ```sh
 bun install
-bun run catalog:build   # genera static/data/cards.json + card-meta.json
-bun run engine:build    # genera static/wasm/mtg_engine_wasm.wasm
+bun run catalog:build        # static/data/cards.json + card-meta.json
+bun run catalog:packs        # static/data/catalog/index.json + packs/
+bun run engine:build         # static/wasm/mtg_engine_wasm.wasm
+bun run impressions:es --set-file data/mtgjson/10E.es.json   # opcional
 bun run dev
 ```
+
+`catalog:packs` acepta el catálogo del motor o un set MTGJSON
+(`--set-file 10E.es.json --set-code 10E`). Sin `--verified` el pack queda
+marcado como no certificado y el constructor lo advierte.
 
 `engine:build` usa el target `wasm32-unknown-unknown` preinstalado. Si solo
  dispones de `rust-src` y necesitas compilar std, usa `ENGINE_BUILD_STD=1`
@@ -80,6 +131,7 @@ bun run engine:verify   # hash del árbol de reglas Phase
 bun run engine:parity   # paridad API directa vs wrapper (semillas 42/7/123)
 bun run engine:scenarios # escenarios explícitos: maná, lanzamiento, combate, objetivos, triggers, reemplazo, victoria
 bun run test:e2e        # Chromium real (visibilidad, a11y, partida completa por UI, motor)
+bun run deps:audit      # drift de dependencias contra el registro npm
 bun run build           # build estático
 ```
 
@@ -104,12 +156,23 @@ El contrato ABI/worker vigente se documenta en
 protocolo, revisión de acciones obsoletas, resultado de partida, resumen de
 maná, eventos filtrados, entropía de host y lista explícita de imports WASM.
 
-La evidencia ejecutada (tests, paridad, escenarios, rendimiento y límites) está
-en [`docs/VERIFICATION-0.3.md`](docs/VERIFICATION-0.3.md); la anterior sigue en
+La evidencia de esta fase (packs, constructor, impresiones, mediciones y límites)
+está en [`docs/VERIFICATION-0.4.md`](docs/VERIFICATION-0.4.md); la anterior sigue
+en [`docs/VERIFICATION-0.3.md`](docs/VERIFICATION-0.3.md) y
 [`docs/VERIFICATION-0.2.md`](docs/VERIFICATION-0.2.md). Los niveles de prueba se
 explican en [`docs/TESTING.md`](docs/TESTING.md).
 
+La investigación del catálogo ampliable —qué ofrece Phase, qué falta en el puente
+y el plan por PRs— está en [`docs/CATALOG-PLAN.md`](docs/CATALOG-PLAN.md). El
+idioma y su reserva en [`docs/LOCALE.md`](docs/LOCALE.md); las dependencias en
+[`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md).
+
 ## Integración continua
+
+**Sin cobertura CI real al 2026-10-29**: las ejecuciones del workflow terminan sin
+runner asignado (0 pasos ejecutados). El análisis y la evidencia están en
+[`docs/CI-DIAGNOSIS.md`](docs/CI-DIAGNOSIS.md); no se cita ningún resultado de CI
+como prueba.
 
 `.github/workflows/ci.yml` define trabajos separados: estáticos (Bun con
 `--frozen-lockfile`, procedencia, typecheck, unitarias, build), WASM (toolchain
@@ -121,12 +184,14 @@ descargado del trabajo anterior). No incluye IA, red ni deploy.
 
 ```text
 src/lib/engine/       Worker WASM, protocolo binario/JSON y cliente RPC
-src/lib/game/         Estado de sesión (runas), acciones, imágenes Scryfall
+src/lib/game/         Sesión (runas), acciones, packs de catálogo, mazos,
+                      impresiones es, imágenes Scryfall
 src/lib/components/   Board, Hand, Battlefield, CardView, DecisionPanel, …
 src/routes/stress/    Fixture determinista de visibilidad (no ejecuta reglas)
 crates/phase-engine/  Motor Phase upstream byte-idéntico (ver provenance)
 crates/mtg-engine-wasm/ Puente ABI C/JSON, exportador de catálogo y paridad
-static/data/          Catálogo mínimo, metadatos UI y mazos demo
+static/data/          Catálogo del motor, índice+packs, metadatos, mazos demo,
+                      impresiones en español
 ```
 
 Principios:
@@ -186,6 +251,11 @@ Scryfall bloqueado, WASM optimizado con `wasm-opt -O1`.
 - Round-trip completo acción → worker → motor → snapshot → UI: mediana 92 ms,
   p90 93 ms, máximo 106 ms (una muestra incluye el paso de asiento y se reporta).
 - FPS en reposo deliberadamente no medido: no describe ninguna interacción.
+
+Escalado del catálogo (`docs/performance-catalog.json`, Bun, 1×/5×/20×): con packs
+del tamaño de un set, jugar un mazo descarga ~414 KiB tanto a 5× como a 20×, frente
+a 619 KiB y 2.4 MiB del archivo único. El plan de carga cuesta 0.1–1.0 ms y el
+índice mide 48 KiB a 1800 cartas.
 
 Limitaciones actuales: catálogo demo de 90 caras, sin base completa de cartas,
 sin IA, sin multijugador red, sin recuperación de partida y con artefacto WASM
