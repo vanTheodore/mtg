@@ -4,23 +4,29 @@
     checkAgainstCatalog, deckSize, formatDeckList, makeDeck, parseDeckList, readDecks,
     removeDeck, uniqueCards, upsertDeck, writeDecks, type DeckLine, type SavedDeck
   } from '#lib/game/decks.ts';
-  import type { Catalog } from '#lib/game/catalog.ts';
+  import type { Catalog, CatalogIndex } from '#lib/game/catalog.ts';
 
   let {
     catalog,
+    index = null,
     catalogMissing = [],
+    catalogUnverified = [],
     loading = false,
-    onopen,
+    onrequestpack,
     onplay
   }: {
-    /** Loaded catalog entries; the builder searches what it actually has. */
+    /** Packs already in memory. Search supplements them with index names. */
     catalog: Catalog;
+    /** The catalog index: names per pack, without downloading the cards. */
+    index?: CatalogIndex | null;
     /** Names the catalog index could not serve, surfaced for honesty. */
     catalogMissing?: string[];
-    /** True while extra packs for the search surface are downloading. */
+    /** Cards the host refused to play because their packs are not certified. */
+    catalogUnverified?: string[];
+    /** True while one pack is downloading for a selected card. */
     loading?: boolean;
-    /** Ask the host to fetch every pack so search covers the whole index. */
-    onopen?: () => void;
+    /** Fetch exactly one pack, when a card is selected or a deck needs it. */
+    onrequestpack?: (id: string) => Promise<void>;
     /** Start a game with the chosen deck. */
     onplay: (lines: DeckLine[], name: string) => void;
   } = $props();
@@ -42,20 +48,62 @@
 
   onMount(() => { saved = readDecks(storage); });
 
-  const faces = $derived(Object.entries(catalog).map(([key, face]) => ({ key, face })));
-  const results = $derived.by(() => {
+  /** Pack id per lower-cased card name, straight from the index. */
+  const packByName = $derived.by(() => {
+    const map = new Map<string, { id: string; verified: boolean }>();
+    for (const pack of index?.packs ?? []) {
+      for (const name of pack.names) map.set(name.toLocaleLowerCase('es'), { id: pack.id, verified: pack.verified });
+    }
+    return map;
+  });
+
+  type Result = { key: string; name: string; type: string; pack: string | null; loaded: boolean; certified: boolean };
+
+  /**
+   * Names come from the index (cheap, covers the whole catalog); rules text and
+   * type only for packs already in memory. Results are capped: the builder never
+   * renders a 30k-card list.
+   */
+  const results = $derived.by<Result[]>(() => {
     const term = query.trim().toLocaleLowerCase('es');
     if (!term) return [];
-    return faces.filter(({ key, face }) => {
-      const name = String(face.name ?? key).toLocaleLowerCase('es');
+    const out: Result[] = [];
+    const seen = new Set<string>();
+    for (const [key, face] of Object.entries(catalog)) {
+      const name = String(face.name ?? key);
       const text = String(face.oracle_text ?? '').toLocaleLowerCase('es');
-      const type = JSON.stringify(face.card_type ?? '').toLocaleLowerCase('es');
-      return name.includes(term) || text.includes(term) || type.includes(term);
-    }).slice(0, MAX_RESULTS);
+      const type = String(JSON.stringify(face.card_type ?? '')).replace(/[[\]"{}]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!(name.toLocaleLowerCase('es').includes(term) || text.includes(term) || type.toLocaleLowerCase('es').includes(term))) continue;
+      out.push({ key, name, type, pack: packByName.get(key)?.id ?? null, loaded: true, certified: packByName.get(key)?.verified ?? false });
+      seen.add(key);
+      if (out.length >= MAX_RESULTS) return out;
+    }
+    for (const pack of index?.packs ?? []) {
+      for (const name of pack.names) {
+        const key = name.toLocaleLowerCase('es');
+        if (seen.has(key) || !key.includes(term)) continue;
+        out.push({ key, name, type: '', pack: pack.id, loaded: false, certified: pack.verified });
+        seen.add(key);
+        if (out.length >= MAX_RESULTS) return out;
+      }
+    }
+    return out;
   });
+
+  async function pick(result: Result) {
+    // Selective fetch: the pack holding this card, and nothing else.
+    if (!result.loaded && result.pack && onrequestpack) await onrequestpack(result.pack);
+    add(result.name);
+  }
   const total = $derived(deckSize(lines));
   const availability = $derived(checkAgainstCatalog(lines, catalog));
   const missingTotal = $derived(availability.missing.reduce((sum, line) => sum + line.count, 0));
+  /** Deck cards whose pack the index marks as not play-certified. */
+  const uncertifiedLines = $derived(lines.filter((line) => {
+    const pack = packByName.get(line.name.toLocaleLowerCase('es'));
+    return pack ? !pack.verified : catalogUnverified.some((name) => name.toLocaleLowerCase('es') === line.name.toLocaleLowerCase('es'));
+  }));
+  const uncertifiedTotal = $derived(uncertifiedLines.reduce((sum, line) => sum + line.count, 0));
 
   function countOf(name: string) {
     return lines.find((line) => line.name.toLocaleLowerCase('es') === name.toLocaleLowerCase('es'))?.count ?? 0;
@@ -130,6 +178,11 @@
       notice = `Hay ${missingTotal} cartas que el catálogo cargado no contiene. El motor las omitiría: quítalas o cambia de mazo.`;
       return;
     }
+    if (uncertifiedTotal > 0) {
+      notice = `Hay ${uncertifiedTotal} cartas sin certificar (${uncertifiedLines.map((line) => line.name).slice(0, 5).join(', ')}). `
+        + 'Su pack no pasó todavía el análisis de Phase ni una partida real, así que no inicio la partida.';
+      return;
+    }
     onplay(lines, deckName);
   }
 </script>
@@ -140,7 +193,7 @@
     class="toggle"
     aria-expanded={open}
     aria-controls="deck-builder-panel"
-    onclick={() => { open = !open; if (open) onopen?.(); }}
+    onclick={() => { open = !open; }}
   >
     {open ? 'Ocultar constructor' : 'Mis mazos'}
   </button>
@@ -170,20 +223,27 @@
       <div class="columns">
         <div class="search">
           <label class="field">
-            <span>Buscar en el catálogo cargado ({Object.keys(catalog).length} cartas){loading ? ' · cargando packs…' : ''}</span>
+            <span>
+              Buscar en {index ? `el índice (${index.packs.reduce((sum, pack) => sum + pack.names.length, 0)} nombres)` : 'el catálogo cargado'}
+              · {Object.keys(catalog).length} cartas en memoria{loading ? ' · cargando un pack…' : ''}
+            </span>
             <input type="search" bind:value={query} placeholder="Nombre, tipo o texto de reglas" autocomplete="off" />
           </label>
           {#if query.trim() && !results.length}
-            <p class="muted">Sin resultados. El buscador sólo ve los packs ya cargados; un catálogo mayor requiere cargar sus packs.</p>
+            <p class="muted">Sin resultados para «{query.trim()}». Se busca por nombre en todo el índice; texto y tipo, sólo en los packs en memoria.</p>
           {/if}
           <ul class="results" aria-label="Resultados de búsqueda">
             {#each results as result (result.key)}
               <li>
                 <div class="result-text">
-                  <strong>{result.face.name ?? result.key}</strong>
-                  <span class="muted">{result.face.card_type ? JSON.stringify(result.face.card_type).replace(/[[\]"{}]/g, ' ').replace(/\s+/g, ' ').trim() : ''}</span>
+                  <strong>{result.name}</strong>
+                  <span class="muted">
+                    {result.type}
+                    {#if !result.certified}<span class="tag warn">sin certificar</span>{/if}
+                    {#if !result.loaded}<span class="tag">sólo índice</span>{/if}
+                  </span>
                 </div>
-                <button type="button" class="add" aria-label={`Añadir ${result.face.name ?? result.key}`} onclick={() => add(String(result.face.name ?? result.key))}>+</button>
+                <button type="button" class="add" aria-label={`Añadir ${result.name}`} onclick={() => pick(result)}>+</button>
               </li>
             {/each}
           </ul>
@@ -223,6 +283,13 @@
             </p>
           {/if}
 
+          {#if uncertifiedTotal > 0}
+            <p class="notice warn" role="alert">
+              {uncertifiedTotal} cartas sin certificar: {uncertifiedLines.map((line) => line.name).slice(0, 5).join(', ')}.
+              El pack existe, pero Phase no validó estas cartas ni las jugó ninguna partida.
+            </p>
+          {/if}
+
           {#if missingTotal > 0}
             <p class="notice warn" role="alert">
               {missingTotal} cartas no están en el catálogo cargado: {availability.missing.map((line) => line.name).slice(0, 5).join(', ')}. El motor las omitiría al iniciar.
@@ -230,7 +297,7 @@
           {/if}
 
           <div class="actions">
-            <button type="button" class="primary" disabled={!lines.length || missingTotal > 0} onclick={play}>Jugar con este mazo</button>
+            <button type="button" class="primary" disabled={!lines.length || missingTotal > 0 || uncertifiedTotal > 0} onclick={play}>Jugar con este mazo</button>
             <button type="button" onclick={save}>Guardar</button>
             <button type="button" onclick={() => showImport = !showImport} aria-expanded={showImport}>Importar lista</button>
             <button type="button" onclick={startFresh}>Nuevo</button>
@@ -296,6 +363,8 @@
   .link { border: none; background: none; color: var(--accent); text-decoration: underline; padding: 0 .2rem; font-size: .75rem; }
   .notice { margin: 0; font-size: .78rem; }
   .notice.warn { color: var(--warn, #a15c00); }
+  .tag { margin-left: .3rem; border: 1px solid var(--line); border-radius: 999px; padding: 0 .35rem; font-size: .68rem; }
+  .tag.warn { border-color: var(--warn, #a15c00); color: var(--warn, #a15c00); }
   .saved { border-top: 1px solid var(--line); padding-top: .6rem; }
   .saved li { display: flex; gap: .5rem; align-items: center; justify-content: space-between; font-size: .78rem; flex-wrap: wrap; }
 </style>

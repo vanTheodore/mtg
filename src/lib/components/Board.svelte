@@ -12,11 +12,13 @@
   import DeckBuilder from './DeckBuilder.svelte';
   import { session } from '#lib/game/session.svelte.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
-  import { loadCatalog, clearCatalogCache, type Catalog } from '#lib/game/catalog.ts';
+  import { loadCatalog, loadPack, type Catalog, type CatalogIndex } from '#lib/game/catalog.ts';
   import { toEngineDeck, deckSize, type DeckLine } from '#lib/game/decks.ts';
   import { impressions } from '#lib/game/impressions.svelte.ts';
 
   let catalog = $state<Catalog>({});
+  /** The index, without the packs: what the builder searches before fetching. */
+  let catalogIndex = $state<CatalogIndex | null>(null);
   let metas = $state<Record<string, CardMeta>>({});
   let decks = $state<unknown>(null);
   let loadError = $state<string | null>(null);
@@ -27,6 +29,8 @@
   let customName = $state('');
   /** Names the index could not serve for the last started game. */
   let unresolved = $state<string[]>([]);
+  /** Cards the deck needs whose packs are not play-certified. */
+  let uncertified = $state<string[]>([]);
   /** What the engine actually loaded, read back from its own snapshot. */
   let engineLoad = $state<{ requested: number; seats: number[] } | null>(null);
   let catalogReady = $state(false);
@@ -69,6 +73,7 @@
         impressions.load(fetch)
       ]);
       catalog = loaded.catalog;
+      catalogIndex = loaded.index;
       catalogReady = true;
       metas = meta as Record<string, CardMeta>;
       decks = deckData;
@@ -79,13 +84,19 @@
     }
   });
 
-  /** Packs needed by the search surface: every pack the index knows. */
-  async function loadSearchCatalog() {
-    if (loadingPacks) return;
+  /**
+   * The builder searches the index (names only) and asks for one pack when a
+   * card is selected. Opening it never downloads the whole catalog: a catalog
+   * with a thousand packs still costs one index request up front.
+   */
+  async function requestPack(id: string) {
+    if (!catalogIndex || loadingPacks) return;
+    const meta = catalogIndex.packs.find((entry) => entry.id === id);
+    if (!meta) return;
     loadingPacks = true;
     try {
-      const loaded = await loadCatalog(fetch, [], { allPacks: true });
-      catalog = { ...catalog, ...loaded.catalog };
+      const pack = await loadPack(fetch, catalogIndex, id);
+      catalog = { ...catalog, ...pack };
     } catch (e) {
       loadError = e instanceof Error ? e.message : String(e);
     } finally {
@@ -101,8 +112,17 @@
     const names = deckNames(deck);
     const loaded = await loadCatalog(fetch, names);
     unresolved = loaded.missing;
+    uncertified = loaded.unverified;
     if (loaded.missing.length) {
       loadError = `El catálogo no contiene: ${loaded.missing.slice(0, 8).join(', ')}${loaded.missing.length > 8 ? '…' : ''}. El motor las omitiría; la partida no se inicia.`;
+      return false;
+    }
+    // `verified: false` means Phase never parsed these cards and no game proved
+    // them. Starting anyway is exactly the silent half-game this gate prevents.
+    if (loaded.unverified.length) {
+      const packs = loaded.unverifiedPacks.join(', ');
+      loadError = `Cartas sin certificar (${loaded.unverified.length}): ${loaded.unverified.slice(0, 8).join(', ')}${loaded.unverified.length > 8 ? '…' : ''}. `
+        + `Están en ${loaded.unverifiedPacks.length === 1 ? 'el pack' : 'los packs'} ${packs}, que Phase todavía no validó. No inicio la partida con cartas sin admitir.`;
       return false;
     }
     loadError = null;
@@ -205,9 +225,11 @@
       </fieldset>
       <DeckBuilder
         catalog={catalog}
+        index={catalogIndex}
         catalogMissing={unresolved}
+        catalogUnverified={uncertified}
         loading={loadingPacks}
-        onopen={loadSearchCatalog}
+        onrequestpack={requestPack}
         onplay={playCustom}
       />
       <label>Semilla <input type="number" bind:value={seed} min="0" step="1" /></label>

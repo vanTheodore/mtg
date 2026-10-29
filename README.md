@@ -98,9 +98,21 @@ bun run impressions:es --set-file data/mtgjson/10E.es.json   # opcional
 bun run dev
 ```
 
-`catalog:packs` acepta el catálogo del motor o un set MTGJSON
-(`--set-file 10E.es.json --set-code 10E`). Sin `--verified` el pack queda
-marcado como no certificado y el constructor lo advierte.
+`catalog:packs` acepta la exportación plana del motor (`cards.json`) o un archivo
+**AtomicCards v5** (`{ meta, data }`). Un set MTGJSON **v3** (como
+`data/mtgjson/10E.es.json`) no se empaqueta a mano: primero se adapta a
+AtomicCards v5 y lo parsea Phase, para que la identidad y las caras las decida el
+motor:
+
+```sh
+bun scripts/import-set.ts --set-file data/mtgjson/10E.es.json --out /tmp/10E.atomic.json
+cargo run -p mtg-engine-wasm --bin catalog -- /tmp/10E.atomic.json /tmp/10e   # Phase parsea y exporta
+bun run catalog:packs -- --set-file /tmp/10e/cards.json --set-code 10E --pack-id 10e
+```
+
+Un pack sin `--verified` queda marcado como no certificado: se puede buscar y
+cargar, pero **el inicio de partida se niega** con el diagnóstico concreto
+(`docs/engine-coverage.json` guarda qué evidencia respalda cada pack certificado).
 
 `engine:build` usa el target `wasm32-unknown-unknown` preinstalado. Si solo
  dispones de `rust-src` y necesitas compilar std, usa `ENGINE_BUILD_STD=1`

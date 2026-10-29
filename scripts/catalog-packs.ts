@@ -10,11 +10,14 @@
  * Usage:
  *   bun scripts/catalog-packs.ts --input <cards.json> --out static/data/catalog
  *   bun scripts/catalog-packs.ts --input <cards.json> --out static/data/catalog --packs 4
- *   bun scripts/catalog-packs.ts --set-file 10E.es.json --out ... --set-code 10E
+ *   bun scripts/catalog-packs.ts --set-file set.atomic.json --out ... --set-code 10E
  *
  * Flags:
- *   --input <path>      AtomicCards JSON (default static/data/cards.json)
- *   --set-file <path>   MTGJSON v3/v4 set file instead of an AtomicCards file
+ *   --input <path>      AtomicCards v5 JSON (default static/data/cards.json)
+ *   --set-file <path>   AtomicCards v5 file; alternative spelling of --input
+ *                       that also records the set file in the provenance.
+ *                       MTGJSON v3 set files are rejected: convert them first
+ *                       with scripts/import-set.ts so Phase parses them.
  *   --out <dir>         output directory (default static/data/catalog)
  *   --pack-id <id>      pack id when writing a single pack (default: source stem)
  *   --pack-label <text> human label for the pack
@@ -27,7 +30,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { atomicFromMtgjsonSet, type MtgjsonSetFile } from '../src/lib/game/catalog-source.ts';
+import { isAtomicCardsFile, isMtgjsonV3SetFile, type AtomicCardsFile } from '../src/lib/game/catalog-source.ts';
 import type { Catalog, CatalogIndex, CatalogPackMeta } from '../src/lib/game/catalog.ts';
 
 type Args = Record<string, string | true>;
@@ -54,19 +57,71 @@ function bucketOf(name: string, buckets: number): number {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const input = typeof args.input === 'string' ? args.input : 'static/data/cards.json';
 const outDir = typeof args.out === 'string' ? args.out : 'static/data/catalog';
 const packCount = Math.max(1, Number(args.packs ?? 1));
 const setCode = typeof args['set-code'] === 'string' ? args['set-code'] : null;
 const verified = args.verified === true;
 const coreNames = typeof args.core === 'string' ? args.core.split(',').map((name) => name.trim()).filter(Boolean) : [];
+const setFile = typeof args['set-file'] === 'string' ? args['set-file'] : null;
+const inputArg = typeof args.input === 'string' ? args.input : null;
+
+// `--set-file` *is* the source. It used to only switch the converter while the
+// read still went to `--input` (or its default), so `--set-file 10E.es.json`
+// silently packaged `static/data/cards.json`. One flag, one source, no default.
+if (setFile && inputArg && setFile !== inputArg) {
+  console.error('Usá --input o --set-file, no ambos: son dos fuentes distintas.');
+  process.exit(2);
+}
+const input = setFile ?? inputArg ?? 'static/data/cards.json';
 const source = typeof args.source === 'string'
   ? args.source
-  : (typeof args['set-file'] === 'string' ? `MTGJSON set file ${basename(input)}` : `AtomicCards ${basename(input)}`);
+  : (setFile ? `MTGJSON set file ${basename(setFile)}` : `AtomicCards ${basename(input)}`);
 
-const catalog: Catalog = typeof args['set-file'] === 'string'
-  ? atomicFromMtgjsonSet(JSON.parse(readFileSync(input, 'utf8')) as MtgjsonSetFile) as unknown as Catalog
-  : JSON.parse(readFileSync(input, 'utf8')) as Catalog;
+const raw = JSON.parse(readFileSync(input, 'utf8')) as unknown;
+if (isMtgjsonV3SetFile(raw)) {
+  console.error([
+    `El archivo ${input} está en formato MTGJSON v3 (raíz "cards"), no en AtomicCards v5.`,
+    'Phase parsea AtomicCards v5: convertí el set primero con',
+    `  bun scripts/import-set.ts --set-file ${input} --out <set.atomic.json>`,
+    'y volvé a correr catalog-packs con --set-file <set.atomic.json>.',
+    'No se escribió ningún pack.'
+  ].join('\n'));
+  process.exit(1);
+}
+/** Phase's own export (`cards.json`) is the flat map the engine deserializes. */
+function isFlatCatalog(value: unknown): value is Catalog {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const entries = Object.values(value as Record<string, unknown>);
+  // Phase's export has one entry per face (name → face object); MTGJSON AtomicCards
+  // uses name → array and is handled above.
+  return entries.length > 0
+    && entries.every((face) => !!face && typeof face === 'object' && !Array.isArray(face));
+}
+
+if (!isAtomicCardsFile(raw) && !isFlatCatalog(raw)) {
+  console.error(`El archivo ${input} no es AtomicCards v5 ("data") ni una exportación plana de Phase. No se escribió ningún pack.`);
+  process.exit(1);
+}
+/**
+ * AtomicCards groups faces under the combined printed name; a pack keyed like
+ * Phase's own export has one entry per face, lower-cased (the engine lowercases
+ * names when it loads, so the index must index the same string).
+ */
+function flattenAtomic(file: AtomicCardsFile): Catalog {
+  const out: Catalog = {};
+  for (const [name, faces] of Object.entries(file.data)) {
+    for (const face of faces) {
+      const faceName = String((face as { name?: string }).name ?? name.split(' // ')[0] ?? name);
+      for (const key of [faceName, name]) {
+        const normalized = key.toLocaleLowerCase('en-US');
+        if (normalized && !(normalized in out)) out[normalized] = face as Catalog[string];
+      }
+    }
+  }
+  return out;
+}
+
+const catalog: Catalog = isAtomicCardsFile(raw) ? flattenAtomic(raw) : raw;
 
 const names = Object.keys(catalog);
 if (!names.length) {
