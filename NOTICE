@@ -11,3 +11,12 @@ licenses/PHASE-LICENSE-APACHE. Upstream NOTICE: licenses/PHASE-NOTICE.
 Card metadata is derived from MTGJSON (MIT) and Scryfall identifiers.
 Magic: The Gathering card illustrations are proprietary resources of
 Wizards of the Coast and are NOT redistributed by this repository.
+
+Spanish rules text in static/data/impressions.es.json comes from MTGJSON's
+Tenth Edition Spanish set file (data/mtgjson/10E.es.json, fetched 2026-10-29,
+https://github.com/mtgjson/mtgjson3). It is published card text, not a
+translation made for this project, and no card name is replaced: Phase keeps
+the English name as the card identity.
+
+Card rules text and names remain the property of Wizards of the Coast and are
+used here as factual game data.

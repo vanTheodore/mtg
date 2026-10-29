@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "language": "es",
+  "source": "MTGJSON mtgjson3/json/10E.es.json (Tenth Edition, español), descargado 2026-10-29",
+  "generated_at": "2026-10-29T19:41:16.985Z",
+  "cards": {
+    "serra angel": {
+      "face_name": "Serra Angel",
+      "printed_text": "Vuela, vigilancia. (Esta criatura no puede ser bloqueada excepto por criaturas que tengan la habilidad de volar o alcance, y esta criatura no se gira al atacar.)",
+      "printed_type": "Criatura — Ángel",
+      "set": "10E",
+      "printing_id": "150355"
+    },
+    "wrath of god": {
+      "face_name": "Wrath of God",
+      "printed_text": "Destruye todas las criaturas. No pueden ser regeneradas.",
+      "printed_type": "Conjuro",
+      "set": "10E",
+      "printing_id": "150377"
+    },
+    "cancel": {
+      "face_name": "Cancel",
+      "printed_text": "Contrarresta el hechizo objetivo.",
+      "printed_type": "Instantáneo",
+      "set": "10E",
+      "printing_id": "150387"
+    },
+    "unsummon": {
+      "face_name": "Unsummon",
+      "printed_text": "Regresa la criatura objetivo a la mano de su propietario.",
+      "printed_type": "Instantáneo",
+      "set": "10E",
+      "printing_id": "150438"
+    },
+    "shock": {
+      "face_name": "Shock",
+      "printed_text": "El Choque hace 2 puntos de daño a la criatura o jugador objetivo.",
+      "printed_type": "Instantáneo",
+      "set": "10E",
+      "printing_id": "150548"
+    },
+    "giant growth": {
+      "face_name": "Giant Growth",
+      "printed_text": "La criatura objetivo obtiene +3/+3 hasta el final del turno.",
+      "printed_type": "Instantáneo",
+      "set": "10E",
+      "printing_id": "150582"
+    },
+    "grizzly bears": {
+      "face_name": "Grizzly Bears",
+      "printed_type": "Criatura — Oso",
+      "set": "10E",
+      "printing_id": "150584"
+    },
+    "naturalize": {
+      "face_name": "Naturalize",
+      "printed_text": "Destruye el artefacto o encantamiento objetivo.",
+      "printed_type": "Instantáneo",
+      "set": "10E",
+      "printing_id": "150598"
+    },
+    "rampant growth": {
+      "face_name": "Rampant Growth",
+      "printed_text": "Busca en tu biblioteca una carta de tierra básica y pon en juego esa carta girada. Luego baraja tu biblioteca.",
+      "printed_type": "Conjuro",
+      "set": "10E",
+      "printing_id": "150604"
+    }
+  }
+}

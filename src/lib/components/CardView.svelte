@@ -3,6 +3,7 @@
   import { resolveCardImage, type ImageFailureReason } from '#lib/game/scryfall.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
   import { combatRole as roleLabel, keywordLabel, permanentStates } from '#lib/game/interaction.ts';
+  import { impressions } from '#lib/game/impressions.svelte.ts';
 
   let {
     object,
@@ -34,6 +35,13 @@
     blockOptions?: number;
   } = $props();
   const hidden = $derived(isHidden(object));
+  // Published Spanish rules text when one exists for this exact card name; the
+  // engine's English text (or none) is always the fallback.
+  const rulesText = $derived(
+    impressions.lookup.text(object.name)
+      ?? object.oracle_text ?? object.token_rules_text ?? meta?.oracle_text ?? ''
+  );
+  const rulesLang = $derived(impressions.lookup.text(object.name) ? 'es' : 'en');
   const states = $derived([...permanentStates(object, combat), ...(copy ? ['Copia'] : []), ...keywords.map(keywordLabel)]);
   // The accessible name mirrors the visible face in DOM order: axe's
   // label-content-name-mismatch (WCAG 2.5.3) requires visible text to be part
@@ -41,7 +49,7 @@
   const visibleName = $derived.by(() => {
     const cost = manaText(object.mana_cost ?? meta?.mana_cost);
     const type = typeLine(object, meta);
-    const rules = object.oracle_text ?? object.token_rules_text ?? meta?.oracle_text ?? '';
+    const rules = rulesText;
     const pt = object.power != null && object.toughness != null ? `${object.power}/${object.toughness}` : '';
     const art = imageState === 'error' && failureReason ? failureLabels[failureReason] : imageState === 'resolving' || imageState === 'loading-art' ? 'Buscando ilustración' : '';
     return [object.name || meta?.name || 'Carta', cost, type, rules, pt, art, ...states, selectLabel].filter(Boolean).join(', ');
@@ -141,7 +149,7 @@
         <div class="fallback-art" aria-hidden="true">
           {#if imageState === 'resolving' || imageState === 'loading-art'}<!-- The glyph is decorative and lives in CSS so it never becomes text content. --><span class="spinner"></span>{/if}
         </div>
-        <p class="fallback-text" aria-hidden="true">{object.oracle_text ?? object.token_rules_text ?? meta?.oracle_text ?? ''}</p>
+        <p class="fallback-text" aria-hidden="true" lang={rulesLang}>{rulesText}</p>
         {#if object.power != null && object.toughness != null}
           <span class="fallback-pt" aria-hidden="true">{object.power}/{object.toughness}</span>
         {/if}
