@@ -1367,13 +1367,11 @@
   },
   {
    "exercised": false,
-   "gap_count": 1,
-   "gaps": [
-    "Effect:unknown: Flying, trample"
-   ],
+   "gap_count": 0,
+   "gaps": [],
    "key": "lord of the pit",
    "name": "Lord of the Pit",
-   "supported": false
+   "supported": true
   },
   {
    "exercised": false,
@@ -1551,13 +1549,11 @@
   },
   {
    "exercised": false,
-   "gap_count": 1,
-   "gaps": [
-    "Effect:unknown: First strike, forestwalk, vigilance"
-   ],
+   "gap_count": 0,
+   "gaps": [],
    "key": "mirri, cat warrior",
    "name": "Mirri, Cat Warrior",
-   "supported": false
+   "supported": true
   },
   {
    "exercised": false,
@@ -2268,33 +2264,27 @@
   },
   {
    "exercised": false,
-   "gap_count": 1,
-   "gaps": [
-    "Effect:unknown: Flying, first strike"
-   ],
+   "gap_count": 0,
+   "gaps": [],
    "key": "skyhunter patrol",
    "name": "Skyhunter Patrol",
-   "supported": false
+   "supported": true
   },
   {
    "exercised": false,
-   "gap_count": 1,
-   "gaps": [
-    "Effect:unknown: Flying, vigilance"
-   ],
+   "gap_count": 0,
+   "gaps": [],
    "key": "skyhunter prowler",
    "name": "Skyhunter Prowler",
-   "supported": false
+   "supported": true
   },
   {
    "exercised": true,
-   "gap_count": 1,
-   "gaps": [
-    "Effect:unknown: Flying, double strike"
-   ],
+   "gap_count": 0,
+   "gaps": [],
    "key": "skyhunter skirmisher",
    "name": "Skyhunter Skirmisher",
-   "supported": false
+   "supported": true
   },
   {
    "exercised": false,
@@ -2359,13 +2349,11 @@
   },
   {
    "exercised": false,
-   "gap_count": 1,
-   "gaps": [
-    "Effect:unknown: Trample, haste"
-   ],
+   "gap_count": 0,
+   "gaps": [],
    "key": "spark elemental",
    "name": "Spark Elemental",
-   "supported": false
+   "supported": true
   },
   {
    "exercised": false,
@@ -2862,13 +2850,11 @@
   },
   {
    "exercised": false,
-   "gap_count": 1,
-   "gaps": [
-    "Effect:unknown: Defender, flying"
-   ],
+   "gap_count": 0,
+   "gaps": [],
    "key": "wall of air",
    "name": "Wall of Air",
-   "supported": false
+   "supported": true
   },
   {
    "exercised": false,
@@ -2984,14 +2970,14 @@
   "present": "el nombre está en el pack"
  },
  "pack": "10e",
- "pack_bytes": 497611,
+ "pack_bytes": 495730,
  "summary": {
   "cards": 354,
   "exercised": 12,
-  "supported": 286,
-  "with_known_gaps": 68
+  "supported": 293,
+  "with_known_gaps": 61
  },
- "pack_sha256": "8f269bf417b9953b4650ba0b9a198e444ceb74e03c569790b678fcf2baa588c5",
+ "pack_sha256": "fa1cd22d5f2b3d2398d3c65f031a54ecf65b65d247e4a8eb47d29a81b1525317",
  "verified": true,
- "generated_at": "2026-10-29T21:28:21.599Z"
+ "generated_at": "2026-10-29T21:46:36.019Z"
 }

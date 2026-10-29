@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  colorLetters, isAtomicCardsFile, isMtgjsonV3SetFile, mtgjsonV3ToAtomic, type MtgjsonSetFile
+  colorLetters, deriveKeywords, isAtomicCardsFile, isMtgjsonV3SetFile, mtgjsonV3ToAtomic, type MtgjsonSetFile
 } from '../catalog-source.ts';
 
 const root = new URL('../../../../', import.meta.url).pathname;
@@ -91,5 +91,43 @@ describe('mtgjsonV3ToAtomic on the real 10E set', () => {
     const face = converted.atomic.data['Wrath of God']![0]!;
     // `text` is English in a localized v3 file; `originalText` is the Spanish one.
     expect(face.text).toContain('Destroy all creatures');
+  });
+});
+
+describe('keyword derivation from the card text', () => {
+  // MTGJSON v3 has no `keywords` field: the keyword line lives inside `text`.
+  // A reader that only matched one keyword per line silently dropped every
+  // combined line ("Flying, double strike"), and Phase then saw an unknown
+  // effect — 62 cards in 10E were reported as parser gaps for that reason.
+  test('one keyword per line', () => {
+    expect(deriveKeywords('Flying')).toEqual(['Flying']);
+    expect(deriveKeywords('Flying\nTrample')).toEqual(['Flying', 'Trample']);
+  });
+
+  test('several keywords on one comma-separated line', () => {
+    expect(deriveKeywords('Flying, double strike')).toEqual(['Flying', 'Double strike']);
+    expect(deriveKeywords('Flying, vigilance')).toEqual(['Flying', 'Vigilance']);
+  });
+
+  test('reminder text belongs to the keyword it follows', () => {
+    expect(deriveKeywords('Flying, first strike (This creature can\'t be blocked except by creatures with flying.)'))
+      .toEqual(['Flying', 'First strike']);
+  });
+
+  test('a line that is not purely keywords yields nothing', () => {
+    // Nothing is inferred: a parameterised keyword or an ability sentence stays
+    // out, and the card keeps its gap instead of looking supported.
+    expect(deriveKeywords('Flying, protection from red')).toEqual([]);
+    expect(deriveKeywords('When this creature enters, draw a card.')).toEqual([]);
+    expect(deriveKeywords('{T}: Add {G}.')).toEqual([]);
+  });
+
+  test('each 10E keyword line that is a pure keyword list becomes keywords', () => {
+    const converted = mtgjsonV3ToAtomic(set);
+    expect(converted.atomic.data['Skyhunter Skirmisher']![0]!.keywords).toEqual(['Flying', 'Double strike']);
+    expect(converted.atomic.data['Air Elemental']![0]!.keywords).toEqual(['Flying']);
+    expect(converted.atomic.data['Serra Angel']![0]!.keywords).toEqual(['Flying', 'Vigilance']);
+    // Not derivable without inventing the parameter: stays a declared gap.
+    expect(converted.atomic.data['White Knight']?.[0]?.keywords ?? []).toEqual([]);
   });
 });

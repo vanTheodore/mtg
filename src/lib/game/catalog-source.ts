@@ -191,17 +191,29 @@ const KEYWORD_NAMES: string[] = [
 ];
 const KEYWORD_BY_LOWER = new Map(KEYWORD_NAMES.map((keyword) => [keyword.toLowerCase(), keyword]));
 
-/** Keyword lines in the card's own text. Returns the ones we can state exactly. */
+/**
+ * Keyword lines in the card's own text. Returns the ones we can state exactly.
+ *
+ * MTGJSON v3 keeps the whole keyword line in one string, commas included
+ * ("Flying, first strike (This creature can't be blocked…)"), so a per-line
+ * lookup misses every combined line and makes Phase report an unknown effect
+ * for cards that are perfectly ordinary.
+ */
 export function deriveKeywords(text: string | undefined): string[] {
   if (!text) return [];
   const out: string[] = [];
   for (const raw of text.split('\n')) {
     const line = raw.trim();
     if (!line) continue;
-    // Reminder text is parenthesised: "Trample (This creature can deal excess…)".
-    const head = line.split(' (')[0]!.trim().toLowerCase();
-    const keyword = KEYWORD_BY_LOWER.get(head);
-    if (keyword && !out.includes(keyword)) out.push(keyword);
+    // Reminder text is parenthesised and belongs to the keyword it follows.
+    const head = line.replace(/\([^)]*\)/g, ' ').trim().replace(/[.;]+$/, '');
+    if (!head) continue;
+    const parts = head.split(',').map((part) => part.trim().toLowerCase()).filter(Boolean);
+    const keywords = parts.map((part) => KEYWORD_BY_LOWER.get(part));
+    // Only a line that is *entirely* known keywords is derivable: a partial
+    // match would hide the rest of the line behind a claim we cannot make.
+    if (!parts.length || keywords.some((keyword) => keyword === undefined)) continue;
+    for (const keyword of keywords as string[]) if (!out.includes(keyword)) out.push(keyword);
   }
   return out;
 }

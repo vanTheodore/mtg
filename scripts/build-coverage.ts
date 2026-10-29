@@ -12,7 +12,11 @@
  *    not match the index, so coverage can never describe different bytes,
  *  - writes `static/data/catalog/coverage/<pack>.<sha8>.json`: the file name is
  *    content-addressed, so a rebuilt pack cannot be served a stale artifact from
- *    an HTTP cache.
+ *    an HTTP cache,
+ *  - and refreshes the machine-checkable fields of `docs/engine-coverage.json`
+ *    (digest, faces, coverage record). Rebuilding a pack used to break the
+ *    certification tests on a stale digest; now the same command keeps the
+ *    record honest and the prose around it untouched.
  *
  * Usage: bun scripts/build-coverage.ts [--bin <coveragepack>] [--exercised docs/packcheck-10e.json]
  */
@@ -37,6 +41,7 @@ const exercised = exercisedPath && readFileSync(exercisedPath, 'utf8')
   : null;
 
 mkdirSync(outDir, { recursive: true });
+const summaryById = new Map<string, { cards: number; supported: number; with_known_gaps: number; exercised: number; file: string }>();
 let total = 0;
 for (const pack of index.packs) {
   const path = join(catalogDir, 'packs', `${pack.id}.json`);
@@ -71,7 +76,42 @@ for (const pack of index.packs) {
   };
   const target = join(outDir, `${pack.id}.${sha256.slice(0, 8)}.json`);
   writeFileSync(target, `${JSON.stringify(out, null, 1)}\n`);
+  summaryById.set(pack.id, {
+    cards: report.summary.cards,
+    supported: report.summary.supported,
+    with_known_gaps: report.summary.with_known_gaps,
+    exercised: report.summary.exercised,
+    file: target
+  });
   total += 1;
   console.log(`${pack.id}: ${report.summary.cards} caras · ${report.summary.supported} soportadas · ${report.summary.with_known_gaps} con limitaciones · ${report.summary.exercised} ejercitadas → ${target}`);
 }
 console.log(`${total} artefacto(s) de cobertura en ${outDir}`);
+
+// Keep the certification record in step with the artifacts: same digest, same
+// face count, and one `coverage` evidence line that names the numbers. Prose in
+// the record is never rewritten — only the fields a test can check.
+const recordPath = 'docs/engine-coverage.json';
+const record = JSON.parse(readFileSync(recordPath, 'utf8')) as {
+  packs: {
+    id: string;
+    sha256: string;
+    faces: number;
+    levels: { coverage_known: boolean };
+    evidence: { kind: string; detail: string }[];
+  }[];
+};
+for (const pack of index.packs) {
+  const summary = summaryById.get(pack.id);
+  const entry = record.packs.find((candidate) => candidate.id === pack.id);
+  if (!summary || !entry) continue;
+  entry.sha256 = pack.sha256;
+  entry.faces = pack.faces;
+  entry.levels.coverage_known = true;
+  const detail = `${summary.file} (${summary.cards} caras: ${summary.supported} soportadas, ${summary.with_known_gaps} con limitaciones conocidas, ${summary.exercised} ejercitadas). Generado por scripts/build-coverage.ts con el binario coveragepack sobre el pack de sha256 ${pack.sha256}.`;
+  const existing = entry.evidence.find((item) => item.kind === 'coverage');
+  if (existing) existing.detail = detail;
+  else entry.evidence.push({ kind: 'coverage', detail });
+}
+writeFileSync(recordPath, `${JSON.stringify(record, null, 1)}\n`);
+console.log(`registro de certificación al día: ${recordPath}`);

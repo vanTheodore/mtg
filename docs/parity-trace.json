@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-29T21:32:00.817Z",
+  "generated_at": "2026-10-29T21:45:45.398Z",
   "native_trace": "/tmp/trace-native.jsonl",
   "wasm_trace": "/tmp/trace-wasm.jsonl",
   "normalization": [

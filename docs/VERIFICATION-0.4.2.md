@@ -56,14 +56,28 @@ Phase → cobertura de reglas conocida → limitaciones conocidas → ejercitada
 partida real. La **ausencia** de cobertura no se declara incompatibilidad: se
 declara desconocida.
 
-Resultado para `10e` (354 caras): **286 soportadas**, **68 con limitaciones
-conocidas**, **12 ejercitadas**. Antes de esta ronda el mismo pack daba 224
-soportadas y 130 con huecos: el defecto era que `scripts/import-set.ts` no
-trasladaba la línea de palabras clave (`Flying`, `First strike`…), que MTGJSON v3
-deja dentro del texto, así que Phase no podía reconocerlas y 62 cartas quedaban
-marcadas como efecto desconocido. Se derivan solo líneas exactas de palabras clave
-(con texto recordatorio opcional); nada se infiere del texto de efecto y las
-palabras clave parametrizadas quedan como hueco declarado.
+Resultado para `10e` (354 caras): **293 soportadas**, **61 con limitaciones
+conocidas**, **12 ejercitadas**. Para `fixture` (90 caras): 89 y 1
+(`Falkenrath Gorger`, un estático con madness dinámico).
+
+El camino hasta aquí muestra los dos defectos que esta ronda tuvo que arreglar, y
+los dos se reprodujeron con una prueba en rojo antes de tocar nada:
+
+1. `scripts/import-set.ts` no trasladaba la línea de palabras clave (`Flying`,
+   `First strike`…), que MTGJSON v3 deja **dentro del texto**: 224 soportadas y
+   130 huecos, de los cuales 62 eran «efecto desconocido» por ese motivo. Se
+   derivan solo líneas exactas de palabras clave; nada se infiere del texto.
+2. `deriveKeywords()` trataba la línea entera como una palabra clave, así que
+   toda línea combinada («Flying, double strike») se perdía completa y Phase la
+   convertía en `Effect:unknown`. Ahora la línea se separa por comas y solo se
+   acepta si **todas** las partes son palabras clave conocidas: `Flying` +
+   `Double strike` se reconoce, `Flying, protection from red` no (queda como hueco
+   declarado en vez de inventar el parámetro). Efecto: 286 → **293** soportadas,
+   68 → **61** huecos.
+
+Nada de esto cambia la partida certificada: con la misma semilla y los mismos
+mazos siguen siendo 1055 pasos, la misma mezcla de acciones y el mismo ganador.
+La cobertura cambió; el juego, no.
 
 Política de inicio, conservadora:
 
@@ -144,15 +158,15 @@ Máquina de 2 vCPU y 3 GB. Las cifras nativas son de un build `dev`
 | Medida | Nativo (`packcheck`) | WASM publicado |
 |---|---|---|
 | Pasos | 1055 | 1055 |
-| Por paso | 6,48 ms | mediana 9,54 ms · p90 12,25 ms · máx 19,92 ms |
-| Arranque del motor | 541,7 ms (primera lectura: 328,2 ms de parseo de packs) | `init` 214,4 ms tras instanciar |
-| Compilación / instanciación | — | 739,8 ms / 20,3 ms |
-| Memoria del módulo | — | 33,1 MB |
+| Por paso | 6,32 ms | mediana 9,48 ms · p90 11,75 ms · máx 26,26 ms |
+| Arranque del motor | 154,6 ms (lectura en caliente; 76,6 ms de parseo de packs) | `init` 177,9 ms tras instanciar |
+| Compilación / instanciación | — | 739,7 ms / 15,9 ms |
+| Memoria del módulo | — | 33,0 MB |
 | Respuesta máxima del ABI | — | 216 375 B |
-| Resolución de mazos | 6,9 ms (40/40 por asiento) | 40/40 tras `INIT` |
+| Resolución de mazos | 0,3 ms (40/40 por asiento) | 40/40 tras `INIT` |
 
 Comparación honesta con 0.4.1: aquel build nativo daba 6,07 ms/paso con 1063
-pasos; hoy 6,48 ms con 1055. Son la misma máquina y el mismo perfil, y la
+pasos; hoy 6,32 ms con 1055. Son la misma máquina y el mismo perfil, y la
 diferencia está dentro del ruido, así que no se presenta como mejora ni como
 regresión.
 
@@ -186,9 +200,9 @@ regresión.
 - Commits de la ronda: `9949def` (índice canónico), `697ce8e` (certificación por
   carta), `04600dc` (paridad paso a paso), y el de integridad de packs.
 - Motor Phase: `c2fbb7a6634a440c7c6b47e6a87a554cc7382f05`, sin cambios.
-- Artefactos de esta ronda: `static/data/catalog/index.json` (v4),
+- Artefactos de esta ronda: `static/data/catalog/index.json` (v5),
   `static/data/catalog/packs/{fixture,10e}.json`,
-  `static/data/catalog/coverage/{fixture.b0e06de9,10e.8f269bf4}.json`,
+  `static/data/catalog/coverage/{fixture.b0e06de9,10e.fa1cd22d}.json`,
   `docs/packcheck-10e.json`, `docs/wasm-packcheck.json`, `docs/parity-trace.json`,
   `docs/engine-coverage.json`.
 
@@ -201,3 +215,9 @@ regeneraron en esta ronda tras corregir la derivación de palabras clave, así q
 números de 0.4.1: los de 0.4.1 viven en su documento y los actuales, aquí. Los
 recuentos de «ejercitadas» tampoco son comparables entre rondas (0.4.1 contaba 23
 caras por otra definición; hoy son 12 nombres ejercitados), y no se mezclan.
+
+Dentro de 0.4.2 conviene además no mezclar los dos estados del pack: antes y
+después del arreglo de palabras clave combinadas, 286/68 y 293/61 describen el
+mismo set con dos lectores distintos. El estado vigente es 293/61 sobre el pack
+`fa1cd22d…`; el anterior (`8f269bf4…`) se conserva solo como paso intermedio del
+diagnóstico y su artefacto ya no se publica.

@@ -50,11 +50,12 @@
   "steps": 1055,
   "timing_ms": {
     "deck_resolve": 0.3,
-    "engine_start": 154.5,
-    "game": 6238.5,
-    "pack_parse": 77.1,
-    "per_step": 5.913,
-    "total": 6401.2
+    "engine_start": 154.6,
+    "game": 6663.3,
+    "pack_parse": 76.6,
+    "per_step": 6.316,
+    "total": 6826.0
   },
+  "trace": null,
   "unresolved_names": []
 }
