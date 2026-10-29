@@ -9,7 +9,7 @@
  *    bytes) still served the old body from memory.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { clearCatalogCache, loadCatalog, planLoad, type CatalogIndex, type CatalogPackMeta } from '../catalog.ts';
+import { clearCatalogCache, loadCatalog, loadPack, planLoad, type CatalogIndex, type CatalogPackMeta } from '../catalog.ts';
 
 interface Served {
   index: CatalogIndex;
@@ -99,6 +99,28 @@ describe('certification gate', () => {
     const plan = planLoad(served.index, ['Shock']);
     expect(plan.required).toContain('lands');
     expect(plan.unverifiedPacks).toEqual(['lands']);
+  });
+});
+
+describe('opening the builder does not download the catalog', () => {
+  test('core packs load, then one pack per selected card, never the rest', async () => {
+    const opened = await loadCatalog(fetcher, [], { corePacksOnly: true, ...options });
+    expect(opened.packs).toEqual(['lands']);
+    expect(requests).toEqual(['/data/catalog/index.json', '/data/catalog/packs/lands.json']);
+
+    requests.length = 0;
+    const pack = await loadPack(fetcher, served.index, 'certified');
+    expect(pack.shock).toEqual({ name: 'Shock' });
+    expect(requests).toEqual(['/data/catalog/packs/certified.json']);
+    // A second selection inside the same pack is free.
+    requests.length = 0;
+    await loadPack(fetcher, served.index, 'certified');
+    expect(requests).toEqual([]);
+  });
+
+  test('an unknown pack id fails loudly instead of fetching a guess', async () => {
+    await expect(loadPack(fetcher, served.index, 'nope')).rejects.toThrow(/no conoce el pack nope/);
+    expect(requests).toEqual([]);
   });
 });
 

@@ -5,11 +5,16 @@ fijado en `bun.lock`, consulta el canal `latest` del registro npm y compara
 versiones con orden semántico (incluidas preversiones). No instala ni modifica
 nada.
 
-## Resultado
+## Resultado (re-auditado el 2026-10-29 tras la ronda 0.4.1)
 
 - **88 paquetes** en `bun.lock`, **10 directos**.
-- **24 desactualizados**, de los cuales **1 es directo**: `typescript`.
-- Ningún otro dependiente directo están por detrás del registro.
+- **9 desactualizados**, de los cuales **1 es directo**: `typescript`.
+- `rolldown` pasó de 1.2.15 a **1.2.16** (`bun update rolldown`): es transitiva de
+  `vite` 8.3.5, cuyo rango `~1.2.14` la admite. Build y pruebas se repitieron
+  después del cambio.
+- El resto de los desactualizados son transitivas fijadas por el rango de su
+  padre (tabla de abajo): actualizarlas obliga a subir el paquete padre, así que
+  quedan como están y se documentan.
 
 | Directo | Fijado | `latest` | Estado |
 | --- | --- | --- | --- |
@@ -36,8 +41,6 @@ bajo un compilador distinto. Se deja anotado, no aplicado.
 
 | Paquete | Fijado | `latest` | Por qué no se toca a mano |
 | --- | --- | --- | --- |
-| `@rolldown/binding-*` (16 plataformas) | 1.2.15 | 1.2.16 | `optionalDependencies` exactas del rolldown que resuelve Vite 8.3.5; suben con Vite |
-| `@oxc-project/types` | 0.155.0 | 0.156.0 | Fijado con `=` por rolldown; mismo caso |
 | `chokidar`, `readdirp` | 4.x | 6 / 5 | Rangos `^4` de Vite/Kit; el salto es de sus padres |
 | `devalue` | 5.9.4 | 6.0.3 | Rango `^5` de SvelteKit/Svelte |
 | `nanoid`, `obug` | 3.3.20 / 2.2.1 | 6 / 3 | Rangos de los padres |

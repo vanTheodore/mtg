@@ -3,8 +3,11 @@
 | Nivel | Qué demuestra | Qué no demuestra |
 |---|---|---|
 | Unitarias Bun (`bun test src/lib`) | Identidad de imagen, fallback, deduplicación, agrupación conservadora de fichas, etiquetas y guías de decisión, imports WASM estrictos | Reglas Phase ni interacción real |
+| Generador de catálogo (`catalog-packs-cli.test.ts`) | El CLI lee **la** fuente que se le indica, rechaza MTGJSON v3 sin escribir nada y produce el pack esperado desde AtomicCards v5 | Que el motor parsee esas cartas |
+| Certificación (`catalog-certification.test.ts`, `certification-evidence.test.ts`) | Un pack `verified` exige digest + evidencia de parseo; abrir el constructor no descarga el catálogo; la caché distingue versiones | Que las 90 cartas se hayan ejercitado una por una |
 | Verificación de procedencia | 868 archivos de `crates/phase-engine/src` coinciden con el hash fijado | Comportamiento correcto de esas reglas |
 | Integración nativa (`engine:parity`, `engine:scenarios`) | API directa de Phase y ABI raw producen el mismo estado; escenarios explícitos alcanzan maná, lanzamiento, objetivos, combate, trigger, ficha y victoria | Que una persona pueda operar la UI |
+| Certificación de pack (`cargo run --bin packcheck`) | El pack que descarga el cliente lo deserializa Phase (`from_json_str`), resuelve el mazo completo y juega una partida real | Que el pack sea correcto por sí solo: sólo dice que el motor lo carga y juega |
 | Integración WASM (`engine-gameplay.spec.ts`) | El Worker, ABI, catálogo, revisión y proyección reales alcanzan victoria y combate | Que los controles Svelte sean usables; llama al cliente desde el test |
 | Interacción visual (`ui-game.spec.ts`) | Una partida se inicia, conserva manos, juega tierras, lanza criaturas, ataca y gana pulsando controles Svelte; sin importar `EngineClient` ni fabricar acciones | IA, red, formatos completos o todas las cartas |
 | Imágenes (contrato/mock) | Fallback identificable, oracle/nombre/cara/ficha, 429, caché y hidden | Arte real descargado de Scryfall |

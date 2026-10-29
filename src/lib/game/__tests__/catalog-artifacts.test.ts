@@ -21,13 +21,16 @@ const SPARKS = [...Array(24).fill('Mountain'), ...Array(16).fill('Lightning Bolt
 const unique = (names: string[]) => [...new Set(names)];
 
 describe('catalog index matches the engine catalog', () => {
-  test('every indexed name exists as an engine entry and vice versa', () => {
-    const indexed = new Set(index.packs.flatMap((pack) => pack.names));
+  test('the demo fixture pack and static/data/cards.json describe the same cards', () => {
+    // `cards.json` is the engine catalog the demo decks use; any other pack is
+    // certified separately (docs/engine-coverage.json + packcheck), so it is not
+    // compared against this file.
+    const fixture = index.packs.find((pack) => pack.core);
+    expect(fixture).toBeDefined();
+    const indexed = new Set(fixture!.names);
     const engine = new Set(Object.keys(cards));
-    const onlyIndexed = [...indexed].filter((name) => !engine.has(name));
-    const onlyEngine = [...engine].filter((name) => !indexed.has(name));
-    expect(onlyIndexed).toEqual([]);
-    expect(onlyEngine).toEqual([]);
+    expect([...indexed].filter((name) => !engine.has(name))).toEqual([]);
+    expect([...engine].filter((name) => !indexed.has(name))).toEqual([]);
   });
 
   test('pack files exist, parse and hash to the recorded digest', async () => {
