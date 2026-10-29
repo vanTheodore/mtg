@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/phase-rs/phase",
+  "commit": "c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
+  "version": "0.119.0",
+  "license": "MIT OR Apache-2.0",
+  "toolchain_upstream": "nightly-2026-04-19",
+  "retrieved": "2026-10-29"
+}

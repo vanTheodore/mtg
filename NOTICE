@@ -1,0 +1,13 @@
+Mesa — cliente MTG independiente
+Copyright (c) 2026 vanTheodore and Mesa contributors.
+
+This project incorporates software from phase.rs:
+  https://github.com/phase-rs/phase
+  commit c2fbb7a6634a440c7c6b47e6a87a554cc7382f05
+Copyright (c) 2024-2026 phase.rs contributors.
+Licensed under MIT OR Apache-2.0; see licenses/PHASE-LICENSE-MIT and
+licenses/PHASE-LICENSE-APACHE. Upstream NOTICE: licenses/PHASE-NOTICE.
+
+Card metadata is derived from MTGJSON (MIT) and Scryfall identifiers.
+Magic: The Gathering card illustrations are proprietary resources of
+Wizards of the Coast and are NOT redistributed by this repository.
