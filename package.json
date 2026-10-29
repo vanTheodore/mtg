@@ -1,6 +1,6 @@
 {
   "name": "mesa-mtg",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.4",
@@ -20,7 +20,8 @@
     "verify": "bun run check && bun test src/lib && bun run engine:verify && bun run build",
     "engine:parity": "bun scripts/parity.ts",
     "engine:scenarios": "bun scripts/scenarios.ts",
-    "engine:verify": "bun scripts/verify-engine.ts"
+    "engine:verify": "bun scripts/verify-engine.ts",
+    "deps:audit": "bun scripts/deps-audit.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
