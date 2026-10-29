@@ -56,6 +56,15 @@ Phase → cobertura de reglas conocida → limitaciones conocidas → ejercitada
 partida real. La **ausencia** de cobertura no se declara incompatibilidad: se
 declara desconocida.
 
+Una precisión que el informe no puede esconder: el set 10E tiene **363 cartas** y el
+pack publica **354 caras**. Las 9 que faltan (`cancel`, `giant growth`,
+`grizzly bears`, `naturalize`, `rampant growth`, `serra angel`, `shock`,
+`unsummon`, `wrath of god`) son las mismas cartas que ya sirve el pack core: el
+índice las atribuye a su dueño y las deja fuera del pack nuevo, con la lista
+completa en `overlap` — no desaparecen del catálogo, pero tampoco se duplican con
+dos textos distintos. Por eso la cobertura de esas 9 se evalúa con el artefacto
+del pack `fixture`, no con el de `10e`.
+
 Resultado para `10e` (354 caras): **293 soportadas**, **61 con limitaciones
 conocidas**, **12 ejercitadas**. Para `fixture` (90 caras): 89 y 1
 (`Falkenrath Gorger`, un estático con madness dinámico).
@@ -188,6 +197,18 @@ Comparación honesta con 0.4.1: aquel build nativo daba 6,07 ms/paso con 1063
 pasos; hoy 6,32 ms con 1055. Son la misma máquina y el mismo perfil, y la
 diferencia está dentro del ruido, así que no se presenta como mejora ni como
 regresión.
+
+Órdenes ejecutados en esta ronda, con su resultado:
+
+| Orden | Resultado |
+|---|---|
+| `bun test src/lib` | 156 pruebas, **0 fallos** |
+| `bun run check` | 0 errores, 0 avisos |
+| `bun run build` | correcto (`build/`) |
+| `bun run engine:verify` | hashes de Phase sin cambios (`ok: true`) |
+| `packcheck` / `wasm-packcheck` | regenerados; 1055 pasos cada uno |
+| `parity-trace` / `parity-seeds` | 0 divergencias; 5/5 semillas |
+| `build-coverage` | 2 artefactos; registro de certificación al día |
 
 ## 6. Lo que quedó bloqueado
 
