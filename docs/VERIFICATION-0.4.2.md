@@ -124,6 +124,22 @@ Si hubiera divergencia, el informe incluye el primer paso distinto, la ruta del
 campo, ambos valores y el comando para reproducir el prefijo exacto
 (`--max-steps <paso>`), que es el escenario reproducible mínimo pedido.
 
+Un solo escenario, por bien trazado que esté, es una anécdota. `scripts/parity-seeds.ts`
+repite la comparación con **cinco semillas** y compara pasos, mezcla de acciones,
+ganador, resolución por asiento y rechazos:
+
+| Semilla | Pasos | Ganador | Resultado |
+|---|---|---|---|
+| 1 | 849 | asiento 1 | idéntico |
+| 3 | 818 | asiento 1 | idéntico |
+| 7 | 1055 | asiento 1 | idéntico |
+| 11 | 1535 | asiento 0 | idéntico |
+| 42 | 855 | asiento 0 | idéntico |
+
+Que gane un asiento distinto en dos de las cinco es lo que impide que «mismo
+ganador» sea un accidente del mazo: la comparación no está mirando siempre la
+misma partida. Resumen versionado en `docs/parity-seeds.json`.
+
 ## 4. Integridad del pack antes de usarlo
 
 El índice ya declaraba `bytes` y `sha256`; el cargador ahora **los exige**:
@@ -207,6 +223,7 @@ regresión.
   `static/data/catalog/packs/{fixture,10e}.json`,
   `static/data/catalog/coverage/{fixture.b0e06de9,10e.fa1cd22d}.json`,
   `docs/packcheck-10e.json`, `docs/wasm-packcheck.json`, `docs/parity-trace.json`,
+  `docs/parity-seeds.json`,
   `docs/engine-coverage.json`.
 
 ## 9. Separación de evidencia respecto de 0.4.1

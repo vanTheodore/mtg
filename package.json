@@ -25,6 +25,7 @@
     "engine:packcheck": "cargo run --release -p mtg-engine-wasm --bin packcheck --",
     "wasm:packcheck": "bun scripts/wasm-packcheck.ts",
     "parity:trace": "bun scripts/parity-trace.ts",
+    "parity:seeds": "bun scripts/parity-seeds.ts",
     "coverage:build": "bun scripts/build-coverage.ts",
     "engine:verify": "bun scripts/verify-engine.ts",
     "deps:audit": "bun scripts/deps-audit.ts"

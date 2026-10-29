@@ -89,6 +89,27 @@ describe('native engine and shipped WASM resolve the same game', () => {
     }).toEqual({ actions: true, legal: true, states: true, actors: true, waiting: true });
   });
 
+  test('five seeds reach the same game on both engines, not just the tuned one', () => {
+    const seeds = readJson('docs/parity-seeds.json') as {
+      equal: boolean;
+      seeds: { seed: number; equal: boolean; steps: { native: number; wasm: number }; winner: { native: number | null; wasm: number | null }; differences: string[] }[];
+    };
+    expect(seeds.equal).toBe(true);
+    expect(seeds.seeds.length).toBeGreaterThanOrEqual(5);
+    for (const result of seeds.seeds) {
+      expect({ seed: result.seed, equal: result.equal, differences: result.differences }).toEqual({
+        seed: result.seed,
+        equal: true,
+        differences: []
+      });
+      expect(result.steps.native).toBe(result.steps.wasm);
+      expect(result.winner.native).toBe(result.winner.wasm);
+    }
+    // Both seats win at least once: the agreement is not "always the same side".
+    const winners = new Set(seeds.seeds.map((result) => result.winner.native));
+    expect([...winners].sort()).toEqual([0, 1]);
+  });
+
   test('the comparison states what it normalizes and nothing else', () => {
     // Only wall-clock/envelope data is excluded, and the list is the contract:
     // if someone adds a state field here, this test fails.
