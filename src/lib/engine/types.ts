@@ -6,6 +6,22 @@ export interface GameAction {
   data?: Record<string, unknown>;
 }
 
+export interface TokenImageRef {
+  scryfall_id: string;
+  scryfall_oracle_id?: string;
+  face_name?: string;
+  preset_id: string;
+}
+
+export interface TokenArtDescriptor {
+  power?: number | null;
+  toughness?: number | null;
+  colors: string[];
+  subtypes: string[];
+  keywords?: string[];
+  has_abilities: boolean;
+}
+
 export interface GameObject {
   id: ObjectId;
   card_id: number;
@@ -27,7 +43,10 @@ export interface GameObject {
   printed_ref?: { oracle_id: string; face_name: string } | null;
   back_face?: { name?: string } | null;
   display_source?: string;
-  token_image_ref?: unknown;
+  token_image_ref?: TokenImageRef | null;
+  token_art?: TokenArtDescriptor | null;
+  is_emblem?: boolean;
+  emblem_source?: { name: string; printed_ref?: { oracle_id: string; face_name: string } | null } | null;
   card_types?: { core_types?: string[]; subtypes?: string[]; supertypes?: string[] };
   mana_cost?: unknown;
   oracle_text?: string | null;

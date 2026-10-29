@@ -2,6 +2,7 @@
   import CardView from './CardView.svelte';
   import { session } from '#lib/game/session.svelte.ts';
   import { actionsForObject, describeAction } from '#lib/game/actions.ts';
+  import { isHidden } from '#lib/game/cards.ts';
   import type { CardMeta, GameAction, GameObject } from '#lib/engine/types.ts';
 
   let {
@@ -16,7 +17,8 @@
   let dialog: HTMLDialogElement | undefined = $state();
   const allObjects = $derived(objects ?? session.snapshot?.state.objects ?? {});
   const object = $derived(session.inspect !== null ? allObjects[String(session.inspect)] : undefined);
-  const actions = $derived(object ? actionsForObject(byObject ?? session.snapshot?.legal.by_object ?? {}, object.id) : []);
+  const hidden = $derived(object ? isHidden(object) : false);
+  const actions = $derived(object && !hidden ? actionsForObject(byObject ?? session.snapshot?.legal.by_object ?? {}, object.id) : []);
 
   $effect(() => {
     if (object && dialog && !dialog.open) dialog.showModal();
@@ -37,10 +39,10 @@
         <CardView {object} meta={metaFor()} />
       </div>
       <div class="inspect-info">
-        <h2>{object.name}</h2>
+        <h2>{hidden ? 'Carta oculta' : object.name}</h2>
         <p class="muted">Zona: {object.zone} · Controlador: Jugador {object.controller + 1}</p>
-        {#if object.tapped}<p>Girada</p>{/if}
-        {#if object.transformed}<p>Transformada</p>{/if}
+        {#if !hidden && object.tapped}<p>Girada</p>{/if}
+        {#if !hidden && object.transformed}<p>Transformada</p>{/if}
         {#if actions.length}
           <h3>Acciones legales</h3>
           <div class="actions">

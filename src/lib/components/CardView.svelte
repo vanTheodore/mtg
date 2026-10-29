@@ -1,6 +1,6 @@
 <script lang="ts">
   import { cardImageLookup, isHidden, manaText, typeLine } from '#lib/game/cards.ts';
-  import { scryfallImageUrl } from '#lib/game/scryfall.ts';
+  import { resolveCardImage, type ImageFailureReason } from '#lib/game/scryfall.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
 
   let {
@@ -22,33 +22,33 @@
   const hidden = $derived(isHidden(object));
   const lookup = $derived.by(() => {
     const base = cardImageLookup(object);
-    const oracleId = base.oracleId ?? meta?.oracle_id ?? undefined;
-    if (!oracleId) return base;
-    return {
-      ...base,
-      oracleId,
-      // Prefer the engine's stable face index for transformed cards; the
-      // printed face name may still describe the front face.
-      faceName: object.transformed ? undefined : base.faceName ?? meta?.name
-    };
+    if (hidden || base.kind === 'token') return base;
+    return { ...base, oracleId: base.oracleId ?? meta?.oracle_id ?? undefined, faceName: base.faceName ?? meta?.name };
   });
   let imageUrl = $state<string | null>(null);
-  let imageState = $state<'loading' | 'ready' | 'error' | 'none'>('loading');
+  let imageState = $state<'resolving' | 'loading-art' | 'ready' | 'error' | 'hidden'>('resolving');
+  let failureReason = $state<ImageFailureReason | null>(null);
   let retryToken = $state(0);
+  const failureLabels: Record<ImageFailureReason, string> = {
+    'no-identity': 'Sin identificador de imagen', 'not-found': 'Imagen no disponible',
+    network: 'Sin conexión con el servicio de imágenes', 'rate-limit': 'Límite de imágenes; reintenta más tarde',
+    server: 'Servicio de imágenes no disponible', 'invalid-response': 'Respuesta de imagen no válida',
+    'image-download': 'No se pudo cargar la ilustración'
+  };
 
   $effect(() => {
-    const key = `${lookup.oracleId}:${lookup.faceName}:${retryToken}`;
-    if (hidden || !lookup.oracleId) {
-      imageState = 'none';
-      imageUrl = null;
-      return;
-    }
+    const descriptor = lookup;
+    const fresh = retryToken > 0;
+    void retryToken;
+    imageUrl = null;
+    failureReason = null;
+    if (hidden) { imageState = 'hidden'; return; }
     let cancelled = false;
-    imageState = 'loading';
-    scryfallImageUrl(lookup).then((url) => {
+    imageState = 'resolving';
+    resolveCardImage(descriptor, fresh).then((result) => {
       if (cancelled) return;
-      imageUrl = url;
-      imageState = url ? 'ready' : 'error';
+      if (result.status === 'ready') { imageUrl = result.url; imageState = 'loading-art'; }
+      else { failureReason = result.reason; imageState = 'error'; }
     });
     return () => { cancelled = true; };
   });
@@ -74,6 +74,7 @@
     data-hidden={String(hidden)}
     role="button"
     tabindex="0"
+    data-image-state={imageState}
     aria-label={hidden ? 'Carta oculta' : undefined}
     aria-pressed={selected}
     onclick={() => onselect?.(object.id)}
@@ -85,31 +86,34 @@
         <span class="back-mark">M</span>
         <span class="back-text">Carta oculta</span>
       </div>
-    {:else if imageState === 'ready' && imageUrl}
-      <img
-        src={imageUrl}
-        alt={object.name}
-        loading="lazy"
-        decoding="async"
-        class:tapped-img={object.tapped}
-        onerror={() => { imageState = 'error'; imageUrl = null; }}
-      />
     {:else}
-      <div class="fallback" class:loading={imageState === 'loading'}>
+      {#if imageUrl}
+        <img
+          src={imageUrl}
+          alt={object.name}
+          loading="lazy"
+          decoding="async"
+          class:loaded={imageState === 'ready'}
+          class:tapped-img={object.tapped}
+          onload={() => { imageState = 'ready'; }}
+          onerror={() => { imageState = 'error'; failureReason = 'image-download'; imageUrl = null; }}
+        />
+      {/if}
+      <div class="fallback" aria-hidden={imageState === 'ready'}>
         <div class="fallback-head">
           <span class="fallback-name">{object.name || meta?.name || 'Carta'}</span>
           <span class="fallback-cost">{manaText(object.mana_cost ?? meta?.mana_cost)}</span>
         </div>
         <div class="fallback-type">{typeLine(object, meta)}</div>
         <div class="fallback-art" aria-hidden="true">
-          {#if imageState === 'loading'}<span class="spinner"></span>{:else}<span>◇</span>{/if}
+          {#if imageState === 'resolving' || imageState === 'loading-art'}<span class="spinner"></span>{:else}<span>◇</span>{/if}
         </div>
         <p class="fallback-text">{object.oracle_text ?? meta?.oracle_text ?? ''}</p>
         {#if object.power != null && object.toughness != null}
           <span class="fallback-pt">{object.power}/{object.toughness}</span>
         {/if}
-        {#if imageState === 'error'}<span class="art-status">Imagen no disponible</span>
-        {:else if imageState === 'none'}<span class="art-status">Sin identificador de imagen</span>{/if}
+        {#if imageState === 'error' && failureReason}<span class="art-status">{failureLabels[failureReason]}</span>
+        {:else if imageState === 'resolving' || imageState === 'loading-art'}<span class="art-status">Buscando ilustración…</span>{/if}
       </div>
     {/if}
     {#if object.tapped && !hidden}<span class="badge tapped-badge">Girada</span>{/if}
@@ -139,7 +143,8 @@
     cursor: pointer;
   }
   .card.selected { border-color: var(--accent); }
-  .card img { width: 100%; height: 100%; object-fit: cover; border-radius: calc(var(--card-radius) - 2px); display: block; }
+  .card img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; border-radius: calc(var(--card-radius) - 2px); display: block; opacity: 0; }
+  .card img.loaded { opacity: 1; }
   .card img.tapped-img { transform: rotate(90deg) scale(.78); }
   .back { width: 100%; height: 100%; border-radius: calc(var(--card-radius) - 2px); background: repeating-linear-gradient(45deg, var(--surface-3), var(--surface-3) 8px, var(--surface-2) 8px, var(--surface-2) 16px); display: grid; place-content: center; gap: .4rem; text-align: center; }
   .back-mark { font-size: 2rem; font-weight: 700; color: var(--accent); }
@@ -154,7 +159,7 @@
   .fallback-pt { align-self: flex-end; font-size: .72rem; font-weight: 700; }
   .art-status { font-size: .58rem; color: var(--ink-muted); }
   .retry { position: absolute; left: 50%; bottom: .35rem; transform: translateX(-50%); z-index: 2; font-size: .62rem; padding: .15rem .35rem; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--ink); white-space: nowrap; }
-  .badge { position: absolute; font-size: .6rem; padding: .1rem .3rem; border-radius: 5px; background: var(--accent); color: var(--accent-ink); font-weight: 650; }
+  .badge { position: absolute; z-index: 2; font-size: .6rem; padding: .1rem .3rem; border-radius: 5px; background: var(--accent); color: var(--accent-ink); font-weight: 650; }
   .tapped-badge { top: -8px; right: -6px; }
   .transform-badge { bottom: -8px; left: -6px; }
   .attach-badge { top: -8px; left: -6px; background: var(--surface-3); color: var(--ink); }
