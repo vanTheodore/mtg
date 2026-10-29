@@ -27,7 +27,9 @@ export function actionObjectId(a: GameAction): ObjectId | undefined {
 }
 export function manaActions(s: EngineSnapshot | null, id?: ObjectId): GameAction[] {
   if (!s) return [];
-  const groups = Object.values(s.legal.by_object).flat();
+  // Asking for one permanent must not walk every object on the board: the
+  // per-card pass does this for each permanent on every click.
+  const groups = id === undefined ? Object.values(s.legal.by_object).flat() : (s.legal.by_object[String(id)] ?? []);
   const seen = new Set<string>();
   return [...s.legal.actions, ...groups].filter((a) => {
     if (!isManaAction(a) || (id !== undefined && actionObjectId(a) !== id)) return false;
