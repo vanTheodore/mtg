@@ -10,9 +10,14 @@
  * not involved — but every card, action and rule decision comes from Phase.
  *
  * Usage:
- *   bun scripts/wasm-packcheck.ts [packs...] [--decks <file>] [--seed 7] [--max-steps 4000] [--out docs/wasm-packcheck.json]
+ *   bun scripts/wasm-packcheck.ts [packs...] [--decks <file>] [--seed 7] [--max-steps 4000]
+ *                                 [--out docs/wasm-packcheck.json] [--trace <path>]
+ *
+ * `--trace` writes the same JSON lines `packcheck --trace` writes (actor, action,
+ * every legal action, projected state per step) so `scripts/parity-trace.ts` can
+ * diff native and WASM step by step instead of only comparing totals.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { buildImports } from '../src/lib/engine/wasm-imports.ts';
 import { ENGINE_PROTOCOL_VERSION, type EngineReply, type EngineSnapshot, type GameAction } from '../src/lib/engine/types.ts';
 import type { Catalog } from '../src/lib/game/catalog.ts';
@@ -33,6 +38,10 @@ const decksPath = flag('decks', 'docs/packcheck-10e-decks.json');
 const seed = Number(flag('seed', '7'));
 const maxSteps = Number(flag('max-steps', '4000'));
 const outPath = flag('out', '');
+const tracePath = flag('trace', '');
+// Synchronous writes: the script ends with `process.exit`, which would discard a
+// buffered stream's tail.
+const traceFd = tracePath ? openSync(tracePath, 'w') : null;
 const packPaths = argv.filter((token, at) => !token.startsWith('--') && !(at > 0 && argv[at - 1]?.startsWith('--')));
 if (!packPaths.length) {
   console.error('uso: bun scripts/wasm-packcheck.ts <pack.json[,pack2.json…]> [--decks …] [--seed 7] [--max-steps 4000]');
@@ -173,6 +182,16 @@ while (steps < maxSteps && !outcome) {
   if (!action) break;
   kinds[action.type] = (kinds[action.type] ?? 0) + 1;
   const actor = snapshot.state.priority_player;
+  if (traceFd !== null) {
+    writeSync(traceFd, `${JSON.stringify({
+      step: steps,
+      actor,
+      waiting: snapshot.state.waiting_for?.type ?? null,
+      action,
+      legal: actions,
+      state: snapshot.state
+    })}\n`);
+  }
   const started = performance.now();
   const reply = call(OP.ACTION, { actor, action, expected_revision: snapshot.revision });
   stepLatencies.push(performance.now() - started);
@@ -184,6 +203,9 @@ while (steps < maxSteps && !outcome) {
   outcome = snapshot.outcome ?? null;
   steps += 1;
 }
+
+if (traceFd !== null) closeSync(traceFd);
+const rejected = 0;
 
 const players = snapshot.state.players.map((player) => ({
   id: player.id,
@@ -222,6 +244,7 @@ const report = {
     p90: Math.round(percentile(stepLatencies, 0.9) * 100) / 100,
     max: Math.round(Math.max(...stepLatencies, 0) * 100) / 100
   },
+  rejections: rejected,
   wasm_calls: calls,
   wasm_call_ms: Math.round(wasmCallMs * 10) / 10,
   max_response_bytes: responseBytes,

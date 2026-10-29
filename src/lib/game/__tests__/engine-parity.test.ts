@@ -8,6 +8,11 @@
  *
  * If the bridge, the ABI or the pack merge changed behaviour, the step count,
  * the action mix or the winner would drift. They are compared here, not assumed.
+ *
+ * `docs/parity-trace.json` goes further: `scripts/parity-trace.ts` diffs both
+ * runs step by step — actor, action with its arguments, every legal action and
+ * the full projected state for that viewer. The traces themselves are 100 MB of
+ * generated data and are not committed; the summary is.
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
@@ -30,6 +35,19 @@ interface Report {
 
 const native = readJson('docs/packcheck-10e.json') as Report;
 const wasm = readJson('docs/wasm-packcheck.json') as Report;
+const trace = readJson('docs/parity-trace.json') as {
+  equal: boolean;
+  native_steps: number;
+  wasm_steps: number;
+  steps_compared: number;
+  actions_equal: boolean;
+  legal_sets_equal: boolean;
+  states_equal: boolean;
+  actors_equal: boolean;
+  waiting_equal: boolean;
+  first_divergence: unknown;
+  normalization: string[];
+};
 const normalizeOutcome = (report: Report) =>
   report.outcome ? report.outcome.winner ?? null : report.game_over ? report.game_over.winner : null;
 
@@ -55,5 +73,29 @@ describe('native engine and shipped WASM resolve the same game', () => {
   test('the WASM run reports the engine it actually loaded', () => {
     expect(wasm.catalog_faces).toBe(444);
     expect(native.faces).toBe(444);
+  });
+
+  test('every step matches: action, arguments, legal set and projected state', () => {
+    expect(trace.equal).toBe(true);
+    expect(trace.first_divergence).toBeNull();
+    expect(trace.steps_compared).toBe(native.steps);
+    expect(trace.native_steps).toBe(trace.wasm_steps);
+    expect({
+      actions: trace.actions_equal,
+      legal: trace.legal_sets_equal,
+      states: trace.states_equal,
+      actors: trace.actors_equal,
+      waiting: trace.waiting_equal
+    }).toEqual({ actions: true, legal: true, states: true, actors: true, waiting: true });
+  });
+
+  test('the comparison states what it normalizes and nothing else', () => {
+    // Only wall-clock/envelope data is excluded, and the list is the contract:
+    // if someone adds a state field here, this test fails.
+    expect(trace.normalization).toEqual([
+      'metrics: tiempos de pared (no forman parte de la partida)',
+      'envelope del run: bytes, memoria y tiempos; no se incluyen en el trace',
+      'nada dentro de state/legal/action se normaliza'
+    ]);
   });
 });

@@ -5,7 +5,12 @@
 //! This is the link between "the pack file looks right" and "the engine plays
 //! with it". Output is JSON so the certification report is reproducible.
 //!
-//! usage: packcheck <pack.json[,pack2.json…]> <decks.json> [seed] [max-steps]
+//! usage: packcheck <pack.json[,pack2.json…]> <decks.json> [seed] [max-steps] [--trace <path>]
+//!
+//! `--trace` writes one JSON line per step with the actor, the action applied,
+//! every legal action, and the projected state *for the acting viewer* — the same
+//! projection the WASM bridge returns. `scripts/parity-trace.ts` diffs it against
+//! the trace of the same game played through the shipped `.wasm`.
 //!
 //! Several packs may be listed: the client fetches every pack a deck needs and
 //! merges them into one flat catalog before the engine sees it, so the check
@@ -68,6 +73,10 @@ fn main() {
     let started = Instant::now();
     let seed: u64 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(42);
     let max_steps: usize = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(400);
+    let trace_path = args.iter().position(|a| a == "--trace").and_then(|at| args.get(at + 1)).cloned();
+    let mut trace: Option<std::fs::File> = trace_path.as_ref().map(|path| {
+        std::fs::File::create(path).unwrap_or_else(|err| panic!("trace {path}: {err}"))
+    });
 
     // Merge packs exactly like `mergeCatalogs` on the client: first wins.
     let mut merged = serde_json::Map::new();
@@ -133,6 +142,23 @@ fn main() {
         let viewer = turn_control::authorized_submitter(&state).unwrap_or(state.priority_player);
         let (legal, _, _) = engine::ai_support::legal_actions_for_viewer(&state, viewer);
         let Some(action) = choose(&legal, &state) else { break };
+        if let Some(file) = trace.as_mut() {
+            use std::io::Write;
+            let filtered = filter_state_for_viewer(&state, viewer);
+            let legal_json: Vec<serde_json::Value> = legal
+                .iter()
+                .map(|candidate| serde_json::to_value(candidate).unwrap_or(serde_json::Value::Null))
+                .collect();
+            let line = serde_json::json!({
+                "step": steps,
+                "actor": viewer.0,
+                "waiting": serde_json::to_value(&state.waiting_for).ok().and_then(|v| v.get("type").cloned()).unwrap_or(serde_json::Value::Null),
+                "action": serde_json::to_value(&action).unwrap_or(serde_json::Value::Null),
+                "legal": legal_json,
+                "state": mtg_engine_wasm::project_state(&filtered),
+            });
+            writeln!(file, "{line}").expect("write trace");
+        }
         *kinds.entry(action_kind(&action)).or_insert(0) += 1;
         if let GameAction::CastSpell { object_id, .. } = &action {
             if let Some(object) = state.objects.get(object_id) {
@@ -201,6 +227,7 @@ fn main() {
         "game_over": game_over.map(|winner| serde_json::json!({ "winner": winner })),
         "library_counts": library_counts,
         "exercised_names": exercised.into_iter().collect::<Vec<_>>(),
+        "trace": trace_path,
         "timing_ms": {
             "pack_parse": (parse_ms * 10.0).round() / 10.0,
             "deck_resolve": (resolve_ms * 10.0).round() / 10.0,

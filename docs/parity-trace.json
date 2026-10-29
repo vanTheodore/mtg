@@ -1,0 +1,20 @@
+{
+  "generated_at": "2026-10-29T21:32:00.817Z",
+  "native_trace": "/tmp/trace-native.jsonl",
+  "wasm_trace": "/tmp/trace-wasm.jsonl",
+  "normalization": [
+    "metrics: tiempos de pared (no forman parte de la partida)",
+    "envelope del run: bytes, memoria y tiempos; no se incluyen en el trace",
+    "nada dentro de state/legal/action se normaliza"
+  ],
+  "equal": true,
+  "native_steps": 1055,
+  "wasm_steps": 1055,
+  "steps_compared": 1055,
+  "actions_equal": true,
+  "legal_sets_equal": true,
+  "states_equal": true,
+  "actors_equal": true,
+  "waiting_equal": true,
+  "first_divergence": null
+}
