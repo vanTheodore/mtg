@@ -91,14 +91,45 @@ describe('the 10E end-to-end deck', () => {
     expect(/const LIMITED = '([^']+)'/.exec(spec)?.[1]).toBe('Arcane Teachings');
   });
 
-  test('the creature names the spec asserts about exist and are playable', () => {
-    const creatures = [...(/const CREATURES = \[([\s\S]*?)\];/.exec(spec)?.[1] ?? '').matchAll(/'([^']+)'/g)]
-      .map((match) => match[1]!);
-    expect(creatures.length).toBeGreaterThan(5);
-    for (const name of creatures) {
-      expect({ card: name, inDeck: parsed.lines.some((line) => line.name === name) })
-        .toEqual({ card: name, inDeck: true });
-      expect({ card: name, gaps: limitationOf(name) }).toEqual({ card: name, gaps: [] });
+  test('every selector the spec uses exists in the components it drives', () => {
+    // The spec cannot run here, so this is the closest guard against silent
+    // drift: rename an attribute in a component and the E2E would fail in a
+    // browser an hour later. [what the spec asks for, what the component renders,
+    // which file must render it].
+    const contracts: [string, string, string][] = [
+      ["getByTestId('deck-builder')", 'data-testid="deck-builder"', 'src/lib/components/DeckBuilder.svelte'],
+      ["getByTestId('deck-total')", 'data-testid="deck-total"', 'src/lib/components/DeckBuilder.svelte'],
+      ['[data-state=', 'data-state=', 'src/lib/components/DeckBuilder.svelte'],
+      ['Pega una lista', 'Pega una lista', 'src/lib/components/DeckBuilder.svelte'],
+      ['Jugar con este mazo', 'Jugar con este mazo', 'src/lib/components/DeckBuilder.svelte'],
+      ['[data-card-id=', 'data-card-id=', 'src/lib/components/CardView.svelte'],
+      ['data-attack-options', 'data-attack-options=', 'src/lib/components/CardView.svelte'],
+      ['data-block-options', 'data-block-options=', 'src/lib/components/CardView.svelte'],
+      ['data-combat-role', 'data-combat-role=', 'src/lib/components/CardView.svelte'],
+      ['.fallback-name', 'fallback-name', 'src/lib/components/CardView.svelte'],
+      ['Tu mano', 'Tu mano · Jugador', 'src/lib/components/Board.svelte'],
+      ['Tu campo de batalla', 'Tu campo de batalla · Jugador', 'src/lib/components/Board.svelte'],
+      ['Campo de batalla', 'Campo de batalla · Jugador', 'src/lib/components/Board.svelte'],
+      ['Decisión pendiente', 'Decisión pendiente', 'src/lib/components/DecisionPanel.svelte'],
+      ['Bloqueos elegidos', 'Bloqueos elegidos', 'src/lib/components/DecisionPanel.svelte'],
+      ['Confirmar bloqueos', 'Confirmar bloqueos', 'src/lib/components/DecisionPanel.svelte'],
+      ['Registro de la partida', 'Registro de la partida', 'src/lib/components/HistoryPanel.svelte'],
+      ['Paso de asiento', 'Paso de asiento', 'src/lib/components/Board.svelte'],
+      ['Estoy listo', 'Estoy listo', 'src/lib/components/Board.svelte'],
+      ['.handoff', 'class="handoff"', 'src/lib/components/Board.svelte']
+    ];
+    for (const [specNeedle, componentNeedle, file] of contracts) {
+      expect({ needle: specNeedle, inSpec: spec.includes(specNeedle) }).toEqual({ needle: specNeedle, inSpec: true });
+      const source = readFileSync(join(root, file), 'utf8');
+      expect({ needle: componentNeedle, file, rendered: source.includes(componentNeedle) })
+        .toEqual({ needle: componentNeedle, file, rendered: true });
+    }
+  });
+
+  test('the selector attributes are in the components, not only in the spec', () => {
+    const cardView = readFileSync(join(root, 'src/lib/components/CardView.svelte'), 'utf8');
+    for (const attribute of ['data-card-id', 'data-attack-options', 'data-block-options', 'data-combat-role', 'role="button"', 'tabindex="0"']) {
+      expect({ attribute, present: cardView.includes(attribute) }).toEqual({ attribute, present: true });
     }
   });
 
