@@ -15,6 +15,7 @@
   let decks = $state<unknown>(null);
   let loadError = $state<string | null>(null);
   let seed = $state(42);
+  let handoffButton = $state<HTMLButtonElement | undefined>();
 
   const snapshot = $derived(session.snapshot);
   const objects = $derived(snapshot?.state.objects ?? {});
@@ -27,6 +28,10 @@
   const graveyardObjects = $derived((player?.graveyard ?? []).map((id) => objects[String(id)]).filter(Boolean) as GameObject[]);
   const battlefieldObjects = $derived((snapshot?.state.battlefield ?? []).map((id) => objects[String(id)]).filter(Boolean) as GameObject[]);
   const needsHandoff = $derived(snapshot !== null && session.revealedViewer !== null && snapshot.viewer !== session.revealedViewer);
+
+  $effect(() => {
+    if (needsHandoff) handoffButton?.focus();
+  });
 
   onMount(async () => {
     try {
@@ -55,7 +60,7 @@
 
 <svelte:head><title>Mesa · Cliente MTG</title></svelte:head>
 
-<div class="app" style="--card-w: {cardWidth}px" data-density={session.density}>
+<div class="app" style="--card-w: {cardWidth}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer}>
   <header class="topbar">
     <div class="brand">
       <span class="mark" aria-hidden="true">M</span>
@@ -90,7 +95,7 @@
       {#if session.status === 'loading'}<p class="muted">Descargando y compilando WASM, cargando catálogo mínimo…</p>{/if}
     </section>
   {:else}
-    <main class="layout">
+    <main class="layout" inert={needsHandoff} aria-hidden={needsHandoff}>
       <section class="rival-bar" aria-label="Rival">
         <div class="life" class:low={rival && rival.life <= 5}>
           <span class="life-label">Jugador {opponent + 1}</span>
@@ -164,7 +169,7 @@
       <div class="handoff-card">
         <h2>Pasa el dispositivo al Jugador {snapshot!.viewer + 1}</h2>
         <p>La mano del jugador anterior queda oculta. Confirma cuando esté listo para ver su propia mano.</p>
-        <button type="button" class="primary" onclick={() => session.confirmHandoff()}>Estoy listo</button>
+        <button type="button" class="primary" bind:this={handoffButton} onclick={() => session.confirmHandoff()}>Estoy listo</button>
       </div>
     </div>
   {/if}

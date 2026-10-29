@@ -13,10 +13,10 @@
     "preview": "bun --bun vite preview --host 0.0.0.0",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test src/lib",
-    "test:e2e": "bun playwright test",
+    "test:e2e": "bun --bun playwright test",
     "engine:build": "bun scripts/build-engine.ts",
     "catalog:build": "bun scripts/build-catalog.ts",
-    "verify": "bun run check && bun test src/lib && bun run build",
+    "verify": "bun run check && bun test src/lib && bun run engine:verify && bun run build",
     "engine:parity": "bun scripts/parity.ts",
     "engine:verify": "bun scripts/verify-engine.ts"
   },

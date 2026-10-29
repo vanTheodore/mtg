@@ -88,6 +88,10 @@ class GameSession {
 
   private apply(reply: EngineReply) {
     if (isSnapshot(reply)) {
+      if (this.snapshot && this.snapshot.viewer !== reply.viewer) {
+        this.selected = null;
+        this.inspect = null;
+      }
       this.snapshot = reply;
       this.lastMetrics = reply.metrics;
       if (this.selected !== null && !reply.state.objects[String(this.selected)]) this.selected = null;
