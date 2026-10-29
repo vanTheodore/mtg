@@ -4,7 +4,7 @@ import type { EngineReply, EngineSnapshot, GameAction } from './types';
 export class EngineClient {
   private worker: Worker | null = null;
   private nextId = 1;
-  private pending = new Map<number, { resolve: (v: EngineReply) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private pending = new Map<number, { resolve: (v: EngineReply) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout>; sentAt: number }>();
   private bootPromise: Promise<void> | null = null;
 
   private ensure(): Worker {
@@ -19,7 +19,10 @@ export class EngineClient {
       if (error) entry.reject(new Error(error));
       else {
         const r = reply as EngineReply;
-        if (r.ok && metrics) r.metrics = { ...r.metrics, ...metrics };
+        if (r.ok && metrics) {
+          const transport_ms = Math.max(0, performance.now() - entry.sentAt - (metrics.worker_ms ?? 0));
+          r.metrics = { ...r.metrics, ...metrics, transport_ms };
+        }
         entry.resolve(r);
       }
     });
@@ -38,7 +41,7 @@ export class EngineClient {
         this.pending.delete(id);
         reject(new Error('El motor no respondió a tiempo.'));
       }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, { resolve, reject, timer, sentAt: performance.now() });
       // Svelte runes proxies are not structured-cloneable; cross the worker
       // boundary with plain JSON only.
       const msg: WorkerRequest = { id, op, payload: JSON.parse(JSON.stringify(payload)) };

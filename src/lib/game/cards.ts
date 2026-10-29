@@ -75,13 +75,32 @@ export function typeLine(obj: GameObject, meta?: CardMeta): string {
   return subs.length ? `${parts.join(' ')} — ${subs.join(' ')}` : parts.join(' ');
 }
 
-export function groupTokens(objects: GameObject[]): { key: string; name: string; items: GameObject[] }[] {
+export function isToken(obj: GameObject): boolean {
+  return obj.is_token === true || obj.display_source === 'Token' || obj.card_types?.core_types?.includes('Token') === true;
+}
+
+/** Stable serialization for equivalence, not a rules or image-identity hash. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+export interface TokenContext { combatRole?: (id: number) => string | undefined; keywordBadges?: Record<string, unknown[]>; copyStatus?: Record<string, unknown> }
+export function groupTokens(objects: GameObject[], context: TokenContext = {}): { key: string; name: string; items: GameObject[] }[] {
   const map = new Map<string, GameObject[]>();
   for (const obj of objects) {
-    const key = `${obj.controller}:${obj.name}`;
+    // Deliberately conservative: compare the whole filtered public object, not
+    // just its name/art. This includes live/base stats, counters, all ability
+    // sets, keywords, attachments, face/tap state and future Phase DTO fields.
+    // Only storage identity is excluded. Extra singletons are preferable to
+    // concealing a mechanically different permanent behind a representative.
+    const { id, card_id, ...publicState } = obj;
+    const key = stableJson({ publicState, combat: context.combatRole?.(id), keywords: context.keywordBadges?.[String(id)], copy: context.copyStatus?.[String(id)] });
     const list = map.get(key) ?? [];
-    list.push(obj);
-    map.set(key, list);
+    list.push(obj); map.set(key, list);
   }
   return [...map.entries()].map(([key, items]) => ({ key, name: items[0].name, items }));
 }

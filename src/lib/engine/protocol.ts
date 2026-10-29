@@ -10,7 +10,7 @@ export interface WorkerResponse {
   id: number;
   reply?: unknown;
   error?: string;
-  metrics?: { worker_ms: number; wasm_compile_ms?: number; response_bytes?: number; wasm_transfer_bytes?: number; wasm_memory_bytes?: number };
+  metrics?: { worker_ms: number; wasm_compile_ms?: number; response_bytes?: number; wasm_transfer_bytes?: number; wasm_memory_bytes?: number; encode_ms?: number; wasm_call_ms?: number; decode_ms?: number };
 }
 
 export function encodeRequest(payload: unknown): Uint8Array {

@@ -2,6 +2,7 @@
   import { cardImageLookup, isHidden, manaText, typeLine } from '#lib/game/cards.ts';
   import { resolveCardImage, type ImageFailureReason } from '#lib/game/scryfall.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
+  import { combatRole as roleLabel, keywordLabel, permanentStates } from '#lib/game/interaction.ts';
 
   let {
     object,
@@ -9,7 +10,14 @@
     selected = false,
     compact = false,
     onselect,
-    oninspect
+    oninspect,
+    combat,
+    keywords = [],
+    copy = false,
+    targetable = false,
+    selectLabel,
+    attackOptions = 0,
+    blockOptions = 0
   }: {
     object: GameObject;
     meta?: CardMeta;
@@ -17,9 +25,28 @@
     compact?: boolean;
     onselect?: (id: number) => void;
     oninspect?: (id: number) => void;
+    combat?: string;
+    keywords?: unknown[];
+    copy?: boolean;
+    targetable?: boolean;
+    selectLabel?: string;
+    attackOptions?: number;
+    blockOptions?: number;
   } = $props();
-
   const hidden = $derived(isHidden(object));
+  const states = $derived([...permanentStates(object, combat), ...(copy ? ['Copia'] : []), ...keywords.map(keywordLabel)]);
+  // The accessible name mirrors the visible face in DOM order: axe's
+  // label-content-name-mismatch (WCAG 2.5.3) requires visible text to be part
+  // of the name, and a card face has several visible fields.
+  const visibleName = $derived.by(() => {
+    const cost = manaText(object.mana_cost ?? meta?.mana_cost);
+    const type = typeLine(object, meta);
+    const rules = object.oracle_text ?? object.token_rules_text ?? meta?.oracle_text ?? '';
+    const pt = object.power != null && object.toughness != null ? `${object.power}/${object.toughness}` : '';
+    const art = imageState === 'error' && failureReason ? failureLabels[failureReason] : imageState === 'resolving' || imageState === 'loading-art' ? 'Buscando ilustración' : '';
+    return [object.name || meta?.name || 'Carta', cost, type, rules, pt, art, ...states, selectLabel].filter(Boolean).join(', ');
+  });
+  const accessibleName = $derived(hidden ? 'Carta oculta' : visibleName);
   const lookup = $derived.by(() => {
     const base = cardImageLookup(object);
     if (hidden || base.kind === 'token') return base;
@@ -70,12 +97,18 @@
     class="card"
     class:selected
     class:tapped={object.tapped}
+    class:targetable
+    data-combat-role={combat ?? 'none'}
+    data-targetable={String(targetable)}
+    data-attack-options={attackOptions}
+    data-block-options={blockOptions}
+    data-zone={object.zone}
     data-card-id={object.id}
     data-hidden={String(hidden)}
     role="button"
     tabindex="0"
     data-image-state={imageState}
-    aria-label={hidden ? 'Carta oculta' : undefined}
+    aria-label={accessibleName}
     aria-pressed={selected}
     onclick={() => onselect?.(object.id)}
     ondblclick={() => oninspect?.(object.id)}
@@ -102,26 +135,31 @@
       <div class="fallback" aria-hidden={imageState === 'ready'}>
         <div class="fallback-head">
           <span class="fallback-name">{object.name || meta?.name || 'Carta'}</span>
-          <span class="fallback-cost">{manaText(object.mana_cost ?? meta?.mana_cost)}</span>
+          <span class="fallback-cost" aria-hidden="true">{manaText(object.mana_cost ?? meta?.mana_cost)}</span>
         </div>
-        <div class="fallback-type">{typeLine(object, meta)}</div>
+        <div class="fallback-type" aria-hidden="true">{typeLine(object, meta)}</div>
         <div class="fallback-art" aria-hidden="true">
-          {#if imageState === 'resolving' || imageState === 'loading-art'}<span class="spinner"></span>{:else}<span>◇</span>{/if}
+          {#if imageState === 'resolving' || imageState === 'loading-art'}<!-- The glyph is decorative and lives in CSS so it never becomes text content. --><span class="spinner"></span>{/if}
         </div>
-        <p class="fallback-text">{object.oracle_text ?? meta?.oracle_text ?? ''}</p>
+        <p class="fallback-text" aria-hidden="true">{object.oracle_text ?? object.token_rules_text ?? meta?.oracle_text ?? ''}</p>
         {#if object.power != null && object.toughness != null}
-          <span class="fallback-pt">{object.power}/{object.toughness}</span>
+          <span class="fallback-pt" aria-hidden="true">{object.power}/{object.toughness}</span>
         {/if}
-        {#if imageState === 'error' && failureReason}<span class="art-status">{failureLabels[failureReason]}</span>
-        {:else if imageState === 'resolving' || imageState === 'loading-art'}<span class="art-status">Buscando ilustración…</span>{/if}
+        {#if imageState === 'error' && failureReason}<span class="art-status" aria-hidden="true">{failureLabels[failureReason]}</span>
+        {:else if imageState === 'resolving' || imageState === 'loading-art'}<span class="art-status" aria-hidden="true">Buscando ilustración…</span>{/if}
       </div>
     {/if}
-    {#if object.tapped && !hidden}<span class="badge tapped-badge">Girada</span>{/if}
-    {#if object.transformed && !hidden}<span class="badge transform-badge">Transformada</span>{/if}
-    {#if object.attachments?.length}<span class="badge attach-badge">+{object.attachments.length}</span>{/if}
+    {#if !hidden && states.length}
+      <div class="status-strip" aria-hidden="true">
+        {#each states as state (state)}<span class="badge" class:combat-badge={state === 'Atacando' || state === 'Bloqueando'}>{state}</span>{/each}
+      </div>
+    {/if}
   </div>
-  {#if !hidden && imageState === 'error'}
-    <button class="retry" type="button" onclick={() => retryToken++}>Reintentar imagen</button>
+  {#if !hidden}
+    <div class="card-tools">
+      <button class="inspect" type="button" aria-label={`Ampliar ${object.name}`} onclick={() => oninspect?.(object.id)}>Ampliar</button>
+      {#if imageState === 'error'}<button class="retry" type="button" onclick={() => retryToken++}>Reintentar imagen</button>{/if}
+    </div>
   {/if}
 </div>
 
@@ -142,7 +180,9 @@
     transition: border-color .12s ease, transform .12s ease;
     cursor: pointer;
   }
-  .card.selected { border-color: var(--accent); }
+  .card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+  .card.targetable { border-color: var(--ok); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 25%, transparent); }
+  .card.targetable::after { content: "◎"; position: absolute; right: .25rem; top: .25rem; z-index: 3; background: var(--surface); color: var(--ok); border-radius: 50%; padding: .1rem .25rem; font-weight: 800; }
   .card img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; border-radius: calc(var(--card-radius) - 2px); display: block; opacity: 0; }
   .card img.loaded { opacity: 1; }
   .card img.tapped-img { transform: rotate(90deg) scale(.78); }
@@ -155,14 +195,15 @@
   .fallback-cost { font-size: .68rem; color: var(--ink-muted); white-space: nowrap; }
   .fallback-type { font-size: .66rem; color: var(--ink-muted); }
   .fallback-art { flex: 1; min-height: 2rem; display: grid; place-items: center; background: var(--surface-2); border-radius: 6px; color: var(--accent); font-size: 1.4rem; }
+  .fallback-art::after { content: '◇'; }
   .fallback-text { margin: 0; font-size: .62rem; line-height: 1.25; max-height: 4.5em; overflow: hidden; }
   .fallback-pt { align-self: flex-end; font-size: .72rem; font-weight: 700; }
   .art-status { font-size: .58rem; color: var(--ink-muted); }
-  .retry { position: absolute; left: 50%; bottom: .35rem; transform: translateX(-50%); z-index: 2; font-size: .62rem; padding: .15rem .35rem; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--ink); white-space: nowrap; }
-  .badge { position: absolute; z-index: 2; font-size: .6rem; padding: .1rem .3rem; border-radius: 5px; background: var(--accent); color: var(--accent-ink); font-weight: 650; }
-  .tapped-badge { top: -8px; right: -6px; }
-  .transform-badge { bottom: -8px; left: -6px; }
-  .attach-badge { top: -8px; left: -6px; background: var(--surface-3); color: var(--ink); }
+  .card-tools { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .25rem; }
+  .card-tools button { font-size: .65rem; padding: .2rem .35rem; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--ink); min-height: 24px; }
+  .status-strip { position: absolute; z-index: 2; left: .2rem; bottom: .2rem; right: .2rem; display: flex; flex-wrap: wrap; gap: .2rem; align-content: flex-end; pointer-events: none; }
+  .badge { font-size: .6rem; padding: .1rem .3rem; border-radius: 5px; background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--line); color: var(--ink); font-weight: 650; }
+  .combat-badge { background: var(--accent); color: var(--accent-ink); }
   .spinner { width: 1rem; height: 1rem; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) {

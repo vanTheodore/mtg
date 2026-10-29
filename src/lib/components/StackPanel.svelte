@@ -4,15 +4,21 @@
   const stack = $derived(snapshot?.state.stack ?? []);
   const objects = $derived(snapshot?.state.objects ?? {});
   const KINDS: Record<string, string> = { Spell: 'Hechizo', ActivatedAbility: 'Habilidad activada', TriggeredAbility: 'Habilidad disparada' };
+  type Detail = { source_name?: string; kind_label?: string; ability_kind?: { type?: string }; ability_description?: string; targets?: { label: string; target: unknown }[]; paid?: unknown[]; controller?: number };
   const entries = $derived(stack.map((raw, i) => {
-    const entry = raw as { source_id?: number; controller?: number; kind?: { type?: string; description?: string; source_name?: string } };
+    const entry = raw as { id?: number; source_id?: number; controller?: number; kind?: { type?: string } };
+    const details = (snapshot?.derived.stack_entry_details ?? {}) as Record<string, Detail>;
+    const detail = details[String(entry.id)];
     const source = entry.source_id !== undefined ? objects[String(entry.source_id)] : undefined;
+    const kindType = entry.kind?.type ?? '';
     return {
-      key: i,
-      name: source?.name ?? entry.kind?.source_name ?? `Objeto en la pila #${i + 1}`,
-      controller: entry.controller !== undefined ? `Jugador ${entry.controller + 1}` : '',
-      kind: KINDS[entry.kind?.type ?? ''] ?? entry.kind?.type ?? '',
-      description: entry.kind?.description ?? ''
+      key: entry.id ?? i,
+      name: detail?.source_name ?? source?.name ?? 'Objeto en la pila',
+      controller: `Jugador ${(detail?.controller ?? entry.controller ?? 0) + 1}`,
+      kind: detail?.kind_label ?? KINDS[kindType] ?? (kindType ? 'Efecto en la pila' : ''),
+      description: detail?.ability_description ?? '',
+      targets: (detail?.targets ?? []).map((t) => t.label).filter(Boolean),
+      paid: detail?.paid?.length ?? 0
     };
   }));
 </script>
@@ -26,8 +32,9 @@
       {#each entries as entry (entry.key)}
         <li>
           <strong>{entry.name}</strong>
-          <span>{[entry.controller, entry.kind].filter(Boolean).join(' · ')}</span>
+          <span>{[entry.controller, entry.kind].filter(Boolean).join(' · ')}{entry.paid ? ` · ${entry.paid} pago(s)` : ''}</span>
           {#if entry.description}<span class="desc">{entry.description}</span>{/if}
+          {#if entry.targets.length}<span class="desc">Objetivos: {entry.targets.join(', ')}</span>{/if}
         </li>
       {/each}
     </ol>

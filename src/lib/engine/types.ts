@@ -22,6 +22,37 @@ export interface TokenArtDescriptor {
   has_abilities: boolean;
 }
 
+/** Phase serializes TargetRef as an externally tagged enum: {Player: id} | {Object: id}. */
+export type TargetRef = { Player: PlayerId } | { Object: ObjectId };
+/** AttackTarget has a tagged wire shape; TargetRef does not. */
+export type AttackTarget = { type: 'Player'; data: PlayerId } | { type: 'Planeswalker' | 'Battle'; data: ObjectId };
+export interface TargetProgress {
+  current_slot: number;
+  selected_slots?: (TargetRef | null)[];
+  current_legal_targets: TargetRef[];
+}
+export interface WaitingFor {
+  type: string;
+  data?: {
+    player?: PlayerId;
+    selection?: TargetProgress;
+    target_slots?: unknown[];
+    mode_labels?: (string | null)[];
+    pending_cast?: { object_id: ObjectId; cost: unknown };
+    valid_attacker_ids?: ObjectId[];
+    valid_attack_targets_by_attacker?: Record<string, AttackTarget[]>;
+    attacker_constraints?: Record<string, unknown>;
+    valid_blocker_ids?: ObjectId[];
+    valid_block_targets?: Record<string, ObjectId[]>;
+    block_requirements?: Record<string, { count: number }>;
+    blocker_constraints?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+}
+export interface CombatView {
+  attackers: { object_id: ObjectId; defending_player: PlayerId; attack_target: AttackTarget; blocked: boolean }[];
+  blockers: Record<string, ObjectId[]>;
+}
 export interface GameObject {
   id: ObjectId;
   card_id: number;
@@ -33,6 +64,13 @@ export interface GameObject {
   tapped?: boolean;
   face_down?: boolean;
   transformed?: boolean;
+  is_token?: boolean;
+  is_copy?: boolean;
+  summoning_sick?: boolean;
+  counters?: Record<string, number> | [string, number][];
+  keywords?: unknown[];
+  abilities?: unknown[];
+  color?: string[];
   flipped?: boolean;
   modal_back_face?: boolean;
   attached_to?: unknown;
@@ -88,13 +126,13 @@ export interface EngineSnapshot {
     active_player: PlayerId;
     priority_player: PlayerId;
     phase: string;
-    waiting_for: { type: string; data?: Record<string, unknown> };
+    waiting_for: WaitingFor;
     players: PlayerView[];
     battlefield: ObjectId[];
     stack: unknown[];
     exile: ObjectId[];
     objects: Record<string, GameObject>;
-    combat?: unknown;
+    combat?: CombatView | null;
   };
   derived: Record<string, unknown>;
   legal: {
@@ -103,10 +141,21 @@ export interface EngineSnapshot {
     by_object: Record<string, GameAction[]>;
   };
   events?: unknown[];
+  auto_pass_recommended?: boolean;
   waiting_for?: { type: string };
   metrics: {
     engine_ms?: number;
+    legal_ms?: number;
+    projection_ms?: number;
     serialize_ms?: number;
+    encode_ms?: number;
+    wasm_call_ms?: number;
+    decode_ms?: number;
+    transport_ms?: number;
+    svelte_commit_ms?: number;
+    presentation_ms?: number;
+    event_timing_ms?: number;
+    projection_bytes?: number;
     response_bytes?: number;
     objects?: number;
     worker_ms?: number;
