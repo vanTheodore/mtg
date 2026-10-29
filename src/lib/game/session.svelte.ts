@@ -1,5 +1,5 @@
 import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
-import type { EngineReply, EngineSnapshot, GameAction } from '#lib/engine/types.ts';
+import { ENGINE_PROTOCOL_VERSION, type EngineReply, type EngineSnapshot, type GameAction } from '#lib/engine/types.ts';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -52,7 +52,7 @@ class GameSession {
     this.snapshot = null;
     this.revealedViewer = null;
     try {
-      const reply = await this.client.init({ catalog, decks, seed, first_player: 0 });
+      const reply = await this.client.init({ protocol_version: ENGINE_PROTOCOL_VERSION, catalog, decks, seed, first_player: 0 });
       this.apply(reply);
       if (reply.ok) {
         this.revealedViewer = reply.viewer;
@@ -66,12 +66,13 @@ class GameSession {
 
   dispatch(action: GameAction): Promise<void> {
     const run = async () => {
-      if (!this.snapshot || this.busy) return;
+      if (!this.snapshot || this.busy || this.snapshot.outcome) return;
       this.busy = true;
       this.error = null;
       try {
-        const reply = await this.client.action(this.snapshot.viewer, action);
+        const reply = await this.client.action(this.snapshot.viewer, action, this.snapshot.revision);
         this.apply(reply);
+        if (!reply.ok && reply.code === 'stale_action') this.apply(await this.client.view(this.snapshot.viewer));
       } catch (e) {
         this.error = e instanceof Error ? e.message : String(e);
       } finally {
@@ -96,7 +97,9 @@ class GameSession {
       this.lastMetrics = reply.metrics;
       if (this.selected !== null && !reply.state.objects[String(this.selected)]) this.selected = null;
     } else {
-      this.error = reply.error;
+      this.error = reply.code === 'stale_action'
+        ? 'La partida cambió mientras elegías. La vista se actualizó; vuelve a seleccionar.'
+        : reply.error;
     }
   }
 }

@@ -50,8 +50,8 @@ export class EngineClient {
     return this.send(OP.INIT, payload, 120_000);
   }
 
-  async action(actor: number, action: GameAction): Promise<EngineReply> {
-    return this.send(OP.ACTION, { actor, action });
+  async action(actor: number, action: GameAction, expectedRevision?: number): Promise<EngineReply> {
+    return this.send(OP.ACTION, { actor, action, expected_revision: expectedRevision });
   }
 
   async view(viewer: number): Promise<EngineReply> {

@@ -8,7 +8,7 @@
     "bun": "1.4.4"
   },
   "scripts": {
-    "dev": "bun --bun vite dev --host 0.0.0.0",
+    "dev": "bun --bun node_modules/vite/bin/vite.js dev --host 0.0.0.0",
     "build": "bun --bun vite build",
     "preview": "bun --bun vite preview --host 0.0.0.0",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -19,6 +19,7 @@
     "catalog:build": "bun scripts/build-catalog.ts",
     "verify": "bun run check && bun test src/lib && bun run engine:verify && bun run build",
     "engine:parity": "bun scripts/parity.ts",
+    "engine:scenarios": "bun scripts/scenarios.ts",
     "engine:verify": "bun scripts/verify-engine.ts"
   },
   "devDependencies": {

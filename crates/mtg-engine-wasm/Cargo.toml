@@ -23,3 +23,7 @@ path = "src/bin/catalog.rs"
 [[bin]]
 name = "parity"
 path = "src/bin/parity.rs"
+
+[[bin]]
+name = "scenarios"
+path = "src/bin/scenarios.rs"

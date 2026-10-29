@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { OP, decodeResponse, encodeRequest, type WorkerRequest, type WorkerResponse } from './protocol';
+import { buildImports } from './wasm-imports';
 
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 let wasm: WebAssembly.Instance | null = null;
@@ -14,46 +15,13 @@ interface Exports {
   mtg_request(op: number, ptr: number, len: number): bigint;
 }
 
-/**
- * The upstream engine uses web-time, which pulls a small wasm-bindgen
- * performance.now() shim. We do not use wasm-bindgen glue, so provide the
- * minimal externref/runtime imports it needs. This is presentation timing only;
- * rules randomness remains deterministically seeded inside the engine.
- */
-function createImports(module: WebAssembly.Module): WebAssembly.Imports {
-  const heap: unknown[] = [undefined];
-  const ref = (value: unknown) => { heap.push(value); return heap.length - 1; };
-  const placeholder: Record<string, (...args: number[]) => number | void> = {};
-  const xform: Record<string, (...args: number[]) => number | void> = {};
-
-  for (const imp of WebAssembly.Module.imports(module)) {
-    if (imp.module === '__wbindgen_placeholder__') {
-      if (imp.name === '__wbindgen_describe') placeholder[imp.name] = () => {};
-      else if (imp.name.startsWith('__wbg_performance')) placeholder[imp.name] = () => ref(performance);
-      else if (imp.name.startsWith('__wbg_now')) placeholder[imp.name] = (idx) => (heap[idx] as Performance).now();
-      else if (imp.name === '__wbindgen_object_drop_ref') placeholder[imp.name] = (idx) => { heap[idx] = undefined; };
-      else if (imp.name === '__wbindgen_object_clone_ref') placeholder[imp.name] = (idx) => ref(heap[idx]);
-      else if (imp.name.includes('GLOBAL_THIS')) placeholder[imp.name] = () => ref(globalThis);
-      else if (imp.name.includes('SELF')) placeholder[imp.name] = () => ref(self);
-      else if (imp.name.includes('WINDOW')) placeholder[imp.name] = () => ref(undefined);
-      else if (imp.name.includes('GLOBAL')) placeholder[imp.name] = () => ref(globalThis);
-      else if (imp.name.includes('is_undefined')) placeholder[imp.name] = (idx) => heap[idx] === undefined ? 1 : 0;
-      else if (imp.name.includes('throw')) placeholder[imp.name] = (ptr, len) => {
-        const bytes = new Uint8Array(memory.buffer, ptr, len);
-        throw new Error(new TextDecoder().decode(bytes));
-      };
-      else placeholder[imp.name] = () => 0;
-    } else if (imp.module === '__wbindgen_externref_xform__') {
-      if (imp.name.includes('table_grow')) xform[imp.name] = (delta) => {
-        const old = heap.length;
-        for (let i = 0; i < delta; i++) heap.push(undefined);
-        return old;
-      };
-      else if (imp.name.includes('table_set_null')) xform[imp.name] = (idx) => { heap[idx] = undefined; };
-      else xform[imp.name] = () => 0;
-    }
+const MAX_MESSAGE_BYTES = 64 * 1024 * 1024;
+function hostRandom(dest: Uint8Array): number {
+  // crypto.getRandomValues has a 65536-byte per-call limit.
+  for (let offset = 0; offset < dest.length; offset += 65_536) {
+    crypto.getRandomValues(dest.subarray(offset, Math.min(offset + 65_536, dest.length)));
   }
-  return { env: { mesa_now_ms: () => performance.now() }, __wbindgen_placeholder__: placeholder, __wbindgen_externref_xform__: xform };
+  return 0;
 }
 
 async function boot() {
@@ -64,7 +32,10 @@ async function boot() {
   const contentLength = Number(response.headers.get('content-length') ?? 0);
   if (contentLength > 0) wasmTransferBytes = contentLength;
   const module = await WebAssembly.compileStreaming(response);
-  wasm = await WebAssembly.instantiate(module, createImports(module));
+  const imports = buildImports(WebAssembly.Module.imports(module), {
+    now: () => performance.now(), random: hostRandom, memory: () => memory.buffer
+  });
+  wasm = await WebAssembly.instantiate(module, imports);
   memory = (wasm.exports as unknown as Exports).memory;
   compileMs = performance.now() - start;
 }
@@ -73,14 +44,20 @@ function call(op: number, payload: unknown): { reply: unknown; responseBytes: nu
   if (!wasm) throw new Error('WASM no inicializado');
   const ex = wasm.exports as unknown as Exports;
   const input = encodeRequest(payload);
+  if (input.length > MAX_MESSAGE_BYTES) throw new Error('Solicitud WASM demasiado grande');
   const ptr = ex.mtg_alloc(input.length);
-  new Uint8Array(memory.buffer, ptr, input.length).set(input);
-  const packed = ex.mtg_request(op, ptr, input.length);
-  ex.mtg_free(ptr, input.length);
+  if (!ptr || ptr + input.length > memory.buffer.byteLength) throw new Error('Asignación WASM inválida');
+  let packed = 0n;
+  try {
+    new Uint8Array(memory.buffer, ptr, input.length).set(input);
+    packed = ex.mtg_request(op, ptr, input.length);
+  } finally { ex.mtg_free(ptr, input.length); }
   const outPtr = Number(packed >> 32n);
   const outLen = Number(packed & 0xffffffffn);
-  const bytes = new Uint8Array(memory.buffer, outPtr, outLen).slice();
-  ex.mtg_free(outPtr, outLen);
+  if (!outPtr || outLen === 0 || outLen > MAX_MESSAGE_BYTES || outPtr + outLen > memory.buffer.byteLength) throw new Error('Respuesta WASM inválida');
+  let bytes: Uint8Array;
+  try { bytes = new Uint8Array(memory.buffer, outPtr, outLen).slice(); }
+  finally { ex.mtg_free(outPtr, outLen); }
   return { reply: decodeResponse(bytes), responseBytes: bytes.length };
 }
 

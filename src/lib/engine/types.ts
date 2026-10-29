@@ -53,10 +53,18 @@ export interface GameObject {
   [key: string]: unknown;
 }
 
+export const ENGINE_PROTOCOL_VERSION = 2 as const;
+
+export interface ManaPoolSummary {
+  total: number; white: number; blue: number; black: number; red: number; green: number; colorless: number;
+}
+
+export interface GameOutcome { winner: number | null; draw: boolean }
+
 export interface PlayerView {
   id: PlayerId;
   life: number;
-  mana_pool: unknown;
+  mana_pool: ManaPoolSummary;
   hand: ObjectId[];
   library_count: number;
   graveyard: ObjectId[];
@@ -69,9 +77,12 @@ export interface PlayerView {
 
 export interface EngineSnapshot {
   ok: true;
+  protocol_version?: number;
   viewer: PlayerId;
   seed: number;
+  revision: number;
   actions_applied: number;
+  outcome?: GameOutcome | null;
   state: {
     turn_number: number;
     active_player: PlayerId;
@@ -110,6 +121,9 @@ export interface EngineError {
   error: string;
   rejected?: boolean;
   code?: string;
+  disposition?: string;
+  revision?: number;
+  expected_revision?: number;
 }
 
 export type EngineReply = EngineSnapshot | EngineError;

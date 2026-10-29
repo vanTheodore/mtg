@@ -15,30 +15,25 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::sync::Arc;
 
+pub const PROTOCOL_VERSION: u32 = 2;
+
 #[cfg(target_arch = "wasm32")]
 mod wasm_random {
     // getrandom 0.3's custom backend calls this extern symbol. Game randomness
-    // is seeded by GameState; this fallback only satisfies non-game OS entropy
-    // requests (e.g. hash-table seeding) deterministically instead of trapping.
-    static mut STATE: u64 = 0x9e3779b97f4a7c15;
+    // remains GameState's seeded ChaCha20 stream. This host import only supplies
+    // OS-equivalent entropy for non-game requests (hash seeds, session ids).
+    // Production uses crypto.getRandomValues; there is no deterministic fallback.
+    extern "C" { fn mesa_random(dest: *mut u8, len: usize) -> u32; }
 
     #[no_mangle]
     pub extern "Rust" fn __getrandom_v03_custom(dest: *mut u8, len: usize) -> Result<(), getrandom::Error> {
-        unsafe {
-            let out = std::slice::from_raw_parts_mut(dest, len);
-            for chunk in out.chunks_mut(8) {
-                STATE = STATE.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-                let bytes = STATE.to_le_bytes();
-                chunk.copy_from_slice(&bytes[..chunk.len()]);
-            }
-        }
-        Ok(())
+        let code = unsafe { mesa_random(dest, len) };
+        if code == 0 { Ok(()) } else { Err(getrandom::Error::UNSUPPORTED) }
     }
 }
 
 struct Session {
     state: GameState,
-    db: Arc<CardDatabase>,
     seed: u64,
     actions: u64,
 }
@@ -66,6 +61,8 @@ thread_local! {
 
 #[derive(Deserialize)]
 struct InitRequest {
+    #[serde(default)]
+    protocol_version: Option<u32>,
     catalog: serde_json::Value,
     decks: DeckList,
     seed: u64,
@@ -77,6 +74,8 @@ struct InitRequest {
 struct ActionRequest {
     actor: u8,
     action: GameAction,
+    #[serde(default)]
+    expected_revision: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -94,6 +93,9 @@ fn initialize(input: &[u8]) -> Vec<u8> {
         Ok(v) => v,
         Err(e) => return err(format!("init payload: {e}")),
     };
+    if let Some(version) = req.protocol_version {
+        if version != PROTOCOL_VERSION { return err(format!("unsupported protocol version {version}; expected {PROTOCOL_VERSION}")); }
+    }
     let catalog_text = match serde_json::to_string(&req.catalog) {
         Ok(v) => v,
         Err(e) => return err(format!("catalog encode: {e}")),
@@ -112,7 +114,7 @@ fn initialize(input: &[u8]) -> Vec<u8> {
     load_and_hydrate_decks(&mut state, &payload, Some(&db));
     let first = PlayerId(req.first_player.unwrap_or(0));
     let result = start_game_with_starting_player(&mut state, first);
-    let session = Session { state, db, seed: req.seed, actions: 0 };
+    let session = Session { state, seed: req.seed, actions: 0 };
     SESSION.with(|s| *s.borrow_mut() = Some(session));
     snapshot_reply(result, 0.0, 0.0)
 }
@@ -130,6 +132,15 @@ fn submit(input: &[u8]) -> Vec<u8> {
             Some(v) => v,
             None => return Err(err("engine not initialized")),
         };
+        if let Some(expected) = req.expected_revision {
+            if expected != session.actions {
+                return Err(serde_json::to_vec(&serde_json::json!({
+                    "ok": false, "rejected": true, "code": "stale_action",
+                    "error": "La partida cambió. Vuelve a seleccionar una acción.",
+                    "revision": session.actions, "expected_revision": expected
+                })).unwrap());
+            }
+        }
         let started = now_ms();
         let actor = PlayerId(req.actor);
         let result = match apply_with_rejection(&mut session.state, actor, req.action) {
@@ -138,7 +149,8 @@ fn submit(input: &[u8]) -> Vec<u8> {
                 return Err(serde_json::to_vec(&serde_json::json!({
                     "ok": false,
                     "rejected": true,
-                    "code": format!("{:?}", rejection.code),
+                    "code": serde_json::to_value(rejection.code).unwrap_or(serde_json::json!("invalid_action")),
+                    "disposition": serde_json::to_value(rejection.disposition).unwrap_or(serde_json::json!("invalid")),
                     "error": "La acción no es legal en este estado."
                 })).unwrap());
             }
@@ -168,11 +180,15 @@ fn snapshot_reply(result: ActionResult, engine_ms: f64, _serialize_ms: f64) -> V
         let (actions, spell_costs, by_object) =
             engine::ai_support::legal_actions_for_viewer(&session.state, viewer);
         let state_json = project_state(&filtered);
+        let events = engine::game::visibility::filter_events_for_viewer(&result.events, &session.state, viewer);
         let reply = serde_json::json!({
             "ok": true,
+            "protocol_version": PROTOCOL_VERSION,
             "viewer": viewer.0,
             "seed": session.seed,
+            "revision": session.actions,
             "actions_applied": session.actions,
+            "outcome": outcome_json(&session.state),
             "state": state_json,
             "derived": derived,
             "legal": {
@@ -180,7 +196,7 @@ fn snapshot_reply(result: ActionResult, engine_ms: f64, _serialize_ms: f64) -> V
                 "spell_costs": spell_costs,
                 "by_object": by_object,
             },
-            "events": result.events,
+            "events": events,
             "waiting_for": result.waiting_for,
             "metrics": {
                 "engine_ms": engine_ms,
@@ -192,12 +208,34 @@ fn snapshot_reply(result: ActionResult, engine_ms: f64, _serialize_ms: f64) -> V
     })
 }
 
+fn outcome_json(state: &GameState) -> serde_json::Value {
+    match &state.waiting_for {
+        engine::types::game_state::WaitingFor::GameOver { winner } => serde_json::json!({
+            "winner": winner.map(|p| p.0), "draw": winner.is_none()
+        }),
+        _ => serde_json::Value::Null,
+    }
+}
+
+fn mana_pool_json(pool: &engine::types::mana::ManaPool) -> serde_json::Value {
+    use engine::types::mana::ManaType;
+    serde_json::json!({
+        "total": pool.total(),
+        "white": pool.count_color(ManaType::White),
+        "blue": pool.count_color(ManaType::Blue),
+        "black": pool.count_color(ManaType::Black),
+        "red": pool.count_color(ManaType::Red),
+        "green": pool.count_color(ManaType::Green),
+        "colorless": pool.count_color(ManaType::Colorless),
+    })
+}
+
 pub fn project_state(state: &GameState) -> serde_json::Value {
     let players: Vec<serde_json::Value> = state.players.iter().map(|p| {
         serde_json::json!({
             "id": p.id,
             "life": p.life,
-            "mana_pool": p.mana_pool,
+            "mana_pool": mana_pool_json(&p.mana_pool),
             "hand": p.hand,
             "library_count": p.library.len(),
             "graveyard": p.graveyard,
@@ -244,7 +282,9 @@ fn dispatch(op: u32, input: &[u8]) -> Vec<u8> {
                 let derived = derive_filtered_views(&session.state, &filtered, Some(PlayerId(viewer)));
                 let (actions, spell_costs, by_object) = engine::ai_support::legal_actions_for_viewer(&session.state, PlayerId(viewer));
                 serde_json::to_vec(&serde_json::json!({
-                    "ok": true, "viewer": viewer, "state": project_state(&filtered), "derived": derived,
+                    "ok": true, "protocol_version": PROTOCOL_VERSION, "viewer": viewer,
+                    "revision": session.actions, "actions_applied": session.actions, "seed": session.seed,
+                    "outcome": outcome_json(&session.state), "state": project_state(&filtered), "derived": derived,
                     "legal": {"actions": actions, "spell_costs": spell_costs, "by_object": by_object},
                     "metrics": {"objects": filtered.objects.len()}
                 })).unwrap()
