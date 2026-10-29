@@ -7,12 +7,13 @@
   let { objects, metas, owner, label }: { objects: GameObject[]; metas: Record<string, CardMeta>; owner: number; label: string } = $props();
   let expanded = $state<Record<string, boolean>>({});
 
+  const isToken = (o: GameObject) => o.display_source === 'Token' || o.name.includes('Token');
   const mine = $derived(objects.filter((o) => o.controller === owner));
-  const lands = $derived(mine.filter((o) => o.card_types?.core_types?.includes('Land')));
-  const creatures = $derived(mine.filter((o) => o.card_types?.core_types?.includes('Creature') && !o.card_types?.core_types?.includes('Land')));
-  const other = $derived(mine.filter((o) => !o.card_types?.core_types?.includes('Land') && !o.card_types?.core_types?.includes('Creature')));
-  const tokenGroups = $derived(groupTokens(other.filter((o) => o.display_source === 'Token' || o.name.includes('Token'))));
-  const nonTokenOther = $derived(other.filter((o) => !(o.display_source === 'Token' || o.name.includes('Token'))));
+  const lands = $derived(mine.filter((o) => !isToken(o) && o.card_types?.core_types?.includes('Land')));
+  const creatures = $derived(mine.filter((o) => !isToken(o) && o.card_types?.core_types?.includes('Creature') && !o.card_types?.core_types?.includes('Land')));
+  const other = $derived(mine.filter((o) => !isToken(o) && !o.card_types?.core_types?.includes('Land') && !o.card_types?.core_types?.includes('Creature')));
+  const tokenGroups = $derived(groupTokens(mine.filter(isToken)));
+  const nonTokenOther = $derived(other);
 
   function metaFor(obj: GameObject): CardMeta | undefined {
     return metas[obj.printed_ref?.oracle_id ?? ''] ?? metas[obj.name.toLowerCase()];
@@ -74,7 +75,7 @@
 </section>
 
 <style>
-  .battlefield { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: .7rem .8rem; min-width: 0; }
+  .battlefield { min-width: 0; max-width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: .7rem .8rem; min-width: 0; }
   h2 { margin: 0 0 .5rem; font-size: .9rem; font-weight: 650; }
   .count { color: var(--ink-muted); font-weight: 500; }
   .row { display: flex; flex-wrap: wrap; gap: .8rem; padding: .5rem .2rem; overflow: visible; }

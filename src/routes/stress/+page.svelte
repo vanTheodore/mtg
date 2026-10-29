@@ -78,7 +78,8 @@
 </div>
 
 <style>
-  .stress { max-width: 1600px; margin: 0 auto; padding: .8rem; display: grid; gap: .8rem; }
+  .stress { grid-template-columns: minmax(0, 1fr); max-width: 1600px; margin: 0 auto; padding: .8rem; display: grid; gap: .8rem; }
+  .stress > * { min-width: 0; }
   header { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; }
   h1 { font-size: 1.2rem; margin: 0; }
   header p { margin: 0; color: var(--ink-muted); font-size: .85rem; flex: 1; }

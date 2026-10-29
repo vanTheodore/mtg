@@ -31,9 +31,9 @@ const args = [
   '-p', 'mtg-engine-wasm',
   '--lib',
   '--profile', profile,
-  '-j', '1',
-  '-Z', 'build-std=core,alloc,std,panic_abort'
+  '-j', '1'
 ];
+if (process.env.ENGINE_BUILD_STD !== '0') args.push('-Z', 'build-std=core,alloc,std,panic_abort');
 if (process.env.CARGO_OFFLINE === '1') args.push('--offline', '--config', '.cargo/offline.toml');
 if (process.env.CARGO_LOCKED === '1') args.push('--locked');
 

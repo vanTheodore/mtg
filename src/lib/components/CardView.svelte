@@ -52,70 +52,70 @@
     }
   }
 
-  const label = $derived(hidden ? 'Carta oculta' : `${object.name}${object.tapped ? ', girada' : ''}`);
 </script>
 
-<div
-  class="card"
-  class:selected
-  class:compact
-  class:tapped={object.tapped}
-  data-card-id={object.id}
-  data-hidden={String(hidden)}
-  role="button"
-  tabindex="0"
-  aria-label={label}
-  aria-pressed={selected}
-  onclick={() => onselect?.(object.id)}
-  ondblclick={() => oninspect?.(object.id)}
-  onkeydown={handleKey}
->
-  {#if hidden}
-    <div class="back" aria-hidden="true">
-      <span class="back-mark">M</span>
-      <span class="back-text">Carta oculta</span>
-    </div>
-  {:else if imageState === 'ready' && imageUrl}
-    <img
-      src={imageUrl}
-      alt={object.name}
-      loading="lazy"
-      decoding="async"
-      class:tapped-img={object.tapped}
-      onerror={() => { imageState = 'error'; imageUrl = null; }}
-    />
-  {:else}
-    <div class="fallback" class:loading={imageState === 'loading'}>
-      <div class="fallback-head">
-        <span class="fallback-name">{object.name || meta?.name || 'Carta'}</span>
-        <span class="fallback-cost">{manaText(object.mana_cost ?? meta?.mana_cost)}</span>
+<div class="card-shell" class:compact>
+  <div
+    class="card"
+    class:selected
+    class:tapped={object.tapped}
+    data-card-id={object.id}
+    data-hidden={String(hidden)}
+    role="button"
+    tabindex="0"
+    aria-label={hidden ? 'Carta oculta' : undefined}
+    aria-pressed={selected}
+    onclick={() => onselect?.(object.id)}
+    ondblclick={() => oninspect?.(object.id)}
+    onkeydown={handleKey}
+  >
+    {#if hidden}
+      <div class="back" aria-hidden="true">
+        <span class="back-mark">M</span>
+        <span class="back-text">Carta oculta</span>
       </div>
-      <div class="fallback-type">{typeLine(object, meta)}</div>
-      <div class="fallback-art" aria-hidden="true">
-        {#if imageState === 'loading'}<span class="spinner"></span>{:else}<span>◇</span>{/if}
+    {:else if imageState === 'ready' && imageUrl}
+      <img
+        src={imageUrl}
+        alt={object.name}
+        loading="lazy"
+        decoding="async"
+        class:tapped-img={object.tapped}
+        onerror={() => { imageState = 'error'; imageUrl = null; }}
+      />
+    {:else}
+      <div class="fallback" class:loading={imageState === 'loading'}>
+        <div class="fallback-head">
+          <span class="fallback-name">{object.name || meta?.name || 'Carta'}</span>
+          <span class="fallback-cost">{manaText(object.mana_cost ?? meta?.mana_cost)}</span>
+        </div>
+        <div class="fallback-type">{typeLine(object, meta)}</div>
+        <div class="fallback-art" aria-hidden="true">
+          {#if imageState === 'loading'}<span class="spinner"></span>{:else}<span>◇</span>{/if}
+        </div>
+        <p class="fallback-text">{object.oracle_text ?? meta?.oracle_text ?? ''}</p>
+        {#if object.power != null && object.toughness != null}
+          <span class="fallback-pt">{object.power}/{object.toughness}</span>
+        {/if}
+        {#if imageState === 'error'}<span class="art-status">Imagen no disponible</span>
+        {:else if imageState === 'none'}<span class="art-status">Sin identificador de imagen</span>{/if}
       </div>
-      <p class="fallback-text">{object.oracle_text ?? meta?.oracle_text ?? ''}</p>
-      {#if imageState === 'error'}<span class="art-status">Imagen no disponible</span>
-      {:else if imageState === 'none'}<span class="art-status">Sin identificador de imagen</span>{/if}
-      {#if object.power != null && object.toughness != null}
-        <span class="fallback-pt">{object.power}/{object.toughness}</span>
-      {/if}
-      {#if imageState === 'error'}
-        <button class="retry" type="button"
-          onclick={(e) => { e.stopPropagation(); retryToken++; }}
-          onkeydown={(e) => e.stopPropagation()}>Reintentar imagen</button>
-      {/if}
-    </div>
+    {/if}
+    {#if object.tapped && !hidden}<span class="badge tapped-badge">Girada</span>{/if}
+    {#if object.transformed && !hidden}<span class="badge transform-badge">Transformada</span>{/if}
+    {#if object.attachments?.length}<span class="badge attach-badge">+{object.attachments.length}</span>{/if}
+  </div>
+  {#if !hidden && imageState === 'error'}
+    <button class="retry" type="button" onclick={() => retryToken++}>Reintentar imagen</button>
   {/if}
-  {#if object.tapped && !hidden}<span class="badge tapped-badge">Girada</span>{/if}
-  {#if object.transformed && !hidden}<span class="badge transform-badge">Transformada</span>{/if}
-  {#if object.attachments?.length}<span class="badge attach-badge">+{object.attachments.length}</span>{/if}
 </div>
 
 <style>
+  .card-shell { position: relative; width: var(--card-w); flex: 0 0 auto; }
+  .card-shell.compact { width: calc(var(--card-w) * .78); }
   .card {
     position: relative;
-    width: var(--card-w);
+    width: 100%;
     aspect-ratio: 488 / 680;
     padding: 0;
     border: 2px solid transparent;
@@ -123,11 +123,10 @@
     background: var(--surface-2);
     color: var(--ink);
     overflow: visible;
-    flex: 0 0 auto;
     box-shadow: var(--shadow);
     transition: border-color .12s ease, transform .12s ease;
+    cursor: pointer;
   }
-  .card.compact { width: calc(var(--card-w) * .78); }
   .card.selected { border-color: var(--accent); }
   .card img { width: 100%; height: 100%; object-fit: cover; border-radius: calc(var(--card-radius) - 2px); display: block; }
   .card img.tapped-img { transform: rotate(90deg) scale(.78); }
@@ -142,12 +141,16 @@
   .fallback-art { flex: 1; min-height: 2rem; display: grid; place-items: center; background: var(--surface-2); border-radius: 6px; color: var(--accent); font-size: 1.4rem; }
   .fallback-text { margin: 0; font-size: .62rem; line-height: 1.25; max-height: 4.5em; overflow: hidden; }
   .fallback-pt { align-self: flex-end; font-size: .72rem; font-weight: 700; }
-  .retry { font-size: .62rem; padding: .15rem .3rem; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--ink); }
   .art-status { font-size: .58rem; color: var(--ink-muted); }
+  .retry { position: absolute; left: 50%; bottom: .35rem; transform: translateX(-50%); z-index: 2; font-size: .62rem; padding: .15rem .35rem; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--ink); white-space: nowrap; }
   .badge { position: absolute; font-size: .6rem; padding: .1rem .3rem; border-radius: 5px; background: var(--accent); color: var(--accent-ink); font-weight: 650; }
   .tapped-badge { top: -8px; right: -6px; }
   .transform-badge { bottom: -8px; left: -6px; }
   .attach-badge { top: -8px; left: -6px; background: var(--surface-3); color: var(--ink); }
   .spinner { width: 1rem; height: 1rem; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .card { transition: none; }
+    .spinner { animation-duration: 1.6s; }
+  }
 </style>

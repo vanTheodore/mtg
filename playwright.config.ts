@@ -16,7 +16,7 @@ export default defineConfig({
     launchOptions: executablePath
       ? {
           executablePath,
-          args: ['--no-sandbox', '--disable-dev-shm-usage', '--single-process', '--no-zygote', '--disable-gpu', '--disable-webgl'],
+          args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-webgl'],
           env: { ...process.env, LD_LIBRARY_PATH: process.env.PLAYWRIGHT_CHROMIUM_LIB_PATH ?? '/tmp/al2023/lib' }
         }
       : undefined

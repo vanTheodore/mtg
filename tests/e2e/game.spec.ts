@@ -25,13 +25,13 @@ test('partida real: inicializa WASM, conserva manos y juega una tierra', async (
   await expect(page.locator('.rival-hand')).not.toContainText(/Forest|Lightning|Island|Mountain/);
 
   // Select a land in hand and execute the engine-provided legal action.
-  const forest = page.locator('.hand-scroll [role="button"][aria-label^="Forest"]').first();
+  const forest = page.locator('.hand-scroll [role="button"]:has-text("Forest")').first();
   await expect(forest).toBeVisible();
   await forest.click();
   const play = page.getByRole('button', { name: 'Jugar tierra: Forest' });
   await expect(play).toBeVisible();
   await play.click();
-  await expect(page.locator('.battlefield [aria-label^="Forest"]').first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.battlefield [role="button"]:has-text("Forest")').first()).toBeVisible({ timeout: 15_000 });
 
   // Priority can be passed through the real engine.
   const pass = page.getByRole('button', { name: 'Pasar prioridad' });

@@ -59,13 +59,13 @@
 </section>
 
 <style>
-  .hand-zone { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: .65rem .8rem; }
+  .hand-zone { min-width: 0; max-width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: .65rem .8rem; }
   .zone-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .45rem; }
   h2 { margin: 0; font-size: .9rem; font-weight: 650; }
   .count { color: var(--ink-muted); font-weight: 500; }
   .scroll-controls { display: flex; gap: .3rem; }
   .scroll-controls button { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 7px; width: 2rem; height: 1.8rem; }
-  .hand-scroll { display: flex; gap: .65rem; overflow-x: auto; overflow-y: visible; padding: .6rem .2rem .8rem; scroll-snap-type: x proximity; }
+  .hand-scroll { min-width: 0; max-width: 100%; display: flex; gap: .65rem; overflow-x: auto; overflow-y: visible; padding: .6rem .2rem .8rem; scroll-snap-type: x proximity; }
   .hand-card { position: relative; scroll-snap-align: start; }
   .playable { position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); color: var(--ok); font-size: .7rem; }
   .empty { color: var(--ink-muted); font-size: .85rem; margin: .5rem 0; }

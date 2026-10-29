@@ -190,7 +190,7 @@
   .start-panel input { background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: .45rem; max-width: 160px; }
   button.primary { background: var(--accent); color: var(--accent-ink); border: none; border-radius: 10px; padding: .65rem 1rem; font-weight: 650; }
   .muted { color: var(--ink-muted); font-size: .82rem; }
-  .layout { display: grid; gap: .8rem; min-width: 0; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: .8rem; min-width: 0; }
   .rival-bar, .player-bar { display: flex; justify-content: space-between; align-items: center; gap: .8rem; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: .55rem .8rem; flex-wrap: wrap; }
   .life { display: flex; align-items: baseline; gap: .5rem; }
   .life-label { font-size: .8rem; color: var(--ink-muted); }

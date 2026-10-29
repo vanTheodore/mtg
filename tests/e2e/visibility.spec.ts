@@ -11,7 +11,7 @@ for (const width of widths) {
   test(`todas las cartas de una mano de 30 son accesibles a ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/stress?hand=30&tokens=20');
-    const hand = page.getByRole('region', { name: /Mano de prueba/ });
+    const hand = page.getByRole('region', { name: 'Mano de prueba', exact: true });
     await expect(hand).toBeVisible();
     const cards = hand.locator('[role="button"][data-card-id]');
     await expect(cards).toHaveCount(30);
@@ -40,10 +40,11 @@ for (const width of widths) {
 test('fallback identificable, error de imagen y reintento', async ({ page }) => {
   await page.goto('/stress?hand=3&tokens=0');
   const card = page.locator('[data-card-id="1001"]');
+  const shell = card.locator('..');
   await expect(card).toContainText('Grizzly Bears');
   await expect(card).toContainText('2/2');
-  await expect(card.getByRole('button', { name: 'Reintentar imagen' })).toBeVisible();
-  await card.getByRole('button', { name: 'Reintentar imagen' }).click();
+  await expect(shell.getByRole('button', { name: 'Reintentar imagen' })).toBeVisible();
+  await shell.getByRole('button', { name: 'Reintentar imagen' }).click();
   await expect(card).toContainText('Grizzly Bears');
 });
 
@@ -53,7 +54,7 @@ test('información oculta se distingue de arte ausente', async ({ page }) => {
   await expect(card).toHaveAttribute('data-hidden', 'true');
   await expect(card).toHaveAttribute('aria-label', 'Carta oculta');
   await expect(card).not.toContainText('Grizzly Bears');
-  await expect(card.getByRole('button', { name: 'Reintentar imagen' })).toHaveCount(0);
+  await expect(card.locator('..').getByRole('button', { name: 'Reintentar imagen' })).toHaveCount(0);
 });
 
 test('ampliación por teclado y transformación/adjuntos', async ({ page }) => {
