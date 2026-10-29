@@ -134,8 +134,18 @@ cadena que funciona:
 3. `bun run engine:build` con `CARGO_OFFLINE=1`.
 
 **Estado de esta ronda**: el toolchain (paso 1) se instaló y verificó; el
-vendoring de las 71 crates (paso 2) **no se completó**, así que el `.wasm` sigue
-sin generarse aquí y ningún resultado de esta fase depende de haberlo tenido.
+vendoring de las 71 crates de `Cargo.lock` (paso 2) **no se completó**, así que
+el `.wasm` sigue sin generarse aquí y ningún resultado de esta fase depende de
+haberlo tenido. La prueba de dónde se detiene, tal cual:
+
+```
+$ PATH=/home/user/tools/rust/bin:$PATH cargo build --offline --locked \
+    --target wasm32-unknown-unknown -p mtg-engine-wasm --lib --profile release -j 1
+error: no matching package named `indexmap` found
+location searched: crates.io index
+required by package `phase-engine v0.119.0 (/home/user/mtg/crates/phase-engine)`
+```
+
 En una máquina normal la Ruta A lo resuelve en un comando.
 
 ## 4. Qué ejecutar y qué mirar
