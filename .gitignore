@@ -15,3 +15,5 @@ static/wasm/
 .cargo/vendor/
 .cargo/offline.toml
 Cargo.sandbox.lock
+
+target-*/

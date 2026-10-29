@@ -1,0 +1,7415 @@
+use crate::types::ability::StaticDefinition;
+use crate::types::card_type::CoreType;
+use crate::types::events::GameEvent;
+use crate::types::game_state::{
+    GameState, LinkedExileLki, LinkedExileSnapshot, ResolutionSourceRelatch, StackEntry,
+    StackEntryKind, ZoneChangeCombatStatus,
+};
+use crate::types::identifiers::{CardId, ObjectId, ObjectIncarnationRef};
+use crate::types::player::PlayerId;
+use crate::types::resolved_commands::{
+    ResolvedControllerOverrideCommand, ResolvedControllerOverrideReplayInvariantError,
+    ResolvedEntryProvenanceCommand, ResolvedEntryProvenanceReplayInvariantError,
+    ResolvedObjectCeaseCommand, ResolvedObjectCeaseReplayInvariantError, ResolvedZoneChangeCommand,
+    ResolvedZoneChangeReplayInvariantError, RetainedStickerTimestamp,
+};
+use crate::types::statics::StaticMode;
+use crate::types::zones::Zone;
+
+use super::game_object::GameObject;
+use super::printed_cards::{apply_back_face_to_object, swap_object_faces};
+
+/// CR 109.1 + CR 601.2a + CR 405.1: A spell is an object on the stack from
+/// announcement, even while this engine retains its origin-zone field until
+/// finalization. The retained-origin representation is stack-resident only while
+/// the exact spell's `PendingCast` lifecycle and announcement placeholder both
+/// remain live; a bare same-id stack entry is insufficient.
+fn object_has_stack_residency(state: &GameState, obj: &GameObject) -> bool {
+    if obj.zone == Zone::Stack {
+        return true;
+    }
+
+    let is_pending_spell = |pending: &crate::types::game_state::PendingCast| {
+        pending.object_id == obj.id && pending.activation_ability_index.is_none()
+    };
+    let has_pending_spell = state.pending_cast.as_deref().is_some_and(is_pending_spell)
+        || state
+            .waiting_for
+            .pending_cast_ref()
+            .is_some_and(is_pending_spell);
+
+    has_pending_spell
+        && state
+            .stack
+            .iter()
+            .any(|entry| entry.id == obj.id && matches!(entry.kind, StackEntryKind::Spell { .. }))
+}
+
+/// CR 704.5d / CR 111.7 / CR 111.8: A token outside the battlefield ceases to
+/// exist at the next SBA and can't change zones before then. Effectively
+/// stack-resident tokens are excluded so announced spell copies can finish
+/// casting and resolving before the next applicable SBA check.
+pub(super) fn token_is_outside_battlefield_and_stack(state: &GameState, obj: &GameObject) -> bool {
+    obj.is_token && obj.zone != Zone::Battlefield && !object_has_stack_residency(state, obj)
+}
+
+/// CR 704.5e + CR 707.10a: A copy of a card in any zone other than the stack or
+/// the battlefield ceases to exist as a state-based action. Distinct from the
+/// token rule (CR 704.5d): a copy of a card is legal on the battlefield
+/// (CR 707.10f makes a permanent copy a token there) and may change zones freely
+/// while alive, so this predicate is used ONLY by the cease-to-exist SBA — never
+/// by the CR 111.8 "can't change zones" movement guards, which apply to tokens only.
+/// CR 722.3c: except the linked prepare-spell copy in exile, which remains for as
+/// long as its prepared permanent remains on the battlefield and has the prepared
+/// designation ("This is an exception to rule 704.5e").
+pub(super) fn copy_of_card_outside_battlefield_and_stack(
+    state: &GameState,
+    obj: &GameObject,
+) -> bool {
+    obj.is_copy
+        && obj.zone != Zone::Battlefield
+        && !object_has_stack_residency(state, obj)
+        && !crate::game::effects::prepare::is_retained_linked_prepared_copy(state, obj)
+}
+
+/// CR 122.2 + CR 113.6b: Determine whether `object_id`'s counters survive a move
+/// into the `to` zone. The default (CR 122.2) is that counters cease to exist on
+/// any zone change. A `StaticMode::CountersPersistAcrossZones` ability overrides
+/// this for destination zones NOT in its `excluded_zones` list (Me, the
+/// Immortal; Skullbriar, the Walking Grave).
+///
+/// CR 113.6b: the ability is read from the object's state in the zone it is
+/// moving FROM. This function must be called while the object's `zone` field
+/// still holds the from-zone (before `move_to_zone` updates it), so the
+/// ability's `condition` gate is evaluated from the correct zone — matching
+/// Me's official ruling.
+///
+/// Two documented limitations, both arising because this helper reads
+/// `obj.static_definitions` directly (via `active_static_definitions`) rather
+/// than the layer-resolved view of the object:
+///
+/// 1. `active_zones`: `active_static_definitions` only enforces the
+///    `active_zones` membership gate for the Command zone
+///    (functioning_abilities.rs); for other zones the full `active_zones` gate
+///    lives in the layers pipeline (layers.rs), which this helper bypasses.
+///    Persistence here is therefore gated by `excluded_zones`, not by
+///    `active_zones`. This is sound for the shipping cards because their
+///    `excluded_zones` (Hand, Library) coincide with the inactive zones where
+///    objects never carry counters. A future `CountersPersistAcrossZones` card
+///    with a different active/excluded split would need an explicit
+///    `active_zones` check added here.
+///
+/// 2. Layer-6 ability removal (Humility / Yixlid Jailer's "Cards in graveyards
+///    lose all abilities"): `evaluate_layers` (layers.rs) only applies layers to
+///    battlefield + hand objects, so a graveyard/exile object's
+///    `static_definitions` never has its abilities stripped. With Yixlid Jailer
+///    in play and Me/Skullbriar in a graveyard bearing counters, this helper
+///    still observes the persistence static and would INCORRECTLY persist the
+///    counters on a graveyard→exile move — CR 113.6b reads the ability from the
+///    from-zone state, where it is rules-meant to be removed. This is not a
+///    regression (graveyard ability-removal is unmodeled engine-wide), but it is
+///    a known-wrong interaction on this new path, called out here explicitly
+///    rather than left implicit.
+///    TODO: once `evaluate_layers` applies Layer-6 ability removal to non-
+///    battlefield zones, re-check persistence against the layer-resolved view
+///    here so Humility/Yixlid correctly suppress it.
+fn counters_persist_on_move(state: &GameState, object_id: ObjectId, to: Zone) -> bool {
+    let Some(obj) = state.objects.get(&object_id) else {
+        return false;
+    };
+    super::functioning_abilities::active_static_definitions(state, obj).any(|def| {
+        matches!(
+            &def.mode,
+            StaticMode::CountersPersistAcrossZones { excluded_zones }
+                if !excluded_zones.contains(&to)
+        )
+    })
+}
+
+/// CR 603.10a + CR 603.6e: Capture a snapshot of every attachment on `obj` at the
+/// moment of the zone change. The snapshot records each attachment's current
+/// controller and kind (Aura/Equipment) so that look-back triggers of the form
+/// "for each Aura you controlled that was attached to it" (Hateful Eidolon)
+/// can resolve their quantity after the departure has already unattached the
+/// Auras (CR 701.3d).
+pub(crate) fn capture_attachment_snapshot(
+    state: &GameState,
+    obj: &GameObject,
+) -> Vec<crate::types::game_state::AttachmentSnapshot> {
+    use crate::types::ability::AttachmentKind;
+    obj.attachments
+        .iter()
+        .filter_map(|id| {
+            let att = state.objects.get(id)?;
+            let kind = if att.card_types.subtypes.iter().any(|s| s == "Aura") {
+                AttachmentKind::Aura
+            } else if att.card_types.subtypes.iter().any(|s| s == "Equipment") {
+                AttachmentKind::Equipment
+            } else {
+                // Fortifications and other attachment types — skip; only
+                // Aura/Equipment predicates are modeled.
+                return None;
+            };
+            Some(crate::types::game_state::AttachmentSnapshot {
+                object_id: *id,
+                identity: Some(ObjectIncarnationRef::from_object(att)),
+                controller: att.controller,
+                kind,
+            })
+        })
+        .collect()
+}
+
+fn clear_exert_history_on_zone_change(
+    state: &mut GameState,
+    object_id: ObjectId,
+    from: Zone,
+    to: Zone,
+) {
+    // CR 400.7: Exert history belongs to the departed object, even when its
+    // replacement incarnation reuses the same storage id. Reorders keep it.
+    if from != to {
+        state.exerted_this_turn.remove(&object_id);
+    }
+}
+
+/// CR 400.7: Snapshot LKI and apply all cleanup side effects when an object
+/// leaves its current zone. Shared by `move_to_zone` and `move_to_library_at_index`.
+///
+/// Handles: LKI snapshot (CR 400.7), activation-use clearing, transform
+/// revert (CR 712.14), exile permission clearing (CR 113.6e), monstrous reset
+/// (CR 701.37b), counter clearing (CR 122.2), layer pruning, and mana-tap
+/// cleanup.
+/// `attachments` MUST be captured by the caller BEFORE
+/// `sever_battlefield_attachment_graph_on_exit` runs. This function cannot capture it
+/// itself: in `move_to_zone` the sever happens first, so by the time we get here the
+/// live object's attachment list is already empty. CR 608.2h needs the pre-sever set
+/// (see the `LKISnapshot::attachments` doc comment), so the caller — which is the only
+/// code that still has it — supplies it.
+pub(crate) fn apply_zone_exit_cleanup(
+    state: &mut GameState,
+    object_id: ObjectId,
+    from: Zone,
+    to: Zone,
+    attachments: Vec<crate::types::game_state::AttachmentSnapshot>,
+) {
+    // CR 608.2h + CR 707.2: record the spell's stack entry and object before
+    // any of this function's own reverts (`cast_occurrence` clear below,
+    // modal/face-down face swap further down) erase what "that spell" looked
+    // like while it was on the stack.
+    if from == Zone::Stack && to != Zone::Stack {
+        let departed_entry = state
+            .stack
+            .iter()
+            .find(|entry| entry.id == object_id)
+            .cloned();
+        if let Some(entry) = departed_entry {
+            super::stack::record_departed_stack_spell(state, &entry);
+        }
+    }
+    // CR 400.7: An object that changes zones becomes a new object with no
+    // memory of its previous existence. The information authority receives the
+    // pre-move occurrence so the future Zone command can apply this same clear
+    // without ever exposing the new incarnation through the old reveal lease.
+    let occurrence = state
+        .objects
+        .get(&object_id)
+        .map(ObjectIncarnationRef::from_object)
+        .expect("zone-exit cleanup must reference a live object");
+    state.clear_revealed_information_on_zone_exit(occurrence);
+    // CR 400.7 + CR 702.187b: The "discarded this turn" mark (Mayhem's gate)
+    // belongs to the old object. Clear it on any zone change so a card that
+    // leaves the graveyard and returns is not treated as still discarded; the
+    // discard pipeline re-stamps it after the move-to-graveyard completes.
+    if let Some(obj) = state.objects.get_mut(&object_id) {
+        obj.discarded_turn = None;
+        // CR 400.7 + CR 601.2i: A cast occurrence belongs to the spell object
+        // represented on the stack, never to the new object after it leaves.
+        if from == Zone::Stack && to != Zone::Stack {
+            obj.cast_occurrence = None;
+            obj.prepared_copy_source = None;
+            // CR 400.7: the spell's identity ends with the spell.
+            obj.spell_announcement = None;
+        }
+    }
+    // CR 607.2q + CR 400.7 + CR 400.7d + CR 608.3a: a cast-cost link follows the spell
+    // onto the stack and onto the battlefield as the permanent it becomes; any other
+    // move makes a new object the cost was not paid for.
+    if !(to == Zone::Stack || (from == Zone::Stack && to == Zone::Battlefield)) {
+        crate::game::exile_links::end_cast_cost_links(state, object_id);
+    }
+    // CR 400.7 + CR 403.4: Activation-use history belongs to the old
+    // object. `ObjectId` is storage identity here, so clear per-object counts
+    // at the zone-change boundary before the same id can represent a new object.
+    state
+        .activated_abilities_this_turn
+        .retain(|(id, _), _| *id != object_id);
+    state
+        .activated_abilities_this_game
+        .retain(|(id, _), _| *id != object_id);
+    clear_exert_history_on_zone_change(state, object_id, from, to);
+
+    // CR 400.7: Snapshot LKI before a zone change out of any zone whose
+    // characteristics are not recomputed on demand. Power/toughness reflect
+    // layer modifications on battlefield (Layer 7); from exile they will be
+    // None (no layer computation), which is correct.
+    //
+    // CR 608.2h + CR 109.4: `Zone::Stack` is included because the CR 109.4
+    // reset below erases `obj.controller` on the way out, and a look-back
+    // effect that needs the at-exit controller of a stack object has nowhere
+    // else to read it. Render Silent ("Counter target spell. Its controller
+    // can't cast spells this turn") is the measured consumer:
+    // `ability_utils::parent_target_controller` already prefers this snapshot
+    // for any off-battlefield object and only falls through to `obj.controller`
+    // when there is none, so widening the capture is the whole fix — no
+    // consumer changes. The stack seed (`layers.rs`) owns a stack object's
+    // controller on the way IN; this owns the record of it on the way OUT.
+    if from == Zone::Battlefield || from == Zone::Exile || from == Zone::Stack {
+        let lki_copiable_values =
+            crate::game::layers::compute_current_copiable_values(state, object_id);
+        if let Some(obj) = state.objects.get(&object_id) {
+            let incarnation = obj.incarnation;
+            let lki = crate::types::game_state::LKISnapshot {
+                name: obj.name.clone(),
+                token_image_ref: obj.token_image_ref.clone(),
+                power: obj.power,
+                toughness: obj.toughness,
+                // CR 208.4b + CR 613.4b: Capture the layer-7b base values so
+                // base-scope P/T look-back filters read the base, not current.
+                base_power: obj.layer_base_power.or(obj.base_power),
+                base_toughness: obj.layer_base_toughness.or(obj.base_toughness),
+                // CR 202.3d + CR 709.4b: this LKI is captured on leaving the
+                // battlefield or exile (off the stack), so a split card records
+                // its combined mana value and colors (no-op for single-face and
+                // battlefield Rooms, which gate out).
+                mana_value: obj.effective_mana_value(),
+                controller: obj.controller,
+                owner: obj.owner,
+                // CR 400.7: Capture core types for "if it was a creature" patterns.
+                card_types: obj.card_types.core_types.clone(),
+                subtypes: obj.card_types.subtypes.clone(),
+                supertypes: obj.card_types.supertypes.clone(),
+                keywords: obj.keywords.clone(),
+                colors: obj.effective_colors(),
+                chosen_attributes: obj.chosen_attributes.clone(),
+                // CR 400.7: Capture counters for "if it had counters on it" patterns.
+                counters: obj.counters.clone(),
+                // CR 110.5 + CR 110.5d: Capture tap status AT zone exit. Once the
+                // object leaves the battlefield it is neither tapped nor untapped,
+                // so a use_lki rider ("if it was tapped", Brackish Blunder) reads
+                // this captured value instead of the live (now-absent) object.
+                tapped: obj.tapped,
+                // CR 701.60b: Capture suspected status at zone exit for
+                // "was suspected" look-back riders.
+                is_suspected: obj.is_suspected,
+                // CR 722.3a + CR 608.2h: Capture the prepared designation at
+                // zone exit, before the move clears it — a departed source's
+                // "isn't prepared" intervening-if recheck (CR 603.4) reads
+                // this exit value, not the trigger-time appearance.
+                was_prepared: obj.prepared.is_some(),
+                // CR 608.2h: intensity at zone exit, for a departed source's
+                // "its intensity" read.
+                intensity: obj.intensity,
+                // CR 608.2h: The attachment set as it stood BEFORE the departure
+                // sever (CR 701.3d) cleared it, so a source-referential intervening-if
+                // re-checked at resolution ("if this creature is enchanted" — Dreampod
+                // Druid) reads last known information once its source has left the
+                // battlefield.
+                // Supplied by the caller: the sever already ran by the time we get here.
+                attachments,
+            };
+            state.lki_cache.insert(object_id, lki.clone());
+            state
+                .lki_by_incarnation
+                .entry(object_id)
+                .or_default()
+                .insert(incarnation, lki);
+        }
+        if let Some(values) = lki_copiable_values {
+            state
+                .lki_copiable_values_by_incarnation
+                .entry(object_id)
+                .or_default()
+                .insert(occurrence.incarnation, values.clone());
+            state.lki_copiable_values.insert(object_id, values);
+        }
+    }
+
+    // CR 122.2 + CR 113.6b: Decide counter persistence using the still-current
+    // from-zone object state, BEFORE taking the mutable borrow below (the helper
+    // needs `&state` to read the object's functioning statics). Me, the
+    // Immortal / Skullbriar keep their counters on a move to any zone outside
+    // their `excluded_zones`; every other object follows the CR 122.2 default.
+    let preserve_counters = counters_persist_on_move(state, object_id, to);
+
+    // CR 722.3c: the prepare-face copy remains in exile only while its linked
+    // permanent remains on the battlefield with the prepared designation.
+    if from == Zone::Battlefield {
+        crate::game::effects::prepare::remove_linked_prepared_copy_if_idle(state, object_id);
+    }
+
+    if let Some(obj_mut) = state.objects.get_mut(&object_id) {
+        // CR 400.7 + CR 614.1a: Rod of Absorption's stack-exile rider is a
+        // transient marker on the spell object. The stack resolver snapshots it
+        // before moving the spell, so all zone exits can clear the field here.
+        obj_mut.exile_from_stack_linked_source = None;
+        // CR 400.7 + CR 603.7a + CR 702.170c: the exile-instead consequence
+        // rider clears in lockstep — a spell that leaves the stack any other
+        // way (countered, fizzled) never takes the consequence (Feather's
+        // return, Lilah's plot).
+        obj_mut.exile_from_stack_rider = None;
+
+        // CR 400.7 + CR 730.3c: a component split out of a merged permanent is a
+        // new object on every zone change, so its survivor back-link is
+        // meaningful only while it stays in the zone it split into. Clear it on
+        // ANY exit (it is re-set by `merge::split_merged_permanent_on_leave` if it
+        // re-leaves a merged permanent) so it cannot wrongly re-collect on a later
+        // continuity return after moving between non-battlefield zones (e.g.
+        // exile → graveyard). The split sets the link AFTER this cleanup runs, so
+        // this never clobbers the initial set.
+        obj_mut.split_from_merge_survivor = None;
+
+        // CR 712.8a + CR 400.7: Transformed permanents revert to front face on any
+        // zone exit (transform DFCs are only valid in transformed state on the battlefield).
+        if obj_mut.transformed && obj_mut.back_face.is_some() {
+            swap_object_faces(obj_mut);
+            obj_mut.transformed = false;
+        }
+
+        // CR 601.2b + CR 400.7 (#7565): the cast conversation ends with any
+        // move that is not onto the stack (resolve, counter, discard, bounce,
+        // battlefield entry) — a later cast must offer the face choice afresh.
+        if to != Zone::Stack {
+            obj_mut.cast_face_committed = false;
+        }
+
+        // CR 712.8a + CR 400.7: MDFC objects showing their back face revert to
+        // front face in any zone other than the stack or battlefield (back face is
+        // valid on the stack while the spell is being cast, and on the battlefield).
+        if obj_mut.modal_back_face
+            && to != Zone::Stack
+            && to != Zone::Battlefield
+            && obj_mut.back_face.is_some()
+        {
+            swap_object_faces(obj_mut);
+            obj_mut.modal_back_face = false;
+        }
+
+        // CR 708.9: A face-down permanent leaving the battlefield, or a
+        // face-down spell leaving the stack for a zone other than the battlefield,
+        // is revealed to all players. Restore its stored identity so public zones
+        // show the real card instead of a face-down 2/2 shell.
+        if obj_mut.face_down
+            && (from == Zone::Battlefield || (from == Zone::Stack && to != Zone::Battlefield))
+        {
+            obj_mut.face_down = false;
+            if let Some(back_face) = obj_mut.back_face.take() {
+                apply_back_face_to_object(obj_mut, back_face);
+            }
+        }
+
+        // CR 710.4 + CR 110.5: A flipped permanent that leaves the battlefield
+        // retains no memory of its status, and in every zone other than the
+        // battlefield a flip card has only its normal characteristics
+        // (CR 710.2). Restore the normal half and clear the flipped status.
+        //
+        // Ordered AFTER the CR 708.9 face-down restore on purpose: a flipped
+        // permanent that was then turned face down (Ixidron, Cyber Conversion)
+        // shares this one `back_face` slot between both statuses.
+        // `effects::turn_face_down` keeps the flip stash (the normal half) in
+        // it, so the face-down restore above already puts the normal half back
+        // on the object; this call then only has to clear the flipped status
+        // (its `back_face == None` branch). Running it first would instead
+        // consume the flip stash and leave the face-down 2/2 shell to be
+        // restored into the graveyard.
+        crate::game::flip::revert_flip_on_zone_exit(obj_mut);
+
+        clear_cast_origin_off_provenance_zones(obj_mut, to);
+
+        // CR 400.7 + CR 113.6e: Clear exile-based casting permissions when leaving exile
+        // (prevents re-casting if the card returns to exile via a different effect).
+        if from == Zone::Exile {
+            // CR 702.143c-d + CR 400.7: Foretold is a designation of the card
+            // while it remains in exile. Once it changes zones, the new object
+            // is no longer a foretold card.
+            obj_mut.foretold = false;
+            // CR 400.7 + CR 406.6: which player exiled this card is a fact
+            // about its stay in exile; the new object has no such history.
+            obj_mut.exiled_by = None;
+            // CR 708.4: a spell CAST face down (morph/disguise via an exile
+            // permission) is turned face down as part of the cast and keeps
+            // that status on the stack. Only the exile-zone face-down
+            // designation ends here (foretold/hideaway cards, which stash no
+            // identity in `back_face`); the cast is the one exile exit whose
+            // destination is the stack and whose object carries the cast
+            // stash (`spell_is_cast_face_down`, #5171's discriminator).
+            if !(to == Zone::Stack && obj_mut.spell_is_cast_face_down()) {
+                obj_mut.face_down = false;
+            }
+            obj_mut.casting_permissions.retain(|p| {
+                !matches!(
+                    p,
+                    crate::types::ability::CastingPermission::AdventureCreature
+                        | crate::types::ability::CastingPermission::ExileWithAltCost { .. }
+                        | crate::types::ability::CastingPermission::ExileWithAltAbilityCost { .. }
+                        | crate::types::ability::CastingPermission::PlayFromExile { .. }
+                        | crate::types::ability::CastingPermission::ExileWithEnergyCost
+                        | crate::types::ability::CastingPermission::WarpExile { .. }
+                        // CR 702.170d + CR 400.7: Plotted permission is scoped
+                        // to the exile zone. Once the card leaves exile (cast
+                        // resolves, or another effect moves it), drop the
+                        // permission so a later return-to-exile doesn't
+                        // inherit a stale turn_plotted value.
+                        | crate::types::ability::CastingPermission::Plotted { .. }
+                        | crate::types::ability::CastingPermission::Foretold { .. }
+                )
+            });
+            state.exile_links.retain(|link| link.exiled_id != object_id);
+        }
+
+        // CR 400.7 + CR 601.2a + CR 118.9 + CR 701.17d: An object-tagged cast/play
+        // grant ("you may cast it without paying its mana cost", a milled card's
+        // "you may play that card") attaches an `ExileWithAltCost` /
+        // `ExileWithAltAbilityCost` / `PlayFromExile` permission *in place* on a
+        // card picked from the hand or graveyard (Sunforger searches a card to
+        // hand and casts it from there; Electrodominance / Emry cast in place;
+        // Ark of Hunger / Tablet of Discovery mill-grant in the graveyard) — see
+        // `effects::cast_from_zone` and the #751 graveyard `PlayFromExile` path.
+        // Such a card never passes through exile, so the exile-exit clear above
+        // never fires for it. Each grant authorizes exactly one cast of *that*
+        // card; once it has been cast and is leaving the stack (resolved or
+        // countered), the spent grant must be dropped so CR 400.7's new object
+        // does not inherit it. Without this, a stale grant lands back in the
+        // graveyard where `has_graveyard_timed_alt_cost_permission` /
+        // `graveyard_spell_objects_available_to_cast` re-offer the free cast on
+        // every priority — an unbounded recast loop. Exile-origin grants are
+        // already cleared at the Exile→Stack move, so this is a no-op for them
+        // (impulse draw, Suspend, Discover, Cascade). Other exile-scoped
+        // permissions (AdventureCreature, Plotted, Foretold, WarpExile) are left
+        // untouched: an Adventure spell, for instance, gains `AdventureCreature`
+        // precisely as it resolves to exile.
+        if from == Zone::Stack {
+            obj_mut.casting_permissions.retain(|p| {
+                !matches!(
+                    p,
+                    crate::types::ability::CastingPermission::ExileWithAltCost { .. }
+                        | crate::types::ability::CastingPermission::ExileWithAltAbilityCost { .. }
+                        | crate::types::ability::CastingPermission::PlayFromExile { .. }
+                )
+            });
+        }
+
+        // CR 400.7 + CR 611.2a: the REMAINING exits of the same in-place grant the
+        // block above closes. This IS a hand-kept list, like the Stack block
+        // above it — there is no shared predicate, so a FOURTH in-place zone
+        // added to `grant_lingering_permissions` (`effects/cast_from_zone.rs`:
+        // `Zone::Exile | Zone::Graveyard | Zone::Hand`) would not reach here on
+        // its own. That sibling is named so the next reader can check the two
+        // against each other. Exile already has its own clear far above, so the
+        // two left over are HAND and GRAVEYARD, and both were open:
+        // a discarded card and a milled card each carried their grant onward,
+        // where the readers pick it up again by CURRENT zone and never by origin
+        // (`casting::has_graveyard_timed_alt_cost_permission`,
+        // `casting::has_exile_cast_permission`). Emry, Lurker of the Loch is the
+        // named specimen of the graveyard half in the block above; exiling that
+        // graveyard afterwards left the card castable. A hand-origin permission authorizes casting the
+        // card FROM THE HAND ("Until end of turn, you may cast spells from your
+        // hand …", Chandra, Flame's Catalyst); a card that leaves the hand
+        // without being cast "becomes a new object with no memory of … its
+        // previous existence", so the grant must not travel with it. Without
+        // this, a discarded card lands in the graveyard still carrying the
+        // permission, where `casting::has_graveyard_timed_alt_cost_permission`
+        // and `graveyard_spell_objects_available_to_cast` re-offer it as a free
+        // graveyard cast — the same re-offer the Stack exit above exists to
+        // prevent, reached by the other door.
+        //
+        // `to != Zone::Stack` is load-bearing, not defensive, and that is MEASURED:
+        // dropping it turns `rishkars_expertise_free_cast_completes_during_resolution`
+        // red on "the consumed free-cast permission must remain only as a neutral
+        // stable slot" and
+        // `hand_cast_selection_casts_during_resolution_without_lingering_permission`
+        // red on its hand-cast wording of the same assertion. Casting the card IS a
+        // move to the stack, and it is the one exit these grants authorize
+        // (Sunforger searching a card to hand and casting it from there,
+        // Electrodominance's resolution-time pick, Emry's graveyard cast). The
+        // spent grant is then dropped by the Stack exit above when the spell
+        // leaves the stack.
+        //
+        // Scoped to the three in-place cast/play variants, mirroring that block.
+        // The exile-scoped designations a card can gain as it leaves the hand
+        // (`Plotted` from CR 702.170a, `Foretold` from CR 702.143a) are
+        // deliberately absent: those are granted at the exile side of the same
+        // move and must survive it.
+        clear_hand_or_graveyard_casting_permissions_on_exit(obj_mut, from, to);
+
+        if from == Zone::Battlefield {
+            obj_mut.reset_for_battlefield_exit();
+        }
+
+        // CR 109.4: "Only objects on the stack or on the battlefield have a
+        // controller. Objects that are neither on the stack nor on the
+        // battlefield aren't controlled by any player." CR 108.4a: "If anything
+        // asks for the controller of a card that doesn't have one … use its
+        // owner instead." So an object arriving in any OTHER zone must carry the
+        // owner fallback, not whatever CR 613.1b layer-2 control change was last
+        // applied to it.
+        //
+        // Keyed on the DESTINATION, which is the CR 109.4 partition itself —
+        // not on `from == Zone::Stack`. The battlefield leg already reached this
+        // answer via `revert_layered_characteristics_to_base` (called below for
+        // `from == Zone::Battlefield`), which writes the same
+        // `base_controller.unwrap_or(owner)` expression, so this write is
+        // idempotent there and the two sites agree by construction. The STACK
+        // exit had no such reset: MEASURED, a stolen spell that Dissipate
+        // counters-and-exiles reached `Zone::Exile` carrying the THIEF, and
+        // `filter::is_owner_scoped_zone` (Hand | Library | Graveyard) does not
+        // shield Exile. The at-exit controller is not lost — the LKI capture
+        // above snapshots it for CR 608.2h consumers.
+        if !matches!(to, Zone::Battlefield | Zone::Stack) {
+            obj_mut.controller = obj_mut.base_controller.unwrap_or(obj_mut.owner);
+        }
+
+        // CR 702.103b: A bestowed Aura's type-changing effect lasts until the
+        // spell or permanent ceases to be bestowed (CR 702.103e–g). The form
+        // is applied at cast-prepare time on the hand object, so it must
+        // persist through every zone change while the spell/permanent is in a
+        // "live bestow" state — that is, on its way to the stack from hand,
+        // on the stack as a bestowed Aura spell, and on the battlefield as
+        // the bestowed Aura permanent. Revert only when the object leaves
+        // those live zones to a "dead" zone:
+        //   * Stack → Graveyard / Hand / Library / Exile / Command (countered,
+        //     bounced, exiled — the spell ceases to exist as a bestow Aura).
+        //   * Battlefield → anywhere (death, exile, bounce — the printed
+        //     creature face is restored for graveyard / exile-cast / future
+        //     interactions).
+        // CR 702.103f's unattach exception keeps the form on the battlefield
+        // through SBA-driven unattach (handled in sba.rs::check_unattached_auras
+        // by calling `revert_bestow_form` before the SBA runs).
+        // Idempotent — a no-op if the flag is already false (e.g., the
+        // CR 702.103e illegal-target path reverts before move_to_zone fires).
+        let preserve_bestow_form = match from {
+            // Hand / Library / Graveyard / Exile / Command → Stack: cast
+            // bestowed; the form was just applied during cast preparation
+            // and must persist as the spell enters the stack.
+            _ if to == Zone::Stack => true,
+            // Stack → Battlefield: bestowed Aura resolves as the bestowed
+            // permanent (CR 702.103b "the permanent it becomes as it resolves
+            // will be a bestowed Aura").
+            Zone::Stack if to == Zone::Battlefield => true,
+            _ => false,
+        };
+        if !preserve_bestow_form && obj_mut.bestow_form.is_some() {
+            super::casting::revert_bestow_aura_form(obj_mut);
+            state.layers_dirty.mark_full();
+        }
+
+        // CR 702.148a + CR 612: A cleave spell's text-changing effect functions
+        // only "while a spell with cleave is on the stack." The bracket-removed
+        // ability set is installed on the hand object at cast time and must be
+        // reverted to the printed form when the spell leaves the stack —
+        // whether it resolved (Stack → Graveyard/Exile), was countered, or
+        // fizzled. Without this revert the same object id carries the cleave
+        // (bracket-removed) abilities into the graveyard, and a graveyard→hand
+        // recursion (Regrowth, Eternal Witness) — which reuses the object id
+        // without re-projecting the printed face — would let a later
+        // normal-cost recast resolve with the wrong (cleave) text.
+        //
+        // Gated the same way as bestow (preserve only on → Stack and on
+        // Stack → Battlefield) so the logic is uniform and future-proof, even
+        // though cleave instants/sorceries never resolve onto the battlefield.
+        let preserve_cleave_form = match from {
+            _ if to == Zone::Stack => true,
+            Zone::Stack if to == Zone::Battlefield => true,
+            _ => false,
+        };
+        if !preserve_cleave_form && obj_mut.cleave_form.is_some() {
+            super::casting::revert_cleave_text_change(obj_mut);
+        }
+
+        if retire_prototype_form_on_zone_change(obj_mut, from, to) {
+            state.layers_dirty.mark_full();
+        }
+
+        // CR 400.7d + CR 702.150a: Compleated's Phyrexian life-payment count
+        // is cast metadata. Preserve it while the cast object moves to the
+        // stack, and while the resolving permanent spell becomes the
+        // battlefield object whose ETB counter replacement will consume it.
+        // Every other zone change creates an object with no memory of that
+        // payment.
+        let preserve_phyrexian_life_paid =
+            to == Zone::Stack || (from == Zone::Stack && to == Zone::Battlefield);
+        if !preserve_phyrexian_life_paid {
+            obj_mut.phyrexian_life_paid = 0;
+        }
+
+        // CR 122.2: Counters cease to exist when an object changes zones —
+        // UNLESS a `CountersPersistAcrossZones` ability (read from the from-zone
+        // state above) keeps them for this destination (CR 113.6b). Me, the
+        // Immortal / Skullbriar retain their counters on a move to any zone
+        // other than a player's hand or library.
+        if !preserve_counters {
+            obj_mut.counters.clear();
+        }
+        clear_stickers_for_hidden_destination(obj_mut, to);
+    }
+
+    if let Some(object) = state.objects.get_mut(&object_id) {
+        retire_cast_counterprohibition_on_stack_exit(object, from, to);
+    }
+
+    if from == Zone::Battlefield {
+        // CR 701.54e: A player's Ring-bearer designation applies only while
+        // that permanent remains on the battlefield under that player's control.
+        super::effects::ring::clear_ring_bearer_if_object(state, object_id);
+    }
+
+    prune_object_bound_effects_on_exit(state, object_id, from, to);
+
+    // Prune host-bound transient effects and clean up mana-tap tracking
+    // when a permanent leaves the battlefield.
+    if from == Zone::Battlefield {
+        // CR 506.4: A permanent is removed from combat when it leaves the
+        // battlefield. Combat role is snapshotted into the zone-change record
+        // (capture_combat_status) before this cleanup runs so look-back
+        // triggers still read attacking/blocking status (CR 603.10a).
+        super::effects::remove_from_combat::remove_object_from_combat(state, object_id);
+        super::pairing::break_pair(state, object_id);
+        crate::game::layers::mark_layers_full(state);
+        // CR 400.7 + CR 702.11b: The "has dealt damage since entering" sticky flag
+        // belongs to the old object. ObjectId persists across this zone change, so
+        // clear it on a battlefield exit (death/bounce/exile/flicker) — otherwise a
+        // flickered "has hexproof if it hasn't dealt damage yet" creature would
+        // re-enter still treated as having dealt damage and never regain hexproof.
+        state.objects_that_dealt_damage.remove(&object_id);
+        super::layers::prune_host_left_effects(state, object_id);
+        // CR 611.2a + CR 400.7: `prune_host_left_effects` above covers only
+        // `transient_continuous_effects`. A play/cast permission whose duration
+        // `ends_when_host_leaves_play` — the event deadline and both state
+        // readings — lives on the exiled object instead, so it is revoked here
+        // at the same lifecycle point; otherwise a card exiled by "you may play
+        // that card for as long as [this permanent] remains on the battlefield"
+        // stays playable after its host is gone.
+        super::layers::prune_host_left_casting_permissions(state, object_id);
+        // CR 611.2b + CR 400.7: the captured source leaving play, OR the host
+        // leaving and re-entering as a new object (same storage ObjectId), ends
+        // the "can't become untapped for as long as you control [source]"
+        // continuous effect permanently — drop the gated def from base+live so
+        // it cannot revive on a same-ObjectId re-entry.
+        super::layers::prune_controller_controls_source_on_leave(state, object_id);
+        // CR 613.1 + CR 400.7: Copy effects are pruned above, but layer-derived
+        // characteristics (name, types, abilities) persist on the object until
+        // explicitly reset. Revert to printed baseline so graveyard/exile objects
+        // do not retain copied identity (Vesuva legend-rule sacrifice).
+        if let Some(obj) = state.objects.get_mut(&object_id) {
+            obj.revert_layered_characteristics_to_base();
+            if crate::game::stickers::zone_retains_stickers(to) && !obj.stickers.is_empty() {
+                crate::game::stickers::rebuild_public_zone_stickers(obj);
+            }
+        }
+        for tapped in state.lands_tapped_for_mana.values_mut() {
+            tapped.retain(|&id| id != object_id);
+        }
+        // CR 400.7 + CR 610.3: Drop `TrackedBySource` exile links keyed to a
+        // source that has now left the battlefield. Object identity resets, so
+        // a re-entering (e.g. blinked) permanent must not inherit the previous
+        // object's "exiled with" linkage (Pit of Offerings, Bojuka Bog, etc.).
+        // `UntilSourceLeaves` links are intentionally preserved here because
+        // `check_exile_returns` runs later in the priority loop and consumes
+        // them to return the exiled cards (CR 610.3).
+        // CR 702.55b + CR 702.55c: `Haunt` links are likewise preserved — the haunted
+        // creature leaving the battlefield (its death) is exactly when the
+        // card's haunt-payoff trigger reads the link to fire from exile. The
+        // link is pruned later, when the haunting card itself leaves exile.
+        // CR 702.167a/c: `CraftMaterial` links are preserved too — the craft
+        // source self-exiles mid-activation and returns with the same ObjectId,
+        // so the material links must survive its battlefield exit for the
+        // returned permanent to still read what it was crafted with.
+        // CR 406.3: `HideawayLookable` links are preserved because a look outlives
+        // its source; their live rule stops admitting once the source is gone.
+        // CR 607.2q + CR 400.7: `CastCost` links are already gone on any
+        // battlefield exit (the exit prune above).
+        // CR 607.2a + CR 400.7: `TrackedBySource` links are preserved when the
+        // source leaves the battlefield TO EXILE. A source that self-exiles
+        // (typically as its own activation cost — Mechtitan Core: "Exile this
+        // Vehicle and four other …: … return all cards exiled with this Vehicle
+        // …") keeps a stable ObjectId in exile and remains the linked-ability
+        // referent (CR 607.2a: the second ability refers to the cards put in exile
+        // by the first). Preserve its links so a deferred `ExiledBySource` return
+        // still finds the pile turns later — the blink-identity reset instead
+        // happens if that source RE-ENTERS the battlefield (paired entry prune
+        // below). Narrowed to the exile-exit so ordinary death/bounce (to
+        // graveyard/hand) still prunes.
+        let source_exits_to_exile = to == Zone::Exile;
+        state.exile_links.retain(|link| {
+            link.source_id != object_id
+                || matches!(
+                    link.kind,
+                    crate::types::game_state::ExileLinkKind::UntilSourceLeaves { .. }
+                        | crate::types::game_state::ExileLinkKind::UntilOpponentBecomesMonarch { .. }
+                        | crate::types::game_state::ExileLinkKind::Haunt
+                        | crate::types::game_state::ExileLinkKind::CraftMaterial
+                        | crate::types::game_state::ExileLinkKind::HideawayLookable { .. }
+                )
+                || (source_exits_to_exile
+                    && matches!(
+                        link.kind,
+                        crate::types::game_state::ExileLinkKind::TrackedBySource
+                    ))
+        });
+        // CR 400.7 + CR 607.2a: the cards exiled with this object this turn are the
+        // departed object's; a later object under the same id starts with none. Both
+        // leaves-the-battlefield records (`move_to_zone_with_entry_flags`,
+        // `move_to_library_at_index`) have already synced this list
+        // (`sync_trigger_source_exiled_cards`), so their readers keep it.
+        state.cards_exiled_with_source_this_turn.remove(&object_id);
+        // CR 400.7: a permission source's "once each turn" belongs to the
+        // departed object; a later object under the same id has its own.
+        state.graveyard_cast_permissions_used.remove(&object_id);
+        state
+            .graveyard_cast_permissions_used_per_type
+            .retain(|(source, _)| *source != object_id);
+        state.hand_cast_free_permissions_used.remove(&object_id);
+        state.alt_cost_grant_permissions_used.remove(&object_id);
+        state.exile_play_permissions_used.remove(&object_id);
+        state.exile_cast_permissions_used.remove(&object_id);
+        state
+            .top_of_library_cast_permissions_used
+            .remove(&object_id);
+
+        // PR-7 Phase 4c (B5 defuse): CR 104.4b / CR 110.1 / CR 700.4 — an enabling
+        // permanent leaving the battlefield revokes the revocable-∞ capability it
+        // enabled (every-enabler: `interactive_loop_bridge` Path C). Gated on a
+        // non-empty enabler map so Off/On games (which never populate it — only the
+        // Interactive B5 arm does) pay nothing and stay byte-identical. Whole-
+        // capability clear per controller whose enabler set contains this object:
+        // `clear_unbounded_loop` drops SIX maps, incl. the accepted-collapse stash.
+        if !state.unbounded_loop_enablers.is_empty() {
+            let revoked: Vec<PlayerId> = state
+                .unbounded_loop_enablers
+                .iter()
+                .filter(|(_, ids)| ids.contains(&object_id))
+                .map(|(c, _)| *c)
+                .collect();
+            for controller in revoked {
+                state.clear_unbounded_loop(controller);
+            }
+        }
+    }
+}
+
+/// Allocate a new ObjectId, create a GameObject with defaults, insert into state.objects, and add to the specified zone.
+pub fn create_object(
+    state: &mut GameState,
+    card_id: CardId,
+    owner: PlayerId,
+    name: String,
+    zone: Zone,
+) -> ObjectId {
+    let id = ObjectId(state.next_object_id);
+    state.next_object_id += 1;
+
+    let obj = GameObject::new(id, card_id, owner, name, zone);
+    state.objects.insert(id, obj);
+    add_to_zone(state, id, zone, owner);
+
+    // CR 302.6 + CR 403.4: Record ETB turn as a global counter (used by
+    // "this turn" triggers and filters). NOTE: this helper is used both for
+    // initial test/scenario setup and for a few synthesis paths. The
+    // summoning-sickness flag (`summoning_sick`) is NOT set here — it's set
+    // on the real ETB pipeline via `GameObject::reset_for_battlefield_entry`
+    // (invoked by `move_to_zone`). This keeps test scaffolding that places
+    // "pre-existing" creatures directly on the battlefield (before any turn
+    // has run) from spuriously starting sick.
+    if zone == Zone::Battlefield {
+        if let Some(obj) = state.objects.get_mut(&id) {
+            obj.entered_battlefield_turn = Some(state.turn_number);
+        }
+    }
+
+    id
+}
+
+/// CR 700.11: A player has "descended this turn" when a permanent card has
+/// been put into their graveyard from anywhere this turn. Single authority for
+/// the descend bookkeeping, shared by `move_to_zone` and the merge-split
+/// component delivery (`merge::put_component_into_zone`). Tokens are not cards
+/// and do not count.
+pub(crate) fn record_descend_on_graveyard_arrival(
+    state: &mut GameState,
+    object_id: ObjectId,
+    owner: PlayerId,
+) {
+    let is_permanent_card = state.objects.get(&object_id).is_some_and(|obj| {
+        !obj.is_token
+            && obj
+                .card_types
+                .core_types
+                .iter()
+                .any(|ct| ct.is_permanent_type())
+    });
+    if is_permanent_card {
+        if let Some(player) = state.players.iter_mut().find(|p| p.id == owner) {
+            player.descended_this_turn = true;
+        }
+    }
+}
+
+/// CR 400.7j (+ CR 400.7g/h cast hop): if the currently-resolving ability just
+/// moved its OWN source (`object_id == resolving ability's source_id`), record the
+/// from→to incarnation so `source_is_current` can re-find the moved object after
+/// the all-zone bump advanced its epoch. Chains across multiple self-moves in one
+/// resolution: the first self-move sets `original_stamp` (bound to the ability's
+/// captured incarnation); a chained self-move keeps `original_stamp` fixed and only
+/// advances `current_incarnation`. A first self-move may also start from the CR
+/// 400.7e successor a zone-change trigger already found in `from` (a dies
+/// trigger returning "this card" from the graveyard). A foreign object, or any
+/// other pre-move incarnation, never writes. Call AFTER the bump but BEFORE the
+/// move is recorded in `zone_changes_this_turn`, passing the pre-bump and
+/// post-bump values and the zone the object left.
+pub(crate) fn record_resolution_source_relatch(
+    state: &mut GameState,
+    object_id: ObjectId,
+    from: Zone,
+    pre_move_incarnation: u64,
+    new_incarnation: u64,
+) {
+    // A faithful READ of the resolving ability's captured source identity. The
+    // clone is disconnected from the local resolving borrow, so it cannot be the
+    // carrier — the record on `state` is (consumed inside `source_is_current`).
+    // A triggered ability's stamp is its trigger provenance; any other stack
+    // ability's is the `source_incarnation` captured when it was put on the
+    // stack. CR 400.7j: an activated ability that moves its own source (Unearth,
+    // "return this card from your graveyard to the battlefield. It gains haste")
+    // can still find the moved object for the rest of its effect.
+    let Some((source_id, Some(captured), successor_start)) = state
+        .resolving_stack_entry
+        .as_ref()
+        .and_then(StackEntry::ability)
+        .map(|a| {
+            (
+                a.source_id,
+                a.trigger_source_incarnation().or(a.source_incarnation),
+                a.is_own_departure_successor_in(state, from, Some(pre_move_incarnation)),
+            )
+        })
+    else {
+        return;
+    };
+    if object_id != source_id {
+        return;
+    }
+    // First self-move: pre-move value must equal the ability's captured stamp,
+    // or the source must be the successor its own triggering move created.
+    // CR 400.7j: other parts of that effect can find the object it moved.
+    let matches_first = pre_move_incarnation == captured || successor_start;
+    // Chained self-move: pre-move value must equal the record's current value.
+    let chained = state
+        .resolution_source_relatch
+        .as_ref()
+        .filter(|r| r.object_id == object_id && r.current_incarnation == pre_move_incarnation);
+    if matches_first || chained.is_some() {
+        // Keep `original_stamp` fixed across chained hops; the CR 400.7j identity
+        // is the FIRST captured stamp, not each intermediate incarnation.
+        let original_stamp = chained.map_or(captured, |r| r.original_stamp);
+        state.resolution_source_relatch = Some(ResolutionSourceRelatch {
+            object_id,
+            original_stamp,
+            current_incarnation: new_incarnation,
+        });
+    }
+}
+
+fn zone_container_len(
+    state: &GameState,
+    zone: Zone,
+    owner: PlayerId,
+    object_id: ObjectId,
+) -> usize {
+    match zone {
+        // CR 400.1 + CR 400.3: a shared pile is measured in its holder's container.
+        Zone::Library => state.library_of(owner).len(),
+        Zone::Hand => state
+            .players
+            .iter()
+            .find(|player| player.id == owner)
+            .expect("zone command owner exists")
+            .hand
+            .len(),
+        Zone::Graveyard => state.graveyard_of(owner).len(),
+        Zone::Battlefield => state.battlefield.len(),
+        Zone::Stack => state.stack.len(),
+        Zone::Exile => state.exile.len(),
+        Zone::Command => {
+            let object = state
+                .objects
+                .get(&object_id)
+                .expect("zone command object exists");
+            let player = state
+                .players
+                .iter()
+                .find(|player| player.id == owner)
+                .expect("zone command owner exists");
+            if object.in_attraction_deck {
+                player.attraction_deck.len()
+            } else if object.in_contraption_deck {
+                player.contraption_deck.len()
+            } else {
+                state.command_zone.len()
+            }
+        }
+    }
+}
+
+fn destination_position_after_removal(
+    state: &GameState,
+    object_id: ObjectId,
+    from: Zone,
+    to: Zone,
+    owner: PlayerId,
+) -> usize {
+    let destination_len = zone_container_len(state, to, owner, object_id);
+    if from == to {
+        destination_len
+            .checked_sub(1)
+            .expect("moving object must occupy its source container")
+    } else {
+        destination_len
+    }
+}
+
+/// The timestamp operands one zone transition draws: the object's entry
+/// timestamp and, when it carries stickers into a zone that retains them, one
+/// renewed timestamp per retained sticker.
+struct ZoneTimestamps {
+    entry: Option<u64>,
+    retained: Option<Vec<RetainedStickerTimestamp>>,
+}
+
+/// CR 613.7d + CR 613.7k: draw the object's entry timestamp first, then renew
+/// every retained sticker in its prior relative order (CR 123.5 / CR 400.7m
+/// retention follows the destination). The object's sticker vector is not
+/// reordered; rows bind by locator. An unstickered nonbattlefield move draws
+/// nothing.
+fn resolve_zone_timestamps(
+    state: &mut GameState,
+    object_id: ObjectId,
+    from: Zone,
+    to: Zone,
+) -> ZoneTimestamps {
+    let mut retained: Vec<_> = state
+        .objects
+        .get(&object_id)
+        .filter(|_| from != to && super::stickers::zone_retains_stickers(to))
+        .map(|object| {
+            object
+                .stickers
+                .iter()
+                .map(|sticker| (sticker.locator().clone(), sticker.timestamp()))
+                .collect()
+        })
+        .unwrap_or_default();
+    // Stable: equal prior stamps keep their vector order.
+    retained.sort_by_key(|(_, prior_timestamp)| *prior_timestamp);
+    let entry = (to == Zone::Battlefield || !retained.is_empty()).then(|| state.next_timestamp());
+    let retained = (!retained.is_empty()).then(|| {
+        retained
+            .into_iter()
+            .map(|(locator, prior_timestamp)| RetainedStickerTimestamp {
+                locator,
+                prior_timestamp,
+                timestamp: state.next_timestamp(),
+            })
+            .collect()
+    });
+    ZoneTimestamps { entry, retained }
+}
+
+/// CR 123.5: hidden destinations discard stickers and their characteristic
+/// changes. Returns whether stickers were cleared.
+fn clear_stickers_for_hidden_destination(object: &mut GameObject, to: Zone) -> bool {
+    if super::stickers::zone_retains_stickers(to) || object.stickers.is_empty() {
+        return false;
+    }
+    object.stickers.clear();
+    object.revert_layered_characteristics_to_base();
+    true
+}
+
+/// CR 613.7d + CR 613.7k: replay installs the recorded stamps and only adopts
+/// the allocator past them. The single installer for the ordinary path, its
+/// replay and the special Stack/Command branch; it never draws a timestamp.
+fn install_zone_timestamps(
+    state: &mut GameState,
+    object_id: ObjectId,
+    timestamps: &ZoneTimestamps,
+) {
+    let object = state
+        .objects
+        .get_mut(&object_id)
+        .expect("zone transition object remains live");
+    if let Some(entry) = timestamps.entry {
+        object.timestamp = entry;
+    }
+    let rows = timestamps.retained.as_deref().unwrap_or_default();
+    for row in rows {
+        object
+            .stickers
+            .iter_mut()
+            .find(|sticker| sticker.locator() == &row.locator)
+            .expect("validated retained sticker row names a carried sticker")
+            .set_timestamp(row.timestamp);
+    }
+    if let Some(entry) = timestamps.entry {
+        state.adopt_replayed_timestamp(entry);
+    }
+    if let Some(last) = rows.iter().map(|row| row.timestamp).max() {
+        state.adopt_replayed_timestamp(last);
+        // CR 613.7k: renewed sticker timestamps reorder layer-7b setters.
+        state.layers_dirty.mark_full();
+    }
+}
+
+/// CR 613.7k: binds the recorded retained rows to the live source before any
+/// mutation. Rows are required exactly when a stickered object really moves
+/// into a zone that retains stickers, and then must match every carried
+/// sticker one-to-one by locator and prior timestamp.
+fn retained_prestate_matches(object: &GameObject, command: &ResolvedZoneChangeCommand) -> bool {
+    let requires_retention = retained_rows_required(object, command);
+    match &command.retained_sticker_timestamps {
+        Some(rows) => {
+            requires_retention
+                && rows.len() == object.stickers.len()
+                && rows.iter().all(|row| {
+                    object
+                        .stickers
+                        .iter()
+                        .filter(|sticker| {
+                            sticker.locator() == &row.locator
+                                && sticker.timestamp() == row.prior_timestamp
+                        })
+                        .count()
+                        == 1
+                })
+        }
+        None => !requires_retention,
+    }
+}
+
+fn retained_rows_required(object: &GameObject, command: &ResolvedZoneChangeCommand) -> bool {
+    command.from != command.to
+        && super::stickers::zone_retains_stickers(command.to)
+        && !object.stickers.is_empty()
+}
+
+/// Resolves, applies, and journals the transition core of one ordinary zone move.
+///
+/// CR 400.7 + CR 613.7d + CR 613.7k: the ordinary path consumes its timestamps, captures the
+/// resulting incarnation and destination position, then delegates the exact
+/// installation to [`apply_resolved_zone_change`]. Replay never allocates a
+/// timestamp or a new object identity.
+///
+/// `owner` is the object's owner before the move; `receiver` is `Some` only when
+/// the move rebinds ownership, and then names the new owner.
+pub fn resolve_and_apply_zone_change(
+    state: &mut GameState,
+    object_id: ObjectId,
+    from: Zone,
+    to: Zone,
+    owner: PlayerId,
+    receiver: Option<PlayerId>,
+    mut zone_change_record: crate::types::game_state::ZoneChangeRecord,
+) -> Result<ResolvedZoneChangeCommand, ResolvedZoneChangeReplayInvariantError> {
+    let object = state.objects.get(&object_id).ok_or(
+        ResolvedZoneChangeReplayInvariantError::UnknownObject(object_id),
+    )?;
+    let occurrence = ObjectIncarnationRef::from_object(object);
+    if object.zone != from {
+        return Err(ResolvedZoneChangeReplayInvariantError::SourceZoneMismatch {
+            expected: from,
+            found: object.zone,
+        });
+    }
+    if object.owner != owner {
+        return Err(ResolvedZoneChangeReplayInvariantError::OwnerMismatch {
+            expected: owner,
+            found: object.owner,
+        });
+    }
+
+    let timestamps = resolve_zone_timestamps(state, object_id, from, to);
+    let resulting_incarnation = if to == Zone::Battlefield || from != to {
+        occurrence.incarnation + 1
+    } else {
+        occurrence.incarnation
+    };
+    let installed_owner = receiver.unwrap_or(owner);
+    let rebound_from = (installed_owner != owner).then_some(owner);
+    let destination_position =
+        destination_position_after_removal(state, object_id, from, to, installed_owner);
+    let turn_zone_change_index = state.zone_changes_this_turn.len();
+    zone_change_record.entered_incarnation =
+        (to == Zone::Battlefield).then_some(resulting_incarnation);
+    zone_change_record.turn_zone_change_index = turn_zone_change_index;
+    zone_change_record.recorded_turn_number = state.turn_number;
+    if rebound_from.is_some() {
+        // CR 108.3 as modified by the entry-ownership axis: the receiver becomes owner and controller; on the battlefield or stack that receiver is the player who played or cast it.
+        zone_change_record.install_rebound_arrival(installed_owner);
+    }
+
+    let command = ResolvedZoneChangeCommand {
+        object: occurrence,
+        resulting_incarnation,
+        from,
+        to,
+        destination_position,
+        owner: installed_owner,
+        rebound_from,
+        entry_timestamp: timestamps.entry,
+        retained_sticker_timestamps: timestamps.retained,
+        turn_zone_change_index,
+        zone_change_record,
+        cause: state.current_or_begin_rules_execution_node(),
+    };
+    apply_resolved_zone_change(state, &command)?;
+    state
+        .resolved_rules_journal
+        .record_zone_change(command.clone())
+        .expect("resolved zone change must have a live journal cause");
+    Ok(command)
+}
+
+/// Installs one recorded transition core without a replacement consult, query,
+/// timestamp allocation, or incarnation allocation.
+/// CR 400.7: the narrow `cast_from_zone` lifetime — the stamp survives only
+/// onto the STACK (the cast itself) and onto the BATTLEFIELD (whose entry
+/// reset + `CastLinkSnapshot` restore own it there,
+/// `reset_for_battlefield_entry`/`_exit`). Every other destination clears it,
+/// so a spell leaving the stack countered/fizzled/resolved-to-graveyard
+/// cannot hand a stale origin to a later recast. ONE primitive shared by the
+/// live transition cleanup and the resolved-zone-change replay applier, so
+/// replay equivalence holds by construction rather than by two hand-kept
+/// conditions.
+pub(crate) fn clear_cast_origin_off_provenance_zones(
+    obj: &mut crate::game::game_object::GameObject,
+    to: Zone,
+) {
+    if to != Zone::Stack && to != Zone::Battlefield {
+        obj.cast_from_zone = None;
+    }
+}
+
+/// CR 400.7 + CR 118.9: an in-place hand/graveyard cast or play permission
+/// cannot survive a zone change other than the permitted cast to the stack.
+/// Both the live cleanup and resolved-command replay call this authority.
+fn clear_hand_or_graveyard_casting_permissions_on_exit(
+    obj: &mut crate::game::game_object::GameObject,
+    from: Zone,
+    to: Zone,
+) {
+    if matches!(from, Zone::Hand | Zone::Graveyard) && to != Zone::Stack {
+        obj.casting_permissions.retain(|permission| {
+            !matches!(
+                permission,
+                crate::types::ability::CastingPermission::ExileWithAltCost { .. }
+                    | crate::types::ability::CastingPermission::ExileWithAltAbilityCost { .. }
+                    | crate::types::ability::CastingPermission::PlayFromExile { .. }
+            )
+        });
+    }
+}
+
+/// CR 400.7: an object that moves to a new zone is a new object, so a
+/// continuous effect a resolved spell or ability bound to THIS object
+/// (`SpecificObject`) ends with it on every zone exit (issue #8795: Delay's
+/// suspend grant on the exiled card followed the storage id into the
+/// graveyard after the card was cast). Two moves are excepted:
+/// - a move TO the stack: CR 400.7g, an ability granted to a card that
+///   allows it to be cast (suspend) "will continue to apply to the new
+///   object that card became after it moved to the stack". The clause is
+///   wider than the rule — every grant, every way onto the stack — because
+///   the engine's cast move is deferred: a mana-spent keyword grant
+///   (`ManaSpellGrant::AddKeywordUntilEndOfTurn`, Hall of the Bandit Lord's
+///   haste; 6 corpus cards) is installed during payment while the object's
+///   zone still reads hand, and by CR 601.2a / CR 601.2h the card is on the
+///   stack by then, so no object change intervenes and that grant must
+///   survive this move (the cast move is the engine's only production move
+///   onto the stack);
+/// - a permanent spell's move from the stack to the battlefield:
+///   CR 400.7a, its grants "continue to apply to the permanent that spell
+///   becomes".
+///
+/// ONE authority shared by the live transition cleanup
+/// (`apply_zone_exit_cleanup`) and the resolved-zone-change replay applier,
+/// so replay equivalence holds by construction — the way
+/// `clear_hand_or_graveyard_casting_permissions_on_exit` and
+/// `clear_cast_origin_off_provenance_zones` are shared. A battlefield exit is
+/// covered here too; the live battlefield branch keeps its host-lifetime
+/// prunes (`prune_host_left_effects`), which replay does not reproduce.
+pub(crate) fn prune_object_bound_effects_on_exit(
+    state: &mut GameState,
+    object_id: ObjectId,
+    from: Zone,
+    to: Zone,
+) {
+    if to == Zone::Stack || (from == Zone::Stack && to == Zone::Battlefield) {
+        return;
+    }
+    super::layers::prune_affected_object_left_effects(state, object_id);
+}
+
+/// CR 108.3 as modified by a format's entry-ownership axis + CR 108.4a +
+/// CR 109.4: the receiving player owns the card, and off the battlefield and
+/// stack its controller is its owner; on them the receiver is the caster or the
+/// land's player, who controls it. `base_controller` follows because exit
+/// cleanup computes `controller` from it.
+fn install_rebound_owner(object: &mut crate::game::game_object::GameObject, owner: PlayerId) {
+    object.owner = owner;
+    object.base_controller = Some(owner);
+    object.controller = owner;
+}
+
+/// CR 702.160a + CR 718.3b + CR 718.4 + CR 400.7: Prototype's alternative
+/// characteristics belong only to the spell cast prototyped and the permanent
+/// it becomes. Preserve the marker while the cast becomes a stack spell and
+/// while that spell resolves to the battlefield; clear it for every other zone
+/// change so the new object has only its normal characteristics. Shared by the
+/// live exit cleanup and the resolved-zone-change replay applier so a replayed
+/// departure ends the form exactly as the live one did. Returns whether a form
+/// was cleared, so the caller can schedule a full layer pass.
+fn retire_prototype_form_on_zone_change(object: &mut GameObject, from: Zone, to: Zone) -> bool {
+    let preserve_prototype_form = match from {
+        _ if to == Zone::Stack => true,
+        Zone::Stack if to == Zone::Battlefield => true,
+        _ => false,
+    };
+    if preserve_prototype_form || object.prototype_form.is_none() {
+        return false;
+    }
+    super::casting::clear_prototype_form(object);
+    true
+}
+
+/// CR 112.1 + CR 400.7: a cast-bound rules prohibition ends with the spell;
+/// printed intrinsic prohibitions remain part of the new object's base.
+fn retire_cast_counterprohibition_on_stack_exit(object: &mut GameObject, from: Zone, to: Zone) {
+    if from != Zone::Stack || to == Zone::Stack {
+        return;
+    }
+    let canonical = StaticDefinition::new(StaticMode::CantBeCountered);
+    if !object.base_static_definitions.contains(&canonical) {
+        object
+            .static_definitions
+            .retain(|definition| *definition != canonical);
+    }
+}
+
+pub fn apply_resolved_zone_change(
+    state: &mut GameState,
+    command: &ResolvedZoneChangeCommand,
+) -> Result<(), ResolvedZoneChangeReplayInvariantError> {
+    let turn_number = state.turn_number;
+    let object = state.objects.get(&command.object.object_id).ok_or(
+        ResolvedZoneChangeReplayInvariantError::UnknownObject(command.object.object_id),
+    )?;
+    let found = ObjectIncarnationRef::from_object(object);
+    if found != command.object {
+        return Err(ResolvedZoneChangeReplayInvariantError::OccurrenceMismatch {
+            expected: command.object,
+            found,
+        });
+    }
+    let expected_owner = command.rebound_from.unwrap_or(command.owner);
+    if object.owner != expected_owner {
+        return Err(ResolvedZoneChangeReplayInvariantError::OwnerMismatch {
+            expected: expected_owner,
+            found: object.owner,
+        });
+    }
+    if object.zone != command.from {
+        return Err(ResolvedZoneChangeReplayInvariantError::SourceZoneMismatch {
+            expected: command.from,
+            found: object.zone,
+        });
+    }
+    command.validate_timestamp_operands()?;
+    // CR 613.7k: bind the complete recorded locator set and prior stamps to
+    // this exact source occurrence before changing any state or allocator.
+    if !retained_prestate_matches(object, command) {
+        return Err(
+            ResolvedZoneChangeReplayInvariantError::RetainedStickerMetadataMismatch {
+                recorded: command.retained_sticker_timestamps.clone(),
+            },
+        );
+    }
+    if !retained_rows_required(object, command)
+        && command.to != Zone::Battlefield
+        && command.entry_timestamp.is_some()
+    {
+        return Err(ResolvedZoneChangeReplayInvariantError::UnexpectedNonbattlefieldTimestamp);
+    }
+    if command.turn_zone_change_index != state.zone_changes_this_turn.len() {
+        return Err(
+            ResolvedZoneChangeReplayInvariantError::TurnRecordIndexMismatch {
+                expected: command.turn_zone_change_index,
+                found: state.zone_changes_this_turn.len(),
+            },
+        );
+    }
+    if command.zone_change_record.recorded_turn_number != state.turn_number {
+        return Err(
+            ResolvedZoneChangeReplayInvariantError::RecordedTurnMismatch {
+                expected: command.zone_change_record.recorded_turn_number,
+                found: state.turn_number,
+            },
+        );
+    }
+
+    let mut destination_position = destination_position_after_removal(
+        state,
+        command.object.object_id,
+        command.from,
+        command.to,
+        command.owner,
+    );
+    let linked_idle_copy = (command.from == Zone::Battlefield)
+        .then(|| {
+            crate::game::effects::prepare::linked_prepared_copy_if_idle_id(
+                state,
+                command.object.object_id,
+            )
+        })
+        .flatten();
+    if command.to == Zone::Exile && linked_idle_copy.is_some() {
+        destination_position = destination_position
+            .checked_sub(1)
+            .expect("the linked prepared copy occupies the replay exile container");
+    }
+    if destination_position != command.destination_position {
+        return Err(
+            ResolvedZoneChangeReplayInvariantError::DestinationPositionMismatch {
+                expected: command.destination_position,
+                found: destination_position,
+            },
+        );
+    }
+
+    clear_exert_history_on_zone_change(state, command.object.object_id, command.from, command.to);
+
+    if command.from == Zone::Battlefield {
+        crate::game::effects::prepare::replay_remove_linked_prepared_copy_if_idle(
+            state,
+            command.object.object_id,
+            command.cause,
+        );
+    }
+    // CR 701.3d: the command carries no attachment
+    // payload, so replay re-runs the same severing authority the live
+    // transition used. Idempotent, so the live path's earlier call is not
+    // double-applied; the returned ids are dropped because replay reproduces
+    // state, not events (the live transition already emitted them).
+    let _ = sever_battlefield_attachment_graph_on_exit(state, command.object.object_id);
+    // CR 400.7 + CR 701.20a: replay bypasses `apply_zone_exit_cleanup`, so it
+    // must reproduce that cleanup's stack-bound reveal drop for the departing
+    // occurrence (validated above), or a lease the live move ended survives as a
+    // stale row in replay. A same-zone reorder is not a new object and keeps it.
+    if command.from != command.to {
+        state.drop_stack_bound_reveals_for_occurrence(command.object);
+    }
+    remove_from_zone(state, command.object.object_id, command.from, command.owner);
+    add_to_zone(state, command.object.object_id, command.to, command.owner);
+
+    let object = state
+        .objects
+        .get_mut(&command.object.object_id)
+        .expect("validated zone command object remains live");
+    object.zone = command.to;
+    if command.rebound_from.is_some() {
+        install_rebound_owner(object, command.owner);
+    }
+    clear_hand_or_graveyard_casting_permissions_on_exit(object, command.from, command.to);
+    // CR 400.7 + CR 601.2i: replay bypasses `apply_zone_exit_cleanup`, so it
+    // must reproduce the live Stack-exit carrier clear from the recorded move.
+    if command.from == Zone::Stack && command.to != Zone::Stack {
+        object.cast_occurrence = None;
+        object.prepared_copy_source = None;
+        object.spell_announcement = None;
+    }
+    // CR 400.7: the same object-bound grant lifetime as the live cleanup
+    // (issue #8795), through the shared authority.
+    prune_object_bound_effects_on_exit(state, command.object.object_id, command.from, command.to);
+    let object = state
+        .objects
+        .get_mut(&command.object.object_id)
+        .expect("validated zone command object remains live");
+    if command.to == Zone::Battlefield {
+        object.reset_for_battlefield_entry(
+            turn_number,
+            command
+                .entry_timestamp
+                .expect("validated battlefield command has a timestamp"),
+        );
+    } else {
+        object.incarnation = command.resulting_incarnation;
+        // CR 400.7: same cast-origin lifetime as the live transition cleanup.
+        clear_cast_origin_off_provenance_zones(object, command.to);
+    }
+    if object.incarnation != command.resulting_incarnation {
+        return Err(
+            ResolvedZoneChangeReplayInvariantError::ResultingIncarnationMismatch {
+                expected: command.resulting_incarnation,
+                found: object.incarnation,
+            },
+        );
+    }
+
+    retire_cast_counterprohibition_on_stack_exit(object, command.from, command.to);
+    // CR 718.4 + CR 400.7: replay bypasses `apply_zone_exit_cleanup`, so it
+    // ends a departing prototype form through the same lifetime authority; a
+    // replayed Battlefield -> Hand/Graveyard move leaves only printed values.
+    if retire_prototype_form_on_zone_change(object, command.from, command.to) {
+        state.layers_dirty.mark_full();
+    }
+    // CR 123.5: replay bypasses `apply_zone_exit_cleanup`, so it reproduces
+    // that cleanup's hidden-destination sticker clear through the same helper.
+    // A no-op on the live path, whose cleanup already ran.
+    let object = state
+        .objects
+        .get_mut(&command.object.object_id)
+        .expect("validated zone command object remains live");
+    if clear_stickers_for_hidden_destination(object, command.to) {
+        state.layers_dirty.mark_full();
+    }
+
+    // CR 613.7d + CR 613.7k: the original execution drew the entry and
+    // retained-sticker timestamps, so replay installs them rather than drawing
+    // fresh ones — and carries the allocator past them so a later draw cannot
+    // reissue them. A move that drew none records none.
+    install_zone_timestamps(
+        state,
+        command.object.object_id,
+        &ZoneTimestamps {
+            entry: command.entry_timestamp,
+            retained: command.retained_sticker_timestamps.clone(),
+        },
+    );
+
+    let mut zone_change_record = command.zone_change_record.clone();
+    let turn_zone_change_index =
+        super::restrictions::record_zone_change(state, &mut zone_change_record);
+    if turn_zone_change_index != command.turn_zone_change_index {
+        return Err(
+            ResolvedZoneChangeReplayInvariantError::TurnRecordIndexMismatch {
+                expected: command.turn_zone_change_index,
+                found: turn_zone_change_index,
+            },
+        );
+    }
+    Ok(())
+}
+
+/// CR 400.7: Move an object to a new zone. An object that moves to a new zone becomes a new object.
+///
+/// Plain-entry convenience wrapper: delegates to
+/// [`move_to_zone_with_entry_flags`] with `enter_transformed = false`, so
+/// every existing call site that does not instruct an effect-driven
+/// transformed entry is unchanged. Only the plain-fallback branch of
+/// `deliver_replaced_zone_change` threads the flag through the
+/// `with_entry_flags` form.
+pub fn move_to_zone(
+    state: &mut GameState,
+    object_id: ObjectId,
+    to: Zone,
+    events: &mut Vec<GameEvent>,
+) {
+    move_to_zone_with_entry_flags(state, object_id, to, events, false, None);
+}
+
+/// CR 400.7: Move an object to a new zone. An object that moves to a new zone becomes a new object.
+///
+/// `enter_transformed` (CR 712.14a) is the transient, single-authority "enters
+/// with its back face up" intent carried LIVE from the post-replacement
+/// `ProposedEvent::ZoneChange.enter_transformed` into the battlefield-entry
+/// guard below. It is a synchronous parameter for this one delivery — never a
+/// stored/written `GameState` field.
+///
+/// WHY a parameter rather than a transient `obj.transformed` marker: CR 712.8a
+/// (the `obj_mut.transformed && obj_mut.back_face.is_some()` guard in
+/// `zones::apply_zone_exit_cleanup`) reverts a transformed permanent to its front face on any
+/// non-battlefield zone exit, and the post-move transform itself (the CR
+/// 712.14a `transform_permanent` call in
+/// `zone_pipeline::deliver_replaced_zone_change`) executes the same
+/// face swap when the object reaches the battlefield. A pre-move transient
+/// `transformed` flag would survive into that authoritative swap and
+/// double-corrupt the face (CR 712.8a exit revert + post-move transform both
+/// mutating `back_face`/the live face). The parameter carries the intent without
+/// touching object state. (The `modal_back_face` revert, also in
+/// `zones::apply_zone_exit_cleanup`, is a SEPARATE MDFC mechanism and is not implicated.)
+///
+/// SF1 asymmetry: a single-faced object (`back_face.is_none()`) instructed to
+/// enter transformed can never enter that way — CR 712.14a (2nd sentence)
+/// requires a back face, and the object's FRONT-face core types must NOT be
+/// consulted as a fallback for the CR 307.4 / CR 400.4a eligibility check. The
+/// asymmetric guard below therefore returns before any core-type consult.
+///
+/// A3 (no post-move re-assert): unlike the face-down entry profile's
+/// re-assertion authority (`apply_face_down_entry_profile` in zone_pipeline.rs),
+/// a transformed entry needs no analogous re-assert after the move.
+/// The `transform_permanent` call in `zone_pipeline::deliver_replaced_zone_change`
+/// is the SINGLE authoritative post-move face swap and already runs on `to == Zone::Battlefield`, so the
+/// guard here only gates eligibility — it never mutates the face.
+///
+/// `receiver` (see `zone_pipeline::entry_receiver`) takes effect in the
+/// ordinary-container branch and on a Stack arrival, so a CR 717.6 redirect to
+/// Command never rebinds ownership.
+pub(crate) fn move_to_zone_with_entry_flags(
+    state: &mut GameState,
+    object_id: ObjectId,
+    mut to: Zone,
+    events: &mut Vec<GameEvent>,
+    enter_transformed: bool,
+    receiver: Option<PlayerId>,
+) {
+    // CR 111.8: A token that has left the battlefield can't move to another zone
+    // or come back onto the battlefield — "if such a token would change zones, it
+    // remains in its current zone instead." It ceases to exist at the next SBA
+    // (CR 111.7, enforced in sba.rs). Without this guard a single-resolution
+    // flicker ("exile target permanent, then return it") on a token would return
+    // it before the cease-to-exist SBA runs. The Stack carve-out matches the
+    // CR 111.7 SBA so a copy of a spell still resolves off the stack normally.
+    if state
+        .objects
+        .get(&object_id)
+        .is_some_and(|obj| token_is_outside_battlefield_and_stack(state, obj))
+    {
+        return;
+    }
+
+    // CR 614.12 + CR 701.42: a meld result is projected while its two physical
+    // cards remain in exile. Once its approved battlefield delivery commits,
+    // that projection is the authority for the entry snapshot; the source
+    // card's front-face object remains the storage authority so the meld can
+    // later split back into its physical fronts.
+    let liminal_entry_projection = (to == Zone::Battlefield)
+        .then(|| {
+            state
+                .liminal_entries
+                .get(&object_id)
+                .map(|entry| entry.object.projected().clone())
+        })
+        .flatten();
+    let liminal_attack_target = (to == Zone::Battlefield)
+        .then(|| {
+            state
+                .liminal_entries
+                .get(&object_id)
+                .and_then(|entry| match &entry.kind {
+                    crate::types::game_state::LiminalEntryKind::Meld { attack_target, .. } => {
+                        *attack_target
+                    }
+                    crate::types::game_state::LiminalEntryKind::Token => None,
+                    // Never reached at delivery: `TransformedEntry` projections
+                    // are released before the caller delivers the move (see
+                    // `replacement::release_transformed_entry_projection`).
+                    // This arm exists for exhaustiveness only.
+                    crate::types::game_state::LiminalEntryKind::TransformedEntry => None,
+                })
+        })
+        .flatten();
+
+    // CR 903.9a: A fresh zone change resets the "declined zone return" flag
+    // so the owner gets a new choice opportunity if the commander moves again.
+    state.commander_declined_zone_return.remove(&object_id);
+
+    // CR 614.1d: Check CantEnterBattlefieldFrom statics before allowing the move.
+    // e.g., Grafdigger's Cage: "Creature cards in graveyards and libraries can't enter the battlefield."
+    if to == Zone::Battlefield {
+        if let Some(obj) = liminal_entry_projection
+            .as_ref()
+            .or_else(|| state.objects.get(&object_id))
+        {
+            if is_blocked_from_entering_battlefield(state, obj) {
+                return;
+            }
+            // CR 712.14a (2nd sentence) + CR 712.8e: a transformed entry reads
+            // the BACK face's card types for the CR 307.4 / CR 400.4a
+            // eligibility check (CR 712.8e: "read from its back face"). A
+            // single-faced object instructed to enter transformed has no back
+            // face, so it can never enter that way — and its FRONT face's
+            // permanent types must NOT be consulted as a fallback (CR 712.14a
+            // 2nd sentence). This asymmetric guard precedes any core-type
+            // consult so the front face is never used for a transformed entry.
+            if enter_transformed && obj.back_face.is_none() {
+                return; // CR 712.14a: no back face -> remain in previous zone
+            }
+            let entry_core_types = if enter_transformed {
+                // CR 712.14a + CR 712.8e: eligibility reads the back face's core
+                // types. `back_face` is guaranteed `Some` after the guard above;
+                // the `unwrap_or_default()` empty-slice is an unreachable
+                // safeguard (present only so the borrow stays total).
+                obj.back_face
+                    .as_ref()
+                    .map(|b| b.card_types.core_types.as_slice())
+                    .unwrap_or_default()
+            } else {
+                obj.card_types.core_types.as_slice()
+            };
+            // CR 304.4 / CR 307.4 / CR 400.4a: Instants and sorceries can't enter
+            // the battlefield. Skip for face-down (morph/manifest) and objects with
+            // a permanent type (DFC/MDFC back faces).
+            if !obj.face_down
+                && (entry_core_types.contains(&CoreType::Instant)
+                    || entry_core_types.contains(&CoreType::Sorcery))
+                && !entry_core_types.iter().any(|ct| {
+                    matches!(
+                        ct,
+                        // CR 110.4: Permanent types
+                        CoreType::Creature
+                            | CoreType::Artifact
+                            | CoreType::Enchantment
+                            | CoreType::Planeswalker
+                            | CoreType::Land
+                            | CoreType::Battle
+                    )
+                })
+            {
+                return; // CR 400.4a: Remain in previous zone
+            }
+        }
+    }
+
+    // CR 730.3: When a merged permanent leaves the battlefield, each absorbed
+    // component is routed to its own owner's destination zone before the surviving
+    // object completes its move. No-op for non-merged objects. Done here (while
+    // the object is still on the battlefield with its `merged_components` intact,
+    // before `apply_zone_exit_cleanup` clears them).
+    {
+        let leaving_battlefield = state
+            .objects
+            .get(&object_id)
+            .is_some_and(|o| o.zone == Zone::Battlefield && !o.merged_components.is_empty());
+        if leaving_battlefield {
+            super::merge::split_merged_permanent_on_leave(state, object_id, to, events);
+        }
+    }
+
+    let obj = state.objects.get(&object_id).expect("object exists");
+    let from = obj.zone;
+
+    // CR 603.2g + CR 603.6a: A Battlefield → Battlefield no-op does not put a
+    // permanent onto the battlefield, so no trigger event occurs and no ETB
+    // ability can trigger. No new object is created and no ZoneChanged event is
+    // emitted.
+    // Without this guard, move_to_zone(coiling_id, Battlefield) while Coiling
+    // Oracle is already on the battlefield removes then re-adds it, emits a
+    // spurious ZoneChanged{from:Battlefield, to:Battlefield} event, and fires
+    // its own ETB trigger again — causing an infinite loop.
+    if from == Zone::Battlefield && to == Zone::Battlefield {
+        return;
+    }
+
+    let owner = obj.owner;
+    let redirect_attraction_to_command = super::attractions::is_attraction_card(obj)
+        && !matches!(to, Zone::Battlefield | Zone::Exile | Zone::Command);
+    if redirect_attraction_to_command {
+        // CR 717.6: Astrotorium-backed cards that would move to any zone other
+        // than battlefield, exile, or command move to command instead.
+        to = Zone::Command;
+    }
+    // CR 400.7 + CR 611.3a: a static may depend on an object's membership in
+    // either the leaving or destination zone through its recipient filter,
+    // condition, or dynamic quantity. Query before the move and repeat below
+    // after the object reaches its destination, before any trigger collection.
+    let static_dependency_before =
+        crate::game::layers::static_layer_dependency_for_zone_transition(state, from, to);
+    let unattached_from = state.objects.get(&object_id).and_then(|obj| {
+        obj.attached_to
+            .map(super::effects::attach::target_ref_from_attach_target)
+    });
+    let snapshot_object = liminal_entry_projection.as_ref().unwrap_or(obj);
+    let mut zone_change_record =
+        snapshot_object.snapshot_for_zone_change(object_id, Some(from), to);
+    // CR 603.10a + CR 603.6e: Capture attachment snapshot before the departure
+    // sever (CR 701.3d) clears it.
+    zone_change_record.attachments = capture_attachment_snapshot(state, obj);
+    // CR 603.10a + CR 607.2a: Leaves-the-battlefield triggers look back to the
+    // object as it existed immediately before the move. Snapshot linked "exiled
+    // with" cards here, before CR 400.7 cleanup prunes `TrackedBySource`.
+    zone_change_record.linked_exile_snapshot =
+        capture_linked_exile_snapshot(state, object_id, from);
+    let cast_cost_pile = crate::game::exile_links::cast_cost_pile(state, object_id);
+    zone_change_record.sync_trigger_source_exiled_cards(
+        state
+            .cards_exiled_with_source_this_turn
+            .get(&object_id)
+            .cloned()
+            .unwrap_or_default(),
+    );
+    zone_change_record.combat_status = if let Some(target) = liminal_attack_target {
+        // CR 508.4a: a stale destination yields no defending player and then no
+        // attack target either, so the latch is never half-populated.
+        let defending_player =
+            super::combat::entry_attack_target_defender(state, snapshot_object.controller, target);
+        ZoneChangeCombatStatus {
+            attacking: defending_player.is_some(),
+            defending_player,
+            attack_target: defending_player.map(|_| target),
+            attack_target_identity: defending_player
+                .and_then(|_| super::combat::bind_attack_target(state, target)),
+            ..ZoneChangeCombatStatus::default()
+        }
+    } else {
+        capture_combat_status(state, object_id)
+    };
+    zone_change_record.sync_trigger_source_context();
+
+    let severed_attachments = sever_battlefield_attachment_graph_on_exit(state, object_id);
+    // CR 730.2d + CR 111.7: for a merged permanent whose topmost component
+    // temporarily changed the survivor's token-ness, the ZoneChanged record above
+    // must retain the merged permanent's event-time token-ness. Restore the
+    // survivor only after that snapshot so the moved token component can cease to
+    // exist without corrupting leave-trigger filters.
+    super::merge::restore_pre_merge_tokenness_for_leave(state, object_id);
+
+    // CR 608.2h: hand the LKI the PRE-SEVER attachment set captured above — the sever
+    // has already emptied the live object's attachment list by this point.
+    apply_zone_exit_cleanup(
+        state,
+        object_id,
+        from,
+        to,
+        zone_change_record.attachments.clone(),
+    );
+
+    // CR 800.4a + CR 603.6c: the player-leaves-game procedure names how this
+    // object leaves its zone, so the record carries it before it is journaled.
+    if let Some(leaving) = state
+        .leaving_game_departure
+        .take_if(|leaving| leaving.object_id == object_id)
+    {
+        zone_change_record.departure = leaving.departure;
+    }
+
+    // Command-zone routes select between the ordinary command container and
+    // the owner-specific Attraction/Contraption containers. Stack routes have
+    // their `StackEntry` insertion/removal owned by the casting and resolution
+    // paths, not by `add_to_zone`. Those special containers are outside this
+    // first cut, so preserve their existing raw transition rather than encoding
+    // a partial container identity in this generic command.
+    let (pre_bump_incarnation, new_incarnation, transition_recorded) =
+        if matches!(from, Zone::Command | Zone::Stack) || matches!(to, Zone::Command | Zone::Stack)
+        {
+            // CR 613.7d + CR 613.7k: the same allocator and installer as the
+            // ordinary branch, drawn on this occurrence before the containers move.
+            let timestamps = resolve_zone_timestamps(state, object_id, from, to);
+            remove_from_zone(state, object_id, from, owner);
+            if redirect_attraction_to_command {
+                // CR 717.6a: Cards redirected this way are kept in the command-zone
+                // junkyard pile, separate from the Attraction deck.
+                state
+                    .objects
+                    .get_mut(&object_id)
+                    .expect("object exists")
+                    .in_attraction_deck = false;
+            }
+            add_to_zone(state, object_id, to, owner);
+
+            let obj_mut = state.objects.get_mut(&object_id).expect("object exists");
+            let pre_bump_incarnation = obj_mut.incarnation;
+            obj_mut.zone = to;
+            if to == Zone::Battlefield {
+                obj_mut.reset_for_battlefield_entry(
+                    state.turn_number,
+                    timestamps
+                        .entry
+                        .expect("battlefield entry draws a timestamp"),
+                );
+                zone_change_record.entered_incarnation = Some(obj_mut.incarnation);
+            } else if from != to {
+                // CR 400.7: a move between zones creates a new object.
+                obj_mut.bump_incarnation();
+            }
+            // CR 601.2a: the caster's ownership is installed as the spell arrives on
+            // the stack, with the same record fields the journaled branch rebinds.
+            if let Some(new_owner) = receiver.filter(|_| to == Zone::Stack) {
+                install_rebound_owner(obj_mut, new_owner);
+                zone_change_record.install_rebound_arrival(new_owner);
+            }
+            let new_incarnation = obj_mut.incarnation;
+            install_zone_timestamps(state, object_id, &timestamps);
+            (pre_bump_incarnation, new_incarnation, false)
+        } else {
+            let resolved_zone_change = resolve_and_apply_zone_change(
+                state,
+                object_id,
+                from,
+                to,
+                owner,
+                receiver,
+                zone_change_record,
+            )
+            .expect("ordinary zone transition must install its resolved core");
+            zone_change_record = resolved_zone_change.zone_change_record;
+            (
+                resolved_zone_change.object.incarnation,
+                resolved_zone_change.resulting_incarnation,
+                true,
+            )
+        };
+    record_linked_exile_departure(
+        state,
+        object_id,
+        pre_bump_incarnation,
+        new_incarnation,
+        &zone_change_record.linked_exile_snapshot,
+        &cast_cost_pile,
+    );
+
+    // CR 603.6c: Drop the leaving permanent from the TriggerIndex. The
+    // leaves-battlefield last-known-information scan in
+    // `collect_pending_triggers` reads `state.objects` directly (the object's
+    // zone is no longer Battlefield), unaffected by this removal. The
+    // authoritative correctness path is the `evaluate_layers` rebuild; this
+    // hook is incremental optimization between layer flushes.
+    if from == Zone::Battlefield {
+        state.trigger_index.remove(object_id);
+    }
+
+    if new_incarnation != pre_bump_incarnation {
+        record_resolution_source_relatch(
+            state,
+            object_id,
+            from,
+            pre_bump_incarnation,
+            new_incarnation,
+        );
+    }
+
+    // CR 700.11: a permanent card was put into its owner's graveyard.
+    if to == Zone::Graveyard {
+        record_descend_on_graveyard_arrival(state, object_id, owner);
+    }
+
+    // CR 400.7: A permanent that re-enters the battlefield is a new object with no
+    // relation to its previous existence, so it sheds the "exiled with it"
+    // associations of its prior incarnation. The battlefield-EXIT cleanup above
+    // now preserves a source's `TrackedBySource` links when it leaves TO EXILE
+    // (so a self-exiled source's pending linked return still finds its pile —
+    // Mechtitan Core); this paired entry prune is the blink-back reset that drops
+    // those stale links if that same source is later returned to the battlefield,
+    // preventing `ExiledBySource` from reading a prior incarnation's pile. Scoped
+    // to `TrackedBySource`: `CraftMaterial` links must survive re-entry (the craft
+    // source returns transformed and must still read its materials).
+    if to == Zone::Battlefield {
+        state.exile_links.retain(|link| {
+            link.source_id != object_id
+                || !matches!(
+                    link.kind,
+                    crate::types::game_state::ExileLinkKind::TrackedBySource
+                )
+        });
+    }
+
+    let static_dependency_after =
+        crate::game::layers::static_layer_dependency_for_zone_transition(state, from, to);
+
+    // pod-lab loop-3 Q5: a plain Battlefield entry that doesn't originate
+    // from Hand or Exile, and isn't itself the source of a live
+    // zone-membership-dependent static (static_dependency_before/after),
+    // can take the cheaper `mark_layers_entered` path instead of forcing a
+    // full re-evaluation of every object's characteristics. This does NOT
+    // skip re-verification: `prepare_incremental_flush` (layers.rs) re-runs
+    // its own full Axis-1/Axis-2 safety analysis fresh from live state at
+    // flush time regardless of which mark got set here, and escalates to a
+    // full pass itself whenever that analysis can't prove the entering
+    // object is safe (a sourced continuous effect, a CDA, counters,
+    // attachments, or a population-perturbing static). This call only
+    // proposes the cheap mark when the mutation site itself has nothing
+    // else forcing a full re-evaluation; it is not the safety net.
+    //
+    // Hand and Exile are excluded UNCONDITIONALLY here, not merely folded
+    // into static_dependency_before/after, because both have a proven blind
+    // spot in that check:
+    //   - CR 611.3a + CR 400.3: hand size affects continuous effects gated
+    //     on the controller's hand (Carnage Interpreter, issue #3991), and
+    //     `layers.rs`'s `quantity_ref_reads_zone` classifier maps
+    //     `QuantityRef::HandSize` to a hardcoded `false` — a live
+    //     HandSize-gated static is not detected as a zone dependency at all.
+    //   - CR 613.1: characteristics set by "for each card exiled with/by
+    //     [this]"-style statics (`QuantityRef::CardsExiledBySource`,
+    //     `ExiledCardPower`, `TrackedSetSize`, `FilteredTrackedSetSize`,
+    //     `TrackedSetAggregate` — e.g. Unlicensed Hearse, Veteran Survivor,
+    //     Sutured Ghoul) have the identical blind spot: the same classifier
+    //     maps all of them to `false`, and the count is live-filtered on
+    //     `obj.zone == Zone::Exile` (see `linked_exile_for_context` /
+    //     `players.rs`), so it changes the instant a linked card leaves
+    //     Exile for the Battlefield. Neither axis has a Axis-2 analog in
+    //     `prepare_incremental_flush` (which is exclusively board-population
+    //     framed), so there is no flush-time safety net for either — the
+    //     unconditional mark at this mutation site is these statics' ONLY
+    //     protection, exactly as it is today.
+    if to == Zone::Battlefield
+        && from != Zone::Hand
+        && from != Zone::Exile
+        && !(static_dependency_before || static_dependency_after)
+    {
+        crate::game::layers::mark_layers_entered(state, object_id);
+    } else if to == Zone::Battlefield
+        || from == Zone::Battlefield
+        || to == Zone::Hand
+        || from == Zone::Hand
+        || to == Zone::Stack
+        || static_dependency_before
+        || static_dependency_after
+    {
+        //   - CR 601.2a + CR 611.2f: "a player first moves that card ... to the
+        //     stack. ... Any continuous effects that modify the characteristics of
+        //     the spell as you start casting it BEGIN AS IT IS PUT ON THE STACK."
+        //     The stack pass in `evaluate_layers` is what performs that beginning —
+        //     it resets each stack object to its base and re-applies every
+        //     applicable continuous effect (CR 613.1), including the CR 112.2
+        //     controller seed and the pre-existing CR 613.1 keyword grants the loop
+        //     already serves (Taigam's rebound, Waystone's mobilize, StackSpell-
+        //     filtered statics). Before this term, only a HAND origin marked, via
+        //     `from == Zone::Hand`; Exile -> Stack, Graveyard -> Stack and
+        //     Command -> Stack satisfied no disjunct and ran NO pass at all
+        //     (Exile and Graveyard MEASURED; Command follows the same `else if`
+        //     arm by inspection), so a spell cast from a zone its caster does not own kept
+        //     the OWNER as its controller, contradicting CR 112.2, and a live
+        //     keyword grant naming that spell was never applied.
+        //     COST: `ZoneMoveRequest::casting_to_stack` is the one constructor that
+        //     hardcodes `Zone::Stack`; its production callers are
+        //     `casting_costs::finalize_cast_with_phyrexian_choices_inner` (the real
+        //     cast) and `casting::project_evoke_entry_state` (a read-only projection
+        //     over a cloned state, on the AI search path, whose object is hand-origin
+        //     in practice). So the added work is ONE FULL PASS PER CAST WHOSE ORIGIN
+        //     IS Graveyard / Exile / Command / Library — zero passes today, not a
+        //     cheap pass being upgraded. Hand and Battlefield origins already mark
+        //     via `from == Zone::Hand` / `from == Zone::Battlefield`.
+        crate::game::layers::mark_layers_full(state);
+    }
+
+    // CR 401.5 + CR 611.3a: A move into or out of a library can change that
+    // library's top card, flipping a continuous static gated on it (Vampire
+    // Nocturnus: "as long as the top card of your library is black, ..."). The
+    // hand/battlefield and graveyard marks above don't cover library moves (a
+    // draw off the top, a mill into the graveyard, a put-on-top), so re-evaluate
+    // — self-gated so routine library churn stays cheap when no such static is
+    // live.
+    if to == Zone::Library || from == Zone::Library {
+        crate::game::layers::mark_layers_full_if_top_of_library_static_live(state);
+    }
+
+    // CR 702.145c + CR 702.145f: Daybound/Nightbound permanents entering under
+    // the opposite day/night designation transform immediately. Runs after
+    // battlefield-entry bookkeeping but before the ZoneChanged event is emitted
+    // so the record reflects the face the object entered with. Skipped when
+    // day/night is uninitialized.
+    if to == Zone::Battlefield {
+        if let Some(designation) = state.day_night {
+            let needs_transform =
+                state
+                    .objects
+                    .get(&object_id)
+                    .is_some_and(|obj| match designation {
+                        crate::types::game_state::DayNight::Night => {
+                            obj.has_keyword(&crate::types::keywords::Keyword::Daybound)
+                                && !obj.transformed
+                        }
+                        crate::types::game_state::DayNight::Day => {
+                            obj.has_keyword(&crate::types::keywords::Keyword::Nightbound)
+                                && obj.transformed
+                        }
+                    });
+            if needs_transform {
+                let _ = super::transform::transform_permanent(state, object_id, events);
+            }
+        }
+    }
+
+    // CR 603.6a: Register the post-reset trigger definitions in the index so
+    // `state.clone()` consumers see a coherent battlefield → trigger candidate
+    // map. AUTHORITATIVE PATH: the end-of-`evaluate_layers` rebuild
+    // (`layers.rs`) is the safety net; this hook is incremental
+    // optimization between layer flushes. `state.layers_dirty = true` was set
+    // above, guaranteeing a post-layer rebuild on the next
+    // `collect_pending_triggers` consult.
+    if to == Zone::Battlefield {
+        super::trigger_index::reindex_object_triggers(state, object_id);
+    }
+
+    if !transition_recorded {
+        super::restrictions::record_zone_change(state, &mut zone_change_record);
+    }
+
+    if let Some(old_target) = unattached_from {
+        events.push(GameEvent::Unattached {
+            attachment_id: object_id,
+            old_target,
+        });
+    }
+
+    // CR 701.3d: the other direction of the same relationship — each
+    // attachment this departing permanent hosted has become unattached. Emitted
+    // here, beside the attachment-side event, so both directions share one
+    // ordering relative to the `ZoneChanged` that follows.
+    for attachment_id in severed_attachments {
+        events.push(GameEvent::Unattached {
+            attachment_id,
+            old_target: crate::types::ability::TargetRef::Object(object_id),
+        });
+    }
+
+    events.push(GameEvent::ZoneChanged {
+        object_id,
+        from: Some(from),
+        to,
+        record: Box::new(zone_change_record),
+    });
+}
+
+/// CR 400.7 + CR 608.2i + CR 603.6a: record AND emit the battlefield entry of an object that came
+/// into existence on the battlefield — a zone change with NO origin zone (`from: None`): a created
+/// token (CR 111.1), a copy token (CR 707.2), an Incubator, or a conjured card. The `Some(from)`
+/// counterpart is the emit at the end of `move_to_zone`.
+///
+/// Routes through [`crate::game::restrictions::record_zone_change`] — the single authority that
+/// assigns this turn's zone-change index and performs the CR 608.2i battlefield-entry bookkeeping —
+/// then writes the assigned index back onto the record it emits.
+///
+/// Callers must NOT also call `restrictions::record_battlefield_entry` (`record_zone_change` does
+/// it; a second call double-counts `battlefield_entries_this_turn`) and must NOT also push onto
+/// `state.zone_changes_this_turn` (that would write a duplicate CR 400.7 row).
+///
+/// WHY record and emit are ONE call: `GameObject::snapshot_for_zone_change` leaves
+/// `turn_zone_change_index` at its `0` placeholder for the recorder to overwrite. The CR 603.2c
+/// batched zone-change replay guard (`triggers.rs::batched_zone_change_already_collected`) dedups
+/// on `(definition_ref, turn_zone_change_index)` read off the EVENT, and
+/// `Ability::self_ref_own_departure_successor` (`types/ability.rs`) uses that same index as a
+/// SUBSCRIPT into `state.zone_changes_this_turn`, then requires the row it lands on to carry the
+/// same `trigger_source_context().identity.reference` as the event's own record. An entry that
+/// emits without recording therefore ships index `0`, aliases onto occurrence `0`, and both
+/// consumers read a row belonging to a different object. Splitting the two halves is what made
+/// that defect writable at SIX call sites (measured on `4b34e5465`: `conjure.rs`, `counters.rs` x2,
+/// `gift_delivery.rs`, `token_copy.rs` x2); fusing them removes the seam a seventh would be written
+/// through.
+///
+/// Tripwired — not proved impossible — by
+/// `crates/engine/tests/integration/battlefield_entry_authority_census.rs`, a source-text census
+/// whose ceilings are documented in its own module header.
+///
+/// Returns the recorded row with its assigned index. `None` when the object is gone, in which case
+/// NOTHING is recorded and NOTHING is emitted.
+///
+/// THE `None` ARM IS NOT A SILENT NO-OP AT EVERY CALLER, and an earlier revision of this paragraph
+/// said it was — it named `gift_delivery.rs` and `token_copy.rs`, which are callers of
+/// [`crate::game::effects::token::push_committed_token_entry_events`] ONE LEVEL UP, not of this
+/// function. (That sentence is correct about ITS subject: of that emitter's eight callers, exactly
+/// those two `.expect(…)` its return.) Measured over this function's four direct callers with
+/// `rg -n 'record_and_emit_entry_from_no_zone\(' crates/engine/src`:
+///
+/// * `effects::conjure::resolve` — `.expect("conjured object was just created")`: PANICS on `None`.
+/// * `effects::incubate::resolve` — `.expect("incubator token was just created")`: PANICS on `None`.
+/// * `effects::token::push_committed_token_entry_events` — `if record.is_some()`, which is how
+///   `push_committed_token_entry_events` gates its `GameEvent::TokenCreated` emit. This is the
+///   object-existence predicate the token-creation ledger triple agrees on.
+/// * `effects::counters::apply_pending_counter_post_action` — statement position, discards.
+///
+/// So `None` is inert on exactly ONE of the four routes. The two `.expect` callers keep their
+/// pre-existing "just created" panic deliberately: each creates its object inside the same call, so
+/// `None` there is an engine invariant violation rather than a reachable game state.
+pub(crate) fn record_and_emit_entry_from_no_zone(
+    state: &mut GameState,
+    object_id: ObjectId,
+    events: &mut Vec<GameEvent>,
+) -> Option<crate::types::game_state::ZoneChangeRecord> {
+    let mut record = state
+        .objects
+        .get(&object_id)
+        .map(|obj| obj.snapshot_for_zone_change(object_id, None, Zone::Battlefield))?;
+    // CR 400.7: entries from no zone are created in place — no `move_to_zone`
+    // call fills the entered incarnation — so the authority fills it here from
+    // the birth incarnation, mirroring the battlefield arm there. Without it,
+    // entry-event pins (`zone_change_parent_target_pin`) and arrival
+    // forwarding cannot see token/conjured entrants at all.
+    record.entered_incarnation = state.objects.get(&object_id).map(|obj| obj.incarnation);
+    super::restrictions::record_zone_change(state, &mut record);
+    events.push(GameEvent::ZoneChanged {
+        object_id,
+        from: None,
+        to: Zone::Battlefield,
+        record: Box::new(record.clone()),
+    });
+    Some(record)
+}
+
+/// CR 603.10 + CR 603.6a + CR 611.3c + CR 608.2c: record, for every completed battlefield entry
+/// in `events` not yet observed, the entrant as it exists now — at an instruction boundary,
+/// after the entering instruction completed and before the next instruction can change it.
+/// Layers are flushed first (CR 613.1), so static continuous effects and the counters it
+/// entered with (CR 614.1c) are part of the observation. An entry whose `ZoneChanged` is parked
+/// in `deferred_entry_events` is still mid-entry (CR 614.12a / CR 707.5: its choice is made
+/// before it enters) and is skipped; its replay collects against the realized object.
+/// Idempotent. An entrant that is no longer the exact entered incarnation on the battlefield is
+/// not observed.
+pub(crate) fn settle_battlefield_entry_observations(state: &mut GameState, events: &[GameEvent]) {
+    let parked_entry_keys: Vec<(u32, usize)> = state
+        .deferred_entry_events
+        .iter()
+        .filter_map(|event| match event {
+            GameEvent::ZoneChanged { record, .. } => {
+                Some((record.recorded_turn_number, record.turn_zone_change_index))
+            }
+            _ => None,
+        })
+        .collect();
+    let pending: Vec<(usize, ObjectId, Option<u64>)> = events
+        .iter()
+        .filter_map(|event| match event {
+            GameEvent::ZoneChanged { to, record, .. } if *to == Zone::Battlefield => Some(record),
+            _ => None,
+        })
+        .filter(|record| {
+            record.recorded_turn_number == state.turn_number
+                && !state
+                    .battlefield_entry_observations
+                    .contains_key(&record.turn_zone_change_index)
+                // CR 614.12a + CR 707.5: a parked mid-entry entry is matched by its ledger key,
+                // not by full event equality, so later record stamping cannot unpark it.
+                && !parked_entry_keys
+                    .contains(&(record.recorded_turn_number, record.turn_zone_change_index))
+        })
+        .map(|record| {
+            (
+                record.turn_zone_change_index,
+                record.object_id,
+                record.entered_incarnation,
+            )
+        })
+        .collect();
+    if pending.is_empty() {
+        return;
+    }
+    // CR 613.1 + CR 611.3c: the observation reads layer-applied characteristics.
+    super::layers::flush_layers(state);
+    for (index, object_id, entered_incarnation) in pending {
+        // CR 400.7: only the exact entered incarnation, still on the battlefield and phased in,
+        // is the entrant this entry describes.
+        let observation = state
+            .objects
+            .get(&object_id)
+            .filter(|obj| {
+                obj.zone == Zone::Battlefield
+                    && !obj.is_phased_out()
+                    && entered_incarnation.is_none_or(|incarnation| obj.incarnation == incarnation)
+            })
+            .map(|obj| super::triggers::trigger_source_context_for_latch(state, obj));
+        if let Some(observation) = observation {
+            state
+                .battlefield_entry_observations
+                .insert(index, observation);
+        }
+    }
+}
+
+/// CR 603.10a: Record that every member of `group` left the battlefield in the
+/// SAME simultaneous event, so leaves-the-battlefield / dies observers that are
+/// themselves in the group observe each other via last-known information (the
+/// CR 603.10a worked example: a Blood Artist destroyed by the same Wrath of God
+/// as the creatures it counts triggers once per co-dying creature).
+///
+/// Producers of a simultaneous departure batch — one board wipe (`DestroyAll`),
+/// one state-based-action destruction pass (CR 704.7), one mass bounce/exile —
+/// call this on the events they just produced, AFTER moving every member. This
+/// is the authority for simultaneity: it is established here at the
+/// event-production layer rather than inferred downstream from the shape of the
+/// accumulated event vector, so sequential departures within a single
+/// resolution are never grouped (a member only appears in another member's
+/// `co_departed` when they truly left together).
+pub fn mark_simultaneous_departures(events: &mut [GameEvent], group: &[ObjectId]) {
+    if group.len() < 2 {
+        return;
+    }
+    for event in events.iter_mut() {
+        if let GameEvent::ZoneChanged {
+            object_id,
+            from: Some(Zone::Battlefield),
+            record,
+            ..
+        } = event
+        {
+            if group.contains(object_id) {
+                record.co_departed = group
+                    .iter()
+                    .copied()
+                    .filter(|&member| member != *object_id)
+                    .collect();
+            }
+        }
+    }
+}
+
+/// CR 603.10a: Mirror a simultaneous-departure stamp into the authoritative
+/// per-turn LKI records. A replacement-choice pause can split one logical
+/// simultaneous action across two action-result event buffers; the prior
+/// buffer is intentionally deferred until terminal completion, while these
+/// records were already committed to `GameState` when each zone move occurred.
+/// Updating the exact record indices retained by the batch preserves the same
+/// co-departure fact for later look-back queries and trigger processing.
+pub fn mark_simultaneous_departure_records(
+    state: &mut GameState,
+    record_indices: &[usize],
+    group: &[ObjectId],
+) {
+    if group.len() < 2 {
+        return;
+    }
+    for &index in record_indices {
+        let Some(record) = state.zone_changes_this_turn.get_mut(index) else {
+            continue;
+        };
+        if record.from_zone == Some(Zone::Battlefield) && group.contains(&record.object_id) {
+            record.co_departed = group
+                .iter()
+                .copied()
+                .filter(|&member| member != record.object_id)
+                .collect();
+        }
+    }
+}
+
+/// Marks a settled SearchLibrary move into Exile as face down at event time.
+///
+/// The move's physical destination is already authoritative when this helper
+/// runs. Updating the object, emitted record, and per-turn ledger together
+/// keeps state and event projections on the same event-time privacy fact.
+pub(crate) fn mark_face_down_in_exile(
+    state: &mut GameState,
+    events: &mut [GameEvent],
+    object_id: ObjectId,
+) {
+    if state
+        .objects
+        .get(&object_id)
+        .is_some_and(|object| object.zone == Zone::Exile)
+    {
+        if let Some(object) = state.objects.get_mut(&object_id) {
+            object.face_down = true;
+        }
+    }
+
+    let exact_ledger_entry = events.iter_mut().rev().find_map(|event| {
+        let GameEvent::ZoneChanged {
+            object_id: event_object_id,
+            to: Zone::Exile,
+            record,
+            ..
+        } = event
+        else {
+            return None;
+        };
+        if *event_object_id != object_id || record.object_id != object_id {
+            return None;
+        }
+        if let Some(context) = record.trigger_source_context.as_mut() {
+            context.face_down = true;
+        }
+        Some((record.turn_zone_change_index, record.recorded_turn_number))
+    });
+
+    // The event record carries the exact occurrence assigned by
+    // `record_zone_change`. Never search the ledger by object/destination:
+    // repeated Exile entries for one object are distinct incarnations.
+    if let Some((index, recorded_turn)) = exact_ledger_entry {
+        if recorded_turn == state.turn_number {
+            if let Some(record) = state.zone_changes_this_turn.get_mut(index) {
+                if record.object_id == object_id && record.to_zone == Zone::Exile {
+                    if let Some(context) = record.trigger_source_context.as_mut() {
+                        context.face_down = true;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// CR 603.10a + CR 704.5d/e: where an object stands relative to the battlefield,
+/// for producers and observers that must decide whether it *left*.
+///
+/// Object-side counterpart of `BattlefieldDepartureSourceContext` (the record-side
+/// authority). Callers pass ids verified on the battlefield immediately before the
+/// move being classified, so `DepartedCeased` is only ever reached via a real
+/// departure.
+///
+/// NOT for forward-looking eligibility gates ("is this permanent on the battlefield
+/// right now, so I may tap / equip / sacrifice it"). Those have no departure event
+/// and no last-known-information fallback: for them an absent id means "no such
+/// object" and must be REJECTED, whereas `has_departed()` would answer `true`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BattlefieldResidency {
+    /// Still on the battlefield: the reachable cause is any destruction
+    /// replacement that leaves the permanent on the battlefield — CR 701.19a/b
+    /// regeneration, CR 702.89a umbra armor, CR 122.1c shield counters — so an
+    /// id its producer had already verified on the battlefield survives the
+    /// move being classified.
+    ///
+    /// CR 704.5n's "becomes unattached ... remains on the battlefield" is named
+    /// here only for contrast; it is NOT a producer this function observes.
+    /// `sba::check_unattached_equipment` clears `attached_to` and emits
+    /// `GameEvent::Unattached` with no zone move, so an unattached Equipment
+    /// gets no battlefield-origin `ZoneChanged`, never enters a producer's
+    /// departure id list, and is therefore never passed to this function.
+    Remained,
+    /// Left the battlefield and still exists in another zone.
+    DepartedPresent,
+    /// Left the battlefield and then ceased to exist — CR 704.5d (token) or
+    /// CR 704.5e (copy of a card). CR 111.7's parenthetical is why this still
+    /// counts as a departure: applicable triggered abilities trigger *before* a
+    /// token ceases to exist, and CR 608.2h keeps the departure record as the
+    /// authority for what it was.
+    DepartedCeased,
+}
+
+impl BattlefieldResidency {
+    /// CR 603.10a: did this object leave the battlefield in the event being classified?
+    pub(crate) fn has_departed(self) -> bool {
+        matches!(self, Self::DepartedPresent | Self::DepartedCeased)
+    }
+}
+
+/// CR 603.10a + CR 704.5d/e: the single authority for "has this object left the
+/// battlefield". `state.objects` no longer holds an object that ceased, so absence
+/// must read as a departure, not as a survival.
+pub(crate) fn battlefield_residency(state: &GameState, id: ObjectId) -> BattlefieldResidency {
+    match state.objects.get(&id) {
+        Some(obj) if obj.zone == Zone::Battlefield => BattlefieldResidency::Remained,
+        Some(_) => BattlefieldResidency::DepartedPresent,
+        None => BattlefieldResidency::DepartedCeased,
+    }
+}
+
+/// CR 603.10a: Filter `ids` to those whose object has actually left the
+/// battlefield (now resides in some other zone). Producers that accumulate a
+/// candidate ID list — bounce, change-zone, sacrifice, destroy — pass that list
+/// through this filter before `mark_simultaneous_departures` so that a member
+/// which never actually departed (regenerated, sacrifice-prevented, bounce
+/// guarded out) is excluded from every survivor's `co_departed` group.
+///
+/// CR 704.5d/e: an id absent from `state.objects` **ceased to exist** after
+/// departing, which is a departure, not a survival — CR 111.7's parenthetical says
+/// applicable triggered abilities trigger before a token ceases. Callers pass ids
+/// verified on the battlefield immediately before the move being classified.
+pub fn departed_subset(state: &GameState, ids: &[ObjectId]) -> Vec<ObjectId> {
+    ids.iter()
+        .copied()
+        .filter(|&id| battlefield_residency(state, id).has_departed())
+        .collect()
+}
+
+/// CR 603.10a: Stamp simultaneous departure on a slice of events produced by a
+/// sweep that does not expose an explicit ID list (e.g. `sacrifice_unchosen`
+/// internal loops). Collects every battlefield-origin `ZoneChanged` in `slice`
+/// whose object is now off-battlefield, then groups them as co-departed.
+///
+/// CR 704.3 + CR 704.5d: this runs at the END of an SBA iteration, after the
+/// CR 704.5d sweep has removed ceased tokens, so residency — not raw presence — is
+/// the only correct question. Two consequences, both measured: a 2-member group
+/// containing a ceased token collapses below `mark_simultaneous_departures`'
+/// `len() < 2` floor and is never stamped **at all**; and because that function
+/// *assigns* `co_departed` rather than merging, under-counting here *overwrites*
+/// correct groups stamped by earlier sub-sweeps, breaking the mutual-record
+/// relation the CR 603.10a observer arm requires.
+pub fn stamp_simultaneous_from_slice(state: &GameState, slice: &mut [GameEvent]) {
+    let departed: Vec<ObjectId> = slice
+        .iter()
+        .filter_map(|event| match event {
+            GameEvent::ZoneChanged {
+                object_id,
+                from: Some(Zone::Battlefield),
+                ..
+            } if battlefield_residency(state, *object_id).has_departed() => Some(*object_id),
+            _ => None,
+        })
+        .collect();
+    mark_simultaneous_departures(slice, &departed);
+}
+
+/// CR 406.6 + CR 607.2a (issue #6437): Snapshot `source_id`'s linked exiles at
+/// the moment it leaves the battlefield, for a leaves-the-battlefield
+/// trigger's later `ExiledBySource` lookup (`filter.rs`'s `trigger_source.
+/// is_some()` branch). Every `ExileLinkKind` is kind-agnostically readable via
+/// `ExiledBySource` (`HideawayLookable`'s and `CraftMaterial`'s own doc
+/// comments say so explicitly) and the LIVE lookup
+/// (`players::linked_exile_cards_for_source`) reads
+/// `exile_links::links_for_reader`, which for the live object is this
+/// `live_links_for_source` surface —
+/// this snapshot must match that surface exactly, or a card whose "play the
+/// exiled card" clause resolves via a TRIGGERED ability (Fight Rigging's
+/// begin-of-combat trigger, as opposed to Windbrisk Heights' activated
+/// ability) silently finds nothing: Hideaway's link is `HideawayLookable`, and
+/// a `TrackedBySource`-only filter here dropped it before the previous fix.
+pub(crate) fn capture_linked_exile_snapshot(
+    state: &GameState,
+    source_id: ObjectId,
+    from: Zone,
+) -> Vec<crate::types::game_state::LinkedExileSnapshot> {
+    if from != Zone::Battlefield {
+        return Vec::new();
+    }
+
+    crate::game::exile_links::live_links_for_source(state, source_id)
+        .filter_map(|link| crate::game::exile_links::exiled_card_snapshot(state, link.exiled_id))
+        .collect()
+}
+
+/// CR 607.2a + CR 607.2b + CR 113.7a: Persist a battlefield departure's
+/// linked-exile snapshot as last-known information so an ability of the departed
+/// source (Rod of Absorption sacrificing itself) still finds the cards exiled
+/// with it. CR 400.7: bound it to this departure's incarnations so a later
+/// object under the same id cannot read it. Shared by every departure path
+/// (`move_to_zone_with_entry_flags`, `move_to_library_at_index`). The cards in
+/// `cast_cost_pile` (the departed permanent's `CastCost` links) get an entry of
+/// their own that admits only the departed incarnation.
+fn record_linked_exile_departure(
+    state: &mut GameState,
+    object_id: ObjectId,
+    departed: u64,
+    successor: u64,
+    snapshot: &[LinkedExileSnapshot],
+    cast_cost_pile: &[ObjectId],
+) {
+    if snapshot.is_empty() {
+        return;
+    }
+    // CR 113.7a + CR 400.7 + CR 607.2q: only an ability of the departed
+    // permanent reads its cast-cost pile; the object it became is a new object
+    // that no spell became, and an entry admitting the successor would let that
+    // object's own reads see the pile (`LinkedExileLki::admits`). KNOWN
+    // LIMITATION (CR 113.7a): an activation that sacrifices or exiles this
+    // permanent as its cost is stamped with the successor and so does not read
+    // this pile; no printed card pairs such an activation with a cast-cost pile.
+    let (cast_cost, rest): (Vec<_>, Vec<_>) = snapshot
+        .iter()
+        .cloned()
+        .partition(|snap| cast_cost_pile.contains(&snap.exiled_id));
+    let entries = state.linked_exile_lki.entry(object_id).or_default();
+    for (admitted, pile) in [(successor, rest), (departed, cast_cost)] {
+        if !pile.is_empty() {
+            entries.push(LinkedExileLki {
+                departed,
+                successor: admitted,
+                snapshot: pile,
+            });
+        }
+    }
+}
+
+/// After leave-time snapshots are captured on the zone-change record, sever
+/// live attachment graph edges for a permanent departing the battlefield.
+///
+/// An Aura left unattached on the battlefield is then put into its owner's
+/// graveyard by the SBA sweep (CR 704.5m); an unattached Equipment stays where
+/// it is. Hosts must not carry a stale `attachments` list into other zones
+/// (commander zone return, blink, etc.), and attachments that leave the
+/// battlefield must not keep a dangling `attached_to` pointer.
+///
+/// The severing is symmetric: the departing host's `attachments` list is
+/// cleared AND each of those attachments has its `attached_to` back-pointer
+/// cleared. Leaving the back-pointer for the SBA pass to clean up is not
+/// sufficient. CR 704.3 checks SBAs only when a player would receive priority,
+/// and CR 704.4 states that SBAs "pay no attention to what happens during the
+/// resolution of a spell or ability" — so a host that leaves and returns within
+/// one resolution is never observed as absent. `ObjectId` is storage identity
+/// in this engine (the same slot is reused across a zone change), so that stale
+/// back-pointer silently re-validates against the *returned* permanent, which
+/// CR 400.7 makes a new object with no memory of, or relation to, the one that
+/// left. Severing at the boundary is the direct implementation of CR 301.5c's
+/// "An Equipment that equips an illegal or *nonexistent* permanent becomes
+/// unattached from that permanent but remains on the battlefield."
+///
+/// The observable damage from the one-sided severing was twofold: the
+/// attachment rendered nowhere (the client drops an attachment whose
+/// `attached_to` is set from the battlefield rows, expecting the host surface
+/// to render it, but the host no longer listed it), and its continuous effects
+/// kept applying to a permanent it was never attached to.
+///
+/// Clearing eagerly does not skip CR 704.5m: `sba::check_unattached_auras`
+/// treats `attached_to == None` as unattached, so a non-bestow Aura still goes
+/// to its owner's graveyard, and a bestow Aura still reverts in place per CR
+/// 702.103f, on the next SBA pass.
+///
+/// CR 701.3d: becoming unattached is a real game event, so the severed
+/// attachments are returned to the caller, which emits a `GameEvent::Unattached`
+/// for each one at the same point it emits the attachment-side event for
+/// `unattached_from`. Both directions of the relationship therefore announce
+/// through one authority. Without that emit, `trigger_matchers::match_unattach`
+/// loses these triggers entirely: its `GameEvent::ZoneChanged` fallback arm
+/// re-derives "my host left" by reading the attachment's live `attached_to`,
+/// and the attachment did not itself move, so `TriggerSourceContext::source_read`
+/// resolves to `ExactLive` and observes the freshly cleared `None`. Emitting the
+/// event cannot double-fire with that fallback arm for the same reason: the arm
+/// requires `attached_to` to still name the departing host.
+///
+/// This is a SHARED live/replay authority, called from `move_to_zone`,
+/// `move_to_library_at_index`, and `apply_resolved_zone_change` — the same
+/// arrangement `prune_object_bound_effects_on_exit` uses, and for the same
+/// reason: a `ResolvedZoneChangeCommand` carries no attachment payload, so a
+/// replay that did not re-run this would rebuild a state whose attachment graph
+/// still held the edges the live transition severed. It derives the departing
+/// object's own attachment edge from live state rather than taking it as a
+/// parameter, so both paths cannot drift, and it is idempotent: a second call
+/// finds an empty `attachments` list and a `None` `attached_to` and returns
+/// `Vec::new()` without touching anything. That matters because the live
+/// `move_to_zone` severs before delegating to `apply_resolved_zone_change`, and
+/// the Command/Stack routes bypass the resolved-command path entirely.
+fn sever_battlefield_attachment_graph_on_exit(
+    state: &mut GameState,
+    object_id: ObjectId,
+) -> Vec<ObjectId> {
+    let is_attached = state
+        .objects
+        .get(&object_id)
+        .is_some_and(|obj| obj.attached_to.is_some());
+    if is_attached {
+        if let Some(old_target_id) = state
+            .objects
+            .get(&object_id)
+            .and_then(|o| o.attached_to)
+            .and_then(|t| t.as_object())
+        {
+            if let Some(host) = state.objects.get_mut(&old_target_id) {
+                host.attachments.retain(|&id| id != object_id);
+            }
+        }
+        if let Some(attacher) = state.objects.get_mut(&object_id) {
+            attacher.attached_to = None;
+        }
+        crate::game::layers::mark_layers_full(state);
+    }
+
+    let severed_attachments = state
+        .objects
+        .get_mut(&object_id)
+        .map(|host| std::mem::take(&mut host.attachments))
+        .unwrap_or_default();
+    if severed_attachments.is_empty() {
+        return Vec::new();
+    }
+    // The back-pointer is cleared only when it still names THIS host: an
+    // attachment re-pointed elsewhere by a concurrent effect must keep its live
+    // edge, and must not announce an unattach it did not undergo.
+    //
+    // CR 702.26i: a directly phased-out attachment "will phase in attached to
+    // the object ... it was attached to when it phased out, IF that object is
+    // still in the same zone. If not, ... phases in unattached." The host is
+    // leaving that zone right now, and `phasing::phase_in_object` re-validates
+    // only that the named host is on the battlefield — not that it is the same
+    // incarnation — so a host that leaves and returns to the same `ObjectId`
+    // slot would otherwise re-adopt the attachment on phase-in. The pointer is
+    // therefore cleared for phased-out attachments too.
+    //
+    // CR 702.26j: "Abilities that trigger when a permanent becomes attached or
+    // unattached ... don't trigger when that permanent phases in or out", and
+    // CR 702.26b treats a phased-out permanent as though it does not exist. So
+    // a phased-out attachment is severed SILENTLY — only phased-in attachments
+    // are returned for `GameEvent::Unattached` emission.
+    let mut severed_and_announced = Vec::new();
+    for attachment_id in severed_attachments {
+        let Some(attachment) = state.objects.get_mut(&attachment_id) else {
+            continue;
+        };
+        if attachment.attached_to.and_then(|target| target.as_object()) != Some(object_id) {
+            continue;
+        }
+        attachment.attached_to = None;
+        if attachment.is_phased_in() {
+            severed_and_announced.push(attachment_id);
+        }
+    }
+    crate::game::layers::mark_layers_full(state);
+    severed_and_announced
+}
+
+pub(crate) fn capture_combat_status(
+    state: &GameState,
+    object_id: ObjectId,
+) -> ZoneChangeCombatStatus {
+    let Some(combat) = &state.combat else {
+        return ZoneChangeCombatStatus::default();
+    };
+    let attacker = combat
+        .attackers
+        .iter()
+        .find(|attacker| attacker.object_id == object_id);
+    let active_target = attacker.and_then(|info| super::combat::active_attack_target(state, info));
+
+    ZoneChangeCombatStatus {
+        attacking: attacker.is_some(),
+        blocking: combat.blocker_to_attacker.contains_key(&object_id),
+        blocked: attacker.is_some_and(|attacker| attacker.blocked),
+        // CR 506.5 + CR 603.10a: snapshot the sole-attacker / sole-blocker
+        // status via the shared combat authority so it cannot diverge from the
+        // live `FilterProp::AttackingAlone` / `BlockingAlone` evaluation.
+        attacking_alone: crate::game::combat::attacking_alone(state, object_id),
+        blocking_alone: crate::game::combat::blocking_alone(state, object_id),
+        defending_player: attacker.map(|attacker| attacker.defending_player),
+        // CR 506.4c + CR 608.2h: capture the active relation before removal,
+        // including its explicit absence, independently of the original defender.
+        attack_target: active_target.map(|(target, _)| target),
+        attack_target_identity: active_target.and_then(|(_, pin)| pin),
+    }
+}
+
+/// Reorder objects that remain in one player's library without performing a
+/// zone change. `ordered` is placed at `index` in the supplied order, or
+/// appended when `index` is `None`.
+pub(crate) fn reorder_within_library(
+    state: &mut GameState,
+    player: PlayerId,
+    ordered: &[ObjectId],
+    index: Option<usize>,
+) {
+    let library = state.library_of_mut(player);
+    library.retain(|id| !ordered.contains(id));
+    let insert_index = index.unwrap_or(library.len()).min(library.len());
+    for (offset, &object_id) in ordered.iter().enumerate() {
+        library.insert(insert_index + offset, object_id);
+    }
+    state.advance_library_knowledge_epoch(player);
+
+    // CR 401.5 + CR 611.3a: A library reorder can change its top card without
+    // creating a ZoneChanged event, so invalidate the dependent static directly
+    // (self-gated).
+    crate::game::layers::mark_layers_full_if_top_of_library_static_live(state);
+}
+
+/// Move an object to a specific position in its owner's library (top or bottom), emitting a ZoneChanged event.
+/// Convention: library[0] = top of library.
+pub fn move_to_library_position(
+    state: &mut GameState,
+    object_id: ObjectId,
+    top: bool,
+    events: &mut Vec<GameEvent>,
+) {
+    let index = if top { Some(0) } else { None }; // None = push to end
+    move_to_library_at_index(state, object_id, index, events);
+}
+
+/// Digital-only Alchemy placement (no CR entry): resolve a uniformly-random
+/// 0-based insertion index for `LibraryPosition::RandomWithinTop { n }`. A card
+/// slotted "into the top `top_n` cards of a library at random" lands among the
+/// top `top_n` positions; with `slots_after_insert` total positions available
+/// (the destination library's length *including* the card being placed), the
+/// reachable range is `0..min(top_n, slots_after_insert)`. Consumes exactly one
+/// RNG draw. Single authority for the random-top-N index so the conjure resolver
+/// and the zone pipeline compute it identically.
+pub(crate) fn random_top_slot_index(
+    rng: &mut impl rand::Rng,
+    top_n: usize,
+    slots_after_insert: usize,
+) -> usize {
+    let upper = top_n.min(slots_after_insert).max(1);
+    rng.random_range(0..upper)
+}
+
+/// Move an object to a specific index in its owner's library.
+/// `index = Some(0)` = top, `index = None` = bottom, `index = Some(n)` = nth position.
+/// Handles full cross-zone cleanup (LKI, transform revert, layer pruning, restrictions)
+/// unlike ChangeZone { destination: Library } which shuffles the destination library.
+pub fn move_to_library_at_index(
+    state: &mut GameState,
+    object_id: ObjectId,
+    index: Option<usize>,
+    events: &mut Vec<GameEvent>,
+) {
+    // CR 111.8: A token that has left the battlefield can't move to another zone.
+    if state
+        .objects
+        .get(&object_id)
+        .is_some_and(|obj| token_is_outside_battlefield_and_stack(state, obj))
+    {
+        return;
+    }
+
+    let obj = state.objects.get(&object_id).expect("object exists");
+    let from = obj.zone;
+    let owner = obj.owner;
+    if from == Zone::Library {
+        reorder_within_library(state, owner, &[object_id], index);
+        return;
+    }
+
+    // CR 903.9a: A fresh zone change resets the "declined zone return" flag.
+    state.commander_declined_zone_return.remove(&object_id);
+    let unattached_from = state.objects.get(&object_id).and_then(|obj| {
+        obj.attached_to
+            .map(super::effects::attach::target_ref_from_attach_target)
+    });
+    let mut zone_change_record = obj.snapshot_for_zone_change(object_id, Some(from), Zone::Library);
+    // CR 603.10a + CR 603.6e: Capture attachment snapshot before the departure
+    // sever (CR 701.3d) clears it.
+    zone_change_record.attachments = capture_attachment_snapshot(state, obj);
+    zone_change_record.combat_status = capture_combat_status(state, object_id);
+    // CR 603.10a + CR 607.2a: as in `move_to_zone_with_entry_flags`, snapshot
+    // the linked "exiled with" cards before CR 400.7 cleanup prunes them.
+    zone_change_record.linked_exile_snapshot =
+        capture_linked_exile_snapshot(state, object_id, from);
+    let cast_cost_pile = crate::game::exile_links::cast_cost_pile(state, object_id);
+    zone_change_record.sync_trigger_source_exiled_cards(
+        state
+            .cards_exiled_with_source_this_turn
+            .get(&object_id)
+            .cloned()
+            .unwrap_or_default(),
+    );
+    zone_change_record.sync_trigger_source_context();
+
+    let severed_attachments = sever_battlefield_attachment_graph_on_exit(state, object_id);
+
+    // CR 608.2h: hand the LKI the PRE-SEVER attachment set captured above.
+    apply_zone_exit_cleanup(
+        state,
+        object_id,
+        from,
+        Zone::Library,
+        zone_change_record.attachments.clone(),
+    );
+
+    remove_from_zone(state, object_id, from, owner);
+
+    // CR 603.6c: Drop the leaving permanent from the TriggerIndex when this
+    // path is used to move a battlefield permanent into the library
+    // (Conduit-of-Worlds-style "shuffle a permanent into your library").
+    if from == Zone::Battlefield {
+        state.trigger_index.remove(object_id);
+    }
+
+    // Place at specified index or push to end (bottom)
+    let library = state.library_of_mut(owner);
+    match index {
+        Some(i) => {
+            let clamped = i.min(library.len());
+            library.insert(clamped, object_id);
+        }
+        None => library.push_back(object_id),
+    }
+    state.advance_library_knowledge_epoch(owner);
+
+    let mut bump: Option<(u64, u64)> = None;
+    if let Some(obj_mut) = state.objects.get_mut(&object_id) {
+        let pre_bump_incarnation = obj_mut.incarnation;
+        obj_mut.zone = Zone::Library;
+        // CR 400.7: a move INTO the library from any other zone makes a new object.
+        // A within-Library reposition (reveal / scry bottom placement / look-at-top-N,
+        // CR 701.20b) is zero moves — `from == Library` here — and must NOT bump.
+        if from != Zone::Library {
+            obj_mut.bump_incarnation();
+            bump = Some((pre_bump_incarnation, obj_mut.incarnation));
+        }
+    }
+    if let Some((pre, new)) = bump {
+        record_resolution_source_relatch(state, object_id, from, pre, new);
+        record_linked_exile_departure(
+            state,
+            object_id,
+            pre,
+            new,
+            &zone_change_record.linked_exile_snapshot,
+            &cast_cost_pile,
+        );
+    }
+
+    super::restrictions::record_zone_change(state, &mut zone_change_record);
+
+    if let Some(old_target) = unattached_from {
+        events.push(GameEvent::Unattached {
+            attachment_id: object_id,
+            old_target,
+        });
+    }
+
+    // CR 701.3d: mirrors the `move_to_zone` emit — the attachments
+    // this departing permanent hosted have become unattached.
+    for attachment_id in severed_attachments {
+        events.push(GameEvent::Unattached {
+            attachment_id,
+            old_target: crate::types::ability::TargetRef::Object(object_id),
+        });
+    }
+
+    events.push(GameEvent::ZoneChanged {
+        object_id,
+        from: Some(from),
+        to: Zone::Library,
+        record: Box::new(zone_change_record),
+    });
+
+    // CR 401.5 + CR 611.3a: placing a card at library index 0 changes the top
+    // card, so a `TopOfLibraryMatches` static must be re-evaluated. This path
+    // bypasses `move_to_zone`, so it invalidates directly (self-gated).
+    crate::game::layers::mark_layers_full_if_top_of_library_static_live(state);
+}
+
+/// Remove an ObjectId from the appropriate zone collection (CR 400.1).
+pub fn remove_from_zone(state: &mut GameState, object_id: ObjectId, zone: Zone, owner: PlayerId) {
+    match zone {
+        Zone::Library => state.library_of_mut(owner).retain(|id| *id != object_id),
+        Zone::Graveyard => state.graveyard_of_mut(owner).retain(|id| *id != object_id),
+        Zone::Hand => state
+            .players
+            .iter_mut()
+            .find(|p| p.id == owner)
+            .expect("owner exists")
+            .hand
+            .retain(|id| *id != object_id),
+        Zone::Battlefield => state.battlefield.retain(|id| *id != object_id),
+        Zone::Stack => {
+            // A unique id, so at most ONE entry matches. Routed through the
+            // shared stack-removal authority, which journals it and drops BOTH
+            // per-entry side tables (this arm previously dropped only
+            // `stack_paid_facts`). A miss is normal: the resolution pop already
+            // removed the entry before the card is routed to its next zone.
+            if let Some(idx) = state.stack.iter().position(|e| e.id == object_id) {
+                crate::game::stack::remove_nonresolving_stack_entry_at(
+                    state,
+                    idx,
+                    crate::game::lifecycle::DelayedTerminalDisposition::Removed,
+                )
+                .expect("position yielded a live stack index");
+            }
+        }
+        Zone::Exile => state.exile.retain(|id| *id != object_id),
+        Zone::Command => {
+            if state
+                .objects
+                .get(&object_id)
+                .is_some_and(|obj| obj.in_attraction_deck)
+            {
+                state
+                    .players
+                    .iter_mut()
+                    .find(|p| p.id == owner)
+                    .expect("owner exists")
+                    .attraction_deck
+                    .retain(|id| *id != object_id);
+            } else if state
+                .objects
+                .get(&object_id)
+                .is_some_and(|obj| obj.in_contraption_deck)
+            {
+                state
+                    .players
+                    .iter_mut()
+                    .find(|p| p.id == owner)
+                    .expect("owner exists")
+                    .contraption_deck
+                    .retain(|id| *id != object_id);
+            } else {
+                state.command_zone.retain(|id| *id != object_id);
+            }
+        }
+    }
+}
+
+/// CR 704.5d + CR 704.5e: Remove a token or copy that ceases to exist.
+/// This is not a zone change and deliberately emits no event.
+pub(crate) fn cease_object(
+    state: &mut GameState,
+    object_id: ObjectId,
+    zone: Zone,
+    owner: PlayerId,
+) {
+    // CR 733: capture the occurrence BEFORE the removal — after it there is no
+    // object left to reference. A caller that passes an already-absent object
+    // keeps the prior silent behavior and journals nothing.
+    let Some(object) = state.objects.get(&object_id) else {
+        remove_from_zone(state, object_id, zone, owner);
+        return;
+    };
+    let command = ResolvedObjectCeaseCommand {
+        object: ObjectIncarnationRef::from_object(object),
+        expected_zone: zone,
+        owner,
+        cause: state.current_or_begin_rules_execution_node(),
+    };
+    apply_resolved_object_cease(state, &command)
+        .expect("the freshly read object must satisfy its own cease precondition");
+    state
+        .resolved_rules_journal
+        .record_object_cease(command)
+        .expect("resolved cease-to-exist must have a live journal cause");
+}
+
+/// Installs one already-resolved CR 704.5d cease-to-exist removal verbatim.
+///
+/// Deliberately re-runs none of the CR 704.5d/e eligibility scan: whether this
+/// object was a token outside the battlefield was settled by the SBA sweep that
+/// recorded the command.
+pub fn apply_resolved_object_cease(
+    state: &mut GameState,
+    command: &ResolvedObjectCeaseCommand,
+) -> Result<(), ResolvedObjectCeaseReplayInvariantError> {
+    let object_id = command.object.object_id;
+    let object = state.objects.get(&object_id).ok_or(
+        ResolvedObjectCeaseReplayInvariantError::UnknownObject(object_id),
+    )?;
+    let found = ObjectIncarnationRef::from_object(object);
+    if found != command.object {
+        return Err(ResolvedObjectCeaseReplayInvariantError::StaleObject {
+            expected: command.object,
+            found,
+        });
+    }
+    if object.zone != command.expected_zone {
+        return Err(ResolvedObjectCeaseReplayInvariantError::ZoneMismatch {
+            expected: command.expected_zone,
+            found: object.zone,
+        });
+    }
+    if object.owner != command.owner {
+        return Err(ResolvedObjectCeaseReplayInvariantError::OwnerMismatch {
+            expected: command.owner,
+            found: object.owner,
+        });
+    }
+
+    remove_from_zone(state, object_id, command.expected_zone, command.owner);
+    state.objects.remove(&object_id);
+    Ok(())
+}
+
+/// Add an ObjectId to the appropriate zone collection.
+pub fn add_to_zone(state: &mut GameState, object_id: ObjectId, zone: Zone, owner: PlayerId) {
+    match zone {
+        Zone::Library => state.library_of_mut(owner).push_back(object_id),
+        Zone::Graveyard => state.graveyard_of_mut(owner).push_back(object_id),
+        Zone::Hand => state
+            .players
+            .iter_mut()
+            .find(|p| p.id == owner)
+            .expect("owner exists")
+            .hand
+            .push_back(object_id),
+        // CR 400.4a: Instants/sorceries blocked by early check in move_to_zone.
+        Zone::Battlefield => state.battlefield.push_back(object_id),
+        Zone::Stack => {} // Stack entries are managed separately via StackEntry
+        Zone::Exile => state.exile.push_back(object_id),
+        Zone::Command => {
+            if state
+                .objects
+                .get(&object_id)
+                .is_some_and(|obj| obj.in_attraction_deck)
+            {
+                state
+                    .players
+                    .iter_mut()
+                    .find(|p| p.id == owner)
+                    .expect("owner exists")
+                    .attraction_deck
+                    .push_back(object_id);
+            } else if state
+                .objects
+                .get(&object_id)
+                .is_some_and(|obj| obj.in_contraption_deck)
+            {
+                state
+                    .players
+                    .iter_mut()
+                    .find(|p| p.id == owner)
+                    .expect("owner exists")
+                    .contraption_deck
+                    .push_back(object_id);
+            } else {
+                state.command_zone.push_back(object_id);
+            }
+        }
+    }
+}
+
+/// Absorb a component into a battlefield survivor without creating an
+/// independent zone-change event. `from` is `None` when the component's prior
+/// zone membership was already consumed (for example, by stack resolution).
+/// Callers that require zone-exit cleanup perform it before absorption.
+pub(crate) fn absorb_component(state: &mut GameState, component_id: ObjectId, from: Option<Zone>) {
+    let owner = state.objects.get(&component_id).map(|obj| obj.owner);
+    if let (Some(from), Some(owner)) = (from, owner) {
+        remove_from_zone(state, component_id, from, owner);
+    }
+    if let Some(component) = state.objects.get_mut(&component_id) {
+        component.zone = Zone::Battlefield;
+    }
+}
+
+/// CR 730.3: Route an absorbed merge component to its owner's destination as
+/// a new object, without representing it as an independent battlefield exit.
+/// The caller snapshots the component and emits its `ZoneChanged { from: None
+/// }` event around this delivery.
+pub(crate) fn route_component(state: &mut GameState, component_id: ObjectId, to: Zone) {
+    let Some(owner) = state.objects.get(&component_id).map(|obj| obj.owner) else {
+        return;
+    };
+
+    // CR 608.2h: no sever has run on this path, so the live attachment list is
+    // still intact when this component becomes a new object.
+    let attachments = state
+        .objects
+        .get(&component_id)
+        .map(|obj| capture_attachment_snapshot(state, obj))
+        .unwrap_or_default();
+    apply_zone_exit_cleanup(state, component_id, Zone::Battlefield, to, attachments);
+    // CR 730.2: the component is absorbed into the survivor and is not an
+    // independent member of the battlefield list; defensively ensure it is not
+    // left there (a no-op under the runtime invariant) before adding it to its
+    // OWN owner's destination zone.
+    remove_from_zone(state, component_id, Zone::Battlefield, owner);
+    add_to_zone(state, component_id, to, owner);
+    if let Some(component) = state.objects.get_mut(&component_id) {
+        component.zone = to;
+        // CR 730.3 + CR 400.7: the component becomes a new object in its
+        // owner's destination zone. Keep this beside the raw delivery so
+        // `apply_zone_exit_cleanup` cannot double-bump normal moves.
+        component.bump_incarnation();
+    }
+    // CR 700.11: a nontoken permanent card put into its owner's graveyard from
+    // anywhere counts as having descended this turn — shared single authority
+    // with `move_to_zone`.
+    if to == Zone::Graveyard {
+        record_descend_on_graveyard_arrival(state, component_id, owner);
+    }
+}
+
+/// CR 110.2a + CR 603.6a: Apply an "under your control" battlefield-entry
+/// controller override to both the live object and the zone-change snapshots
+/// created for this entry.
+pub(crate) fn apply_battlefield_entry_controller_override(
+    state: &mut GameState,
+    events: &mut [GameEvent],
+    object_id: ObjectId,
+    controller: PlayerId,
+) {
+    // Read the pre-override identity and controllers once: they are the CR 733
+    // command's occurrence reference and preconditions. An absent object still
+    // retags the snapshots below, exactly as before, and simply journals nothing.
+    let object_snapshot = state.objects.get(&object_id);
+    let reference = object_snapshot.map(ObjectIncarnationRef::from_object);
+    let expected_old_base_controller = object_snapshot.and_then(|obj| obj.base_controller);
+    let expected_old_controller = object_snapshot.map(|obj| obj.controller);
+
+    // Resolve the snapshot POSITIONS rather than mutating through a scan: the
+    // position is what the CR 733 command records, so replay retags the same
+    // record instead of re-running a last-match scan (CR 400.7 permits the same
+    // object to hold several entries in one turn).
+    let zone_change_index = state
+        .zone_changes_this_turn
+        .iter()
+        .rposition(|record| record.object_id == object_id && record.to_zone == Zone::Battlefield);
+    let battlefield_entry_index = state
+        .battlefield_entries_this_turn
+        .iter()
+        .rposition(|record| record.object_id == object_id);
+
+    // CR 733: the retag itself is performed by the command applier, so resolve and
+    // replay install through one body instead of two copies that can drift. An
+    // absent object has nothing to retag on the object side but still retags its
+    // snapshots, exactly as before.
+    let command = reference.zip(expected_old_controller).map(|(object, old)| {
+        ResolvedControllerOverrideCommand {
+            object,
+            expected_old_base_controller,
+            expected_old_controller: old,
+            resulting_controller: controller,
+            zone_change_index,
+            battlefield_entry_index,
+            cause: state.current_or_begin_rules_execution_node(),
+        }
+    });
+    match &command {
+        Some(command) => apply_resolved_controller_override(state, command)
+            .expect("the freshly read object must satisfy its own override precondition"),
+        None => retag_battlefield_entry_snapshots(
+            state,
+            zone_change_index,
+            battlefield_entry_index,
+            controller,
+        ),
+    }
+
+    if let Some(GameEvent::ZoneChanged { record, .. }) = events.iter_mut().rev().find(|event| {
+        matches!(
+            event,
+            GameEvent::ZoneChanged {
+                object_id: id,
+                to: Zone::Battlefield,
+                ..
+            } if *id == object_id
+        )
+    }) {
+        record.arrival.controller = controller;
+    }
+
+    // CR 733: journal the settled override. The event fix-up above is deliberately
+    // NOT part of the command — events are transient carriers consumed by the same
+    // resolution, not persistent state a replay reconstructs.
+    // CR 110.2a: an override onto the controller the object already had, with the
+    // base controller already pinned there, retagged nothing and is not recorded.
+    let Some(command) = command else {
+        return;
+    };
+    if command.expected_old_base_controller == Some(controller)
+        && command.expected_old_controller == controller
+    {
+        return;
+    }
+    state
+        .resolved_rules_journal
+        .record_controller_override(command)
+        .expect("resolved controller override must have a live journal cause");
+}
+
+/// Retags the CR 400.7 zone-change and CR 608.2i battlefield-entry snapshots at
+/// the exact recorded positions. Shared by the resolve-time authority and the
+/// replay applier so both install the same retag.
+///
+/// CR 608.2i, not CR 403.3: `battlefield_entries_this_turn` is an entry-time
+/// characteristics snapshot kept so later effects can look back at a previous
+/// game state. CR 403.3 ("Permanents exist only on the battlefield") is
+/// definitional and describes no such record.
+fn retag_battlefield_entry_snapshots(
+    state: &mut GameState,
+    zone_change_index: Option<usize>,
+    battlefield_entry_index: Option<usize>,
+    controller: PlayerId,
+) {
+    if let Some(record) =
+        zone_change_index.and_then(|index| state.zone_changes_this_turn.get_mut(index))
+    {
+        record.arrival.controller = controller;
+    }
+    if let Some(record) =
+        battlefield_entry_index.and_then(|index| state.battlefield_entries_this_turn.get_mut(index))
+    {
+        record.controller = controller;
+    }
+}
+
+/// Installs one already-resolved CR 110.2a controller override verbatim.
+///
+/// Deliberately re-runs none of the entry-time decision that produced the
+/// override: whether the permanent enters under another player's control was
+/// settled when the command was recorded. The applier verifies the state it is
+/// installing into, then retags the object and the exact snapshots the authority
+/// retagged.
+pub fn apply_resolved_controller_override(
+    state: &mut GameState,
+    command: &ResolvedControllerOverrideCommand,
+) -> Result<(), ResolvedControllerOverrideReplayInvariantError> {
+    let object_id = command.object.object_id;
+    let object = state
+        .objects
+        .get(&object_id)
+        .ok_or(ResolvedControllerOverrideReplayInvariantError::UnknownObject(object_id))?;
+    let found = ObjectIncarnationRef::from_object(object);
+    if found != command.object {
+        return Err(
+            ResolvedControllerOverrideReplayInvariantError::StaleObject {
+                expected: command.object,
+                found,
+            },
+        );
+    }
+    if object.base_controller != command.expected_old_base_controller {
+        return Err(
+            ResolvedControllerOverrideReplayInvariantError::BaseControllerPreconditionMismatch {
+                expected: command.expected_old_base_controller,
+                found: object.base_controller,
+            },
+        );
+    }
+    if object.controller != command.expected_old_controller {
+        return Err(
+            ResolvedControllerOverrideReplayInvariantError::ControllerPreconditionMismatch {
+                expected: command.expected_old_controller,
+                found: object.controller,
+            },
+        );
+    }
+    // Both recorded snapshot positions are checked before any mutation so a
+    // rejected command leaves no partial retag.
+    if let Some(index) = command.zone_change_index {
+        if index >= state.zone_changes_this_turn.len() {
+            return Err(
+                ResolvedControllerOverrideReplayInvariantError::MissingZoneChangeRecord(index),
+            );
+        }
+    }
+    if let Some(index) = command.battlefield_entry_index {
+        if index >= state.battlefield_entries_this_turn.len() {
+            return Err(
+                ResolvedControllerOverrideReplayInvariantError::MissingBattlefieldEntryRecord(
+                    index,
+                ),
+            );
+        }
+    }
+
+    if let Some(obj) = state.objects.get_mut(&object_id) {
+        obj.base_controller = Some(command.resulting_controller);
+        obj.controller = command.resulting_controller;
+    }
+    retag_battlefield_entry_snapshots(
+        state,
+        command.zone_change_index,
+        command.battlefield_entry_index,
+        command.resulting_controller,
+    );
+    Ok(())
+}
+
+/// CR 603.6a: Stamps the entering permanent with the ability that put it onto
+/// the battlefield, so anti-recursion intervening-ifs ("if it wasn't put onto
+/// the battlefield with this ability") can exclude the permanents that very
+/// ability placed.
+///
+/// This is the single authority for the stamp: the delivery tail wrote the field
+/// raw, leaving a CR 733 replay with no record that the permanent's entry was
+/// ability-driven.
+pub(crate) fn stamp_battlefield_entry_provenance(
+    state: &mut GameState,
+    object_id: ObjectId,
+    source_id: ObjectId,
+) {
+    let Some(object) = state.objects.get(&object_id) else {
+        return;
+    };
+    let reference = ObjectIncarnationRef::from_object(object);
+    let expected_old_source = object.entered_via_ability_source;
+    // CR 603.6a: re-stamping the source already recorded changes nothing.
+    if expected_old_source == Some(source_id) {
+        return;
+    }
+
+    let command = ResolvedEntryProvenanceCommand {
+        object: reference,
+        expected_old_source,
+        resulting_source: source_id,
+        cause: state.current_or_begin_rules_execution_node(),
+    };
+    apply_resolved_entry_provenance(state, &command)
+        .expect("the freshly read object must satisfy its own provenance precondition");
+    state
+        .resolved_rules_journal
+        .record_entry_provenance(command)
+        .expect("resolved entry provenance must have a live journal cause");
+}
+
+/// Installs one already-resolved CR 603.6a provenance stamp verbatim.
+pub fn apply_resolved_entry_provenance(
+    state: &mut GameState,
+    command: &ResolvedEntryProvenanceCommand,
+) -> Result<(), ResolvedEntryProvenanceReplayInvariantError> {
+    let object_id = command.object.object_id;
+    let object = state.objects.get(&object_id).ok_or(
+        ResolvedEntryProvenanceReplayInvariantError::UnknownObject(object_id),
+    )?;
+    let found = ObjectIncarnationRef::from_object(object);
+    if found != command.object {
+        return Err(ResolvedEntryProvenanceReplayInvariantError::StaleObject {
+            expected: command.object,
+            found,
+        });
+    }
+    if object.entered_via_ability_source != command.expected_old_source {
+        return Err(
+            ResolvedEntryProvenanceReplayInvariantError::SourcePreconditionMismatch {
+                expected: command.expected_old_source,
+                found: object.entered_via_ability_source,
+            },
+        );
+    }
+    state
+        .objects
+        .get_mut(&object_id)
+        .expect("the validated object must remain present")
+        .entered_via_ability_source = Some(command.resulting_source);
+    Ok(())
+}
+
+/// CR 614.1d: Check if any active CantEnterBattlefieldFrom static prevents this
+/// object from entering the battlefield from its current zone.
+/// e.g., Grafdigger's Cage: "Creature cards in graveyards and libraries can't enter the battlefield."
+fn is_blocked_from_entering_battlefield(state: &GameState, obj: &GameObject) -> bool {
+    let object_id = obj.id;
+    // CR 702.26b + CR 604.1: `battlefield_active_statics` owns the phased-out /
+    // command-zone / condition gate so Grafdigger's Cage phased out no longer
+    // blocks ETB from graveyard/library.
+    for (bf_obj, def) in super::functioning_abilities::battlefield_active_statics(state) {
+        if def.mode != StaticMode::CantEnterBattlefieldFrom {
+            continue;
+        }
+        // The affected filter encodes both card type and zone restrictions
+        // (e.g., Creature + InAnyZone[Graveyard, Library]).
+        if let Some(ref filter) = def.affected {
+            if super::filter::matches_target_filter(
+                state,
+                object_id,
+                filter,
+                &super::filter::FilterContext::from_source(state, bf_obj.id),
+            ) {
+                return true;
+            }
+        }
+    }
+
+    // CR 611.2a + CR 614.1d: floating turn-scoped "cards can't enter the
+    // battlefield from <zone>" restrictions (Bad Wolf Bay's chaos ability) block
+    // entry the same way as the permanent CantEnterBattlefieldFrom static. The
+    // object is still in its origin zone here, so the filter's `InAnyZone` prop
+    // matches `obj.zone`.
+    for restriction in &state.restrictions {
+        if let crate::types::ability::GameRestriction::CantEnterBattlefieldFrom {
+            filter,
+            source,
+            ..
+        } = restriction
+        {
+            if super::filter::matches_target_filter(
+                state,
+                object_id,
+                filter,
+                &super::filter::FilterContext::from_source(state, *source),
+            ) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::game::game_object::CleaveFormState;
+    use crate::types::ability::{
+        ContinuousModification, ControllerRef, FilterProp, StaticCondition, StaticDefinition,
+        TargetFilter, TypeFilter, TypedFilter,
+    };
+    use crate::types::game_state::GameState;
+    use crate::types::keywords::Keyword;
+    use crate::types::mana::ManaCost;
+    use crate::types::resolved_commands::ResolvedObjectStatus;
+
+    fn setup() -> GameState {
+        GameState::new_two_player(42)
+    }
+
+    fn cast_prohibition_fixture(zone: Zone, intrinsic: bool) -> (GameState, ObjectId) {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(9968),
+            PlayerId(0),
+            "Lifecycle fixture".to_string(),
+            zone,
+        );
+        let canonical = StaticDefinition::new(StaticMode::CantBeCountered);
+        let unrelated = StaticDefinition::new(StaticMode::CantBeCopied);
+        let object = state.objects.get_mut(&id).unwrap();
+        object.card_types.core_types = vec![CoreType::Creature];
+        object.base_card_types = object.card_types.clone();
+        object.power = Some(4);
+        object.toughness = Some(3);
+        object.base_power = object.power;
+        object.base_toughness = object.toughness;
+        object.base_characteristics_initialized = true;
+        object.base_static_definitions = Arc::new(if intrinsic {
+            vec![canonical.clone(), unrelated.clone()]
+        } else {
+            vec![unrelated.clone()]
+        });
+        object.static_definitions = vec![canonical, unrelated].into();
+        (state, id)
+    }
+
+    fn cast_prohibition_count(state: &GameState, id: ObjectId) -> usize {
+        let canonical = StaticDefinition::new(StaticMode::CantBeCountered);
+        state.objects[&id]
+            .static_definitions
+            .iter_all()
+            .filter(|definition| **definition == canonical)
+            .count()
+    }
+
+    #[test]
+    fn cast_prohibition_restore_live_exit_destinations_and_retained_boundaries() {
+        // Bounded lifecycle fixtures supplement the actual paid public casts.
+        for intrinsic in [false, true] {
+            for destination in [
+                Zone::Hand,
+                Zone::Graveyard,
+                Zone::Exile,
+                Zone::Command,
+                Zone::Battlefield,
+                Zone::Library,
+            ] {
+                let (mut state, id) = cast_prohibition_fixture(Zone::Stack, intrinsic);
+                let occurrence = ObjectIncarnationRef::from_object(&state.objects[&id]);
+                let baseline = state.objects[&id].base_static_definitions.clone();
+                let allocator = state.next_timestamp;
+                assert_eq!(cast_prohibition_count(&state, id), 1);
+                let mut events = Vec::new();
+                if destination == Zone::Library {
+                    move_to_library_position(&mut state, id, true, &mut events);
+                } else {
+                    move_to_zone(&mut state, id, destination, &mut events);
+                }
+                // CR 112.1 + CR 400.7: only the departing spell loses its
+                // nonprinted rules prohibition; the next object has new identity.
+                assert_eq!(state.objects[&id].zone, destination);
+                match destination {
+                    Zone::Hand => assert!(state.players[0].hand.contains(&id)),
+                    Zone::Graveyard => assert!(state.players[0].graveyard.contains(&id)),
+                    Zone::Exile => assert!(state.exile.contains(&id)),
+                    Zone::Command => assert!(state.command_zone.contains(&id)),
+                    Zone::Battlefield => assert!(state.battlefield.contains(&id)),
+                    Zone::Library => assert_eq!(state.players[0].library.front(), Some(&id)),
+                    Zone::Stack => {
+                        unreachable!("not an exit destination fixture")
+                    }
+                }
+                assert_ne!(
+                    ObjectIncarnationRef::from_object(&state.objects[&id]),
+                    occurrence
+                );
+                assert_eq!(cast_prohibition_count(&state, id), usize::from(intrinsic));
+                assert_eq!(state.objects[&id].base_static_definitions, baseline);
+                assert!(state.objects[&id]
+                    .static_definitions
+                    .iter_all()
+                    .any(|definition| definition.mode == StaticMode::CantBeCopied));
+                assert_eq!(
+                    state.next_timestamp,
+                    allocator + u64::from(destination == Zone::Battlefield)
+                );
+                assert!(events.iter().any(|event| matches!(event, GameEvent::ZoneChanged { object_id, from: Some(Zone::Stack), to, .. } if *object_id == id && *to == destination)));
+                if destination != Zone::Library {
+                    assert!(state.resolved_rules_journal.entries().iter().all(|entry| !matches!(entry.command.as_ref(), Some(crate::types::resolved_commands::ResolvedRulesCommand::ZoneChange(command)) if command.object.object_id == id)), "ordinary Stack/Command generic recording exclusion remains intact");
+                }
+            }
+        }
+        for (from, to) in [(Zone::Hand, Zone::Stack), (Zone::Stack, Zone::Stack)] {
+            let (mut state, id) = cast_prohibition_fixture(from, false);
+            let occurrence = ObjectIncarnationRef::from_object(&state.objects[&id]);
+            move_to_zone(&mut state, id, to, &mut Vec::new());
+            assert_eq!(state.objects[&id].zone, to);
+            assert_eq!(cast_prohibition_count(&state, id), 1);
+            assert_eq!(
+                state.objects[&id].incarnation,
+                occurrence.incarnation + u64::from(from != to)
+            );
+        }
+    }
+
+    #[test]
+    fn cast_prohibition_restore_late_cleanup_prevents_cleave_snapshot_resurrection() {
+        let (mut state, id) = cast_prohibition_fixture(Zone::Stack, false);
+        let object = state.objects.get_mut(&id).unwrap();
+        // Bounded snapshot isolation: the existing cleave owner restores its
+        // stored live statics after early Stack metadata cleanup.
+        object.cleave_form = Some(CleaveFormState {
+            abilities: object.abilities.clone(),
+            triggers: object.trigger_definitions.clone(),
+            statics: object.static_definitions.clone(),
+            replacements: object.replacement_definitions.clone(),
+            base_abilities: object.base_abilities.clone(),
+            base_triggers: object.base_trigger_definitions.clone(),
+            base_trigger_printed_origins: object.base_trigger_printed_origins.clone(),
+            trigger_base_set_instance: object.trigger_base_set_instance,
+            next_trigger_base_set_instance: object.next_trigger_base_set_instance,
+            base_statics: object.base_static_definitions.clone(),
+            base_replacements: object.base_replacement_definitions.clone(),
+        });
+        object.static_definitions.clear();
+        assert_eq!(cast_prohibition_count(&state, id), 0);
+        move_to_zone(&mut state, id, Zone::Hand, &mut Vec::new());
+        assert!(
+            state.objects[&id].cleave_form.is_none(),
+            "snapshot restoration branch was reached"
+        );
+        assert!(
+            state.objects[&id]
+                .static_definitions
+                .iter_all()
+                .any(|definition| definition.mode == StaticMode::CantBeCopied),
+            "unrelated snapshot definition was really restored"
+        );
+        assert_eq!(
+            cast_prohibition_count(&state, id),
+            0,
+            "late retirement prevents canonical snapshot resurrection"
+        );
+    }
+
+    #[test]
+    fn cast_prohibition_restore_direct_transition_core_replay_and_refusal() {
+        for intrinsic in [false, true] {
+            for destination in [Zone::Hand, Zone::Graveyard, Zone::Exile, Zone::Battlefield] {
+                let (mut live, id) = cast_prohibition_fixture(Zone::Stack, intrinsic);
+                let mut replay = live.clone();
+                let original = live.clone();
+                assert!(original.resolved_rules_journal.entries().is_empty());
+                let record = crate::types::game_state::ZoneChangeRecord::test_minimal(
+                    id,
+                    Some(Zone::Stack),
+                    destination,
+                );
+                let command = resolve_and_apply_zone_change(
+                    &mut live,
+                    id,
+                    Zone::Stack,
+                    destination,
+                    PlayerId(0),
+                    None,
+                    record,
+                )
+                .expect("supported direct Stack-source transition core");
+                let retained = usize::from(intrinsic);
+                assert_eq!(cast_prohibition_count(&live, id), retained);
+                assert_eq!(live.objects[&id].incarnation, command.resulting_incarnation);
+                assert_eq!(live.objects[&id].zone, destination);
+                // The existing owner begins a proposal (command=None) before
+                // recording the one exact transition command under that node.
+                assert_eq!(live.resolved_rules_journal.entries().len(), 2);
+                let proposal = live.resolved_rules_journal.entries().front().unwrap();
+                assert!(proposal.command.is_none());
+                assert_eq!(proposal.node, command.cause);
+                assert!(
+                    matches!(live.resolved_rules_journal.entries().back().unwrap().command.as_ref(),
+                    Some(crate::types::resolved_commands::ResolvedRulesCommand::ZoneChange(recorded)) if recorded.as_ref() == &command)
+                );
+                apply_resolved_zone_change(&mut replay, &command)
+                    .expect("direct core command replays");
+                assert_eq!(cast_prohibition_count(&replay, id), retained);
+                assert_eq!(
+                    replay.objects[&id].incarnation,
+                    command.resulting_incarnation
+                );
+                assert_eq!(replay.objects[&id].zone, destination);
+                assert_eq!(replay.next_timestamp, live.next_timestamp);
+                assert_eq!(replay.next_object_id, live.next_object_id);
+                assert_eq!(replay.players[0].hand, live.players[0].hand);
+                assert_eq!(replay.players[0].graveyard, live.players[0].graveyard);
+                assert_eq!(replay.battlefield, live.battlefield);
+                assert_eq!(replay.exile, live.exile);
+                assert_eq!(replay.zone_changes_this_turn, live.zone_changes_this_turn);
+                assert!(
+                    replay.resolved_rules_journal.entries().is_empty(),
+                    "the direct applier does not append the caller's journal entry"
+                );
+                for wrong_source in [false, true] {
+                    let mut hostile = original.clone();
+                    if wrong_source {
+                        hostile.objects.get_mut(&id).unwrap().zone = Zone::Hand;
+                    } else {
+                        hostile.objects.get_mut(&id).unwrap().bump_incarnation();
+                    }
+                    let before = serde_json::to_value(&hostile).unwrap();
+                    assert!(apply_resolved_zone_change(&mut hostile, &command).is_err());
+                    assert_eq!(
+                        serde_json::to_value(&hostile).unwrap(),
+                        before,
+                        "hostile source/occurrence refuses before mutation"
+                    );
+                }
+            }
+        }
+    }
+
+    /// A 1/1 creature that has just entered the battlefield from no zone, with its recorded
+    /// `ZoneChanged` in `events`.
+    fn entered_one_one(state: &mut GameState, events: &mut Vec<GameEvent>) -> ObjectId {
+        let id = create_object(
+            state,
+            CardId(9),
+            PlayerId(0),
+            "Entrant".into(),
+            Zone::Battlefield,
+        );
+        {
+            let obj = state.objects.get_mut(&id).expect("created");
+            obj.card_types.core_types = vec![CoreType::Creature];
+            obj.base_power = Some(1);
+            obj.base_toughness = Some(1);
+            obj.power = Some(1);
+            obj.toughness = Some(1);
+        }
+        crate::game::layers::mark_layers_full(state);
+        crate::game::layers::flush_layers(state);
+        record_and_emit_entry_from_no_zone(state, id, events).expect("entrant exists");
+        id
+    }
+
+    /// U5 — CR 613.1 + CR 611.3c: capture flushes layers first, so a counter the entrant
+    /// carries is part of the observed power even when layers were still dirty.
+    #[test]
+    fn settle_entry_observation_flushes_layers_first() {
+        let mut state = setup();
+        let mut events = Vec::new();
+        let id = entered_one_one(&mut state, &mut events);
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .counters
+            .insert(crate::types::counter::CounterType::Plus1Plus1, 1);
+        crate::game::layers::mark_layers_full(&mut state);
+        assert_eq!(
+            state.objects[&id].power,
+            Some(1),
+            "precondition: power not yet flushed"
+        );
+
+        settle_battlefield_entry_observations(&mut state, &events);
+
+        let row = state
+            .battlefield_entry_observations
+            .values()
+            .next()
+            .expect("the entry is observed");
+        assert_eq!(row.identity.reference.object_id, id);
+        assert_eq!(row.lki.power, Some(2));
+    }
+
+    /// U5 — capture is idempotent: an entry already observed keeps its first row.
+    #[test]
+    fn settle_entry_observation_is_idempotent() {
+        let mut state = setup();
+        let mut events = Vec::new();
+        let id = entered_one_one(&mut state, &mut events);
+        settle_battlefield_entry_observations(&mut state, &events);
+        assert_eq!(state.battlefield_entry_observations.len(), 1);
+
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .counters
+            .insert(crate::types::counter::CounterType::Plus1Plus1, 2);
+        crate::game::layers::mark_layers_full(&mut state);
+        settle_battlefield_entry_observations(&mut state, &events);
+
+        assert_eq!(state.battlefield_entry_observations.len(), 1);
+        let row = state
+            .battlefield_entry_observations
+            .values()
+            .next()
+            .unwrap();
+        assert_eq!(row.lki.power, Some(1), "the first observation is kept");
+    }
+
+    /// U5 — CR 400.7: an entrant that is no longer the entered incarnation is not observed;
+    /// a phased-out entrant is not observed. The paired fresh entrant is.
+    #[test]
+    fn settle_entry_observation_skips_other_incarnation_and_phased_out() {
+        let mut state = setup();
+        let mut events = Vec::new();
+        let id = entered_one_one(&mut state, &mut events);
+        state.objects.get_mut(&id).unwrap().incarnation += 1;
+        settle_battlefield_entry_observations(&mut state, &events);
+        assert!(
+            state.battlefield_entry_observations.is_empty(),
+            "a later incarnation is a different object"
+        );
+
+        let mut state = setup();
+        let mut events = Vec::new();
+        let id = entered_one_one(&mut state, &mut events);
+        state.objects.get_mut(&id).unwrap().phase_status =
+            crate::game::game_object::PhaseStatus::PhasedOut {
+                cause: crate::game::game_object::PhaseOutCause::Directly,
+            };
+        settle_battlefield_entry_observations(&mut state, &events);
+        assert!(
+            state.battlefield_entry_observations.is_empty(),
+            "a phased-out entrant is not observed"
+        );
+
+        let mut state = setup();
+        let mut events = Vec::new();
+        entered_one_one(&mut state, &mut events);
+        settle_battlefield_entry_observations(&mut state, &events);
+        assert_eq!(
+            state.battlefield_entry_observations.len(),
+            1,
+            "paired positive"
+        );
+    }
+
+    #[test]
+    fn exert_history_predicate_tracks_zone_lifetime() {
+        let mut state = setup();
+        let source = create_object(
+            &mut state,
+            CardId(6991),
+            PlayerId(0),
+            "Exert source".into(),
+            Zone::Battlefield,
+        );
+        super::super::object_state::resolve_and_apply_object_edit(
+            &mut state,
+            source,
+            ResolvedObjectStatus::Exerted,
+            true,
+        )
+        .unwrap();
+        let exerted = StaticCondition::SourceExertedThisTurn;
+        let fresh = StaticCondition::Not {
+            condition: Box::new(exerted.clone()),
+        };
+        // CR 400.7 + CR 701.43b: The source predicate survives a same-object
+        // no-op, but both predicate polarities change after a real departure.
+        for before_departure in [true, false] {
+            if before_departure {
+                move_to_zone(&mut state, source, Zone::Battlefield, &mut Vec::new());
+            } else {
+                move_to_zone(&mut state, source, Zone::Exile, &mut Vec::new());
+                move_to_zone(&mut state, source, Zone::Battlefield, &mut Vec::new());
+            }
+            assert_eq!(
+                crate::game::layers::evaluate_condition(&state, &exerted, PlayerId(0), source),
+                before_departure
+            );
+            assert_eq!(
+                crate::game::layers::evaluate_condition(&state, &fresh, PlayerId(0), source),
+                !before_departure
+            );
+        }
+    }
+
+    #[test]
+    fn resolution_source_relatch_uses_activated_source_stamp() {
+        let mut state = setup();
+        let source = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Source".into(),
+            Zone::Graveyard,
+        );
+        let foreign = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Foreign".into(),
+            Zone::Graveyard,
+        );
+        let captured = state.objects[&source].incarnation;
+        let mut ability = crate::types::ability::ResolvedAbility::new(
+            crate::types::ability::Effect::NoOp,
+            vec![],
+            source,
+            PlayerId(0),
+        );
+        ability.source_incarnation = Some(captured);
+        state.resolving_stack_entry = Some(StackEntry {
+            id: ObjectId(900),
+            source_id: source,
+            controller: PlayerId(0),
+            kind: StackEntryKind::ActivatedAbility {
+                source_id: source,
+                ability: Box::new(ability.clone()),
+            },
+        });
+        record_resolution_source_relatch(
+            &mut state,
+            foreign,
+            Zone::Battlefield,
+            captured,
+            captured + 1,
+        );
+        record_resolution_source_relatch(
+            &mut state,
+            source,
+            Zone::Battlefield,
+            captured + 99,
+            captured + 100,
+        );
+        assert!(state.resolution_source_relatch.is_none());
+        move_to_zone(&mut state, source, Zone::Battlefield, &mut Vec::new());
+        let current = state.objects[&source].incarnation;
+        assert_eq!(
+            state.resolution_source_relatch,
+            Some(ResolutionSourceRelatch {
+                object_id: source,
+                original_stamp: captured,
+                current_incarnation: current
+            })
+        );
+        assert!(ability.source_is_current(&state));
+        state.resolution_source_relatch = None;
+        state.resolving_stack_entry = None;
+        record_resolution_source_relatch(&mut state, source, Zone::Battlefield, captured, current);
+        assert!(state.resolution_source_relatch.is_none());
+        assert!(!ability.source_is_current(&state));
+    }
+
+    #[test]
+    fn resolution_source_relatch_starts_only_from_immediate_departure_successor() {
+        // CR 400.7e + CR 400.7j: a dies trigger that returns the card it found
+        // in the graveyard relatches; a card that left and came back before
+        // resolution is a different object and must not, and a trigger cannot
+        // find the card it moved into a hidden zone.
+        for (departure, left_and_returned, relatches) in [
+            (Zone::Graveyard, false, true),
+            (Zone::Graveyard, true, false),
+            (Zone::Hand, false, false),
+        ] {
+            let mut state = setup();
+            let source = create_object(
+                &mut state,
+                CardId(1),
+                PlayerId(0),
+                "Source".into(),
+                Zone::Battlefield,
+            );
+            let mut dies_events = Vec::new();
+            move_to_zone(&mut state, source, departure, &mut dies_events);
+            let dies_event = dies_events
+                .into_iter()
+                .find(|event| {
+                    matches!(event, GameEvent::ZoneChanged { object_id, to, .. }
+                        if *object_id == source && *to == departure)
+                })
+                .expect("dies event");
+            let GameEvent::ZoneChanged { record, .. } = &dies_event else {
+                unreachable!("filtered to ZoneChanged");
+            };
+            let mut ability = crate::types::ability::ResolvedAbility::new(
+                crate::types::ability::Effect::NoOp,
+                vec![],
+                source,
+                PlayerId(0),
+            );
+            ability.set_trigger_source_recursive(
+                record
+                    .trigger_source_context()
+                    .cloned()
+                    .expect("dies record carries its source identity"),
+            );
+            if left_and_returned {
+                move_to_zone(&mut state, source, Zone::Exile, &mut Vec::new());
+                move_to_zone(&mut state, source, Zone::Graveyard, &mut Vec::new());
+            }
+            state.current_trigger_event = Some(dies_event);
+            state.resolving_stack_entry = Some(StackEntry {
+                id: ObjectId(900),
+                source_id: source,
+                controller: PlayerId(0),
+                kind: StackEntryKind::ActivatedAbility {
+                    source_id: source,
+                    ability: Box::new(ability),
+                },
+            });
+
+            move_to_zone(&mut state, source, Zone::Battlefield, &mut Vec::new());
+
+            assert_eq!(state.objects[&source].zone, Zone::Battlefield);
+            assert_eq!(
+                state.resolution_source_relatch.is_some(),
+                relatches,
+                "departure={departure:?} left_and_returned={left_and_returned}"
+            );
+        }
+    }
+
+    #[test]
+    fn resolution_source_relatch_preserves_trigger_stamp_and_rejects_foreign_or_stale_moves() {
+        let mut state = setup();
+        let source = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Source".into(),
+            Zone::Graveyard,
+        );
+        let foreign = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Foreign".into(),
+            Zone::Graveyard,
+        );
+        let captured = state.objects[&source].incarnation;
+        let mut ability = crate::types::ability::ResolvedAbility::new(
+            crate::types::ability::Effect::NoOp,
+            vec![],
+            source,
+            PlayerId(0),
+        );
+        ability.set_test_trigger_source_recursive(captured, CardId(1));
+        ability.source_incarnation = Some(captured + 50);
+        state.resolving_stack_entry = Some(StackEntry {
+            id: ObjectId(900),
+            source_id: source,
+            controller: PlayerId(0),
+            kind: StackEntryKind::ActivatedAbility {
+                source_id: source,
+                ability: Box::new(ability),
+            },
+        });
+        record_resolution_source_relatch(
+            &mut state,
+            source,
+            Zone::Battlefield,
+            captured + 50,
+            captured + 51,
+        );
+        assert!(
+            state.resolution_source_relatch.is_none(),
+            "trigger authority must win over conflicting activated fallback"
+        );
+        move_to_zone(&mut state, source, Zone::Battlefield, &mut Vec::new());
+        let first = state
+            .resolution_source_relatch
+            .expect("trigger-stamped own move must latch");
+        assert_eq!(first.original_stamp, captured);
+        assert_eq!(
+            first.current_incarnation,
+            state.objects[&source].incarnation
+        );
+        move_to_zone(&mut state, source, Zone::Exile, &mut Vec::new());
+        let second = state
+            .resolution_source_relatch
+            .expect("chained own move must advance");
+        assert_eq!(second.original_stamp, captured);
+        assert_eq!(
+            second.current_incarnation,
+            state.objects[&source].incarnation
+        );
+        assert_ne!(second.current_incarnation, first.current_incarnation);
+        record_resolution_source_relatch(
+            &mut state,
+            foreign,
+            Zone::Battlefield,
+            second.current_incarnation,
+            second.current_incarnation + 1,
+        );
+        record_resolution_source_relatch(
+            &mut state,
+            source,
+            Zone::Battlefield,
+            first.current_incarnation,
+            second.current_incarnation + 1,
+        );
+        assert_eq!(state.resolution_source_relatch, Some(second));
+    }
+
+    #[test]
+    fn create_object_assigns_id_and_inserts() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(100),
+            PlayerId(0),
+            "Forest".to_string(),
+            Zone::Hand,
+        );
+        assert_eq!(id, ObjectId(1));
+        assert!(state.objects.contains_key(&id));
+        assert_eq!(state.objects[&id].name, "Forest");
+        assert_eq!(state.objects[&id].zone, Zone::Hand);
+        assert_eq!(state.next_object_id, 2);
+    }
+
+    #[test]
+    fn create_object_adds_to_player_hand() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Card".to_string(),
+            Zone::Hand,
+        );
+        assert!(state.players[0].hand.contains(&id));
+    }
+
+    #[test]
+    fn hand_to_stack_marks_layers_dirty_for_hand_size_statics() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Spell".to_string(),
+            Zone::Hand,
+        );
+        state.layers_dirty = crate::types::game_state::LayersDirty::Clean;
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Stack, &mut events);
+
+        assert_eq!(state.objects[&id].zone, Zone::Stack);
+        assert!(
+            matches!(
+                state.layers_dirty,
+                crate::types::game_state::LayersDirty::Full
+            ),
+            "hand-to-stack movement must mark layers dirty so hand-size-gated statics re-evaluate"
+        );
+    }
+
+    #[test]
+    fn hand_to_stack_with_hand_zone_static_dirties_layers() {
+        let mut state = setup();
+        let grant_static = StaticDefinition::new(StaticMode::Continuous)
+            .affected(TargetFilter::Typed(
+                TypedFilter::new(TypeFilter::Instant)
+                    .controller(ControllerRef::You)
+                    .properties(vec![FilterProp::InZone { zone: Zone::Hand }]),
+            ))
+            .modifications(vec![ContinuousModification::AddKeyword {
+                keyword: Keyword::Miracle(ManaCost::Cost {
+                    shards: vec![],
+                    generic: 2,
+                }),
+            }]);
+        let source = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "HandGrantSource".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let src = state.objects.get_mut(&source).unwrap();
+            src.static_definitions.push(grant_static.clone());
+            src.base_static_definitions = Arc::new(vec![grant_static]);
+        }
+        let id = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Spell".to_string(),
+            Zone::Hand,
+        );
+        state.layers_dirty = crate::types::game_state::LayersDirty::Clean;
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Stack, &mut events);
+
+        assert_eq!(state.objects[&id].zone, Zone::Stack);
+        assert!(
+            state.layers_dirty.is_dirty(),
+            "hand-zone continuous effects must re-evaluate when a hand card departs"
+        );
+    }
+
+    /// CR 404 + CR 611.3a: PRODUCTION-PATH proof for the graveyard-gated static
+    /// invalidation seam (issue #4774). A flying creature card milled from the
+    /// library into a graveyard via the normal `move_to_zone` path — with NO
+    /// manual `mark_layers_full` — must dirty layers so Cairn Wanderer's "~ has
+    /// flying as long as a creature card with flying is in a graveyard"
+    /// re-evaluates and the grant applies. Library→Graveyard deliberately avoids
+    /// the pre-existing hand/battlefield invalidation, so this exercises the new
+    /// graveyard seam specifically; it fails on revert of that seam.
+    #[test]
+    fn graveyard_arrival_reevaluates_graveyard_gated_static_via_zone_move() {
+        let cairn_static = StaticDefinition::new(StaticMode::Continuous)
+            .affected(TargetFilter::SelfRef)
+            .modifications(vec![ContinuousModification::AddKeyword {
+                keyword: Keyword::Flying,
+            }])
+            .condition(crate::types::ability::StaticCondition::IsPresent {
+                filter: Some(TargetFilter::Typed(
+                    TypedFilter::new(TypeFilter::Creature).properties(vec![
+                        FilterProp::WithKeyword {
+                            value: Keyword::Flying,
+                        },
+                        FilterProp::InZone {
+                            zone: Zone::Graveyard,
+                        },
+                    ]),
+                )),
+            });
+
+        let mut state = setup();
+        let cairn = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Cairn Wanderer".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let o = state.objects.get_mut(&cairn).unwrap();
+            o.card_types.core_types.push(CoreType::Creature);
+            o.base_card_types = o.card_types.clone();
+            o.static_definitions.push(cairn_static.clone());
+            o.base_static_definitions = Arc::new(vec![cairn_static]);
+        }
+
+        // A flying creature card in the library (to be milled into the graveyard).
+        let flyer = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Storm Crow".to_string(),
+            Zone::Library,
+        );
+        {
+            let o = state.objects.get_mut(&flyer).unwrap();
+            o.card_types.core_types.push(CoreType::Creature);
+            o.base_card_types = o.card_types.clone();
+            o.base_keywords.push(Keyword::Flying);
+            o.keywords.push(Keyword::Flying);
+        }
+
+        // Baseline: empty graveyard → Cairn has no Flying; layers clean after eval.
+        crate::game::layers::mark_layers_full(&mut state);
+        crate::game::layers::evaluate_layers(&mut state);
+        assert!(!state.objects[&cairn].has_keyword(&Keyword::Flying));
+        assert!(!state.layers_dirty.is_dirty());
+
+        // PRODUCTION PATH: mill the flyer Library → Graveyard (no manual mark_full).
+        let mut events = Vec::new();
+        move_to_zone(&mut state, flyer, Zone::Graveyard, &mut events);
+
+        assert!(
+            state.layers_dirty.is_dirty(),
+            "a flying creature card entering a graveyard must dirty layers for Cairn's graveyard-gated static"
+        );
+        crate::game::layers::evaluate_layers(&mut state);
+        assert!(
+            state.objects[&cairn].has_keyword(&Keyword::Flying),
+            "after the flyer reaches the graveyard via move_to_zone, Cairn gains Flying without a manual mark_full"
+        );
+    }
+
+    /// CR 404 + CR 611.3a: the graveyard invalidation is SCOPED — with no active
+    /// graveyard-membership-gated static, a card entering a graveyard must NOT
+    /// dirty layers, so routine graveyard churn (deaths, mill, discard) stays
+    /// cheap and this is not a blanket per-graveyard-move full re-eval.
+    #[test]
+    fn graveyard_arrival_does_not_dirty_layers_without_graveyard_gated_static() {
+        let mut state = setup();
+        let bear = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Grizzly Bears".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let o = state.objects.get_mut(&bear).unwrap();
+            o.card_types.core_types.push(CoreType::Creature);
+            o.base_card_types = o.card_types.clone();
+        }
+        let card = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Storm Crow".to_string(),
+            Zone::Library,
+        );
+        {
+            let o = state.objects.get_mut(&card).unwrap();
+            o.card_types.core_types.push(CoreType::Creature);
+            o.base_card_types = o.card_types.clone();
+        }
+
+        crate::game::layers::mark_layers_full(&mut state);
+        crate::game::layers::evaluate_layers(&mut state);
+        assert!(!state.layers_dirty.is_dirty());
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, card, Zone::Graveyard, &mut events);
+        assert!(
+            !state.layers_dirty.is_dirty(),
+            "graveyard arrival must NOT dirty layers when no graveyard-membership-gated static is active"
+        );
+    }
+
+    /// CR 404 + CR 611.3a: PRODUCTION-PATH proof that the graveyard invalidation
+    /// also covers COUNT/threshold gates, not just `IsPresent`. A static gated on
+    /// `QuantityComparison(GraveyardSize >= 1)` must re-evaluate when a card is
+    /// milled into the graveyard via the normal `move_to_zone` path (no manual
+    /// `mark_full`). Fails on revert of the `QuantityComparison`/`QuantityRef`
+    /// branch of the zone-read detector.
+    #[test]
+    fn graveyard_count_gated_static_reevaluates_via_zone_move() {
+        let count_static = StaticDefinition::new(StaticMode::Continuous)
+            .affected(TargetFilter::SelfRef)
+            .modifications(vec![ContinuousModification::AddKeyword {
+                keyword: Keyword::Trample,
+            }])
+            .condition(crate::types::ability::StaticCondition::QuantityComparison {
+                lhs: crate::types::ability::QuantityExpr::Ref {
+                    qty: crate::types::ability::QuantityRef::GraveyardSize {
+                        player: crate::types::ability::PlayerScope::Controller,
+                    },
+                },
+                comparator: crate::types::ability::Comparator::GE,
+                rhs: crate::types::ability::QuantityExpr::Fixed { value: 1 },
+            });
+
+        let mut state = setup();
+        let source = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Graveyard-count source".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let o = state.objects.get_mut(&source).unwrap();
+            o.card_types.core_types.push(CoreType::Creature);
+            o.base_card_types = o.card_types.clone();
+            o.static_definitions.push(count_static.clone());
+            o.base_static_definitions = Arc::new(vec![count_static]);
+        }
+        let card = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Milled card".to_string(),
+            Zone::Library,
+        );
+        {
+            let o = state.objects.get_mut(&card).unwrap();
+            o.card_types.core_types.push(CoreType::Creature);
+            o.base_card_types = o.card_types.clone();
+        }
+
+        // Baseline: empty graveyard → count gate unsatisfied → no Trample.
+        crate::game::layers::mark_layers_full(&mut state);
+        crate::game::layers::evaluate_layers(&mut state);
+        assert!(!state.objects[&source].has_keyword(&Keyword::Trample));
+        assert!(!state.layers_dirty.is_dirty());
+
+        // Production path: mill a card Library → Graveyard (no manual mark_full).
+        let mut events = Vec::new();
+        move_to_zone(&mut state, card, Zone::Graveyard, &mut events);
+        assert!(
+            state.layers_dirty.is_dirty(),
+            "a card entering a graveyard must dirty layers for a GraveyardSize-count-gated static"
+        );
+        crate::game::layers::evaluate_layers(&mut state);
+        assert!(
+            state.objects[&source].has_keyword(&Keyword::Trample),
+            "with one card in the graveyard the count gate is satisfied and the grant applies"
+        );
+    }
+
+    #[test]
+    fn create_object_adds_to_battlefield() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Land".to_string(),
+            Zone::Battlefield,
+        );
+        assert!(state.battlefield.contains(&id));
+    }
+
+    /// CR 111.8: A token that has left the battlefield can't move to another zone
+    /// or come back onto the battlefield; it remains in its current zone and
+    /// ceases to exist at the next SBA (CR 111.7). A single-resolution flicker
+    /// ("exile target permanent, then return it") on a token therefore must NOT
+    /// bring it back — modeled here as the two zone changes such an effect makes,
+    /// battlefield -> exile then exile -> battlefield, with no SBA in between.
+    #[test]
+    fn token_that_left_battlefield_cannot_return() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Cat".to_string(),
+            Zone::Battlefield,
+        );
+        state.objects.get_mut(&id).unwrap().is_token = true;
+
+        let mut events = Vec::new();
+        // Flicker step 1: the token leaves the battlefield (exiled).
+        move_to_zone(&mut state, id, Zone::Exile, &mut events);
+        assert_eq!(state.objects[&id].zone, Zone::Exile);
+
+        // Flicker step 2 (same resolution, no SBA between): attempt to return it.
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        // CR 111.8: it stays in exile; it must not re-enter the battlefield.
+        assert_eq!(
+            state.objects[&id].zone,
+            Zone::Exile,
+            "CR 111.8: a token that left the battlefield can't return"
+        );
+        assert!(
+            !state.battlefield.contains(&id),
+            "returned token must not be on the battlefield"
+        );
+    }
+
+    /// CR 111.8: A token that has left the battlefield can't move into a
+    /// library before the next SBA removes it.
+    #[test]
+    fn token_that_left_battlefield_cannot_move_to_library_position() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Cat".to_string(),
+            Zone::Battlefield,
+        );
+        state.objects.get_mut(&id).unwrap().is_token = true;
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Exile, &mut events);
+        move_to_library_position(&mut state, id, true, &mut events);
+
+        assert_eq!(
+            state.objects[&id].zone,
+            Zone::Exile,
+            "CR 111.8: a token that left the battlefield can't move into a library"
+        );
+        assert!(
+            !state.players[0].library.contains(&id),
+            "token must not be inserted into its owner's library"
+        );
+    }
+
+    #[test]
+    fn create_object_increments_id() {
+        let mut state = setup();
+        let id1 = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "A".to_string(),
+            Zone::Hand,
+        );
+        let id2 = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "B".to_string(),
+            Zone::Hand,
+        );
+        assert_eq!(id1, ObjectId(1));
+        assert_eq!(id2, ObjectId(2));
+    }
+
+    #[test]
+    fn move_hand_to_battlefield() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Forest".to_string(),
+            Zone::Hand,
+        );
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        assert!(!state.players[0].hand.contains(&id));
+        assert!(state.battlefield.contains(&id));
+        assert_eq!(state.objects[&id].zone, Zone::Battlefield);
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            GameEvent::ZoneChanged {
+                object_id,
+                from,
+                to,
+                record,
+            } => {
+                assert_eq!(*object_id, id);
+                assert_eq!(*from, Some(Zone::Hand));
+                assert_eq!(*to, Zone::Battlefield);
+                assert_eq!(record.object_id, id);
+                assert_eq!(record.from_zone, Some(Zone::Hand));
+                assert_eq!(record.to_zone, Zone::Battlefield);
+            }
+            _ => panic!("expected ZoneChanged event"),
+        }
+    }
+
+    /// CR 603.2g + CR 603.6a: a no-op Battlefield → Battlefield move does not
+    /// create a zone-change event, so ETB triggers have no event to observe.
+    #[test]
+    fn move_battlefield_to_battlefield_is_no_op() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Coiling Oracle".to_string(),
+            Zone::Battlefield,
+        );
+        let mut events = Vec::new();
+
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        assert!(state.battlefield.contains(&id));
+        assert_eq!(state.objects[&id].zone, Zone::Battlefield);
+        assert!(
+            events.is_empty(),
+            "same-zone battlefield move must not emit ZoneChanged events"
+        );
+    }
+
+    #[test]
+    fn move_library_to_hand() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Card".to_string(),
+            Zone::Library,
+        );
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Hand, &mut events);
+
+        assert!(!state.players[0].library.contains(&id));
+        assert!(state.players[0].hand.contains(&id));
+        assert_eq!(state.objects[&id].zone, Zone::Hand);
+    }
+
+    #[test]
+    fn face_down_exile_marks_the_exact_ledger_occurrence() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(9),
+            PlayerId(0),
+            "Repeated Exile".to_string(),
+            Zone::Hand,
+        );
+        let mut events = Vec::new();
+
+        move_to_zone(&mut state, id, Zone::Exile, &mut events);
+        move_to_zone(&mut state, id, Zone::Hand, &mut events);
+        let second_exile_start = events.len();
+        move_to_zone(&mut state, id, Zone::Exile, &mut events);
+        mark_face_down_in_exile(&mut state, &mut events[second_exile_start..], id);
+
+        assert_eq!(state.zone_changes_this_turn.len(), 3);
+        assert!(
+            !state.zone_changes_this_turn[0]
+                .trigger_source_context()
+                .expect("first Exile record carries source context")
+                .face_down
+        );
+        assert!(
+            state.zone_changes_this_turn[2]
+                .trigger_source_context()
+                .expect("second Exile record carries source context")
+                .face_down
+        );
+    }
+
+    /// CR 122.2 + CR 400.7: Counters cease to exist when an object changes
+    /// zones. The Personify class ("Exile target creature you control, then
+    /// return that card to the battlefield under its owner's control") moves
+    /// the creature Battlefield → Exile → Battlefield. ObjectId is storage
+    /// identity in this engine (the same slot is reused), so unless the
+    /// exit-cleanup hook actually clears `obj.counters` at the boundary, the
+    /// returning permanent will retain its pre-exile counters — which the
+    /// rules say cease to exist. This test drives `move_to_zone` directly
+    /// (not a shape assertion on the HashMap) and would have caught a
+    /// regression in `apply_zone_exit_cleanup`'s counter-clear branch.
+    #[test]
+    fn issue_4223_combat_role_cleared_on_battlefield_exit() {
+        use crate::game::combat::{AttackTarget, AttackerInfo, CombatState};
+
+        let mut state = setup();
+        let attacker = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Strangleroot Geist".to_string(),
+            Zone::Battlefield,
+        );
+        let blocker = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(1),
+            "Blocker".to_string(),
+            Zone::Battlefield,
+        );
+
+        let mut combat = CombatState {
+            attackers: vec![AttackerInfo {
+                object_id: attacker,
+                defending_player: PlayerId(1),
+                attack_target: AttackTarget::Player(PlayerId(1)),
+                blocked: true,
+                band_id: None,
+            }],
+            ..Default::default()
+        };
+        combat.blocker_assignments.insert(attacker, vec![blocker]);
+        combat.blocker_to_attacker.insert(blocker, vec![attacker]);
+        state.combat = Some(combat);
+
+        let mut events = Vec::new();
+        // Blocker dies (e.g. combat damage) — must leave combat before Undying
+        // returns the same ObjectId to the battlefield.
+        move_to_zone(&mut state, blocker, Zone::Graveyard, &mut events);
+        let combat = state.combat.as_ref().unwrap();
+        assert!(
+            !combat.blocker_to_attacker.contains_key(&blocker),
+            "CR 506.4: blocker must be removed from combat when it leaves the battlefield"
+        );
+        assert!(
+            combat
+                .blocker_assignments
+                .get(&attacker)
+                .is_none_or(|blockers| !blockers.contains(&blocker)),
+            "dead blocker must not remain assigned to the attacker"
+        );
+
+        // Undying-style return: same ObjectId re-enters without combat role.
+        move_to_zone(&mut state, blocker, Zone::Battlefield, &mut events);
+        let combat = state.combat.as_ref().unwrap();
+        assert!(
+            !combat.blocker_to_attacker.contains_key(&blocker),
+            "returned creature must not inherit stale blocking status (issue #4223)"
+        );
+
+        // Attacker dies and returns — must not remain an attacker either.
+        move_to_zone(&mut state, attacker, Zone::Graveyard, &mut events);
+        let combat = state.combat.as_ref().unwrap();
+        assert!(
+            combat
+                .attackers
+                .iter()
+                .all(|info| info.object_id != attacker),
+            "CR 506.4: attacker must be removed from combat when it leaves the battlefield"
+        );
+        assert!(
+            !combat.blocker_assignments.contains_key(&attacker),
+            "CR 506.4: attacker-keyed block assignment must be removed on battlefield exit"
+        );
+        assert!(
+            combat
+                .blocker_to_attacker
+                .values()
+                .all(|attackers| !attackers.contains(&attacker)),
+            "CR 506.4: departed attacker must be pruned from every blocker's reverse lookup"
+        );
+        move_to_zone(&mut state, attacker, Zone::Battlefield, &mut events);
+        let combat = state.combat.as_ref().unwrap();
+        assert!(
+            combat
+                .attackers
+                .iter()
+                .all(|info| info.object_id != attacker),
+            "returned attacker must not inherit stale attacking status"
+        );
+        assert!(
+            !combat.blocker_assignments.contains_key(&attacker),
+            "returned attacker must not inherit stale attacker-keyed block assignment"
+        );
+        assert!(
+            !combat.blocker_to_attacker.contains_key(&attacker),
+            "returned attacker must not inherit stale blocking status via reverse lookup"
+        );
+    }
+
+    #[test]
+    fn counters_cease_to_exist_across_exile_and_return() {
+        use crate::types::counter::CounterType;
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Stapled Cat".to_string(),
+            Zone::Battlefield,
+        );
+        // Put -1/-1 counters on the creature while it's on the battlefield —
+        // mirrors the user-reported Personify scenario (the reported leak was
+        // -1/-1 counters specifically, e.g. from a Wither/Infect source).
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .counters
+            .insert(CounterType::Minus1Minus1, 2);
+
+        let mut events = Vec::new();
+        // Personify step 1: Battlefield → Exile. Counters must cease to
+        // exist on the exit boundary (CR 122.2).
+        move_to_zone(&mut state, id, Zone::Exile, &mut events);
+        assert!(
+            state.objects[&id].counters.is_empty(),
+            "counters must cease to exist when leaving the battlefield (CR 122.2); had {:?}",
+            state.objects[&id].counters
+        );
+
+        // Personify step 2: Exile → Battlefield. The new object on the
+        // battlefield must have no counters — there's nothing to restore.
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+        assert!(
+            state.objects[&id].counters.is_empty(),
+            "returning object is a new object per CR 400.7 — no counters carry; had {:?}",
+            state.objects[&id].counters
+        );
+    }
+
+    #[test]
+    fn move_battlefield_to_graveyard() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Creature".to_string(),
+            Zone::Battlefield,
+        );
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Graveyard, &mut events);
+
+        assert!(!state.battlefield.contains(&id));
+        assert!(state.players[0].graveyard.contains(&id));
+        assert_eq!(state.objects[&id].zone, Zone::Graveyard);
+    }
+
+    #[test]
+    fn move_to_zone_clears_old_object_activation_counts() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Quirion Ranger".to_string(),
+            Zone::Battlefield,
+        );
+        let other = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Relic".to_string(),
+            Zone::Battlefield,
+        );
+
+        state.activated_abilities_this_turn.insert((id, 0), 1);
+        state.activated_abilities_this_game.insert((id, 0), 1);
+        state.activated_abilities_this_turn.insert((other, 0), 1);
+        state.activated_abilities_this_game.insert((other, 0), 1);
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Hand, &mut events);
+
+        assert!(!state.activated_abilities_this_turn.contains_key(&(id, 0)));
+        assert!(!state.activated_abilities_this_game.contains_key(&(id, 0)));
+        assert_eq!(
+            state.activated_abilities_this_turn.get(&(other, 0)),
+            Some(&1)
+        );
+        assert_eq!(
+            state.activated_abilities_this_game.get(&(other, 0)),
+            Some(&1)
+        );
+    }
+
+    #[test]
+    fn token_dying_does_not_count_as_descending() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Token".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let obj = state.objects.get_mut(&id).unwrap();
+            obj.card_types.core_types.push(CoreType::Creature);
+            obj.is_token = true;
+        }
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Graveyard, &mut events);
+
+        assert!(!state.players[0].descended_this_turn);
+    }
+
+    #[test]
+    fn permanent_card_to_graveyard_counts_as_descending() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Creature".to_string(),
+            Zone::Battlefield,
+        );
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Creature);
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Graveyard, &mut events);
+
+        assert!(state.players[0].descended_this_turn);
+    }
+
+    #[test]
+    fn move_to_exile() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Card".to_string(),
+            Zone::Battlefield,
+        );
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Exile, &mut events);
+
+        assert!(!state.battlefield.contains(&id));
+        assert!(state.exile.contains(&id));
+        assert_eq!(state.objects[&id].zone, Zone::Exile);
+    }
+
+    #[test]
+    fn move_generates_zone_changed_event() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Card".to_string(),
+            Zone::Hand,
+        );
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Graveyard, &mut events);
+
+        assert_eq!(events.len(), 1);
+        let GameEvent::ZoneChanged {
+            object_id,
+            from,
+            to,
+            record,
+        } = &events[0]
+        else {
+            panic!("move_to_zone must emit ZoneChanged");
+        };
+        assert_eq!(*object_id, id);
+        assert_eq!(*from, Some(Zone::Hand));
+        assert_eq!(*to, Zone::Graveyard);
+        assert_eq!(record.name, "Card");
+        let context = record
+            .trigger_source_context()
+            .expect("real zone-change events carry their source context");
+        assert_eq!(context.identity.reference.object_id, id);
+        assert_eq!(context.identity.expected_zone, Zone::Hand);
+        assert_eq!(context.card_id, CardId(1));
+    }
+
+    #[test]
+    fn move_to_library_top() {
+        let mut state = setup();
+        let id1 = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Bottom".to_string(),
+            Zone::Library,
+        );
+        let id2 = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Top".to_string(),
+            Zone::Hand,
+        );
+
+        let mut events = Vec::new();
+        move_to_library_position(&mut state, id2, true, &mut events);
+
+        assert_eq!(state.players[0].library[0], id2); // top
+        assert_eq!(state.players[0].library[1], id1); // bottom
+        assert_eq!(state.objects[&id2].zone, Zone::Library);
+    }
+
+    #[test]
+    fn move_to_library_bottom() {
+        let mut state = setup();
+        let id1 = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Top".to_string(),
+            Zone::Library,
+        );
+        let id2 = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Card".to_string(),
+            Zone::Hand,
+        );
+
+        let mut events = Vec::new();
+        move_to_library_position(&mut state, id2, false, &mut events);
+
+        assert_eq!(state.players[0].library[0], id1); // stays at top
+        assert_eq!(state.players[0].library[1], id2); // goes to bottom
+    }
+
+    #[test]
+    fn within_library_reposition_does_not_create_a_zone_change() {
+        let mut state = setup();
+        let filler = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Filler".to_string(),
+            Zone::Library,
+        );
+        let card = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Card".to_string(),
+            Zone::Library,
+        );
+
+        let incarnation_before = state.objects[&card].incarnation;
+        state.commander_declined_zone_return.insert(card);
+        let mut events = Vec::new();
+        move_to_library_at_index(&mut state, card, Some(0), &mut events); // to top
+        move_to_library_at_index(&mut state, card, None, &mut events); // to bottom
+
+        assert_eq!(
+            state.objects[&card].incarnation, incarnation_before,
+            "a within-library reposition must preserve object identity"
+        );
+        assert!(
+            state.players[0].library.contains(&filler) && state.players[0].library.contains(&card)
+        );
+        assert!(
+            events.is_empty(),
+            "repositioning within a library emits no events"
+        );
+        assert!(
+            state.zone_changes_this_turn.is_empty(),
+            "repositioning within a library does not enter the zone-change ledger"
+        );
+        assert!(
+            state.commander_declined_zone_return.contains(&card),
+            "without a zone change, the commander marker must be preserved"
+        );
+    }
+
+    #[test]
+    fn reorder_within_library_clamps_after_removal_and_appends_when_unspecified() {
+        let mut state = setup();
+        let first = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "First".to_string(),
+            Zone::Library,
+        );
+        let second = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Second".to_string(),
+            Zone::Library,
+        );
+        let third = create_object(
+            &mut state,
+            CardId(3),
+            PlayerId(0),
+            "Third".to_string(),
+            Zone::Library,
+        );
+
+        reorder_within_library(&mut state, PlayerId(0), &[first, third], Some(99));
+        assert_eq!(
+            state.players[0].library.iter().copied().collect::<Vec<_>>(),
+            [second, first, third]
+        );
+
+        reorder_within_library(&mut state, PlayerId(0), &[first], None);
+        assert_eq!(
+            state.players[0].library.iter().copied().collect::<Vec<_>>(),
+            [second, third, first]
+        );
+    }
+
+    #[test]
+    fn player_zones_are_per_player() {
+        let mut state = setup();
+        let id1 = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "P0 Card".to_string(),
+            Zone::Hand,
+        );
+        let id2 = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(1),
+            "P1 Card".to_string(),
+            Zone::Hand,
+        );
+
+        assert!(state.players[0].hand.contains(&id1));
+        assert!(!state.players[0].hand.contains(&id2));
+        assert!(state.players[1].hand.contains(&id2));
+        assert!(!state.players[1].hand.contains(&id1));
+    }
+
+    #[test]
+    fn shared_zones_work_for_any_player() {
+        let mut state = setup();
+        let id1 = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "P0 Creature".to_string(),
+            Zone::Battlefield,
+        );
+        let id2 = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(1),
+            "P1 Creature".to_string(),
+            Zone::Battlefield,
+        );
+
+        assert!(state.battlefield.contains(&id1));
+        assert!(state.battlefield.contains(&id2));
+    }
+
+    #[test]
+    fn multiple_zone_transfers() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Card".to_string(),
+            Zone::Library,
+        );
+        let mut events = Vec::new();
+
+        // Library -> Hand (draw)
+        move_to_zone(&mut state, id, Zone::Hand, &mut events);
+        assert_eq!(state.objects[&id].zone, Zone::Hand);
+
+        // Hand -> Battlefield (play)
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+        assert_eq!(state.objects[&id].zone, Zone::Battlefield);
+
+        // Battlefield -> Graveyard (destroy)
+        move_to_zone(&mut state, id, Zone::Graveyard, &mut events);
+        assert_eq!(state.objects[&id].zone, Zone::Graveyard);
+
+        assert_eq!(events.len(), 3);
+    }
+
+    #[test]
+    fn instant_cannot_enter_battlefield() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Lightning Bolt".to_string(),
+            Zone::Hand,
+        );
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Instant);
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        // CR 400.4a: Instant should remain in hand
+        assert_eq!(state.objects[&id].zone, Zone::Hand);
+        assert!(state.players[0].hand.contains(&id));
+    }
+
+    #[test]
+    fn counters_cleared_on_move_to_zone() {
+        // CR 122.2: Counters cease to exist when an object changes zones.
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Creature".to_string(),
+            Zone::Battlefield,
+        );
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .counters
+            .insert(crate::types::counter::CounterType::Plus1Plus1, 3);
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Graveyard, &mut events);
+
+        assert!(state.objects[&id].counters.is_empty());
+    }
+
+    #[test]
+    fn counters_cleared_on_move_to_library() {
+        // CR 122.2: Counters cease to exist when an object changes zones.
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Creature".to_string(),
+            Zone::Battlefield,
+        );
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .counters
+            .insert(crate::types::counter::CounterType::Plus1Plus1, 2);
+
+        let mut events = Vec::new();
+        move_to_library_at_index(&mut state, id, Some(0), &mut events);
+
+        assert!(state.objects[&id].counters.is_empty());
+    }
+
+    #[test]
+    fn counters_cleared_on_exile_to_hand() {
+        // CR 122.2: Counters cease to exist on ANY zone transition, not just from battlefield.
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Card".to_string(),
+            Zone::Exile,
+        );
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .counters
+            .insert(crate::types::counter::CounterType::Plus1Plus1, 1);
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Hand, &mut events);
+
+        assert!(state.objects[&id].counters.is_empty());
+    }
+
+    /// CR 122.2 + CR 113.6b building-block test for
+    /// `StaticMode::CountersPersistAcrossZones`: Me, the Immortal / Skullbriar
+    /// retain counters on a move to any zone OTHER than a player's hand or
+    /// library, and follow the normal CR 122.2 clear for hand/library moves.
+    /// Exercises the full destination matrix so the parameter (the
+    /// `excluded_zones` set), not a single card, is verified.
+    fn make_persistent_counter_object(state: &mut GameState, card: u64, zone: Zone) -> ObjectId {
+        let id = create_object(
+            state,
+            CardId(card),
+            PlayerId(0),
+            "Counter Keeper".to_string(),
+            zone,
+        );
+        let obj = state.objects.get_mut(&id).unwrap();
+        obj.counters
+            .insert(crate::types::counter::CounterType::Plus1Plus1, 4);
+        // "Counters remain on ~ as it moves to any zone other than a player's
+        // hand or library." Functions in every zone the object can leave with
+        // counters on it (CR 113.6b).
+        obj.static_definitions.push(
+            crate::types::ability::StaticDefinition::new(
+                crate::types::statics::StaticMode::CountersPersistAcrossZones {
+                    excluded_zones: vec![Zone::Hand, Zone::Library],
+                },
+            )
+            .affected(crate::types::ability::TargetFilter::SelfRef)
+            .active_zones(vec![
+                Zone::Battlefield,
+                Zone::Graveyard,
+                Zone::Exile,
+                Zone::Command,
+                Zone::Stack,
+            ]),
+        );
+        id
+    }
+
+    #[test]
+    fn persistent_counters_survive_move_to_non_excluded_zones() {
+        for to in [Zone::Graveyard, Zone::Exile, Zone::Command] {
+            let mut state = setup();
+            let id = make_persistent_counter_object(&mut state, 1, Zone::Battlefield);
+            let mut events = Vec::new();
+            move_to_zone(&mut state, id, to, &mut events);
+            assert_eq!(
+                state.objects[&id]
+                    .counters
+                    .get(&crate::types::counter::CounterType::Plus1Plus1)
+                    .copied(),
+                Some(4),
+                "counters should persist on move to {to:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn persistent_counters_cleared_on_move_to_excluded_hand_or_library() {
+        // CR 122.2: hand and library are in `excluded_zones`, so the default
+        // clear still applies (matches Me, the Immortal's ruling).
+        for to in [Zone::Hand, Zone::Library] {
+            let mut state = setup();
+            let id = make_persistent_counter_object(&mut state, 1, Zone::Battlefield);
+            let mut events = Vec::new();
+            move_to_zone(&mut state, id, to, &mut events);
+            assert!(
+                state.objects[&id].counters.is_empty(),
+                "counters should clear on move to excluded zone {to:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn persistent_counters_survive_graveyard_to_battlefield_reanimation() {
+        // CR 113.6b: the ability is read from the graveyard (from-zone) state;
+        // a reanimated Me/Skullbriar keeps its graveyard counters.
+        let mut state = setup();
+        let id = make_persistent_counter_object(&mut state, 1, Zone::Graveyard);
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+        assert_eq!(
+            state.objects[&id]
+                .counters
+                .get(&crate::types::counter::CounterType::Plus1Plus1)
+                .copied(),
+            Some(4),
+            "graveyard→battlefield should preserve counters per the from-zone ability"
+        );
+    }
+
+    #[test]
+    fn face_down_instant_can_enter_battlefield() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Morph Instant".to_string(),
+            Zone::Hand,
+        );
+        {
+            let obj = state.objects.get_mut(&id).unwrap();
+            obj.card_types.core_types.push(CoreType::Instant);
+            obj.face_down = true;
+        }
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        // Face-down instants (morph) can enter the battlefield
+        assert_eq!(state.objects[&id].zone, Zone::Battlefield);
+    }
+
+    #[test]
+    fn sorcery_cannot_enter_battlefield() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Time Walk".to_string(),
+            Zone::Hand,
+        );
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Sorcery);
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        // CR 307.4 / CR 400.4a: Sorcery should remain in hand
+        assert_eq!(state.objects[&id].zone, Zone::Hand);
+        assert!(state.players[0].hand.contains(&id));
+    }
+
+    #[test]
+    fn instant_creature_mdfc_can_enter_battlefield() {
+        // CR 110.4: An object with both Instant and Creature types (MDFC back face)
+        // should be allowed to enter the battlefield because it has a permanent type.
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "MDFC Back".to_string(),
+            Zone::Hand,
+        );
+        {
+            let obj = state.objects.get_mut(&id).unwrap();
+            obj.card_types.core_types.push(CoreType::Instant);
+            obj.card_types.core_types.push(CoreType::Creature);
+        }
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        // Should enter because it has a permanent type (Creature)
+        assert_eq!(state.objects[&id].zone, Zone::Battlefield);
+    }
+
+    /// CR 712.14a + CR 712.8e: a DFC whose FRONT face is a Sorcery (non-permanent)
+    /// can still enter the battlefield when it is instructed to enter TRANSFORMED
+    /// (back face up) — eligibility reads the BACK face's core types (a Creature,
+    /// a permanent type, CR 110.4), so the CR 307.4 / CR 400.4a reject is bypassed.
+    ///
+    /// REVERT-CATCHER: flips red if the entry-face rewrite (reading the back
+    /// face for a transformed entry) is removed — the front Sorcery type would
+    /// then trip the instant/sorcery guard and the DFC would stay in hand.
+    #[test]
+    fn transform_entry_sorcery_front_creature_back_allowed_via_flag() {
+        use crate::game::game_object::BackFaceData;
+        use crate::types::card_type::CardType;
+
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Esper Origins".to_string(),
+            Zone::Hand,
+        );
+        {
+            let obj = state.objects.get_mut(&id).unwrap();
+            obj.card_types = CardType {
+                supertypes: vec![],
+                core_types: vec![CoreType::Sorcery],
+                subtypes: vec![],
+            };
+            obj.base_card_types = obj.card_types.clone();
+            obj.back_face = Some(BackFaceData {
+                is_swap_snapshot: false,
+                trigger_printed_origins: Vec::new(),
+                name: "Summon: Esper Maduin".to_string(),
+                power: None,
+                toughness: None,
+                loyalty: None,
+                printed_loyalty: None,
+                defense: None,
+                card_types: CardType {
+                    supertypes: vec![],
+                    core_types: vec![CoreType::Creature],
+                    subtypes: vec![],
+                },
+                mana_cost: crate::types::mana::ManaCost::default(),
+                keywords: vec![],
+                abilities: vec![],
+                trigger_definitions: Default::default(),
+                replacement_definitions: Default::default(),
+                static_definitions: Default::default(),
+                color: vec![],
+                printed_ref: None,
+                modal: None,
+                additional_cost: None,
+                strive_cost: None,
+                casting_restrictions: vec![],
+                casting_options: vec![],
+                layout_kind: None,
+                parse_warnings: vec![],
+            });
+        }
+
+        let mut events = Vec::new();
+        move_to_zone_with_entry_flags(&mut state, id, Zone::Battlefield, &mut events, true, None);
+
+        assert_eq!(
+            state.objects[&id].zone,
+            Zone::Battlefield,
+            "CR 712.14a + CR 712.8e: a transformed entry reads the back face's \
+             Creature (permanent, CR 110.4) type and is permitted by CR 400.4a"
+        );
+    }
+
+    /// CR 307.4 / CR 400.4a negative reach-guard: the SAME Sorcery//Creature DFC
+    /// entering through the PUBLIC `move_to_zone` (enter_transformed = false) is
+    /// rejected — its FRONT Sorcery face falls to the instant/sorcery guard. This
+    /// proves the transformed-entry carve-out is conditioned on `enter_transformed`
+    /// and is never unconditional.
+    #[test]
+    fn transform_entry_sorcery_front_rejected_without_flag() {
+        use crate::game::game_object::BackFaceData;
+        use crate::types::card_type::CardType;
+
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Esper Origins".to_string(),
+            Zone::Hand,
+        );
+        {
+            let obj = state.objects.get_mut(&id).unwrap();
+            obj.card_types = CardType {
+                supertypes: vec![],
+                core_types: vec![CoreType::Sorcery],
+                subtypes: vec![],
+            };
+            obj.base_card_types = obj.card_types.clone();
+            obj.back_face = Some(BackFaceData {
+                is_swap_snapshot: false,
+                trigger_printed_origins: Vec::new(),
+                name: "Summon: Esper Maduin".to_string(),
+                power: None,
+                toughness: None,
+                loyalty: None,
+                printed_loyalty: None,
+                defense: None,
+                card_types: CardType {
+                    supertypes: vec![],
+                    core_types: vec![CoreType::Creature],
+                    subtypes: vec![],
+                },
+                mana_cost: crate::types::mana::ManaCost::default(),
+                keywords: vec![],
+                abilities: vec![],
+                trigger_definitions: Default::default(),
+                replacement_definitions: Default::default(),
+                static_definitions: Default::default(),
+                color: vec![],
+                printed_ref: None,
+                modal: None,
+                additional_cost: None,
+                strive_cost: None,
+                casting_restrictions: vec![],
+                casting_options: vec![],
+                layout_kind: None,
+                parse_warnings: vec![],
+            });
+        }
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        assert_eq!(
+            state.objects[&id].zone,
+            Zone::Hand,
+            "CR 307.4 / CR 400.4a: without enter_transformed the front Sorcery \
+             face cannot enter the battlefield"
+        );
+        assert!(state.players[0].hand.contains(&id));
+    }
+
+    /// CR 712.14a (2nd sentence) — SF1 asymmetric branch, DIRECT reach-guard: a
+    /// SINGLE-FACED permanent-front object (`back_face = None`) instructed to
+    /// enter transformed can NEVER enter, even though its front face is a
+    /// creature. `move_to_zone_with_entry_flags(..., true)` drives the wrapper
+    /// directly, bypassing the zone_pipeline single-faced early-return (so only
+    /// this guard's SF1 branch is exercised).
+    ///
+    /// REVERT-CATCHER for SF1: if the asymmetric guard were removed or regressed
+    /// to a front-face fallback, this single-faced Creature-with-flag=true call
+    /// would land in Battlefield and this test flips red.
+    #[test]
+    fn transform_entry_single_faced_permanent_front_rejected_with_flag() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Single-Faced".to_string(),
+            Zone::Hand,
+        );
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Creature);
+        // back_face intentionally left None (single-faced; the GameState default).
+
+        let mut events = Vec::new();
+        move_to_zone_with_entry_flags(&mut state, id, Zone::Battlefield, &mut events, true, None);
+
+        assert_eq!(
+            state.objects[&id].zone,
+            Zone::Hand,
+            "CR 712.14a (2nd sentence): a single-faced object cannot enter transformed"
+        );
+        assert!(state.players[0].hand.contains(&id));
+    }
+
+    /// CR 712.14a + CR 400.4a positive reach-guard pairing the SF1 rejection: the
+    /// SAME single-faced permanent-front fixture entering through the PUBLIC
+    /// `move_to_zone` (enter_transformed = false) lands in Battlefield. Proves the
+    /// rejection above is conditioned on `enter_transformed`, NOT on
+    /// single-facedness — a bare single-faced Creature on a plain entry has no
+    /// instant/sorcery type on the entry face, so CR 400.4a passes.
+    #[test]
+    fn transform_entry_single_faced_permanent_front_allowed_without_flag() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Single-Faced".to_string(),
+            Zone::Hand,
+        );
+        state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Creature);
+        // back_face intentionally left None (single-faced).
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        assert_eq!(
+            state.objects[&id].zone,
+            Zone::Battlefield,
+            "CR 400.4a: a single-faced Creature on a plain entry is a permanent and \
+             enters normally"
+        );
+    }
+
+    #[test]
+    fn phased_out_grafdiggers_cage_allows_reanimation_from_graveyard() {
+        // CR 702.26b + CR 614.1d regression: Grafdigger's Cage on the
+        // battlefield prevents a creature from entering from graveyard /
+        // library. Phased out, it must NOT — so reanimation succeeds.
+        // Drives the real `move_to_zone` -> `is_blocked_from_entering_battlefield`
+        // pipeline.
+        use crate::types::ability::{FilterProp, TargetFilter, TypeFilter, TypedFilter};
+        use crate::types::statics::StaticMode;
+
+        let mut state = setup();
+
+        // Grafdigger's Cage: "Creature cards in graveyards and libraries can't
+        // enter the battlefield." Affected filter = creature cards whose zone
+        // is graveyard OR library.
+        let cage = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Grafdigger's Cage".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let obj = state.objects.get_mut(&cage).unwrap();
+            obj.card_types.core_types.push(CoreType::Artifact);
+            obj.static_definitions.push(
+                crate::types::ability::StaticDefinition::new(StaticMode::CantEnterBattlefieldFrom)
+                    .affected(TargetFilter::Typed(
+                        TypedFilter::default()
+                            .with_type(TypeFilter::Creature)
+                            .properties(vec![FilterProp::InAnyZone {
+                                zones: vec![Zone::Graveyard, Zone::Library],
+                            }]),
+                    )),
+            );
+        }
+
+        // A creature card sitting in P0's graveyard, the target of reanimation.
+        let dead = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Dead Bear".to_string(),
+            Zone::Graveyard,
+        );
+        {
+            let obj = state.objects.get_mut(&dead).unwrap();
+            obj.card_types.core_types.push(CoreType::Creature);
+            obj.base_card_types = obj.card_types.clone();
+        }
+
+        // Baseline: with Cage functioning, reanimation is blocked.
+        let mut events = Vec::new();
+        move_to_zone(&mut state, dead, Zone::Battlefield, &mut events);
+        assert_eq!(
+            state.objects[&dead].zone,
+            Zone::Graveyard,
+            "Functioning Cage must block ETB from graveyard"
+        );
+
+        // Phase out the Cage via the real pipeline — CR 702.26b puts it into
+        // PhasedOut status, which the functioning-abilities gate must drop.
+        let mut phase_events = Vec::new();
+        crate::game::phasing::phase_out_object(
+            &mut state,
+            cage,
+            crate::game::game_object::PhaseOutCause::Directly,
+            &mut phase_events,
+        );
+
+        // Reanimate again — now the move must succeed because the phased-out
+        // Cage contributes no CantEnterBattlefieldFrom static.
+        let mut events2 = Vec::new();
+        move_to_zone(&mut state, dead, Zone::Battlefield, &mut events2);
+        assert_eq!(
+            state.objects[&dead].zone,
+            Zone::Battlefield,
+            "Phased-out Cage must not block ETB from graveyard"
+        );
+    }
+
+    #[test]
+    fn floating_cant_enter_from_exile_blocks_then_expires_at_cleanup() {
+        // CR 611.2a + CR 614.1d + CR 514.2 runtime proof for Bad Wolf Bay's
+        // chaos ability: a floating `GameRestriction::CantEnterBattlefieldFrom`
+        // (origin = exile) blocks an object from entering the battlefield from
+        // exile via the SAME `move_to_zone` -> `is_blocked_from_entering_
+        // battlefield` gate as the Grafdigger's Cage static, and the "this turn"
+        // restriction is pruned at cleanup so a later move succeeds.
+        use crate::types::ability::{
+            FilterProp, GameRestriction, RestrictionExpiry, TargetFilter, TypedFilter,
+        };
+
+        let mut state = setup();
+
+        // A creature card sitting in exile (Bad Wolf Bay exiled it at combat and
+        // wants it back at the next end step — but chaos ensued this turn).
+        let exiled = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Exiled Bear".to_string(),
+            Zone::Exile,
+        );
+        {
+            let obj = state.objects.get_mut(&exiled).unwrap();
+            obj.card_types.core_types.push(CoreType::Creature);
+            obj.base_card_types = obj.card_types.clone();
+        }
+
+        // "cards can't enter from exile this turn" — empty type_filters = any
+        // card; origin zone = exile.
+        state
+            .restrictions
+            .push(GameRestriction::CantEnterBattlefieldFrom {
+                source: crate::types::identifiers::ObjectId(0),
+                expiry: RestrictionExpiry::EndOfTurn,
+                filter: TargetFilter::Typed(TypedFilter::default().properties(vec![
+                    FilterProp::InAnyZone {
+                        zones: vec![Zone::Exile],
+                    },
+                ])),
+            });
+
+        // With the restriction active the return is blocked — the object stays
+        // in exile. CR 614.1d: the "[objects] can't enter the battlefield"
+        // continuous effect is a replacement effect; CR 101.2: the "can't"
+        // effect takes precedence over the attempt to enter, so the creature
+        // remains in exile.
+        let mut events = Vec::new();
+        move_to_zone(&mut state, exiled, Zone::Battlefield, &mut events);
+        assert_eq!(
+            state.objects[&exiled].zone,
+            Zone::Exile,
+            "floating CantEnterBattlefieldFrom must block ETB from exile"
+        );
+
+        // CR 514.2: the "this turn" restriction ends at cleanup.
+        let mut cleanup_events = Vec::new();
+        crate::game::turns::execute_cleanup(&mut state, &mut cleanup_events);
+        assert!(
+            state.restrictions.is_empty(),
+            "EndOfTurn restriction must be pruned at cleanup, got {:?}",
+            state.restrictions
+        );
+
+        // Now the same move succeeds — the gate no longer fires.
+        let mut events2 = Vec::new();
+        move_to_zone(&mut state, exiled, Zone::Battlefield, &mut events2);
+        assert_eq!(
+            state.objects[&exiled].zone,
+            Zone::Battlefield,
+            "after the restriction expires, ETB from exile must succeed"
+        );
+    }
+
+    #[test]
+    fn move_to_zone_snapshots_linked_exile_before_pruning_tracked_links() {
+        let mut state = setup();
+        let source = create_object(
+            &mut state,
+            CardId(50),
+            PlayerId(0),
+            "Skyclave Apparition".to_string(),
+            Zone::Battlefield,
+        );
+        let exiled = create_object(
+            &mut state,
+            CardId(51),
+            PlayerId(1),
+            "Exiled Card".to_string(),
+            Zone::Exile,
+        );
+        state.objects.get_mut(&exiled).unwrap().mana_cost =
+            crate::types::mana::ManaCost::generic(4);
+        state.exile_links.push(crate::types::game_state::ExileLink {
+            source_id: source,
+            exiled_id: exiled,
+            kind: crate::types::game_state::ExileLinkKind::TrackedBySource,
+        });
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, source, Zone::Graveyard, &mut events);
+
+        let record = match &events[0] {
+            GameEvent::ZoneChanged { record, .. } => record,
+            other => panic!("expected ZoneChanged event, got {other:?}"),
+        };
+
+        assert_eq!(
+            record.linked_exile_snapshot,
+            vec![crate::types::game_state::LinkedExileSnapshot {
+                exiled_id: exiled,
+                owner: PlayerId(1),
+                mana_value: 4,
+                incarnation: state.objects[&exiled].incarnation,
+            }]
+        );
+        assert!(
+            state
+                .exile_links
+                .iter()
+                .all(|link| link.source_id != source),
+            "TrackedBySource links should still be pruned immediately after LTB"
+        );
+    }
+
+    /// CR 607.2a + CR 400.7: A source that leaves the battlefield TO EXILE
+    /// (self-exile as an activation cost — Mechtitan Core) keeps a stable
+    /// ObjectId in exile and stays the linked-ability referent for its
+    /// "exiled with ~" pile, so its `TrackedBySource` links must survive the
+    /// exit. The sibling above (exit to graveyard) proves the survival is
+    /// exile-scoped, not a blanket "never prune".
+    #[test]
+    fn tracked_by_source_links_survive_source_exit_to_exile() {
+        let mut state = setup();
+        let source = create_object(
+            &mut state,
+            CardId(60),
+            PlayerId(0),
+            "Mechtitan Core".to_string(),
+            Zone::Battlefield,
+        );
+        let exiled = create_object(
+            &mut state,
+            CardId(61),
+            PlayerId(1),
+            "Exiled With Source".to_string(),
+            Zone::Exile,
+        );
+        state.exile_links.push(crate::types::game_state::ExileLink {
+            source_id: source,
+            exiled_id: exiled,
+            kind: crate::types::game_state::ExileLinkKind::TrackedBySource,
+        });
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, source, Zone::Exile, &mut events);
+
+        assert!(
+            state
+                .exile_links
+                .iter()
+                .any(|link| link.source_id == source && link.exiled_id == exiled),
+            "TrackedBySource link must survive the source's self-exile"
+        );
+        // Reach-guard: the deferred `ExiledBySource` lookup keyed to the now-exiled
+        // source still resolves the pile (the property the Mechtitan return relies on).
+        assert!(
+            crate::game::players::linked_exile_cards_for_source(&state, source)
+                .iter()
+                .any(|snap| snap.exiled_id == exiled),
+            "linked_exile_cards_for_source must return the pile after the source self-exiles"
+        );
+    }
+
+    /// CR 400.7: A source that self-exiled (keeping its `TrackedBySource` links)
+    /// and is then returned to the battlefield is a new object and sheds those
+    /// stale links, so a later "cards exiled with ~" reference cannot read a
+    /// prior incarnation's pile. This is the blink-back reset paired with the
+    /// exit-to-exile preservation above.
+    #[test]
+    fn tracked_by_source_links_reset_on_battlefield_reentry() {
+        let mut state = setup();
+        let source = create_object(
+            &mut state,
+            CardId(62),
+            PlayerId(0),
+            "Blinked Source".to_string(),
+            Zone::Exile,
+        );
+        let exiled = create_object(
+            &mut state,
+            CardId(63),
+            PlayerId(1),
+            "Old Pile Card".to_string(),
+            Zone::Exile,
+        );
+        state.exile_links.push(crate::types::game_state::ExileLink {
+            source_id: source,
+            exiled_id: exiled,
+            kind: crate::types::game_state::ExileLinkKind::TrackedBySource,
+        });
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, source, Zone::Battlefield, &mut events);
+
+        assert!(
+            state
+                .exile_links
+                .iter()
+                .all(|link| link.source_id != source),
+            "TrackedBySource links keyed to a re-entering source must be dropped (CR 400.7)"
+        );
+    }
+
+    /// CR 400.7 + CR 607.2a + CR 113.7a: each battlefield departure of a source
+    /// records its own linked-exile entry, bounded to that departure's
+    /// incarnations; a second departure in the same step does not overwrite
+    /// the first.
+    #[test]
+    fn each_battlefield_departure_records_its_own_bounded_linked_exile_entry() {
+        let mut state = setup();
+        let source = create_object(
+            &mut state,
+            CardId(64),
+            PlayerId(0),
+            "Departing Source".to_string(),
+            Zone::Battlefield,
+        );
+        let mut events = Vec::new();
+        let mut departures = Vec::new();
+        for card_id in [65, 66] {
+            if state.objects[&source].zone != Zone::Battlefield {
+                move_to_zone(&mut state, source, Zone::Battlefield, &mut events);
+            }
+            let exiled = create_object(
+                &mut state,
+                CardId(card_id),
+                PlayerId(1),
+                "Exiled With Source".to_string(),
+                Zone::Exile,
+            );
+            state.exile_links.push(crate::types::game_state::ExileLink {
+                source_id: source,
+                exiled_id: exiled,
+                kind: crate::types::game_state::ExileLinkKind::TrackedBySource,
+            });
+            let departed = state.objects[&source].incarnation;
+            move_to_zone(&mut state, source, Zone::Graveyard, &mut events);
+            departures.push(LinkedExileLki {
+                departed,
+                successor: state.objects[&source].incarnation,
+                snapshot: vec![LinkedExileSnapshot {
+                    exiled_id: exiled,
+                    owner: PlayerId(1),
+                    mana_value: 0,
+                    incarnation: state.objects[&exiled].incarnation,
+                }],
+            });
+        }
+
+        assert_ne!(departures[0].successor, departures[1].departed);
+        assert_eq!(state.linked_exile_lki.get(&source), Some(&departures));
+    }
+
+    /// CR 712.8a + CR 400.7: An MDFC permanent that entered the battlefield as
+    /// its back face (modal_back_face = true) must revert to its front face when
+    /// it leaves the battlefield (battlefield is the only non-stack zone where
+    /// back face is permitted).
+    #[test]
+    fn mdfc_back_face_reverts_to_front_face_on_leaving_battlefield() {
+        use crate::game::game_object::BackFaceData;
+        use crate::game::printed_cards::apply_back_face_to_object;
+        use crate::types::card_type::{CardType, CoreType};
+        use crate::types::keywords::Keyword;
+
+        let mut state = setup();
+
+        // Create an MDFC in command zone, showing its front face (Valki-like).
+        let id = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Front Face".to_string(),
+            Zone::Command,
+        );
+        {
+            let obj = state.objects.get_mut(&id).unwrap();
+            obj.card_types = CardType {
+                supertypes: vec![],
+                core_types: vec![CoreType::Creature],
+                subtypes: vec!["God".to_string()],
+            };
+            obj.base_card_types = obj.card_types.clone();
+            obj.power = Some(1);
+            obj.toughness = Some(1);
+            obj.base_power = Some(1);
+            obj.base_toughness = Some(1);
+            // Store back face data (original MDFC back face).
+            obj.back_face = Some(BackFaceData {
+                is_swap_snapshot: false,
+                trigger_printed_origins: Vec::new(),
+                name: "Back Face".to_string(),
+                power: Some(6),
+                toughness: Some(6),
+                loyalty: None,
+                printed_loyalty: None,
+                defense: None,
+                card_types: CardType {
+                    supertypes: vec![],
+                    core_types: vec![CoreType::Planeswalker],
+                    subtypes: vec!["Devil".to_string()],
+                },
+                mana_cost: crate::types::mana::ManaCost::default(),
+                keywords: vec![Keyword::Trample],
+                abilities: vec![],
+                trigger_definitions: Default::default(),
+                replacement_definitions: Default::default(),
+                static_definitions: Default::default(),
+                color: vec![],
+                printed_ref: None,
+                modal: None,
+                additional_cost: None,
+                strive_cost: None,
+                casting_restrictions: vec![],
+                casting_options: vec![],
+                layout_kind: Some(crate::types::card::LayoutKind::Modal),
+                parse_warnings: vec![],
+            });
+        }
+
+        // Simulate ChooseModalFace { back_face: true }: apply back face and set flag.
+        let front_snapshot =
+            crate::game::printed_cards::snapshot_object_face(state.objects.get(&id).unwrap());
+        let back_data = state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .back_face
+            .take()
+            .unwrap();
+        {
+            let obj = state.objects.get_mut(&id).unwrap();
+            apply_back_face_to_object(obj, back_data);
+            obj.back_face = Some(front_snapshot);
+            obj.modal_back_face = true;
+        }
+
+        // Move to battlefield.
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        {
+            let obj = &state.objects[&id];
+            assert!(obj.modal_back_face, "flag must still be set on battlefield");
+            assert_eq!(obj.name, "Back Face");
+        }
+
+        // Leave the battlefield (dies / commander SBA).
+        move_to_zone(&mut state, id, Zone::Graveyard, &mut events);
+
+        let obj = &state.objects[&id];
+        // CR 712.8a: must revert to front face.
+        assert!(
+            !obj.modal_back_face,
+            "modal_back_face must be cleared after leaving battlefield"
+        );
+        assert_eq!(obj.name, "Front Face", "must show front face in graveyard");
+        assert_eq!(obj.power, Some(1), "power must revert to front face");
+        assert_eq!(obj.card_types.core_types, vec![CoreType::Creature]);
+    }
+
+    /// #7782 round 4: the REPLAY applier must install the same cast-origin
+    /// lifetime as the live path — a replayed stamped Stack → Graveyard
+    /// command clears the stamp exactly like the live transition did.
+    #[test]
+    fn a_replayed_stack_exit_clears_the_stamp_like_the_live_one() {
+        let mut live = setup();
+        let id = create_object(
+            &mut live,
+            CardId(7783),
+            PlayerId(0),
+            "Replayed Spell".to_string(),
+            Zone::Stack,
+        );
+        live.objects.get_mut(&id).unwrap().cast_from_zone = Some(Zone::Hand);
+        let mut replayed = live.clone();
+
+        let record = crate::types::game_state::ZoneChangeRecord::test_minimal(
+            id,
+            Some(Zone::Stack),
+            Zone::Graveyard,
+        );
+        let command = resolve_and_apply_zone_change(
+            &mut live,
+            id,
+            Zone::Stack,
+            Zone::Graveyard,
+            PlayerId(0),
+            None,
+            record,
+        )
+        .expect("live transition must resolve");
+        assert_eq!(
+            live.objects[&id].cast_from_zone, None,
+            "reach-guard: the live transition clears the stamp"
+        );
+
+        apply_resolved_zone_change(&mut replayed, &command)
+            .expect("replaying the recorded command must succeed");
+        assert_eq!(
+            replayed.objects[&id].cast_from_zone, None,
+            "the replayed transition must clear the stamp exactly like the live one"
+        );
+    }
+
+    #[test]
+    fn cast_occurrence_is_cleared_on_stack_to_battlefield_and_nonbattlefield_moves() {
+        let occurrence = crate::types::game_state::CastOccurrence {
+            caster: PlayerId(0),
+            turn_journal_index: 3,
+        };
+
+        for destination in [Zone::Battlefield, Zone::Graveyard] {
+            let mut live = setup();
+            let id = create_object(
+                &mut live,
+                CardId(6865),
+                PlayerId(0),
+                "Stamped Spell".to_string(),
+                Zone::Stack,
+            );
+            {
+                let object = live.objects.get_mut(&id).unwrap();
+                object.cast_occurrence = Some(occurrence);
+                object.prepared_copy_source = Some(ObjectId(777));
+            }
+            let mut replayed = live.clone();
+            let record = crate::types::game_state::ZoneChangeRecord::test_minimal(
+                id,
+                Some(Zone::Stack),
+                destination,
+            );
+            let command = resolve_and_apply_zone_change(
+                &mut live,
+                id,
+                Zone::Stack,
+                destination,
+                PlayerId(0),
+                None,
+                record,
+            )
+            .expect("live Stack exit resolves");
+            assert_eq!(live.objects[&id].cast_occurrence, None);
+            assert_eq!(live.objects[&id].prepared_copy_source, None);
+
+            apply_resolved_zone_change(&mut replayed, &command)
+                .expect("recorded Stack exit replays");
+            assert_eq!(replayed.objects[&id].cast_occurrence, None);
+            assert_eq!(replayed.objects[&id].prepared_copy_source, None);
+        }
+
+        let mut hostile = setup();
+        let id = create_object(
+            &mut hostile,
+            CardId(6866),
+            PlayerId(0),
+            "Not a Stack Exit".to_string(),
+            Zone::Hand,
+        );
+        hostile.objects.get_mut(&id).unwrap().cast_occurrence = Some(occurrence);
+        move_to_zone(&mut hostile, id, Zone::Exile, &mut Vec::new());
+        assert_eq!(
+            hostile.objects[&id].cast_occurrence,
+            Some(occurrence),
+            "only a Stack exit owns cast-occurrence cleanup"
+        );
+    }
+
+    #[test]
+    fn battlefield_exit_replay_ceases_the_linked_prepared_copy_like_live() {
+        let mut live = setup();
+        let source = create_object(
+            &mut live,
+            CardId(6867),
+            PlayerId(0),
+            "Prepared Source".to_string(),
+            Zone::Battlefield,
+        );
+        live.objects.get_mut(&source).unwrap().prepared =
+            Some(crate::game::game_object::PreparedState);
+        let copy = create_object(
+            &mut live,
+            CardId(6868),
+            PlayerId(0),
+            "Linked Prepared Copy".to_string(),
+            Zone::Exile,
+        );
+        live.objects.get_mut(&copy).unwrap().prepared_copy_source = Some(source);
+        let mut replayed = live.clone();
+        let replay_journal_before = replayed.resolved_rules_journal.clone();
+
+        move_to_zone(&mut live, source, Zone::Exile, &mut Vec::new());
+        let command = live
+            .resolved_rules_journal
+            .entries()
+            .iter()
+            .filter_map(|entry| entry.command.as_ref())
+            .find_map(|command| match command {
+                crate::types::resolved_commands::ResolvedRulesCommand::ZoneChange(command)
+                    if command.object.object_id == source =>
+                {
+                    Some(command.as_ref().clone())
+                }
+                _ => None,
+            })
+            .expect("the live battlefield exit records its zone command");
+
+        assert!(!live.objects.contains_key(&copy));
+        assert!(!live.exile.contains(&copy));
+        assert_eq!(live.objects[&source].zone, Zone::Exile);
+        assert_eq!(live.exile[command.destination_position], source);
+
+        apply_resolved_zone_change(&mut replayed, &command)
+            .expect("the recorded exit replays from the pre-cleanup state");
+        assert!(!replayed.objects.contains_key(&copy));
+        assert!(!replayed.exile.contains(&copy));
+        assert_eq!(replayed.objects[&source].zone, Zone::Exile);
+        assert_eq!(replayed.exile, live.exile);
+        assert_eq!(
+            replayed.resolved_rules_journal, replay_journal_before,
+            "applying a recorded transition must not allocate or journal fresh replay authority"
+        );
+    }
+
+    /// #7782 round 3: a spell leaving the STACK for a non-battlefield zone
+    /// (countered / fizzled / instant to the graveyard) must lose its
+    /// `cast_from_zone` stamp (CR 400.7 — a new object has no memory of its
+    /// cast), so a later recast from another zone cannot inherit the stale
+    /// origin. The battlefield legs are owned by `reset_for_battlefield_entry`
+    /// / `_exit` and their `CastLinkSnapshot` restore.
+    #[test]
+    fn the_cast_from_zone_stamp_dies_off_stack_and_battlefield() {
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(7782),
+            PlayerId(0),
+            "Stamped Spell".to_string(),
+            Zone::Stack,
+        );
+        state.objects.get_mut(&id).unwrap().cast_from_zone = Some(Zone::Hand);
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Graveyard, &mut events);
+        assert_eq!(
+            state.objects[&id].cast_from_zone, None,
+            "a spell leaving the stack for the graveyard must lose the stamp (CR 400.7)"
+        );
+    }
+
+    /// CR 708.9: A face-down permanent is revealed when it leaves the battlefield.
+    #[test]
+    fn face_down_permanent_turns_face_up_when_leaving_battlefield() {
+        use crate::game::morph::manifest_card;
+        use crate::types::ability::FaceDownProfile;
+
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(3285),
+            PlayerId(0),
+            "Hidden Bear".to_string(),
+            Zone::Library,
+        );
+        state.players[0].library.push_front(id);
+
+        let mut events = Vec::new();
+        manifest_card(
+            &mut state,
+            PlayerId(0),
+            id,
+            id,
+            FaceDownProfile::vanilla_2_2(),
+            None,
+            &mut events,
+        )
+        .unwrap();
+        assert!(state.objects[&id].face_down);
+
+        move_to_zone(&mut state, id, Zone::Graveyard, &mut events);
+
+        let obj = &state.objects[&id];
+        assert!(
+            !obj.face_down,
+            "CR 708.9 must clear face_down on battlefield exit"
+        );
+        assert_eq!(obj.name, "Hidden Bear");
+        assert!(obj.back_face.is_none());
+    }
+
+    /// CR 708.4: A face-down spell that resolves to the battlefield becomes a
+    /// face-down permanent. CR 708.9 reveal only applies when it leaves the stack
+    /// for a zone other than the battlefield.
+    #[test]
+    fn face_down_spell_stays_face_down_when_resolving_to_battlefield() {
+        use crate::game::morph::apply_face_down_creature_characteristics;
+        use crate::game::printed_cards::snapshot_object_face;
+        use crate::types::ability::FaceDownProfile;
+
+        let mut state = setup();
+        let id = create_object(
+            &mut state,
+            CardId(3286),
+            PlayerId(0),
+            "Hidden Stack Bear".to_string(),
+            Zone::Stack,
+        );
+        {
+            let original = snapshot_object_face(&state.objects[&id]);
+            let obj = state.objects.get_mut(&id).unwrap();
+            apply_face_down_creature_characteristics(obj, &FaceDownProfile::vanilla_2_2());
+            obj.back_face = Some(original);
+        }
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Battlefield, &mut events);
+
+        let obj = &state.objects[&id];
+        assert!(
+            obj.face_down,
+            "CR 708.4 keeps the resolved permanent face down"
+        );
+        assert_eq!(obj.name, "");
+        assert!(obj.back_face.is_some());
+    }
+
+    /// CR 712.8a: A countered MDFC spell (stack → graveyard) must also revert to
+    /// front face — the graveyard is "a zone other than the battlefield or stack."
+    #[test]
+    fn mdfc_back_face_reverts_on_countered_spell_to_graveyard() {
+        use crate::game::game_object::BackFaceData;
+        use crate::game::printed_cards::apply_back_face_to_object;
+        use crate::types::card_type::{CardType, CoreType};
+
+        let mut state = setup();
+
+        let id = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Front Face".to_string(),
+            Zone::Stack,
+        );
+        {
+            let obj = state.objects.get_mut(&id).unwrap();
+            obj.back_face = Some(BackFaceData {
+                is_swap_snapshot: false,
+                trigger_printed_origins: Vec::new(),
+                name: "Back Face".to_string(),
+                power: Some(6),
+                toughness: Some(6),
+                loyalty: None,
+                printed_loyalty: None,
+                defense: None,
+                card_types: CardType {
+                    supertypes: vec![],
+                    core_types: vec![CoreType::Planeswalker],
+                    subtypes: vec![],
+                },
+                mana_cost: crate::types::mana::ManaCost::default(),
+                keywords: vec![],
+                abilities: vec![],
+                trigger_definitions: Default::default(),
+                replacement_definitions: Default::default(),
+                static_definitions: Default::default(),
+                color: vec![],
+                printed_ref: None,
+                modal: None,
+                additional_cost: None,
+                strive_cost: None,
+                casting_restrictions: vec![],
+                casting_options: vec![],
+                layout_kind: Some(crate::types::card::LayoutKind::Modal),
+                parse_warnings: vec![],
+            });
+        }
+        // Apply back face (simulating ChooseModalFace on stack).
+        let front_snapshot =
+            crate::game::printed_cards::snapshot_object_face(state.objects.get(&id).unwrap());
+        let back_data = state
+            .objects
+            .get_mut(&id)
+            .unwrap()
+            .back_face
+            .take()
+            .unwrap();
+        {
+            let obj = state.objects.get_mut(&id).unwrap();
+            apply_back_face_to_object(obj, back_data);
+            obj.back_face = Some(front_snapshot);
+            obj.modal_back_face = true;
+        }
+
+        // Spell is countered: stack → graveyard.
+        let mut events = Vec::new();
+        move_to_zone(&mut state, id, Zone::Graveyard, &mut events);
+
+        // CR 712.8a: graveyard is not battlefield/stack — must show front face.
+        let obj = &state.objects[&id];
+        assert!(
+            !obj.modal_back_face,
+            "flag must be cleared when spell goes to graveyard"
+        );
+        assert_eq!(
+            obj.name, "Front Face",
+            "must revert to front face in graveyard"
+        );
+    }
+
+    #[test]
+    fn aura_leaving_battlefield_clears_attached_to() {
+        use crate::game::effects::attach::attach_to;
+        use crate::types::card_type::CoreType;
+
+        let mut state = setup();
+        let host = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Host".to_string(),
+            Zone::Battlefield,
+        );
+        let aura = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Aura".to_string(),
+            Zone::Battlefield,
+        );
+        state
+            .objects
+            .get_mut(&aura)
+            .unwrap()
+            .card_types
+            .subtypes
+            .push("Aura".to_string());
+        state
+            .objects
+            .get_mut(&aura)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Enchantment);
+        attach_to(&mut state, aura, host);
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, aura, Zone::Graveyard, &mut events);
+
+        assert_eq!(state.objects[&aura].zone, Zone::Graveyard);
+        assert!(
+            state.objects[&aura].attached_to.is_none(),
+            "attached_to must be cleared when the aura leaves the battlefield"
+        );
+        assert!(
+            !state.objects[&host].attachments.contains(&aura),
+            "host must not retain a stale attachments entry"
+        );
+    }
+
+    #[test]
+    fn host_leaving_battlefield_clears_attachment_back_pointers() {
+        use crate::game::effects::attach::attach_to;
+        use crate::types::card_type::CoreType;
+
+        let mut state = setup();
+        let host = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Host".to_string(),
+            Zone::Battlefield,
+        );
+        state
+            .objects
+            .get_mut(&host)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Creature);
+        let equipment = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Equipment".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let obj = state.objects.get_mut(&equipment).unwrap();
+            obj.card_types.core_types.push(CoreType::Artifact);
+            obj.card_types.subtypes.push("Equipment".to_string());
+        }
+        attach_to(&mut state, equipment, host);
+        assert!(state.objects[&host].attachments.contains(&equipment));
+
+        // CR 704.5n's unattach SBA is only checked when a player would receive
+        // priority (CR 704.3), so the back-pointer must already be severed the
+        // moment the host leaves — not left for a later SBA pass.
+        let mut events = Vec::new();
+        move_to_zone(&mut state, host, Zone::Graveyard, &mut events);
+
+        assert!(
+            state.objects[&host].attachments.is_empty(),
+            "departing host must not carry a stale attachments list"
+        );
+        assert!(
+            state.objects[&equipment].attached_to.is_none(),
+            "equipment must be unattached when its host leaves the battlefield"
+        );
+        assert_eq!(
+            state.objects[&equipment].zone,
+            Zone::Battlefield,
+            "CR 701.3d: the Equipment must remain on the battlefield, not vanish"
+        );
+        // CR 701.3d: becoming unattached is a real event. `match_unattach`'s
+        // `ZoneChanged` fallback arm re-derives this by reading the
+        // attachment's live `attached_to`, which the sever has just cleared —
+        // so without this event, host-exit unattach triggers (Stitcher's Graft,
+        // Captain's Hook) would silently stop firing.
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                GameEvent::Unattached {
+                    attachment_id,
+                    old_target: crate::types::ability::TargetRef::Object(old_host),
+                } if *attachment_id == equipment && *old_host == host
+            )),
+            "host exit must announce the unattach: {events:?}"
+        );
+
+        // CR 400.7: the returning permanent is a new object. Because ObjectId is
+        // storage identity here, a surviving back-pointer would silently
+        // re-attach to it — the Heart-Shaped Herb / blink defect.
+        move_to_zone(&mut state, host, Zone::Battlefield, &mut events);
+        assert!(
+            state.objects[&equipment].attached_to.is_none(),
+            "equipment must not re-attach to the returned permanent"
+        );
+        assert!(
+            !state.objects[&host].attachments.contains(&equipment),
+            "returned permanent must not regain the pre-departure attachment"
+        );
+    }
+
+    #[test]
+    fn host_exit_leaves_reattached_equipment_edge_intact() {
+        use crate::game::effects::attach::attach_to;
+        use crate::types::card_type::CoreType;
+
+        let mut state = setup();
+        let make_creature = |state: &mut GameState, card, name: &str| {
+            let id = create_object(
+                state,
+                card,
+                PlayerId(0),
+                name.to_string(),
+                Zone::Battlefield,
+            );
+            state
+                .objects
+                .get_mut(&id)
+                .unwrap()
+                .card_types
+                .core_types
+                .push(CoreType::Creature);
+            id
+        };
+        let departing_host = make_creature(&mut state, CardId(1), "Departing Host");
+        let new_host = make_creature(&mut state, CardId(2), "New Host");
+        let equipment = create_object(
+            &mut state,
+            CardId(3),
+            PlayerId(0),
+            "Equipment".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let obj = state.objects.get_mut(&equipment).unwrap();
+            obj.card_types.core_types.push(CoreType::Artifact);
+            obj.card_types.subtypes.push("Equipment".to_string());
+        }
+
+        // Stale forward edge only: the equipment has already moved to `new_host`,
+        // but `departing_host` still lists it. Severing must follow the live
+        // `attached_to` edge, not blindly clear whatever the host lists.
+        attach_to(&mut state, equipment, new_host);
+        state
+            .objects
+            .get_mut(&departing_host)
+            .unwrap()
+            .attachments
+            .push(equipment);
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, departing_host, Zone::Graveyard, &mut events);
+
+        assert_eq!(
+            state.objects[&equipment].attached_to,
+            Some(crate::game::game_object::AttachTarget::Object(new_host)),
+            "an attachment pointing at a different host must keep its live edge"
+        );
+        assert!(
+            state.objects[&new_host].attachments.contains(&equipment),
+            "the live host must retain the attachment"
+        );
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                GameEvent::Unattached { attachment_id, .. } if *attachment_id == equipment
+            )),
+            "an attachment that did not become unattached must not announce one: {events:?}"
+        );
+    }
+
+    #[test]
+    fn host_exit_severing_is_reproduced_by_resolved_command_replay() {
+        // The live transition severs the attachment graph BEFORE delegating to
+        // `resolve_and_apply_zone_change`, and `ResolvedZoneChangeCommand`
+        // carries no attachment payload. If replay did not re-run the same
+        // severing authority, a state rebuilt from the journal would still hold
+        // the edges the live transition cut — a live/replay divergence.
+        use crate::game::effects::attach::attach_to;
+        use crate::types::card_type::CoreType;
+
+        let mut live = setup();
+        let host = create_object(
+            &mut live,
+            CardId(1),
+            PlayerId(0),
+            "Host".to_string(),
+            Zone::Battlefield,
+        );
+        live.objects
+            .get_mut(&host)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Creature);
+        let equipment = create_object(
+            &mut live,
+            CardId(2),
+            PlayerId(0),
+            "Equipment".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let obj = live.objects.get_mut(&equipment).unwrap();
+            obj.card_types.core_types.push(CoreType::Artifact);
+            obj.card_types.subtypes.push("Equipment".to_string());
+        }
+        attach_to(&mut live, equipment, host);
+
+        // Clone BEFORE the move: this is the pre-cleanup shape replay starts from.
+        let mut replayed = live.clone();
+
+        move_to_zone(&mut live, host, Zone::Exile, &mut Vec::new());
+        let command = live
+            .resolved_rules_journal
+            .entries()
+            .iter()
+            .filter_map(|entry| entry.command.as_ref())
+            .find_map(|command| match command {
+                crate::types::resolved_commands::ResolvedRulesCommand::ZoneChange(command)
+                    if command.object.object_id == host =>
+                {
+                    Some(command.as_ref().clone())
+                }
+                _ => None,
+            })
+            .expect("the live battlefield exit records its zone command");
+
+        assert_eq!(live.objects[&equipment].attached_to, None);
+        assert!(live.objects[&host].attachments.is_empty());
+
+        apply_resolved_zone_change(&mut replayed, &command)
+            .expect("the recorded exit replays from the pre-cleanup state");
+
+        assert_eq!(
+            replayed.objects[&equipment].attached_to, live.objects[&equipment].attached_to,
+            "replay must reproduce the severed back-pointer"
+        );
+        assert_eq!(
+            replayed.objects[&host].attachments, live.objects[&host].attachments,
+            "replay must reproduce the emptied host attachment list"
+        );
+    }
+
+    #[test]
+    fn phased_out_attachment_does_not_readopt_a_returned_host() {
+        // CR 702.26i: a directly phased-out attachment phases in attached to
+        // its old host only "if that object is still in the same zone". The
+        // host leaves and returns to the SAME `ObjectId` slot, so
+        // `phasing::phase_in_object`'s battlefield check would re-adopt it
+        // unless the pointer was cleared when the host left.
+        //
+        // CR 702.26j: that severing is silent — no unattach trigger fires for a
+        // phased-out attachment.
+        use crate::game::effects::attach::attach_to;
+        use crate::game::game_object::{PhaseOutCause, PhaseStatus};
+        use crate::types::card_type::CoreType;
+
+        let mut state = setup();
+        let host = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Host".to_string(),
+            Zone::Battlefield,
+        );
+        state
+            .objects
+            .get_mut(&host)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Creature);
+        let equipment = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Equipment".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let obj = state.objects.get_mut(&equipment).unwrap();
+            obj.card_types.core_types.push(CoreType::Artifact);
+            obj.card_types.subtypes.push("Equipment".to_string());
+        }
+        attach_to(&mut state, equipment, host);
+        state.objects.get_mut(&equipment).unwrap().phase_status = PhaseStatus::PhasedOut {
+            cause: PhaseOutCause::Directly,
+        };
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, host, Zone::Graveyard, &mut events);
+
+        assert_eq!(
+            state.objects[&equipment].attached_to, None,
+            "CR 702.26i: the phased-out attachment must not keep a pointer to a host \
+             that left the zone"
+        );
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                GameEvent::Unattached { attachment_id, .. } if *attachment_id == equipment
+            )),
+            "CR 702.26j: severing a phased-out attachment is silent: {events:?}"
+        );
+
+        // The host returns to the very same ObjectId slot.
+        move_to_zone(&mut state, host, Zone::Battlefield, &mut events);
+        crate::game::phasing::phase_in_object(&mut state, equipment, &mut events);
+
+        assert_eq!(
+            state.objects[&equipment].attached_to, None,
+            "CR 702.26i: it must phase in UNATTACHED, not re-adopt the returned permanent"
+        );
+        assert!(
+            !state.objects[&host].attachments.contains(&equipment),
+            "the returned permanent must not list the attachment"
+        );
+    }
+
+    /// Build a merged permanent (CR 730.2) whose absorbed component carries a
+    /// live attachment edge in both directions. Returns
+    /// `(survivor, component, attachment)`. Production does not build this shape
+    /// today — every `absorb_component` caller absorbs a component that is not a
+    /// battlefield object while the survivor is, so a live edge names the
+    /// survivor — which is what these rows fence: a delivery route that ended
+    /// edges without regard for which object left.
+    fn merged_permanent_with_attached_component(
+        state: &mut GameState,
+    ) -> (ObjectId, ObjectId, ObjectId) {
+        use crate::game::effects::attach::attach_to;
+        use crate::types::card_type::CoreType;
+
+        let survivor = create_object(
+            state,
+            CardId(1),
+            PlayerId(0),
+            "Survivor".to_string(),
+            Zone::Battlefield,
+        );
+        let component = create_object(
+            state,
+            CardId(2),
+            PlayerId(0),
+            "Component".to_string(),
+            Zone::Battlefield,
+        );
+        for id in [survivor, component] {
+            state
+                .objects
+                .get_mut(&id)
+                .unwrap()
+                .card_types
+                .core_types
+                .push(CoreType::Creature);
+        }
+        let attachment = create_object(
+            state,
+            CardId(3),
+            PlayerId(0),
+            "Equipment".to_string(),
+            Zone::Battlefield,
+        );
+        {
+            let obj = state.objects.get_mut(&attachment).unwrap();
+            obj.card_types.core_types.push(CoreType::Artifact);
+            obj.card_types.subtypes.push("Equipment".to_string());
+        }
+        attach_to(state, attachment, component);
+
+        // CR 730.2b: the component is absorbed into the survivor — it is no
+        // longer an independent member of the battlefield list, and the
+        // survivor's component list is what routes it on the way out.
+        absorb_component(state, component, Some(Zone::Battlefield));
+        state.objects.get_mut(&survivor).unwrap().merged_components = vec![survivor, component];
+        (survivor, component, attachment)
+    }
+
+    /// CR 730.3: an absorbed component is delivered to its owner's zone by
+    /// `route_component`, which runs no sever. The authority that ends an
+    /// attachment edge when an object leaves the zone it was in (CR 701.3d) is
+    /// `sever_battlefield_attachment_graph_on_exit`, reached from the departure
+    /// routes in this file and not from the delivery — so the delivered
+    /// component keeps its edge in both directions and announces nothing.
+    #[test]
+    fn merge_component_delivery_leaves_the_component_attachment_edge_intact() {
+        let mut state = setup();
+        let (survivor, component, attachment) =
+            merged_permanent_with_attached_component(&mut state);
+        assert_eq!(
+            state.objects[&attachment].attached_to,
+            Some(crate::game::game_object::AttachTarget::Object(component)),
+            "precondition: the component must hold the edge before the delivery"
+        );
+        assert!(
+            state.objects[&component].attachments.contains(&attachment),
+            "precondition: the edge must be live in both directions"
+        );
+        let incarnation_before = state.objects[&component].incarnation;
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, survivor, Zone::Graveyard, &mut events);
+
+        // CR 400.7: the component became a new object in its owner's zone.
+        // This is what fails when the route did not run: both
+        // `split_merged_permanent_on_leave` and `put_component_into_zone`
+        // return silently on an absent component, and the intact edge the
+        // assertions below read is also what an unrun route leaves behind.
+        assert!(
+            state.objects[&component].incarnation > incarnation_before,
+            "the delivery route must run to its end and bump the component's incarnation"
+        );
+        assert_eq!(
+            state.objects[&component].zone,
+            Zone::Graveyard,
+            "the component must reach its owner's destination zone"
+        );
+
+        assert_eq!(
+            state.objects[&attachment].attached_to,
+            Some(crate::game::game_object::AttachTarget::Object(component)),
+            "the delivery leaves the attachment's own reference intact"
+        );
+        assert!(
+            state.objects[&component].attachments.contains(&attachment),
+            "the delivery leaves the component's record of the attachment intact"
+        );
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                GameEvent::Unattached { attachment_id, .. } if *attachment_id == attachment
+            )),
+            "a delivery that severs nothing announces no unattachment"
+        );
+
+        // Live control at the same reading point: the same constructed state
+        // whose component leaves by the departure primitive instead has both
+        // directions ended and the unattachment announced. Without it, an
+        // intact verdict above could be a reading taken before anything could
+        // have severed.
+        let mut control = setup();
+        let (_, control_component, control_attachment) =
+            merged_permanent_with_attached_component(&mut control);
+        let mut control_events = Vec::new();
+        move_to_zone(
+            &mut control,
+            control_component,
+            Zone::Graveyard,
+            &mut control_events,
+        );
+        assert_eq!(
+            control.objects[&control_attachment].attached_to, None,
+            "a departure ends the attachment's own reference (CR 701.3d)"
+        );
+        assert!(
+            control.objects[&control_component].attachments.is_empty(),
+            "a departure ends the host's record of the attachment (CR 701.3d)"
+        );
+        assert!(
+            control_events.iter().any(|event| matches!(
+                event,
+                GameEvent::Unattached { attachment_id, .. } if *attachment_id == control_attachment
+            )),
+            "a departure announces the unattachment it performed"
+        );
+    }
+
+    /// A delivery carrying no attachment edge announces nothing, so a route
+    /// that ended edges indiscriminately is refused by this row rather than by
+    /// the intact verdict above.
+    #[test]
+    fn merge_component_delivery_without_an_edge_announces_nothing() {
+        let mut state = setup();
+        let (survivor, component, attachment) =
+            merged_permanent_with_attached_component(&mut state);
+        // Take the edge away in both directions before the delivery.
+        state.objects.get_mut(&attachment).unwrap().attached_to = None;
+        state
+            .objects
+            .get_mut(&component)
+            .unwrap()
+            .attachments
+            .clear();
+        let incarnation_before = state.objects[&component].incarnation;
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, survivor, Zone::Graveyard, &mut events);
+
+        // CR 400.7: the route ran, so this row is not green for the trivial
+        // reason that nothing happened.
+        assert!(
+            state.objects[&component].incarnation > incarnation_before,
+            "the delivery route must still run to its end"
+        );
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                GameEvent::Unattached { attachment_id, .. } if *attachment_id == attachment
+            )),
+            "a delivery with nothing attached announces no unattachment"
+        );
+    }
+
+    /// CR 701.3d binds the edge that is live at the moment of the departure: an
+    /// attachment re-pointed to a different host before the delivery keeps that
+    /// edge and announces nothing, so a sever driven by the departing object's
+    /// `attachments` list rather than by the live edge is refused here.
+    #[test]
+    fn merge_component_delivery_leaves_a_repointed_attachment_on_its_new_host() {
+        use crate::types::card_type::CoreType;
+
+        let mut state = setup();
+        let (survivor, component, attachment) =
+            merged_permanent_with_attached_component(&mut state);
+        let new_host = create_object(
+            &mut state,
+            CardId(4),
+            PlayerId(0),
+            "New host".to_string(),
+            Zone::Battlefield,
+        );
+        state
+            .objects
+            .get_mut(&new_host)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Creature);
+        // Re-point the attachment while the component still lists it.
+        state.objects.get_mut(&attachment).unwrap().attached_to =
+            Some(crate::game::game_object::AttachTarget::Object(new_host));
+        state
+            .objects
+            .get_mut(&new_host)
+            .unwrap()
+            .attachments
+            .push(attachment);
+
+        let incarnation_before = state.objects[&component].incarnation;
+        let mut events = Vec::new();
+        move_to_zone(&mut state, survivor, Zone::Graveyard, &mut events);
+
+        assert!(
+            state.objects[&component].incarnation > incarnation_before,
+            "the delivery route must still run to its end"
+        );
+        assert_eq!(
+            state.objects[&attachment].attached_to,
+            Some(crate::game::game_object::AttachTarget::Object(new_host)),
+            "the re-pointed attachment keeps the host it actually names"
+        );
+        assert!(
+            state.objects[&new_host].attachments.contains(&attachment),
+            "the new host keeps its record of the attachment"
+        );
+        assert!(
+            !events.iter().any(|event| matches!(
+                event,
+                GameEvent::Unattached { attachment_id, .. } if *attachment_id == attachment
+            )),
+            "no unattachment is announced for an edge that did not end"
+        );
+    }
+
+    #[test]
+    fn sba_pipeline_graveyard_clears_attached_to() {
+        use crate::game::effects::attach::attach_to;
+        use crate::game::zone_pipeline::{ZoneMoveRequest, ZoneMoveResult};
+        use crate::types::card_type::CoreType;
+
+        let mut state = setup();
+        let host = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Host".to_string(),
+            Zone::Battlefield,
+        );
+        let aura = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(0),
+            "Aura".to_string(),
+            Zone::Battlefield,
+        );
+        state
+            .objects
+            .get_mut(&aura)
+            .unwrap()
+            .card_types
+            .subtypes
+            .push("Aura".to_string());
+        state
+            .objects
+            .get_mut(&aura)
+            .unwrap()
+            .card_types
+            .core_types
+            .push(CoreType::Enchantment);
+        attach_to(&mut state, aura, host);
+
+        let mut events = Vec::new();
+        let result = crate::game::zone_pipeline::move_object(
+            &mut state,
+            ZoneMoveRequest::state_based_action(aura, Zone::Graveyard),
+            &mut events,
+        );
+        assert!(matches!(result, ZoneMoveResult::Done));
+        assert_eq!(state.objects[&aura].zone, Zone::Graveyard);
+        assert!(state.objects[&aura].attached_to.is_none());
+        assert!(
+            events.iter().any(|event| {
+                matches!(
+                    event,
+                    GameEvent::Unattached {
+                        attachment_id,
+                        old_target
+                    } if *attachment_id == aura
+                        && *old_target == crate::types::ability::TargetRef::Object(host)
+                )
+            }),
+            "SBA zone movement must still publish the unattach event for triggers"
+        );
+    }
+
+    /// CR 400.7: the per-turn exile list and the seven once-each-turn usage sets
+    /// drop the departing source's entries on its battlefield exit and keep
+    /// every other source's.
+    #[test]
+    fn battlefield_departure_ends_the_sources_per_turn_entries() {
+        let mut state = setup();
+        let [departing, staying] = [CardId(1), CardId(2)].map(|card_id| {
+            create_object(
+                &mut state,
+                card_id,
+                PlayerId(0),
+                "Source".into(),
+                Zone::Battlefield,
+            )
+        });
+        for source in [departing, staying] {
+            state
+                .cards_exiled_with_source_this_turn
+                .insert(source, vec![ObjectId(99)]);
+            state.graveyard_cast_permissions_used.insert(source);
+            state
+                .graveyard_cast_permissions_used_per_type
+                .extend([(source, CoreType::Creature), (source, CoreType::Land)]);
+            state.hand_cast_free_permissions_used.insert(source);
+            state.alt_cost_grant_permissions_used.insert(source);
+            state.exile_play_permissions_used.insert(source);
+            state.exile_cast_permissions_used.insert(source);
+            state.top_of_library_cast_permissions_used.insert(source);
+        }
+
+        move_to_zone(&mut state, departing, Zone::Graveyard, &mut Vec::new());
+
+        let holds = |state: &GameState, source: ObjectId| {
+            [
+                state
+                    .cards_exiled_with_source_this_turn
+                    .contains_key(&source),
+                state.graveyard_cast_permissions_used.contains(&source),
+                state
+                    .graveyard_cast_permissions_used_per_type
+                    .contains(&(source, CoreType::Creature)),
+                state
+                    .graveyard_cast_permissions_used_per_type
+                    .contains(&(source, CoreType::Land)),
+                state.hand_cast_free_permissions_used.contains(&source),
+                state.alt_cost_grant_permissions_used.contains(&source),
+                state.exile_play_permissions_used.contains(&source),
+                state.exile_cast_permissions_used.contains(&source),
+                state.top_of_library_cast_permissions_used.contains(&source),
+            ]
+        };
+        assert_eq!(holds(&state, departing), [false; 9]);
+        assert_eq!(holds(&state, staying), [true; 9]);
+    }
+
+    /// CR 603.10a + CR 607.2a: the departure record keeps the departed
+    /// source's "exiled with it this turn" list after the live entry ends.
+    #[test]
+    fn departure_record_keeps_the_sources_exiled_this_turn_list() {
+        let mut state = setup();
+        let source = create_object(
+            &mut state,
+            CardId(1),
+            PlayerId(0),
+            "Source".into(),
+            Zone::Battlefield,
+        );
+        let exiled = create_object(
+            &mut state,
+            CardId(2),
+            PlayerId(1),
+            "Exiled".into(),
+            Zone::Exile,
+        );
+        state
+            .cards_exiled_with_source_this_turn
+            .insert(source, vec![exiled]);
+
+        let mut events = Vec::new();
+        move_to_zone(&mut state, source, Zone::Graveyard, &mut events);
+
+        assert!(!state
+            .cards_exiled_with_source_this_turn
+            .contains_key(&source));
+        let record = events
+            .iter()
+            .find_map(|event| match event {
+                GameEvent::ZoneChanged {
+                    object_id, record, ..
+                } if *object_id == source => Some(record),
+                _ => None,
+            })
+            .expect("the departure emits its zone-change record");
+        assert_eq!(
+            record
+                .trigger_source_context()
+                .expect("the departure record carries its source context")
+                .cards_exiled_this_turn,
+            vec![exiled]
+        );
+    }
+}
+
+#[cfg(test)]
+mod hand_entry_rebind_tests {
+    use super::*;
+    use crate::types::format::FormatConfig;
+    use crate::types::resolved_commands::{ResolvedRulesCommand, ResolvedRulesJournal};
+
+    const P0: PlayerId = PlayerId(0);
+    const P1: PlayerId = PlayerId(1);
+
+    /// A Dandân state holding one P0-owned pile card, moved into P1's hand with
+    /// P1 as receiver. Returns the pre-move state, the live state, the card and
+    /// the journaled command.
+    fn rebound_move(
+        from: Zone,
+        to: Zone,
+    ) -> (GameState, GameState, ObjectId, ResolvedZoneChangeCommand) {
+        let mut state = GameState::new(FormatConfig::dandan(), 2, 42);
+        let card = create_object(&mut state, CardId(1), P0, "Pile Card".to_string(), from);
+        let pre = state.clone();
+        let record = state.objects[&card].snapshot_for_zone_change(card, Some(from), to);
+        let command =
+            resolve_and_apply_zone_change(&mut state, card, from, to, P0, Some(P1), record)
+                .expect("the rebinding move applies");
+        (pre, state, card, command)
+    }
+
+    fn journal_wire(state: &GameState) -> serde_json::Value {
+        serde_json::to_value(&state.resolved_rules_journal).expect("journal serializes")
+    }
+
+    fn command_json(
+        wire: &mut serde_json::Value,
+    ) -> &mut serde_json::Map<String, serde_json::Value> {
+        wire["entries"]
+            .as_array_mut()
+            .expect("journal entries")
+            .iter_mut()
+            .find_map(|entry| {
+                entry
+                    .get_mut("command")?
+                    .get_mut("ZoneChange")?
+                    .as_object_mut()
+            })
+            .expect("a zone-change command")
+    }
+
+    fn journal_is_accepted(wire: serde_json::Value) -> bool {
+        serde_json::from_value::<ResolvedRulesJournal>(wire).is_ok()
+    }
+
+    #[test]
+    fn replaying_the_command_reproduces_the_live_rebind() {
+        let (pre, live, card, command) = rebound_move(Zone::Library, Zone::Hand);
+        assert_eq!(command.rebound_from, Some(P0), "reach: the move rebound");
+        assert_eq!(command.owner, P1);
+
+        let mut replay = pre;
+        apply_resolved_zone_change(&mut replay, &command).expect("replay applies");
+
+        for state in [&live, &replay] {
+            let object = &state.objects[&card];
+            assert_eq!(object.owner, P1);
+            assert_eq!(object.controller, P1);
+            assert_eq!(object.base_controller, Some(P1));
+            assert_eq!(object.zone, Zone::Hand);
+            assert!(state.players[1].hand.contains(&card));
+            assert!(state.players[0].hand.is_empty());
+        }
+        assert_eq!(live.players[1].hand, replay.players[1].hand);
+        assert_eq!(live.players[0].library, replay.players[0].library);
+    }
+
+    #[test]
+    fn the_replay_precondition_is_the_pre_rebind_owner() {
+        let (mut pre, _, card, command) = rebound_move(Zone::Library, Zone::Hand);
+        pre.objects.get_mut(&card).unwrap().owner = P1;
+
+        assert!(matches!(
+            apply_resolved_zone_change(&mut pre, &command),
+            Err(ResolvedZoneChangeReplayInvariantError::OwnerMismatch {
+                expected: P0,
+                found: P1,
+            })
+        ));
+    }
+
+    #[test]
+    fn a_later_zone_change_does_not_resurrect_the_old_owner_as_controller() {
+        let (_, mut live, card, _) = rebound_move(Zone::Library, Zone::Hand);
+        let mut events = Vec::new();
+
+        move_to_zone(&mut live, card, Zone::Graveyard, &mut events);
+
+        let object = &live.objects[&card];
+        assert_eq!(object.owner, P1);
+        assert_eq!(object.controller, P1);
+        assert!(live.players[0].graveyard.contains(&card));
+    }
+
+    #[test]
+    fn the_journal_validator_accepts_the_rebind_and_refuses_each_malformed_form() {
+        let (_, live, _, _) = rebound_move(Zone::Library, Zone::Hand);
+        assert!(
+            journal_is_accepted(journal_wire(&live)),
+            "reach: the well-formed rebind validates"
+        );
+
+        let mut wire = journal_wire(&live);
+        command_json(&mut wire).insert("rebound_from".to_string(), serde_json::json!(P1));
+        assert!(!journal_is_accepted(wire), "a rebind to the same owner");
+
+        let (_, to_graveyard, _, _) = rebound_move(Zone::Library, Zone::Graveyard);
+        assert!(
+            !journal_is_accepted(journal_wire(&to_graveyard)),
+            "a rebind whose destination is not Hand"
+        );
+
+        let (_, from_exile, _, _) = rebound_move(Zone::Exile, Zone::Hand);
+        assert!(
+            !journal_is_accepted(journal_wire(&from_exile)),
+            "a rebind out of a zone no format shares"
+        );
+
+        for from in [Zone::Library, Zone::Graveyard, Zone::Exile] {
+            let (_, played, _, _) = rebound_move(from, Zone::Battlefield);
+            assert!(
+                journal_is_accepted(journal_wire(&played)),
+                "a land-play rebind out of {from:?}"
+            );
+        }
+
+        let (_, from_hand, _, _) = rebound_move(Zone::Hand, Zone::Battlefield);
+        assert!(
+            !journal_is_accepted(journal_wire(&from_hand)),
+            "a Battlefield rebind out of Hand"
+        );
+    }
+
+    fn accepts_with_record_edit(state: &GameState, path: &[&str], value: PlayerId) -> bool {
+        let mut wire = journal_wire(state);
+        let mut slot = &mut command_json(&mut wire)["zone_change_record"];
+        for key in path {
+            slot = &mut slot[*key];
+        }
+        *slot = serde_json::json!(value);
+        journal_is_accepted(wire)
+    }
+
+    #[test]
+    fn the_journal_validator_ties_the_record_to_the_command() {
+        let (_, live, _, _) = rebound_move(Zone::Library, Zone::Hand);
+        assert!(
+            journal_is_accepted(journal_wire(&live)),
+            "reach: the well-formed rebind validates"
+        );
+        assert!(
+            accepts_with_record_edit(&live, &["controller"], P1),
+            "an edit of a field the validator does not read is accepted"
+        );
+        assert!(
+            accepts_with_record_edit(&live, &["arrival", "controller"], P0),
+            "the arrival controller is not part of the command"
+        );
+        assert!(
+            !accepts_with_record_edit(&live, &["arrival", "owner"], P0),
+            "the arrival owner is the command's installed owner"
+        );
+        assert!(
+            !accepts_with_record_edit(&live, &["owner"], P1),
+            "the departure owner is the owner the rebind replaced"
+        );
+
+        let mut state = GameState::new(FormatConfig::dandan(), 2, 42);
+        let card = create_object(&mut state, CardId(1), P0, "Own".to_string(), Zone::Library);
+        let record =
+            state.objects[&card].snapshot_for_zone_change(card, Some(Zone::Library), Zone::Hand);
+        resolve_and_apply_zone_change(
+            &mut state,
+            card,
+            Zone::Library,
+            Zone::Hand,
+            P0,
+            None,
+            record,
+        )
+        .expect("an ordinary move applies");
+        assert!(
+            journal_is_accepted(journal_wire(&state)),
+            "reach: an unrebound move validates"
+        );
+        assert!(
+            accepts_with_record_edit(&state, &["controller"], P1),
+            "an edit of a field the validator does not read is accepted"
+        );
+        assert!(
+            !accepts_with_record_edit(&state, &["owner"], P1),
+            "an unrebound command's departure owner is its owner"
+        );
+    }
+
+    #[test]
+    fn an_unrebound_command_omits_the_field_and_old_saves_default_it() {
+        let mut state = GameState::new(FormatConfig::dandan(), 2, 42);
+        let card = create_object(&mut state, CardId(1), P0, "Own".to_string(), Zone::Library);
+        let record =
+            state.objects[&card].snapshot_for_zone_change(card, Some(Zone::Library), Zone::Hand);
+        let command = resolve_and_apply_zone_change(
+            &mut state,
+            card,
+            Zone::Library,
+            Zone::Hand,
+            P0,
+            None,
+            record,
+        )
+        .expect("an ordinary move applies");
+        assert_eq!(command.rebound_from, None);
+
+        let wire =
+            serde_json::to_value(ResolvedRulesCommand::ZoneChange(Box::new(command.clone())))
+                .expect("serializes");
+        assert!(wire["ZoneChange"].get("rebound_from").is_none());
+        assert_eq!(
+            serde_json::from_value::<ResolvedRulesCommand>(wire).expect("legacy shape reads"),
+            ResolvedRulesCommand::ZoneChange(Box::new(command)),
+        );
+
+        let (_, _, _, command) = rebound_move(Zone::Library, Zone::Hand);
+        let wire = serde_json::to_value(ResolvedRulesCommand::ZoneChange(Box::new(command)))
+            .expect("serializes");
+        assert!(
+            wire["ZoneChange"].get("rebound_from").is_some(),
+            "reach: a rebound command carries the key"
+        );
+    }
+}
+
+#[cfg(test)]
+mod capture_combat_status_tests {
+    use super::*;
+    use crate::game::combat::{AttackTarget, AttackerInfo, CombatState};
+
+    const P0: PlayerId = PlayerId(0);
+    const P1: PlayerId = PlayerId(1);
+    const P2: PlayerId = PlayerId(2);
+
+    /// CR 506.3 + CR 508.5: the capture holds the declared attack target
+    /// beside the collapsed defending player, for every kind of target.
+    /// Siblings (a non-attacker, a blocker, no combat) hold none.
+    #[test]
+    fn capture_combat_status_holds_the_declared_attack_target() {
+        let mut state = GameState::new(crate::types::format::FormatConfig::standard(), 3, 42);
+        let mut attacker = |n: u64| {
+            create_object(
+                &mut state,
+                CardId(n),
+                P0,
+                format!("A{n}"),
+                Zone::Battlefield,
+            )
+        };
+        let (a_player, a_walker, a_battle) = (attacker(1), attacker(2), attacker(3));
+        let bystander = attacker(4);
+        let blocker = attacker(5);
+        let walker = create_object(
+            &mut state,
+            CardId(900),
+            P2,
+            "Walker".to_string(),
+            Zone::Battlefield,
+        );
+        state
+            .objects
+            .get_mut(&walker)
+            .unwrap()
+            .card_types
+            .core_types = vec![CoreType::Planeswalker];
+        let battle = create_object(
+            &mut state,
+            CardId(901),
+            P0,
+            "Battle".to_string(),
+            Zone::Battlefield,
+        );
+        state
+            .objects
+            .get_mut(&battle)
+            .unwrap()
+            .card_types
+            .core_types = vec![CoreType::Battle];
+
+        let mut combat = CombatState::default();
+        combat
+            .attackers
+            .push(AttackerInfo::new(a_player, AttackTarget::Player(P1), P1));
+        // The planeswalker's controller (P2) is the collapsed defender.
+        combat.attackers.push(AttackerInfo::new(
+            a_walker,
+            AttackTarget::Planeswalker(walker),
+            P2,
+        ));
+        // The battle's protector (P1) is the collapsed defender.
+        combat.attackers.push(AttackerInfo::new(
+            a_battle,
+            AttackTarget::Battle(battle),
+            P1,
+        ));
+        combat.blocker_to_attacker.insert(blocker, vec![a_player]);
+        combat.attacked_permanents.insert(
+            a_walker,
+            super::super::combat::bind_attack_target(&state, AttackTarget::Planeswalker(walker))
+                .unwrap(),
+        );
+        combat.attacked_permanents.insert(
+            a_battle,
+            super::super::combat::bind_attack_target(&state, AttackTarget::Battle(battle)).unwrap(),
+        );
+        state.combat = Some(combat);
+
+        for (id, target, defender) in [
+            (a_player, AttackTarget::Player(P1), P1),
+            (a_walker, AttackTarget::Planeswalker(walker), P2),
+            (a_battle, AttackTarget::Battle(battle), P1),
+        ] {
+            let status = capture_combat_status(&state, id);
+            assert!(status.attacking, "reach guard: {target:?}");
+            assert_eq!(status.defending_player, Some(defender), "{target:?}");
+            assert_eq!(status.attack_target, Some(target), "{target:?}");
+            assert_eq!(
+                status.attack_target_identity,
+                super::super::combat::bind_attack_target(&state, target)
+            );
+        }
+
+        let blocking = capture_combat_status(&state, blocker);
+        assert!(blocking.blocking, "reach guard: the blocker is in combat");
+        assert_eq!(blocking.attack_target, None);
+        let outside = capture_combat_status(&state, bystander);
+        assert!(!outside.attacking && !outside.blocking);
+        assert_eq!(outside.attack_target, None);
+
+        state.combat = None;
+        let no_combat = capture_combat_status(&state, a_player);
+        assert!(!no_combat.attacking, "reach guard: combat is gone");
+        assert_eq!(no_combat.attack_target, None);
+    }
+}
