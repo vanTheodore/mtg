@@ -84,6 +84,20 @@ FPS en reposo porque no mide ninguna interacción.
 - El duelo de práctica y el de chispas son mazos didácticos de la app, no
   formatos construidos.
 - Sin IA, sin red, sin replay. Catálogo de 90 caras.
-- CI (`.github/workflows/ci.yml`) aún no se ha ejecutado en GitHub en esta fase:
-  se añadió y se validó su sintaxis localmente, pero no se declara cobertura CI
-  hasta verla correr en el PR.
+- CI: el workflow existe y GitHub lo registró, pero ningún job recibió runner
+  (ver sección siguiente). No se declara cobertura CI.
+
+## Estado real de CI (importante)
+
+GitHub aceptó el workflow y creó la ejecución `40842762906` para el HEAD
+`7363fcb`, pero **ningún job obtuvo runner**: los tres jobs terminaron en 1–2 s
+con `runner_name` vacío y el job de navegador quedó en `skipped` por dependencia.
+Es una limitación de la cuenta/repositorio privado (Actions sin minutos de
+runner), no un resultado de las pruebas. Por eso:
+
+- No se declara ninguna cobertura CI.
+- Lo verificado es exactamente lo ejecutado en el sandbox y listado arriba.
+- Cuando el repositorio tenga runners disponibles, los jobs ejecutarán
+  `bun install --frozen-lockfile`, procedencia, typecheck, unitarias, build,
+  compilación WASM fijada, paridad/escenarios nativos y Chromium.
+

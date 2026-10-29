@@ -38,3 +38,12 @@ herramientas fijadas y a los hashes publicados.
 - La prueba visual de victoria no usa atajos del motor. La prueba WASM que sí los
   usa se documenta por separado.
 - Scryfall live depende del egress; si falla se informa como no verificado.
+
+## CI
+
+`.github/workflows/ci.yml` crea cuatro trabajos (estático, WASM, integración
+nativa y navegador). En el momento de escribir esto, la ejecución
+`40842762906` falló en 1–2 s sin asignar runner (`runner_name` vacío), lo que
+apunta a una limitación de la cuenta con repositorio privado. Los trabajos están
+escritos para ejecutar de verdad los comandos, pero **no se afirma cobertura CI**
+hasta que existan runners y la ejecución pase de extremo a extremo.
