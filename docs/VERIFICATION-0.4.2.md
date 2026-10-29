@@ -136,6 +136,9 @@ El índice ya declaraba `bytes` y `sha256`; el cargador ahora **los exige**:
 - La caché en memoria sigue indexada por digest: un rechazo no envenena el
   reintento (`pack-integrity.test.ts` lo comprueba cargando el archivo corregido
   después del fallo).
+- `crypto.subtle` solo existe en contexto seguro. Servida por HTTP plano desde
+  otra máquina, la app **no puede** verificar el pack y lo dice con esas palabras
+  en vez de fiarse del archivo: la verificación es requisito, no adorno.
 
 `pack-integrity.test.ts` (8 pruebas, sobre los archivos reales):
 

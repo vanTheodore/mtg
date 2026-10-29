@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { clearCatalogCache, loadCatalog, loadPack, type CatalogIndex, type CatalogPackMeta } from '../catalog.ts';
+import { clearCatalogCache, loadCatalog, loadPack, sha256Hex, type CatalogIndex, type CatalogPackMeta } from '../catalog.ts';
 
 const root = new URL('../../../../', import.meta.url).pathname;
 const index = JSON.parse(readFileSync(join(root, 'static/data/catalog/index.json'), 'utf8')) as CatalogIndex;
@@ -105,6 +105,18 @@ describe('a pack that does not match the index is refused', () => {
     served.bodies.set('10e', packFile('10e'));
     const catalog = await loadPack(fetcher, index, '10e');
     expect(Object.keys(catalog).length).toBe(tenE.faces);
+  });
+});
+
+describe('the verifier never pretends to have checked', () => {
+  test('without crypto.subtle the loader says so instead of trusting the file', async () => {
+    await expect(sha256Hex('{}', null)).rejects.toThrow(/contexto seguro/);
+  });
+
+  test('the digest is the file digest, lowercase hex', async () => {
+    const body = packFile('10e');
+    expect(await sha256Hex(body)).toBe(tenE.sha256);
+    expect(await sha256Hex(body)).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 

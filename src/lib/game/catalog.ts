@@ -163,9 +163,20 @@ export type Fetcher = (url: string) => Promise<{ ok: boolean; status?: number; t
  */
 const packUrl = (pack: CatalogPackMeta) => `/data/catalog/packs/${pack.id}.json?v=${pack.sha256}`;
 
-async function sha256Hex(text: string): Promise<string> {
+/**
+ * `crypto.subtle` only exists in a secure context. A page served over plain HTTP
+ * from another machine has no way to hash the pack, and pretending the bytes were
+ * verified is exactly the failure this module exists to prevent — so say so.
+ */
+export async function sha256Hex(
+  text: string,
+  subtle: SubtleCrypto | null = globalThis.crypto?.subtle ?? null
+): Promise<string> {
+  if (!subtle) {
+    throw new Error('La verificación de packs requiere un contexto seguro (https o localhost): crypto.subtle no está disponible.');
+  }
   const bytes = new TextEncoder().encode(text);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const digest = await subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
