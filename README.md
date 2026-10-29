@@ -12,7 +12,14 @@ Vertical slice jugable local de dos jugadores (hot-seat) con el motor real:
 - Inicialización de partida, catálogo mínimo y mazos de demo.
 - Mulligan, prioridad, fases, pila y acciones legales consultadas al motor.
 - Maná, lanzamiento de coste simple, objetivos, criaturas, combate y victoria
-  determinista verificados contra el WASM real (ver `docs/VERIFICATION-0.2.md`).
+  determinista verificados contra el WASM real.
+- Partida completa jugada **desde los controles Svelte**: elegir y lanzar,
+  objetivos con clic en carta/jugador, maná automático o manual, atacantes con
+  destino, bloqueadoras por atacante, pila, resoluciones, daño, vida y victoria
+  (ver `docs/VERIFICATION-0.3.md`).
+- Mazos didácticos seleccionables (duelo de práctica, duelo de chispas) y los
+  mazos de demostración, con auto-paso por recomendación de Phase y paso de
+  asiento configurable.
 - Campo de batalla, mano, biblioteca, cementerio y exilio.
 - Imágenes Scryfall con fallback identificable, reintento y caché.
 - Agrupación de fichas, cartas giradas/transformadas/adjuntas.
@@ -58,8 +65,8 @@ WASM_OPT=/ruta/a/wasm-opt bun run engine:optimize
 WASM_OPT=/ruta/a/wasm-opt ENGINE_OPTIMIZE=1 bun run engine:build
 ```
 
-En este repositorio `-O1` redujo el artefacto de ≈46 MiB a ≈40.9 MiB y pasó la
-partida real E2E. `-Oz` puede reducir más, pero es mucho más lento.
+En este repositorio `-O1` redujo el artefacto de ≈46 MiB a ≈41 MiB (43 036 524 B)
+y pasó la partida real E2E. `-Oz` puede reducir más, pero es mucho más lento.
 
 ### Verificación
 
@@ -69,7 +76,7 @@ bun test src/lib        # pruebas unitarias Bun
 bun run engine:verify   # hash del árbol de reglas Phase
 bun run engine:parity   # paridad API directa vs wrapper (semillas 42/7/123)
 bun run engine:scenarios # escenarios explícitos: maná, lanzamiento, combate, objetivos, triggers, reemplazo, victoria
-bun run test:e2e        # Chromium real (visibilidad, a11y, partida, motor)
+bun run test:e2e        # Chromium real (visibilidad, a11y, partida completa por UI, motor)
 bun run build           # build estático
 ```
 
@@ -83,7 +90,8 @@ bun run test:e2e
 
 ## Auditoría de capacidades
 
-La fotografía inicial de Mesa 0.2 está en [`docs/AUDIT-0.2.md`](docs/AUDIT-0.2.md).
+La fotografía inicial de Mesa 0.2 está en [`docs/AUDIT-0.2.md`](docs/AUDIT-0.2.md) y
+la auditoría de interacción de 0.3 en [`docs/AUDIT-0.3.md`](docs/AUDIT-0.3.md).
 Distingue las reglas disponibles en Phase, las acciones transportadas por Mesa,
 los flujos realmente utilizables en Svelte y las mecánicas verificadas en una
 partida. Una etiqueta de acción no equivale a soporte completo.
@@ -94,7 +102,17 @@ protocolo, revisión de acciones obsoletas, resultado de partida, resumen de
 maná, eventos filtrados, entropía de host y lista explícita de imports WASM.
 
 La evidencia ejecutada (tests, paridad, escenarios, rendimiento y límites) está
-en [`docs/VERIFICATION-0.2.md`](docs/VERIFICATION-0.2.md).
+en [`docs/VERIFICATION-0.3.md`](docs/VERIFICATION-0.3.md); la anterior sigue en
+[`docs/VERIFICATION-0.2.md`](docs/VERIFICATION-0.2.md). Los niveles de prueba se
+explican en [`docs/TESTING.md`](docs/TESTING.md).
+
+## Integración continua
+
+`.github/workflows/ci.yml` define trabajos separados: estáticos (Bun con
+`--frozen-lockfile`, procedencia, typecheck, unitarias, build), WASM (toolchain
+Rust fijado, `rust-src`, `--locked`, Binaryen 132, hash del artefacto), nativos
+(paridad y escenarios con reportes) y navegador (Chromium con el WASM compilado
+descargado del trabajo anterior). No incluye IA, red ni deploy.
 
 ## Arquitectura
 

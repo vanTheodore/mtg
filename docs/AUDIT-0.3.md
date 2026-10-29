@@ -50,3 +50,23 @@ debe pasar su prioridad explícitamente, igual que una persona.
 - Scryfall live sigue sujeto al egress del entorno; los mocks no prueban arte real.
 - El build offline de 0.2 utilizó crates normalizados de espejos externos. CI
   debe compilar con el lockfile y toolchain fijados y declarar su procedencia.
+
+## Resultado tras implementar
+
+- Selección y lanzamiento: botón por carta con coste efectivo del motor y opción
+  explícita de pago manual; los hechizos de una sola fuente se lanzan con un clic.
+- Objetivos: las cartas y paneles de jugador con objetivo legal muestran ◎ y se
+  eligen con un clic; queda una lista accesible como alternativa.
+- Maná: fuentes clicables, reserva visible, confirmación por `PassPriority` y
+  cancelación; la UI no calcula asequibilidad.
+- Combate: borrador local de ataques con destino visible y borrador de bloqueo
+  por pares bloqueadora→atacante, ambos enviados como acciones del motor.
+- Pila y resultados: detalles de Phase, registro de lanzamientos/daños/vida y
+  banner de victoria.
+- Fichas: agrupación conservadora por estado público completo.
+- Rendimiento: fases separadas y medidas; `presentation_ms` declarado como proxy.
+- CI: workflows añadidos pero **aún no ejecutados en GitHub** en esta fase.
+
+Huecos que permanecen: E2E visual estable de bloqueo (la lógica pura y el motor sí
+están probados), pago manual de costes genéricos complejos, efectos de reemplazo,
+IA, red, replay y Scryfall live.
