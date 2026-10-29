@@ -68,5 +68,5 @@ test('ampliación por teclado y transformación/adjuntos', async ({ page }) => {
   await expect(dialog).toContainText('Insectile Aberration');
   await dialog.getByRole('button', { name: 'Cerrar' }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.locator('[data-card-id="2101"]')).toContainText('+1');
+  await expect(page.locator('[data-card-id="2101"]')).toContainText('1 adjuntos');
 });

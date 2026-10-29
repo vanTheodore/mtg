@@ -21,7 +21,7 @@ test('describes mulligan decisions in Spanish', () => {
 
 test('describes mana sources and casting payment mode', () => {
   const objects = { '7': { id: 7, name: 'Forest', zone: 'Battlefield' } as never, '8': { id: 8, name: 'Grizzly Bears', zone: 'Hand' } as never };
-  expect(describeAction({ type: 'TapLandForMana', data: { selection: { source: { object_id: 7 } } } }, objects)).toBe('Girar Forest para producir maná');
+  expect(describeAction({ type: 'TapLandForMana', data: { selection: { source: { object_id: 7 } } } }, objects)).toBe('Activar Forest para producir maná');
   expect(describeAction({ type: 'CastSpell', data: { object_id: 8, card_id: 2, targets: [] } }, objects)).toContain('Lanzar Grizzly Bears');
   expect(describeAction({ type: 'CastSpell', data: { object_id: 8, card_id: 2, targets: [], payment_mode: { type: 'Manual' } } }, objects)).toContain('pago manual');
 });

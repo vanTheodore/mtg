@@ -43,3 +43,17 @@ test('typeLine joins supertypes, core types and subtypes', () => {
   expect(typeLine({ ...base, card_types: { supertypes: ['Legendary'], core_types: ['Creature'], subtypes: ['Human', 'Wizard'] } }))
     .toBe('Legendary Creature — Human Wizard');
 });
+
+describe('conservative token equivalence', () => {
+  const token = { ...base, name: 'Soldier', display_source: 'Token', is_token: true, power: 1, toughness: 1, card_types: { core_types: ['Token', 'Creature'] } } as GameObject;
+  test('identical public characteristics group', () => {
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2 }])).toHaveLength(1);
+  });
+  test('counters, stats, abilities, tapped and combat state prevent grouping', () => {
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2, counters: { PlusOnePlusOne: 1 } }])).toHaveLength(2);
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2, power: 2 }])).toHaveLength(2);
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2, keywords: ['Flying'] }])).toHaveLength(2);
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2, tapped: true }])).toHaveLength(2);
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2 }], { combatRole: (id) => id === 2 ? 'Atacando' : undefined })).toHaveLength(2);
+  });
+});
