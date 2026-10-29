@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.4",
-  "engines": { "bun": "1.4.4" },
+  "engines": {
+    "bun": "1.4.4"
+  },
   "scripts": {
     "dev": "bun --bun vite dev --host 0.0.0.0",
     "build": "bun --bun vite build",
@@ -13,10 +15,11 @@
     "test": "bun test src/lib",
     "test:e2e": "bun playwright test",
     "engine:build": "bun scripts/build-engine.ts",
-    "catalog:build": "cargo run --release -p mtg-engine-wasm --bin catalog -- data/mtgjson/test_fixture.json static/data",
+    "catalog:build": "bun scripts/build-catalog.ts",
     "verify": "bun run check && bun test src/lib && bun run build"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.64.1",
     "@sveltejs/adapter-static": "4.0.0",
     "@sveltejs/kit": "3.1.0",
@@ -26,5 +29,8 @@
     "svelte-check": "4.7.7",
     "typescript": "6.0.3",
     "vite": "8.3.5"
+  },
+  "imports": {
+    "#lib/*": "./src/lib/*"
   }
 }
