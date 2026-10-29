@@ -65,8 +65,10 @@ completa en `overlap` — no desaparecen del catálogo, pero tampoco se duplican
 dos textos distintos. Por eso la cobertura de esas 9 se evalúa con el artefacto
 del pack `fixture`, no con el de `10e`.
 
-Resultado para `10e` (354 caras): **293 soportadas**, **61 con limitaciones
-conocidas**, **12 ejercitadas**. Para `fixture` (90 caras): 89 y 1
+**Estado vigente** del pack `10e` (`fa1cd22d…`, 354 caras): **293 soportadas**,
+**61 con limitaciones conocidas**, **12 ejercitadas**. Las cifras 224/130 y
+286/68 que aparecen más abajo son pasos históricos del diagnóstico, no el estado
+actual. Para `fixture` (90 caras): 89 y 1
 (`Falkenrath Gorger`, un estático con madness dinámico).
 
 El camino hasta aquí muestra los dos defectos que esta ronda tuvo que arreglar, y
@@ -122,8 +124,12 @@ tercera sin decirlo):
 
 Nada dentro de `state`, `legal` o `action` se normaliza.
 
-Resultado con `docs/packcheck-10e-decks.json`, semilla 7, 444 caras (fixture +
-10e): **1055 pasos comparados, 0 divergencias**. Mezcla idéntica de acciones:
+**Alcance, para no confundir dos pruebas distintas**: la traza *paso a paso* es
+una sola partida (semilla 7). Las demás semillas se comparan de forma agregada
+(§ más abajo), no paso a paso.
+
+Traza paso a paso, `docs/packcheck-10e-decks.json`, semilla 7, 444 caras (fixture
++ 10e): **1055 pasos comparados, 0 divergencias**. Mezcla idéntica de acciones:
 `PassPriority` 862, `ActivateAbility` 111, `DeclareAttackers` 27, `CastSpell` 18,
 `PlayLand` 18, `DeclareBlockers` 15, `MulliganDecision` 2, `ChooseOption` 1,
 `SelectCards` 1. Ganador: asiento 1. `docs/parity-trace.json` guarda el resumen; los
@@ -134,16 +140,21 @@ campo, ambos valores y el comando para reproducir el prefijo exacto
 (`--max-steps <paso>`), que es el escenario reproducible mínimo pedido.
 
 Un solo escenario, por bien trazado que esté, es una anécdota. `scripts/parity-seeds.ts`
-repite la comparación con **cinco semillas** y compara pasos, mezcla de acciones,
-ganador, resolución por asiento y rechazos:
+compara **otras cuatro semillas** de forma agregada —pasos totales, mezcla de
+acciones, ganador, resolución por asiento y rechazos— y repite la semilla 7 como
+control de que el camino agregado mide lo mismo que la traza:
 
-| Semilla | Pasos | Ganador | Resultado |
-|---|---|---|---|
-| 1 | 849 | asiento 1 | idéntico |
-| 3 | 818 | asiento 1 | idéntico |
-| 7 | 1055 | asiento 1 | idéntico |
-| 11 | 1535 | asiento 0 | idéntico |
-| 42 | 855 | asiento 0 | idéntico |
+| Semilla | Pasos | Ganador | Comparación | Resultado |
+|---|---|---|---|---|
+| 1 | 849 | asiento 1 | agregada | idéntico |
+| 3 | 818 | asiento 1 | agregada | idéntico |
+| 7 | 1055 | asiento 1 | traza paso a paso **y** agregada | idéntico |
+| 11 | 1535 | asiento 0 | agregada | idéntico |
+| 42 | 855 | asiento 0 | agregada | idéntico |
+
+La fila de la semilla 7 es la única con igualdad *por paso*; las otras cuatro
+sólo demuestran que el resultado agregado coincide. Se presentan así y no como
+«cinco trazas».
 
 Que gane un asiento distinto en dos de las cinco es lo que impide que «mismo
 ganador» sea un accidente del mazo: la comparación no está mirando siempre la

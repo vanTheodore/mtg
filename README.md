@@ -181,8 +181,10 @@ El contrato ABI/worker vigente se documenta en
 protocolo, revisión de acciones obsoletas, resultado de partida, resumen de
 maná, eventos filtrados, entropía de host y lista explícita de imports WASM.
 
-La evidencia vigente —índice canónico, certificación por carta, paridad paso a
-paso e integridad de packs— está en
+La evidencia vigente —mazo pegado de 10E, estados por carta, descarga selectiva e
+integridad de packs— está en
+[`docs/VERIFICATION-0.4.3.md`](docs/VERIFICATION-0.4.3.md); la anterior, con el
+índice canónico, la certificación por carta y la paridad paso a paso, en
 [`docs/VERIFICATION-0.4.2.md`](docs/VERIFICATION-0.4.2.md). Las rondas anteriores
 siguen en [`docs/VERIFICATION-0.4.1.md`](docs/VERIFICATION-0.4.1.md),
 [`docs/VERIFICATION-0.4.md`](docs/VERIFICATION-0.4.md),
