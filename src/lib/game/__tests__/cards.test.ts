@@ -39,9 +39,28 @@ describe('groupTokens', () => {
   });
 });
 
-test('typeLine joins supertypes, core types and subtypes', () => {
-  expect(typeLine({ ...base, card_types: { supertypes: ['Legendary'], core_types: ['Creature'], subtypes: ['Human', 'Wizard'] } }))
-    .toBe('Legendary Creature — Human Wizard');
+describe('typeLine (es-419)', () => {
+  test('renders supertypes after the noun with gender agreement', () => {
+    expect(typeLine({ ...base, card_types: { supertypes: ['Legendary'], core_types: ['Creature'], subtypes: ['Human', 'Wizard'] } }))
+      .toBe('Criatura legendaria — Humano Mago');
+    expect(typeLine({ ...base, card_types: { supertypes: ['Basic'], core_types: ['Land'], subtypes: ['Plains'] } }))
+      .toBe('Tierra básica — Llanura');
+  });
+  test('keeps the Spanish word order for multi-type cards', () => {
+    expect(typeLine({ ...base, card_types: { core_types: ['Artifact', 'Creature'], subtypes: ['Golem'] } }))
+      .toBe('Criatura artefacto — Golem');
+  });
+  test('names token types as fichas', () => {
+    expect(typeLine({ ...base, card_types: { core_types: ['Token', 'Creature'], subtypes: ['Soldier'] } }))
+      .toBe('Ficha de criatura — Soldado');
+    expect(typeLine({ ...base, card_types: { core_types: ['Token'] } })).toBe('Ficha');
+  });
+  test('falls back to the engine words instead of mixing languages', () => {
+    expect(typeLine({ ...base, card_types: { core_types: ['Conspiracy'], subtypes: ['Scheme'] } }))
+      .toBe('Conspiracy — Scheme');
+    expect(typeLine({ ...base, card_types: { supertypes: ['World'], core_types: ['Enchantment'] } }))
+      .toBe('World Enchantment');
+  });
 });
 
 describe('conservative token equivalence', () => {

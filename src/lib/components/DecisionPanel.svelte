@@ -63,7 +63,7 @@
     {#if discard && discard.player === s.viewer}
       <div class="prompt" aria-label="Descartar hasta siete cartas">
         <strong>Descartar {discard.count} carta{discard.count === 1 ? '' : 's'}</strong>
-        <p>Al terminar el turno solo puedes conservar siete cartas. Pulsa las cartas de tu mano que descartas.</p>
+        <p>Al terminar el turno solo puedes conservar siete cartas. Selecciona las cartas de tu mano que descartas.</p>
         <ul class="draft">{#each session.choosing as id (id)}<li>{objects[String(id)]?.name ?? `Carta ${id}`}</li>{#if !session.choosing.length}<li>Sin cartas elegidas.</li>{/if}{/each}</ul>
         <button type="button" class="primary" disabled={session.busy || session.choosing.length !== discard.count} onclick={() => session.confirmDiscard()}>Confirmar descarte ({session.choosing.length}/{discard.count})</button>
       </div>
@@ -76,7 +76,7 @@
         {#if progress?.selected_slots?.length}
           <ul class="draft">{#each progress.selected_slots as target, i (i)}<li>Objetivo {i + 1}: {targetLabel(target ?? undefined, objects)}</li>{/each}</ul>
         {/if}
-        <p>Las cartas y jugadores válidos tienen el marcador ◎. Púlsalos para elegir.</p>
+        <p>Las cartas y jugadores válidos tienen el marcador ◎. Selecciónalos para elegir.</p>
         <details>
           <summary>Elegir desde una lista accesible ({targetChoices.length})</summary>
           <div class="actions">
@@ -90,7 +90,7 @@
       <div class="prompt" aria-label="Pago de maná">
         <strong>{pending?.name ?? 'Pago pendiente'}</strong>
         <span>Coste: {manaText(pendingCost) || 'sin coste de maná'}</span>
-        <p>Pulsa una fuente resaltada para producir maná. La reserva aparece junto a tu vida. Phase comprobará el pago al confirmar.</p>
+        <p>Selecciona una fuente resaltada para producir maná. La reserva aparece junto a tu vida. Phase comprobará el pago al confirmar.</p>
         {#if selected}
           <span>Fuente seleccionada: {selected.name}</span>
           <div class="actions">{#each selectedMana as action, i (i)}<button type="button" disabled={session.busy} onclick={() => play(action)}>{manaLabel(action)}</button>{/each}</div>
@@ -105,7 +105,7 @@
       </div>
     {:else if kind === 'DeclareAttackers'}
       <div class="prompt" aria-label="Preparar ataque">
-        <p>Pulsa tus criaturas válidas. Si hay varios destinos, elige después un jugador, planeswalker o batalla.</p>
+        <p>Selecciona tus criaturas válidas. Si hay varios destinos, elige después un jugador, planeswalker o batalla.</p>
         {#if selected && selectedDestinations.length}
           <strong>Destino de {selected.name}</strong>
           <div class="actions">{#each selectedDestinations as destination, i (i)}<button type="button" onclick={() => session.chooseAttackDestination(selected.id, destination)}>Atacar a {attackLabel(destination, objects)}</button>{/each}</div>
@@ -118,7 +118,7 @@
       </div>
     {:else if kind === 'DeclareBlockers'}
       <div class="prompt" aria-label="Preparar bloqueo">
-        <p>Pulsa una atacante y después una bloqueadora válida, o al revés. Repite para asignar más bloqueadoras.</p>
+        <p>Selecciona una criatura atacante y después una bloqueadora válida, o al revés. Repite para asignar más bloqueadoras.</p>
         {#if selected && selectedBlockTargets.length}
           <strong>{selected.name} puede bloquear a:</strong>
           <div class="actions">{#each selectedBlockTargets as id (id)}<button type="button" onclick={() => session.selectObject(id)}>{objects[String(id)]?.name}</button>{/each}</div>

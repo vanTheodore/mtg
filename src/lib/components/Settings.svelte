@@ -26,6 +26,10 @@
           <option value="compact">Compacta</option>
         </select>
       </label>
+      <div class="locale" role="note">
+        <strong>Idioma</strong>
+        <span>Español (Latinoamérica). Los nombres y textos de las cartas llegan en inglés desde el motor Phase.</span>
+      </div>
       <button type="button" onclick={() => open = false}>Cerrar</button>
     </div>
   {/if}
@@ -37,5 +41,7 @@
   .panel { position: absolute; right: 0; top: calc(100% + .4rem); z-index: 20; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: .8rem; display: grid; gap: .6rem; min-width: 220px; box-shadow: var(--shadow); }
   label { display: grid; gap: .25rem; font-size: .82rem; color: var(--ink-muted); }
   select, input { accent-color: var(--accent); }
+  .locale { display: grid; gap: .2rem; font-size: .78rem; color: var(--ink-muted); border-top: 1px solid var(--line); padding-top: .55rem; }
+  .locale strong { color: var(--ink); }
   .panel button { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 8px; padding: .35rem; }
 </style>

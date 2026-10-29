@@ -67,12 +67,69 @@ export function manaText(cost: unknown): string {
   return generic + shards;
 }
 
+/**
+ * Spanish (es-419) rendering of Phase's English type DTOs. This is presentation
+ * only: grouping, filters and rules still read the engine's English keys. When a
+ * term has no verified Spanish form the whole line falls back to English instead
+ * of mixing languages.
+ */
+const CORE_TYPES_ES: Record<string, { es: string; gender: 'f' | 'm' }> = {
+  Artifact: { es: 'Artefacto', gender: 'm' },
+  Creature: { es: 'Criatura', gender: 'f' },
+  Enchantment: { es: 'Encantamiento', gender: 'm' },
+  Instant: { es: 'Instantáneo', gender: 'm' },
+  Land: { es: 'Tierra', gender: 'f' },
+  Planeswalker: { es: 'Planeswalker', gender: 'm' },
+  Sorcery: { es: 'Conjuro', gender: 'm' }
+};
+const SUPERTYPES_ES: Record<string, { f: string; m: string }> = {
+  Basic: { f: 'básica', m: 'básico' },
+  Legendary: { f: 'legendaria', m: 'legendario' },
+  Snow: { f: 'nevada', m: 'nevado' }
+};
+/** Wizards' Spanish card types. Unknown subtypes keep their English name. */
+const SUBTYPES_ES: Record<string, string> = {
+  Adventure: 'Aventura', Angel: 'Ángel', Arcane: 'Arcano', Armadillo: 'Armadillo', Artificer: 'Artífice',
+  Aura: 'Aura', Bear: 'Oso', Beast: 'Bestia', Bird: 'Ave', Cat: 'Gato', Cleric: 'Clérigo',
+  Construct: 'Constructo', Demon: 'Demonio', Dog: 'Perro', Druid: 'Druida', Elf: 'Elfo', Equipment: 'Equipo',
+  Faerie: 'Hada', Forest: 'Bosque', Goblin: 'Trasgo', Human: 'Humano', Insect: 'Insecto', Island: 'Isla',
+  Jace: 'Jace', Knight: 'Caballero', Lhurgoyf: 'Lhurgoyf', Lizard: 'Lagarto', Merfolk: 'Tritón', Monk: 'Monje',
+  Mountain: 'Montaña', Myr: 'Myr', Noble: 'Noble', Peasant: 'Campesino', Pirate: 'Pirata', Plains: 'Llanura',
+  Rogue: 'Pícaro', Scout: 'Explorador', Shaman: 'Chamán', Sheep: 'Oveja', Skeleton: 'Esqueleto',
+  Soldier: 'Soldado', Sphinx: 'Esfinge', Spirit: 'Espíritu', Swamp: 'Pantano', Vampire: 'Vampiro',
+  Warrior: 'Guerrero', Wizard: 'Mago', Zombie: 'Zombi'
+};
+
+/** "Criatura legendaria — Humano Mago", "Tierra básica — Llanura", "Ficha de criatura — Soldado". */
+function spanishTypeLine(supertypes: string[], coreTypes: string[]): string | undefined {
+  const isTokenType = coreTypes.includes('Token');
+  const cores = coreTypes.filter((type) => type !== 'Token');
+  if (!cores.length) return isTokenType ? 'Ficha' : undefined;
+  const mapped = cores.map((type) => CORE_TYPES_ES[type]);
+  if (mapped.some((entry) => !entry)) return undefined;
+  const primary = mapped[mapped.length - 1]!;
+  const secondary = mapped.slice(0, -1).map((entry) => entry!.es.toLocaleLowerCase('es'));
+  const adjectives = supertypes.map((type) => SUPERTYPES_ES[type]?.[primary.gender]);
+  if (adjectives.some((adjective) => !adjective)) return undefined;
+  const noun = isTokenType ? primary.es.toLocaleLowerCase('es') : primary.es;
+  const head = isTokenType ? `Ficha de ${noun}` : noun;
+  const tail = [...adjectives.filter((adjective): adjective is string => !!adjective), ...secondary];
+  return tail.length ? `${head} ${tail.join(' ')}` : head;
+}
+
 export function typeLine(obj: GameObject, meta?: CardMeta): string {
   const ct = obj.card_types ?? meta?.card_type;
   if (!ct) return '';
-  const parts = [...(ct.supertypes ?? []), ...(ct.core_types ?? [])];
+  const supertypes = ct.supertypes ?? [];
+  const coreTypes = ct.core_types ?? [];
   const subs = ct.subtypes ?? [];
-  return subs.length ? `${parts.join(' ')} — ${subs.join(' ')}` : parts.join(' ');
+  const localized = spanishTypeLine(supertypes, coreTypes);
+  if (!localized) {
+    const parts = [...supertypes, ...coreTypes];
+    return subs.length ? `${parts.join(' ')} — ${subs.join(' ')}` : parts.join(' ');
+  }
+  const translatedSubs = subs.map((type) => SUBTYPES_ES[type] ?? type);
+  return translatedSubs.length ? `${localized} — ${translatedSubs.join(' ')}` : localized;
 }
 
 export function isToken(obj: GameObject): boolean {
