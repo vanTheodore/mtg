@@ -78,6 +78,13 @@ PLAYWRIGHT_CHROMIUM_LIB_PATH=/tmp/al2023/lib \
 bun run test:e2e
 ```
 
+## Auditoría de capacidades
+
+La fotografía inicial de Mesa 0.2 está en [`docs/AUDIT-0.2.md`](docs/AUDIT-0.2.md).
+Distingue las reglas disponibles en Phase, las acciones transportadas por Mesa,
+los flujos realmente utilizables en Svelte y las mecánicas verificadas en una
+partida. Una etiqueta de acción no equivale a soporte completo.
+
 ## Arquitectura
 
 ```text
