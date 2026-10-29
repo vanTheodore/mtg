@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    checkAgainstCatalog, deckSize, formatDeckList, makeDeck, parseDeckList, readDecks,
+    deckSize, deckStatus, formatDeckList, makeDeck, parseDeckList, readDecks,
     removeDeck, uniqueCards, upsertDeck, writeDecks, type DeckLine, type SavedDeck
   } from '#lib/game/decks.ts';
   import type { Catalog, CatalogIndex } from '#lib/game/catalog.ts';
+  import type { CoverageDocument } from '#lib/game/coverage.ts';
   import { canonicalIndex, normalizeName } from '#lib/game/canonical.ts';
 
   let {
@@ -13,7 +14,9 @@
     catalogMissing = [],
     catalogUnverified = [],
     loading = false,
+    coverage = new Map(),
     onrequestpack,
+    onrequestcoverage,
     onplay
   }: {
     /** Packs already in memory. Search supplements them with index names. */
@@ -26,8 +29,12 @@
     catalogUnverified?: string[];
     /** True while one pack is downloading for a selected card. */
     loading?: boolean;
+    /** Coverage artifacts already fetched: per-card support, keyed by pack. */
+    coverage?: Map<string, CoverageDocument | null>;
     /** Fetch exactly one pack, when a card is selected or a deck needs it. */
     onrequestpack?: (id: string) => Promise<void>;
+    /** Fetch the coverage artifacts of the packs a deck touches (a few KB each). */
+    onrequestcoverage?: (ids: string[]) => Promise<void>;
     /** Start a game with the chosen deck. */
     onplay: (lines: DeckLine[], name: string) => void;
   } = $props();
@@ -104,15 +111,34 @@
     add(result.name);
   }
   const total = $derived(deckSize(lines));
-  const availability = $derived(checkAgainstCatalog(lines, catalog));
-  const missingTotal = $derived(availability.missing.reduce((sum, line) => sum + line.count, 0));
-  /** Deck cards whose pack the index marks as not play-certified. */
-  const uncertifiedLines = $derived(lines.filter((line) => {
-    const key = normalizeName(line.name);
-    const pack = packByName.get(key);
-    return pack ? !pack.verified : catalogUnverified.some((name) => normalizeName(name) === key);
-  }));
-  const uncertifiedTotal = $derived(uncertifiedLines.reduce((sum, line) => sum + line.count, 0));
+  /**
+   * What the deck needs, separated by state: unknown to the index, known but in
+   * a pack we have not downloaded, in memory, or with known limitations. A
+   * pending pack is *not* a missing card: the loader fetches it at start.
+   */
+  const status = $derived(deckStatus(lines, { index, catalog, coverage }));
+  const statusByName = $derived(new Map(status.lines.map((entry) => [entry.key, entry])));
+  const missingTotal = $derived(status.unknown.reduce((sum, entry) => sum + entry.line.count, 0));
+  const pendingTotal = $derived(status.copies.pending);
+  const limitedTotal = $derived(status.copies.limited);
+  const uncertifiedTotal = $derived(
+    status.unverified.reduce((sum, entry) => sum + entry.line.count, 0)
+      + lines.filter((line) => !packByName.has(normalizeName(line.name))
+        && catalogUnverified.some((name) => normalizeName(name) === normalizeName(line.name)))
+        .reduce((sum, line) => sum + line.count, 0)
+  );
+  /** Coverage is cheap (a few KB): fetch it for the packs this deck touches. */
+  $effect(() => {
+    const ids = status.neededPacks;
+    if (ids.length && onrequestcoverage) void onrequestcoverage(ids);
+  });
+
+  const STATE_TEXT: Record<string, string> = {
+    ready: 'en memoria',
+    pending: 'se descargará',
+    limited: 'limitaciones',
+    absent: 'no está en el índice'
+  };
 
   function countOf(name: string) {
     return lines.find((line) => normalizeName(line.name) === normalizeName(name))?.count ?? 0;
@@ -182,15 +208,20 @@
   function play() {
     if (!lines.length) { notice = 'El mazo está vacío.'; return; }
     // No format rule is enforced here: Phase owns deck legality and the bridge
-    // does not expose it yet. This only stops cards the catalog cannot serve.
-    if (missingTotal > 0) {
-      notice = `Hay ${missingTotal} cartas que el catálogo cargado no contiene. El motor las omitiría: quítalas o cambia de mazo.`;
+    // does not expose it yet. This only stops cards nobody can serve, and cards
+    // whose pack Phase never certified.
+    if (status.unknown.length) {
+      notice = `${missingTotal} cartas no están en el índice del catálogo: `
+        + `${status.unknown.map((entry) => entry.line.name).slice(0, 5).join(', ')}. Revisá el nombre o la edición.`;
       return;
     }
     if (uncertifiedTotal > 0) {
-      notice = `Hay ${uncertifiedTotal} cartas sin certificar (${uncertifiedLines.map((line) => line.name).slice(0, 5).join(', ')}). `
+      notice = `Hay ${uncertifiedTotal} cartas sin certificar (${status.unverified.map((entry) => entry.line.name).slice(0, 5).join(', ')}). `
         + 'Su pack no pasó todavía el análisis de Phase ni una partida real, así que no inicio la partida.';
       return;
+    }
+    if (status.pendingPacks.length) {
+      notice = `Descargando ${status.pendingPacks.join(', ')} para iniciar la partida…`;
     }
     onplay(lines, deckName);
   }
@@ -276,7 +307,14 @@
                     aria-label={`Cantidad de ${line.name}`}
                     oninput={(event) => setCount(line.name, event.currentTarget.value)}
                   />
-                  <span class="line-name" class:missing={availability.missing.some((m) => m.name === line.name)}>{line.name}</span>
+                  <span class="line-name" class:missing={statusByName.get(normalizeName(line.name))?.state === 'absent'}>
+                    {line.name}
+                    <span
+                      class="state"
+                      data-state={statusByName.get(normalizeName(line.name))?.state ?? 'absent'}
+                      title={statusByName.get(normalizeName(line.name))?.gaps.join('; ') ?? ''}
+                    >{STATE_TEXT[statusByName.get(normalizeName(line.name))?.state ?? 'absent']}</span>
+                  </span>
                   <button type="button" class="link" aria-label={`Quitar ${line.name}`} onclick={() => add(line.name, -line.count)}>Quitar</button>
                 </li>
               {/each}
@@ -294,19 +332,34 @@
 
           {#if uncertifiedTotal > 0}
             <p class="notice warn" role="alert">
-              {uncertifiedTotal} cartas sin certificar: {uncertifiedLines.map((line) => line.name).slice(0, 5).join(', ')}.
+              {uncertifiedTotal} cartas sin certificar: {status.unverified.map((entry) => entry.line.name).slice(0, 5).join(', ')}.
               El pack existe, pero Phase no validó estas cartas ni las jugó ninguna partida.
             </p>
           {/if}
 
           {#if missingTotal > 0}
             <p class="notice warn" role="alert">
-              {missingTotal} cartas no están en el catálogo cargado: {availability.missing.map((line) => line.name).slice(0, 5).join(', ')}. El motor las omitiría al iniciar.
+              {missingTotal} cartas no están en el índice: {status.unknown.map((entry) => entry.line.name).slice(0, 5).join(', ')}.
+              Ningún pack las sirve, así que el motor las omitiría.
+            </p>
+          {/if}
+
+          {#if limitedTotal > 0}
+            <p class="notice warn" role="status">
+              {limitedTotal} cartas con limitaciones conocidas del parser: {status.limited.map((entry) => entry.line.name).slice(0, 5).join(', ')}.
+              Se pueden jugar, pero al iniciar hay que dar permiso explícito.
+            </p>
+          {/if}
+
+          {#if pendingTotal > 0}
+            <p class="muted" role="status">
+              {pendingTotal} cartas están en {status.pendingPacks.length === 1 ? 'el pack' : 'los packs'} {status.pendingPacks.join(', ')},
+              que se descarga al iniciar. No hace falta cargar el catálogo entero.
             </p>
           {/if}
 
           <div class="actions">
-            <button type="button" class="primary" disabled={!lines.length || missingTotal > 0 || uncertifiedTotal > 0} onclick={play}>Jugar con este mazo</button>
+            <button type="button" class="primary" disabled={!lines.length || status.unknown.length > 0 || uncertifiedTotal > 0} onclick={play}>Jugar con este mazo</button>
             <button type="button" onclick={save}>Guardar</button>
             <button type="button" onclick={() => showImport = !showImport} aria-expanded={showImport}>Importar lista</button>
             <button type="button" onclick={startFresh}>Nuevo</button>
@@ -373,6 +426,11 @@
   .notice { margin: 0; font-size: .78rem; }
   .notice.warn { color: var(--warn, #a15c00); }
   .tag { margin-left: .3rem; border: 1px solid var(--line); border-radius: 999px; padding: 0 .35rem; font-size: .68rem; }
+  /* Per-line availability: the same five states the start gate uses. */
+  .state { margin-left: .35rem; border: 1px solid var(--line); border-radius: 999px; padding: 0 .35rem; font-size: .66rem; color: var(--text-secondary); }
+  .state[data-state='ready'] { border-color: var(--ok); color: var(--ok); }
+  .state[data-state='pending'] { border-style: dashed; }
+  .state[data-state='limited'], .state[data-state='absent'] { border-color: var(--warn, #a15c00); color: var(--warn, #a15c00); }
   .tag.warn { border-color: var(--warn, #a15c00); color: var(--warn, #a15c00); }
   .saved { border-top: 1px solid var(--line); padding-top: .6rem; }
   .saved li { display: flex; gap: .5rem; align-items: center; justify-content: space-between; font-size: .78rem; flex-wrap: wrap; }

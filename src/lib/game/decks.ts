@@ -4,9 +4,13 @@
  * Everything here is deck *plumbing*: counting lines, normalizing names and
  * persisting them. It never decides whether a card is legal or whether a deck is
  * valid for a format — that is Phase's job. The only cross-check this module
- * performs is against the loaded catalog (does a card exist in the data we
- * have?), which is a data question, not a rules question.
+ * performs is against the loaded catalog and the catalog index (does a card
+ * exist in the data we have, or in a pack we could still download?), which is a
+ * data question, not a rules question.
  */
+import type { CatalogIndex } from './catalog.ts';
+import { canonicalIndex, normalizeName } from './canonical.ts';
+import type { CoverageDocument } from './coverage.ts';
 
 export type SavedFormat = 'limited';
 export const DEFAULT_FORMAT: SavedFormat = 'limited';
@@ -126,23 +130,139 @@ export function deckId(seed = Date.now(), random = Math.random): string {
 export interface CatalogAvailability {
   /** Names present in the loaded catalog, matched case-insensitively. */
   found: DeckLine[];
-  /** Names the loaded catalog cannot serve. The engine would skip them silently. */
+  /**
+   * Names no pack can serve. **Only** when an index is given: without it the
+   * loaded catalog is the whole universe the caller knows about, so everything
+   * else is missing by definition.
+   */
   missing: DeckLine[];
+  /**
+   * Names the index knows in a pack that is not in memory. Not a problem: the
+   * loader fetches exactly those packs when the game starts. Reporting them as
+   * `missing` used to disable 「Jugar」 before the download could happen.
+   */
+  pending: DeckLine[];
   /** Lower-cased canonical key per input name, for display. */
   canonical: Record<string, string>;
 }
 
-export function checkAgainstCatalog(lines: readonly DeckLine[], catalog: Record<string, unknown>): CatalogAvailability {
+/**
+ * Compare a deck against what the browser has and what the index knows.
+ *
+ * With an `index`, a name is `found` (face in memory), `pending` (the index
+ * names a pack for it) or `missing` (nobody can serve it). Without an index the
+ * loaded catalog is the only authority and a name it lacks is `missing`.
+ */
+export function checkAgainstCatalog(
+  lines: readonly DeckLine[],
+  catalog: Record<string, unknown>,
+  index?: CatalogIndex | null
+): CatalogAvailability {
   const keys = new Map(Object.keys(catalog).map((key) => [key.toLocaleLowerCase('en-US'), key]));
+  const known = index ? canonicalIndex(index).byName : null;
   const found: DeckLine[] = [];
   const missing: DeckLine[] = [];
+  const pending: DeckLine[] = [];
   const canonical: Record<string, string> = {};
   for (const line of lines) {
-    const key = keys.get(line.name.toLocaleLowerCase('en-US').trim());
-    if (key) { found.push(line); canonical[line.name] = key; }
+    const key = keys.get(normalizeName(line.name));
+    if (key) { found.push(line); canonical[line.name] = key; continue; }
+    if (known?.has(normalizeName(line.name))) pending.push(line);
     else missing.push(line);
   }
-  return { found, missing, canonical };
+  return { found, missing, pending, canonical };
+}
+
+/** The five states a deck line can be in, in the order the UI shows them. */
+export type DeckLineState = 'absent' | 'limited' | 'pending' | 'ready';
+
+export interface DeckLineStatus {
+  line: DeckLine;
+  /** Canonical lower-case name; the key every catalog lookup uses. */
+  key: string;
+  /** Pack that owns the name in the canonical index, `null` when unknown. */
+  pack: string | null;
+  /** The face is already in memory. */
+  loaded: boolean;
+  /** The owning pack is play-certified (`verified: true` in the index). */
+  certified: boolean;
+  /** Known Phase gaps for this card, when its coverage artifact was consulted. */
+  gaps: string[];
+  state: DeckLineState;
+}
+
+export interface DeckStatus {
+  lines: DeckLineStatus[];
+  /** Packs the deck touches, in deck order. Never the whole catalog. */
+  neededPacks: string[];
+  /** Packs that must be downloaded before the deck is fully in memory. */
+  pendingPacks: string[];
+  /** Lines no pack in the index can serve. */
+  unknown: DeckLineStatus[];
+  /** Lines whose pack the index marks as not play-certified. */
+  unverified: DeckLineStatus[];
+  /** Lines with known Phase limitations (admitted only with explicit consent). */
+  limited: DeckLineStatus[];
+  /** Copies per state; `total` is the deck size, so the parts must add up. */
+  copies: Record<DeckLineState | 'total', number>;
+  /**
+   * Nothing blocks *attempting* the load: no unknown names and no unverified
+   * packs. Pending packs are the loader's job, and limitations are the start
+   * gate's (they need explicit consent, not a silent block here).
+   */
+  canStart: boolean;
+}
+
+/**
+ * Resolve a deck against the index, the loaded catalog and (optionally) the
+ * coverage artifacts. Pure: the caller decides when to download anything.
+ */
+export function deckStatus(
+  lines: readonly DeckLine[],
+  input: { index?: CatalogIndex | null; catalog?: Record<string, unknown>; coverage?: Map<string, CoverageDocument | null> }
+): DeckStatus {
+  const catalog = input.catalog ?? {};
+  const loadedKeys = new Map(Object.entries(catalog).map(([key, face]) => [normalizeName(key), face]));
+  const known = input.index ? canonicalIndex(input.index).byName : null;
+  const needed: string[] = [];
+  const pendingPacks = new Set<string>();
+  const copies: Record<DeckLineState | 'total', number> = { absent: 0, limited: 0, pending: 0, ready: 0, total: 0 };
+
+  const resolved = lines.map<DeckLineStatus>((line) => {
+    const key = normalizeName(line.name);
+    const entry = known?.get(key) ?? null;
+    const face = loadedKeys.get(key) ?? (entry ? loadedKeys.get(normalizeName(entry.name)) : undefined);
+    const loaded = face !== undefined;
+    const pack = entry?.pack ?? null;
+    const certified = entry?.verified ?? true;
+    const document = pack ? input.coverage?.get(pack) ?? null : null;
+    const card = document?.cards?.find((candidate) => candidate.key === key || normalizeName(candidate.name) === key);
+    const gaps = card && card.supported === false ? card.gaps : [];
+    let state: DeckLineState;
+    if (!entry && !loaded) state = 'absent';
+    else if (gaps.length) state = 'limited';
+    else if (!loaded) state = 'pending';
+    else state = 'ready';
+    if (pack && !needed.includes(pack)) needed.push(pack);
+    if (state === 'pending' && pack) pendingPacks.add(pack);
+    copies[state] += line.count;
+    return { line, key, pack, loaded, certified, gaps, state };
+  });
+
+  copies.total = resolved.reduce((sum, status) => sum + status.line.count, 0);
+  const byState = (state: DeckLineState) => resolved.filter((status) => status.state === state);
+  const unknown = byState('absent');
+  const unverified = resolved.filter((status) => !status.certified);
+  return {
+    lines: resolved,
+    neededPacks: needed,
+    pendingPacks: [...pendingPacks],
+    unknown,
+    unverified,
+    limited: byState('limited'),
+    copies,
+    canStart: unknown.length === 0 && unverified.length === 0
+  };
 }
 
 // ── storage ──────────────────────────────────────────────────────────────────

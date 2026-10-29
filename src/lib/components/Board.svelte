@@ -14,7 +14,7 @@
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
   import { loadCatalog, loadPack, type Catalog, type CatalogIndex } from '#lib/game/catalog.ts';
   import { mergeCatalogs } from '#lib/game/canonical.ts';
-  import { assessDeck, describeAssessment, loadCoverage, type CardAssessment } from '#lib/game/coverage.ts';
+  import { assessDeck, describeAssessment, loadCoverage, type CardAssessment, type CoverageDocument } from '#lib/game/coverage.ts';
   import { toEngineDeck, deckSize, type DeckLine } from '#lib/game/decks.ts';
   import { impressions } from '#lib/game/impressions.svelte.ts';
 
@@ -45,6 +45,13 @@
   let engineLoad = $state<{ requested: number; seats: number[] } | null>(null);
   let catalogReady = $state(false);
   let loadingPacks = $state(false);
+  /**
+   * Coverage artifacts already fetched, keyed by pack. Shared by the deck
+   * builder (to label cards) and the start gate (to require consent), so both
+   * read the same evidence instead of two independent fetches.
+   */
+  let coverage = $state<Map<string, CoverageDocument | null>>(new Map());
+  const coveragePending = new Set<string>();
   const PRACTICE = { player: { main_deck: [...Array(18).fill('Plains'), ...Array(22).fill('Savannah Lions')] }, opponent: { main_deck: [...Array(18).fill('Plains'), ...Array(22).fill('Savannah Lions')] } };
   // Teaching duel for targeted damage: one Mountain pays one Lightning Bolt.
   const SPARKS = { player: { main_deck: [...Array(24).fill('Mountain'), ...Array(16).fill('Lightning Bolt')] }, opponent: { main_deck: [...Array(40).fill('Island')] } };
@@ -121,6 +128,27 @@
   }
 
   /**
+   * Fetch coverage for the given packs once, and keep it. Idempotent: asking
+   * twice for the same pack performs no request and no state change, so the
+   * builder can call it from an effect without looping.
+   */
+  async function requestCoverage(ids: string[]): Promise<void> {
+    if (!catalogIndex) return;
+    const wanted = catalogIndex.packs.filter((pack) => ids.includes(pack.id)
+      && !coverage.has(pack.id) && !coveragePending.has(pack.id));
+    if (!wanted.length) return;
+    for (const pack of wanted) coveragePending.add(pack.id);
+    try {
+      const loaded = await loadCoverage(fetch, wanted);
+      const next = new Map(coverage);
+      for (const [id, document] of loaded) next.set(id, document);
+      coverage = next;
+    } finally {
+      for (const pack of wanted) coveragePending.delete(pack.id);
+    }
+  }
+
+  /**
    * Start a game from deck *names*: only the packs holding those cards are
    * fetched. `missing` comes from the index, never from guessing.
    */
@@ -151,8 +179,9 @@
     // Coverage comes from Phase (`analyze_coverage`), one artifact per pack,
     // content-addressed by the pack digest. Missing artifact = unknown, not
     // incompatible; `supported: false` = known limitation, blocked by default.
-    const coverage = await loadCoverage(fetch, loaded.index.packs.filter((pack) => loaded.packs.includes(pack.id)));
-    const assessment = assessDeck(names, loaded.index, coverage, loaded.catalog);
+    // The builder may already have fetched it for the packs this deck touches.
+    await requestCoverage(loaded.packs);
+    const assessment = assessDeck(names, loaded.index, new Map(coverage), loaded.catalog);
     limitedCards = assessment.limited;
     coverageNotice = describeAssessment(assessment);
     if (assessment.limited.length && !allowLimited) {
@@ -282,7 +311,9 @@
         catalogMissing={unresolved}
         catalogUnverified={uncertified}
         loading={loadingPacks}
+        coverage={coverage}
         onrequestpack={requestPack}
+        onrequestcoverage={requestCoverage}
         onplay={playCustom}
       />
       <label>Semilla <input type="number" bind:value={seed} min="0" step="1" /></label>
