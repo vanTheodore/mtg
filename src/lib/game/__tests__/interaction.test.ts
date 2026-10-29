@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { attackTargets, blockTargets, canSelectObject, combatRole, isHiddenObject, manaActions, manualCast, nextBlockAssignment, permanentStates, sameTarget, targetAction } from '../interaction';
+import { attackTargets, blockedAttackerIds, blockTargets, canSelectObject, combatRole, isHiddenObject, manaActions, manualCast, nextBlockAssignment, permanentStates, sameTarget, targetAction } from '../interaction';
 import type { EngineSnapshot } from '../../engine/types';
 
 const object = { id: 10, card_id: 10, owner: 0, controller: 0, zone: 'Battlefield', name: 'Savannah Lions' };
@@ -8,7 +8,7 @@ const snapshot = {
   state: {
     turn_number: 2, active_player: 0, priority_player: 0, phase: 'DeclareAttackers', players: [], battlefield: [10], stack: [], exile: [], objects: { '10': object },
     waiting_for: { type: 'DeclareAttackers', data: { player: 0, valid_attacker_ids: [10], valid_attack_targets_by_attacker: { '10': [{ type: 'Player', data: 1 }] } } },
-    combat: { attackers: [{ object_id: 10, defending_player: 1, attack_target: { type: 'Player', data: 1 }, blocked: false }], blockers: {} }
+    combat: { attackers: [{ object_id: 10, defending_player: 1, attack_target: { type: 'Player', data: 1 }, blocked: false }], blocker_assignments: {}, blocker_to_attacker: {} }
   },
   derived: {}, legal: { actions: [{ type: 'DeclareAttackers', data: { attacks: [[10, { type: 'Player', data: 1 }]] } }], spell_costs: {}, by_object: {} }
 } as unknown as EngineSnapshot;
@@ -52,4 +52,31 @@ test('block assignment accepts attacker-first and blocker-first clicks only from
   // A creature the engine did not offer as a blocker gives no assignment.
   expect(nextBlockAssignment(20, 99, attackers, valid)).toEqual({ selected: 99 });
   expect(nextBlockAssignment(20, 20, attackers, valid)).toEqual({ selected: null });
+});
+
+test('a blocking creature is labelled from the map Phase actually sends', () => {
+  // Shape taken from `CombatState` (phase-engine/game/combat.rs): the bridge
+  // forwards the struct unchanged, so there is `blocker_to_attacker`, never
+  // `blockers`. Reading the wrong key meant a blocker was never marked.
+  const withBlock = {
+    ...snapshot,
+    state: {
+      ...snapshot.state,
+      combat: {
+        attackers: [{ object_id: 10, defending_player: 1, attack_target: { type: 'Player', data: 1 }, blocked: true }],
+        blocker_assignments: { '10': [20] },
+        blocker_to_attacker: { '20': [10] }
+      }
+    }
+  } as unknown as EngineSnapshot;
+  expect(combatRole(withBlock, 20)).toBe('Bloqueando');
+  expect(combatRole(withBlock, 10)).toBe('Atacando');
+  expect([...blockedAttackerIds(withBlock)]).toEqual([10]);
+  // A creature that blocked and whose attacker left combat keeps the role: the
+  // key stays with an empty list (CR 509.1g).
+  const emptied = { ...withBlock, state: { ...withBlock.state, combat: { ...withBlock.state.combat!, blocker_to_attacker: { '20': [] } } } } as unknown as EngineSnapshot;
+  expect(combatRole(emptied, 20)).toBe('Bloqueando');
+  // The field that never existed must not be treated as truth either.
+  const legacy = { ...withBlock, state: { ...withBlock.state, combat: { attackers: [], blockers: { '10': [20] } } } } as unknown as EngineSnapshot;
+  expect(combatRole(legacy, 20)).toBeUndefined();
 });

@@ -49,9 +49,20 @@ export interface WaitingFor {
     [key: string]: unknown;
   };
 }
+/**
+ * `CombatState` as Phase serializes it (`crates/phase-engine/src/game/combat.rs`).
+ *
+ * The bridge forwards the struct unchanged, so the two blocking maps are
+ * `blocker_assignments` (attacker → blockers) and `blocker_to_attacker`
+ * (blocker → attackers). There is **no** `blockers` field: a client that reads
+ * one silently believes no creature ever blocks.
+ */
 export interface CombatView {
   attackers: { object_id: ObjectId; defending_player: PlayerId; attack_target: AttackTarget; blocked: boolean }[];
-  blockers: Record<string, ObjectId[]>;
+  /** attacker id → blocker ids. */
+  blocker_assignments?: Record<string, ObjectId[]>;
+  /** blocker id → attacker ids. Key presence is what marks a blocking creature (CR 509.1g). */
+  blocker_to_attacker?: Record<string, ObjectId[]>;
 }
 export interface GameObject {
   id: ObjectId;

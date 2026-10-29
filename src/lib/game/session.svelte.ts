@@ -1,7 +1,10 @@
 import { tick } from 'svelte';
 import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
 import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId } from '#lib/engine/types.ts';
-import { attackTargets, blockTargets, manaActions, nextBlockAssignment, objectTarget, playerTarget, targetAction } from './interaction.ts';
+import {
+  attackDeclaration, attackTargets, blockDeclaration, blockTargets, manaActions,
+  nextBlockAssignment, objectTarget, playerTarget, secondActivation, targetAction
+} from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
 
 export type Theme = 'light' | 'dark' | 'system';
@@ -139,6 +142,12 @@ class GameSession {
     }
     const mana = manaActions(s, id);
     if (mana.length === 1) { void this.dispatch(mana[0]); return; }
+    // A second activation on the same card commits the single obvious action
+    // (play the land, cast the only option). Ambiguity keeps it a selection.
+    if (this.selected === id) {
+      const commit = secondActivation(s, id);
+      if (commit.action) { void this.dispatch(commit.action); return; }
+    }
     this.selected = this.selected === id ? null : id;
   }
 
@@ -159,10 +168,10 @@ class GameSession {
   removeAttack(id: ObjectId) { const next = { ...this.attacks }; delete next[id]; this.attacks = next; }
   removeBlock(id: ObjectId) { const next = { ...this.blocks }; delete next[id]; this.blocks = next; }
   confirmAttackers() {
-    void this.dispatch({ type: 'DeclareAttackers', data: { attacks: Object.entries(this.attacks).map(([id, target]) => [Number(id), target]), bands: [] } });
+    void this.dispatch(attackDeclaration(this.attacks));
   }
   confirmBlockers() {
-    void this.dispatch({ type: 'DeclareBlockers', data: { assignments: Object.entries(this.blocks).map(([blocker, attacker]) => [Number(blocker), attacker]) } });
+    void this.dispatch(blockDeclaration(this.blocks));
   }
   confirmHandoff() {
     if (!this.snapshot) return;

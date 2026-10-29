@@ -88,11 +88,27 @@ export function attackLabel(target: AttackTarget, objects: Record<string, GameOb
 export function manualCast(action: GameAction): GameAction {
   return { ...action, data: { ...action.data, payment_mode: { type: 'Manual' } } };
 }
+/**
+ * Combat role of one permanent, read from Phase's own combat state.
+ *
+ * `attackers` is a list; blocking is a **map keyed by blocker**
+ * (`blocker_to_attacker`, CR 509.1g) whose presence marks the creature as a
+ * blocking creature even if every attacker it blocked has left combat. The old
+ * reader looked for a `blockers` field that Phase never sends, so a blocker was
+ * never labelled and the player could not see the block they had just made.
+ */
 export function combatRole(s: EngineSnapshot | null, id: ObjectId): string | undefined {
   const c = s?.state.combat;
-  if (c?.attackers.some((a) => a.object_id === id)) return 'Atacando';
-  if (Object.entries(c?.blockers ?? {}).some(([, attackers]) => attackers.includes(id))) return 'Bloqueando';
+  if (c?.attackers?.some((a) => a.object_id === id)) return 'Atacando';
+  if (c?.blocker_to_attacker && Object.prototype.hasOwnProperty.call(c.blocker_to_attacker, String(id))) return 'Bloqueando';
   return undefined;
+}
+
+/** Attackers Phase marked as blocked (CR 509.1h), as a set for the UI. */
+export function blockedAttackerIds(s: EngineSnapshot | null): Set<ObjectId> {
+  const out = new Set<ObjectId>();
+  for (const attacker of s?.state.combat?.attackers ?? []) if (attacker.blocked) out.add(attacker.object_id);
+  return out;
 }
 export function permanentStates(o: GameObject, combat?: string): string[] {
   if (isHiddenObject(o)) return [];
@@ -114,6 +130,54 @@ export function keywordLabel(value: unknown): string {
   if (value && typeof value === 'object' && 'type' in value) return KEYWORDS[String(value.type)] ?? String(value.type);
   return 'Habilidad';
 }
+/**
+ * The exact payload Phase receives for a combat declaration.
+ *
+ * These live here — not inline in the session — so a test can assert the pairs
+ * the UI sends: `[blocker, attacker]` in that order, matching `BlockersDeclared`.
+ */
+export function attackDeclaration(attacks: Record<string, AttackTarget>): GameAction {
+  return {
+    type: 'DeclareAttackers',
+    data: { attacks: Object.entries(attacks).map(([id, target]) => [Number(id), target]), bands: [] }
+  };
+}
+
+export function blockDeclaration(blocks: Record<string, ObjectId>): GameAction {
+  return {
+    type: 'DeclareBlockers',
+    data: { assignments: Object.entries(blocks).map(([blocker, attacker]) => [Number(blocker), attacker]) }
+  };
+}
+
+/** Pairs as the log and the tests read them: `[[blocker, attacker], …]`. */
+export function blockPairs(blocks: Record<string, ObjectId>): [ObjectId, ObjectId][] {
+  return Object.entries(blocks).map(([blocker, attacker]) => [Number(blocker), attacker]);
+}
+
+/**
+ * What a **second** activation of an already-selected hand card commits.
+ *
+ * One click selects (the panel then shows every option with its cost); a second
+ * one plays the single obvious action, so the common case is two clicks on the
+ * card instead of click-then-aim-at-a-button-across-the-screen. It only commits
+ * when the engine offers **exactly one** such action: with two ways to cast the
+ * same card the second activation stays a selection — the choice belongs to the
+ * player, not to a guess.
+ */
+export function secondActivation(
+  s: EngineSnapshot | null,
+  id: ObjectId
+): { action: GameAction; kind: 'play-land' | 'cast' } | { action: null; reason: 'no-action' | 'ambiguous' | 'not-a-priority' } {
+  if (!s) return { action: null, reason: 'no-action' };
+  if (s.state.waiting_for.type !== 'Priority') return { action: null, reason: 'not-a-priority' };
+  const committing = (s.legal.by_object[String(id)] ?? []).filter((a) => a.type === 'PlayLand' || a.type === 'CastSpell');
+  if (!committing.length) return { action: null, reason: 'no-action' };
+  if (committing.length > 1) return { action: null, reason: 'ambiguous' };
+  const action = committing[0]!;
+  return { action, kind: action.type === 'PlayLand' ? 'play-land' : 'cast' };
+}
+
 export function objectSelectLabel(s: EngineSnapshot | null, id: ObjectId): string | undefined {
   if (!s) return undefined;
   if (targetAction(s, objectTarget(id))) return 'Elegir como objetivo';
