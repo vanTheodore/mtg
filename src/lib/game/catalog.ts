@@ -13,7 +13,11 @@
  *
  * Rules never live here. The engine still decides legality, and a pack marked
  * `verified: false` is searchable but explicitly not certified for play.
+ *
+ * Name resolution lives in `canonical.ts`: this module consumes the canonical
+ * index instead of keeping a second, silently different answer.
  */
+import { canonicalIndex, mergeCatalogs, normalizeName, type MergeConflict, type MergeResult } from './canonical.ts';
 
 /**
  * One entry exactly as Phase deserializes it: `CardExportEntry`, i.e. a card
@@ -46,6 +50,11 @@ export interface CatalogPackMeta {
   bytes: number;
   sha256: string;
   source: string;
+  /**
+   * Names this pack would carry but another pack already owns, grouped by owner.
+   * The pack payload does not contain them: one name must resolve to one face.
+   */
+  overlap?: Record<string, string[]>;
 }
 
 export interface CatalogIndex {
@@ -75,6 +84,8 @@ export interface CatalogLoadPlan {
 export interface LoadedCatalog {
   catalog: Catalog;
   packs: string[];
+  /** Names served by more than one loaded pack, with what differed. Empty is normal. */
+  conflicts: MergeConflict[];
   /** Names the index did not cover; the engine would silently skip them. */
   missing: string[];
   /** Requested names served only by packs that are not play-certified. */
@@ -86,7 +97,7 @@ export interface LoadedCatalog {
   index: CatalogIndex;
 }
 
-const normalizeName = (name: string) => name.normalize('NFKC').trim().toLocaleLowerCase('en-US');
+export { normalizeName } from './canonical.ts';
 
 /**
  * Split a deck entry into the canonical names the database stores. Phase keys
@@ -103,15 +114,11 @@ export function faceNames(name: string): string[] {
  * are always included because decks grow lands during play.
  */
 export function planLoad(index: CatalogIndex, names: readonly string[]): CatalogLoadPlan {
-  const byName = new Map<string, string>();
-  const core: string[] = [];
-  for (const pack of index.packs) {
-    if (pack.core) core.push(pack.id);
-    for (const name of pack.names) {
-      const key = normalizeName(name);
-      if (!byName.has(key)) byName.set(key, pack.id);
-    }
-  }
+  // One canonical owner per name, shared with the builder (`canonicalIndex`), so
+  // "the pack the search shows" and "the pack the game loads" cannot diverge.
+  const canonical = canonicalIndex(index);
+  const core: string[] = index.packs.filter((pack) => pack.core).map((pack) => pack.id);
+  const byName = new Map<string, string>([...canonical.byName].map(([key, entry]) => [key, entry.pack]));
   const required = new Set<string>(core);
   const missing: string[] = [];
   const unverified = new Set<string>();
@@ -137,15 +144,14 @@ export function planLoad(index: CatalogIndex, names: readonly string[]): Catalog
   };
 }
 
-/** Merge packs into one map. The first pack wins; a later identical entry is ignored. */
-export function mergePacks(packs: Catalog[]): Catalog {
-  const merged: Catalog = {};
-  for (const pack of packs) {
-    for (const [name, entry] of Object.entries(pack)) {
-      if (!(name in merged)) merged[name] = entry;
-    }
-  }
-  return merged;
+/**
+ * Merge packs into one map, first wins, reporting every overwrite.
+ * `mergeCatalogs` is the single implementation; this keeps the old call shape
+ * from silently dropping duplicates.
+ */
+export function mergePacks(packs: Catalog[], ids?: readonly string[]): MergeResult {
+  const inputs = packs.map((catalog, position) => ({ id: ids?.[position] ?? `pack-${position}`, catalog }));
+  return mergeCatalogs(inputs);
 }
 
 export type Fetcher = (url: string) => Promise<{ ok: boolean; status?: number; json: () => Promise<unknown> }>;
@@ -207,8 +213,10 @@ export async function loadCatalog(
   }));
 
   const bytes = plan.required.reduce((sum, id) => sum + (index.packs.find((pack) => pack.id === id)?.bytes ?? 0), 0);
+  const merged = mergePacks(packs, plan.required);
   return {
-    catalog: mergePacks(packs),
+    catalog: merged.catalog,
+    conflicts: merged.conflicts,
     packs: plan.required,
     missing: plan.missing,
     unverified: plan.unverified ?? [],

@@ -55,16 +55,20 @@ describe('catalog pack planning', () => {
 
 describe('mergePacks', () => {
   test('merges entry maps and keeps the first definition', () => {
-    const merged = mergePacks([
+    const { catalog, conflicts } = mergePacks([
       { shock: { name: 'Shock', oracle_text: 'a' } },
       { shock: { name: 'Shock', oracle_text: 'b' }, forest: { name: 'Forest' } }
     ]);
-    expect(Object.keys(merged).sort()).toEqual(['forest', 'shock']);
-    expect(merged.shock).toEqual({ name: 'Shock', oracle_text: 'a' });
+    expect(Object.keys(catalog).sort()).toEqual(['forest', 'shock']);
+    expect(catalog.shock).toEqual({ name: 'Shock', oracle_text: 'a' });
+    // The overwrite is reported, never silent: the wording differs.
+    expect(conflicts).toEqual([
+      { name: 'shock', kept: 'pack-0', dropped: 'pack-1', conflict: 'rules_text', oracleIds: [null, null] }
+    ]);
   });
 
   test('handles the flattened CardExportEntry shape without touching it', () => {
     const entry = { name: 'Shock', legalities: { modern: 'legal' }, face_index: 0 };
-    expect(mergePacks([{ shock: entry }]).shock).toBe(entry);
+    expect(mergePacks([{ shock: entry }]).catalog.shock).toBe(entry);
   });
 });

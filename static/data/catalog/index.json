@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "generated_at": "2026-10-29T20:41:21.836Z",
+  "version": 3,
+  "generated_at": "2026-10-29T21:23:22.789Z",
   "format": "atomic",
   "packs": [
     {
@@ -152,7 +152,6 @@
         "boomerang",
         "bottle gnomes",
         "brushland",
-        "cancel",
         "canopy spider",
         "caves of koilos",
         "cephalid constable",
@@ -225,7 +224,6 @@
         "gaea's herald",
         "ghitu encampment",
         "ghost warden",
-        "giant growth",
         "giant spider",
         "glorious anthem",
         "goblin elite infantry",
@@ -236,7 +234,6 @@
         "grave pact",
         "graveborn muse",
         "gravedigger",
-        "grizzly bears",
         "guerrilla tactics",
         "hail of arrows",
         "hate weaver",
@@ -307,7 +304,6 @@
         "mortivore",
         "nantuko husk",
         "natural spring",
-        "naturalize",
         "nekrataal",
         "nightmare",
         "no rest for the wicked",
@@ -340,7 +336,6 @@
         "rage weaver",
         "raging goblin",
         "rain of tears",
-        "rampant growth",
         "ravenous rats",
         "razormane masticore",
         "recollect",
@@ -375,7 +370,6 @@
         "seedborn muse",
         "seismic assault",
         "sengir vampire",
-        "serra angel",
         "serra's embrace",
         "severed legion",
         "shatterstorm",
@@ -383,7 +377,6 @@
         "shivan dragon",
         "shivan hellkite",
         "shivan reef",
-        "shock",
         "shunt",
         "siege-gang commander",
         "sift",
@@ -449,7 +442,6 @@
         "underground river",
         "underworld dreams",
         "unholy strength",
-        "unsummon",
         "upwelling",
         "vampire bats",
         "vedalken mastermind",
@@ -468,7 +460,6 @@
         "whispersilk cloak",
         "wild griffin",
         "windborn muse",
-        "wrath of god",
         "wurm's tooth",
         "yavimaya coast",
         "yavimaya enchantress",
@@ -477,10 +468,23 @@
       "set": "10E",
       "core": false,
       "verified": true,
-      "faces": 363,
-      "bytes": 525607,
-      "sha256": "65711d59439ed843f40afc4517e0c51092f7a00bbab6037e5ceb943885a9c45e",
-      "source": "MTGJSON 10E.es.json (v3) → scripts/import-set.ts → bin catalog (CardDatabase::from_mtgjson + export_subset_json)"
+      "faces": 354,
+      "bytes": 515285,
+      "sha256": "2a1ac7e5af2e53b6781dbc4bed575938333e2e9e92ac3765fd8a96ce22f5d9e5",
+      "source": "MTGJSON 10E.es.json (v3) → scripts/import-set.ts → bin catalog (CardDatabase::from_mtgjson + export_subset_json)",
+      "overlap": {
+        "fixture": [
+          "serra angel",
+          "cancel",
+          "giant growth",
+          "rampant growth",
+          "unsummon",
+          "naturalize",
+          "shock",
+          "wrath of god",
+          "grizzly bears"
+        ]
+      }
     }
   ]
 }

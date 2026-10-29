@@ -5,6 +5,7 @@
     removeDeck, uniqueCards, upsertDeck, writeDecks, type DeckLine, type SavedDeck
   } from '#lib/game/decks.ts';
   import type { Catalog, CatalogIndex } from '#lib/game/catalog.ts';
+  import { canonicalIndex, normalizeName } from '#lib/game/canonical.ts';
 
   let {
     catalog,
@@ -48,12 +49,16 @@
 
   onMount(() => { saved = readDecks(storage); });
 
-  /** Pack id per lower-cased card name, straight from the index. */
+  /**
+   * Pack id per card name, from the **same** canonical index the loader uses.
+   * The builder used to keep the last pack that mentioned a name while the
+   * loader kept the first, so a card could be picked from one set and played
+   * with another set's rules text.
+   */
+  const canonical = $derived.by(() => canonicalIndex(index ?? { version: 0, generated_at: '', format: 'atomic', packs: [] }));
   const packByName = $derived.by(() => {
     const map = new Map<string, { id: string; verified: boolean }>();
-    for (const pack of index?.packs ?? []) {
-      for (const name of pack.names) map.set(name.toLocaleLowerCase('es'), { id: pack.id, verified: pack.verified });
-    }
+    for (const [key, entry] of canonical.byName) map.set(key, { id: entry.pack, verified: entry.verified });
     return map;
   });
 
@@ -80,8 +85,11 @@
     }
     for (const pack of index?.packs ?? []) {
       for (const name of pack.names) {
-        const key = name.toLocaleLowerCase('es');
+        const key = normalizeName(name);
+        // A name another pack already owns is not offered twice.
         if (seen.has(key) || !key.includes(term)) continue;
+        const owner = packByName.get(key);
+        if (owner && owner.id !== pack.id) continue;
         out.push({ key, name, type: '', pack: pack.id, loaded: false, certified: pack.verified });
         seen.add(key);
         if (out.length >= MAX_RESULTS) return out;
@@ -100,17 +108,18 @@
   const missingTotal = $derived(availability.missing.reduce((sum, line) => sum + line.count, 0));
   /** Deck cards whose pack the index marks as not play-certified. */
   const uncertifiedLines = $derived(lines.filter((line) => {
-    const pack = packByName.get(line.name.toLocaleLowerCase('es'));
-    return pack ? !pack.verified : catalogUnverified.some((name) => name.toLocaleLowerCase('es') === line.name.toLocaleLowerCase('es'));
+    const key = normalizeName(line.name);
+    const pack = packByName.get(key);
+    return pack ? !pack.verified : catalogUnverified.some((name) => normalizeName(name) === key);
   }));
   const uncertifiedTotal = $derived(uncertifiedLines.reduce((sum, line) => sum + line.count, 0));
 
   function countOf(name: string) {
-    return lines.find((line) => line.name.toLocaleLowerCase('es') === name.toLocaleLowerCase('es'))?.count ?? 0;
+    return lines.find((line) => normalizeName(line.name) === normalizeName(name))?.count ?? 0;
   }
 
   function add(name: string, delta = 1) {
-    const index = lines.findIndex((line) => line.name.toLocaleLowerCase('es') === name.toLocaleLowerCase('es'));
+    const index = lines.findIndex((line) => normalizeName(line.name) === normalizeName(name));
     if (index >= 0) {
       const next = Math.max(0, Math.min(99, lines[index]!.count + delta));
       lines = next === 0 ? lines.filter((_, i) => i !== index) : lines.map((line, i) => (i === index ? { ...line, count: next } : line));

@@ -33,8 +33,8 @@
     },
     {
       "id": "10e",
-      "sha256": "65711d59439ed843f40afc4517e0c51092f7a00bbab6037e5ceb943885a9c45e",
-      "faces": 363,
+      "sha256": "2a1ac7e5af2e53b6781dbc4bed575938333e2e9e92ac3765fd8a96ce22f5d9e5",
+      "faces": 354,
       "levels": {
         "found": true,
         "parsed": true,
@@ -44,7 +44,7 @@
       "evidence": [
         {
           "kind": "parse",
-          "detail": "data/mtgjson/10E.es.json (MTGJSON v3, 363 cartas) -> scripts/import-set.ts (v5) -> bin `catalog` de mtg-engine-wasm (CardDatabase::from_mtgjson + export_subset_json) escribe static/data/catalog/packs/10e.json (363 caras, sha256 65711d59...). `packcheck` vuelve a deserializarlo con CardDatabase::from_json_str, la misma funcion que usa el puente WASM."
+          "detail": "data/mtgjson/10E.es.json (MTGJSON v3, 363 cartas) -> scripts/import-set.ts (v5) -> bin `catalog` de mtg-engine-wasm (CardDatabase::from_mtgjson + export_subset_json) escribe static/data/catalog/packs/10e.json (354 caras, sha256 65711d59...). `packcheck` vuelve a deserializarlo con CardDatabase::from_json_str, la misma funcion que usa el puente WASM."
         },
         {
           "kind": "game",

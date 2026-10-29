@@ -40,11 +40,15 @@ describe('the shipped catalog carries a second real set', () => {
     }
   });
 
-  test('the 10E pack has the cards the certified game played', () => {
+  test('the 10E pack has the cards the certified game played, and only its own', () => {
     const tenE = pack('10e');
-    for (const name of ['serra angel', 'soul warden', 'youthful knight', "ancestor's chosen"]) {
+    for (const name of ['soul warden', 'youthful knight', "ancestor's chosen"]) {
       expect({ name, present: name in tenE }).toEqual({ name, present: true });
     }
+    // `Serra Angel` is printed in both. The fixture owns the name (modern Oracle
+    // text), so the set pack must not carry a second face for it.
+    expect('serra angel' in tenE).toBe(false);
+    expect('serra angel' in pack('fixture')).toBe(true);
     // Décima Edición does not ship basic lands in MTGJSON v3; the core pack does.
     expect('plains' in tenE).toBe(false);
     expect('plains' in pack('fixture')).toBe(true);

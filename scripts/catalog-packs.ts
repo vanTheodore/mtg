@@ -29,6 +29,9 @@
  *   --append            add these packs to the index already in --out instead of
  *                       replacing it (a real set next to the curated fixture);
  *                       the index version increments so caches cannot go stale
+ *                       and names another pack already owns are removed from
+ *                       the new pack (recorded in `overlap`), so the engine can
+ *                       never see two faces for one name
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -143,9 +146,41 @@ for (const name of names) {
   else buckets[bucketOf(name, packCount)]!.push(name);
 }
 
+// `--append` must not ship a second face for a name the index already serves:
+// the engine keys cards by name and would silently play one of the two, and the
+// builder and the loader historically disagreed about which one. The new pack
+// keeps only names nobody owns yet; the rest are recorded in `overlap`.
+const previousIndex: CatalogIndex | null = args.append === true && existsSync(join(outDir, 'index.json'))
+  ? JSON.parse(readFileSync(join(outDir, 'index.json'), 'utf8')) as CatalogIndex
+  : null;
+// The packs this run rewrites are not "other packs": their names are exactly the
+// ones being replaced, so they must not count as owned.
+const rewritten = new Set<string>([...Array(packCount).keys()].map((position) => (packCount === 1 ? baseId : `${baseId}-${position + 1}`)));
+const ownedBy = new Map<string, string>();
+for (const pack of previousIndex?.packs ?? []) {
+  if (rewritten.has(pack.id)) continue;
+  for (const name of pack.names) {
+    const key = name.normalize('NFKC').trim().toLocaleLowerCase('en-US');
+    if (!ownedBy.has(key)) ownedBy.set(key, pack.id);
+  }
+}
+
 mkdirSync(join(outDir, 'packs'), { recursive: true });
 const packs: CatalogPackMeta[] = [];
 for (const [index, bucket] of buckets.entries()) {
+  const overlap: Record<string, string[]> = {};
+  const kept: string[] = [];
+  for (const name of bucket) {
+    const owner = ownedBy.get(name.normalize('NFKC').trim().toLocaleLowerCase('en-US'));
+    if (owner) (overlap[owner] ??= []).push(name);
+    else kept.push(name);
+  }
+  if (bucket.length && !kept.length) {
+    console.error(`Todas las cartas de este pack ya pertenecen a otros packs (${Object.keys(overlap).join(', ')}); no se escribió nada.`);
+    process.exit(1);
+  }
+  bucket.length = 0;
+  bucket.push(...kept);
   if (!bucket.length) continue;
   const payload: Catalog = {};
   for (const name of bucket) payload[name] = catalog[name]!;
@@ -164,16 +199,17 @@ for (const [index, bucket] of buckets.entries()) {
     faces: bucket.length,
     bytes: Buffer.byteLength(text),
     sha256: sha256(text),
-    source
+    source,
+    // Names this pack would have carried but another pack owns. Recorded so the
+    // overlap is auditable instead of invisible.
+    ...(Object.keys(overlap).length ? { overlap } : {})
   });
 }
 
 // A name may appear in a core pack and again in a set pack; the index keeps the
 // first entry, so core packs are listed first.
 const indexPath = join(outDir, 'index.json');
-const previous: CatalogIndex | null = args.append === true && existsSync(indexPath)
-  ? JSON.parse(readFileSync(indexPath, 'utf8')) as CatalogIndex
-  : null;
+const previous: CatalogIndex | null = previousIndex;
 const replaced = new Set(packs.map((pack) => pack.id));
 // `--append` replaces a pack with the same id but keeps every other pack: the
 // fixture (basic lands + demo deck) has to survive adding a real set.
@@ -192,6 +228,10 @@ writeFileSync(indexPath, JSON.stringify(index, null, 2));
 const totalFaces = packs.reduce((sum, pack) => sum + pack.faces, 0);
 const totalBytes = packs.reduce((sum, pack) => sum + pack.bytes, 0);
 console.log(`${packs.length} pack(s) · ${names.length} nombres · ${totalFaces} caras · ${(totalBytes / 1024).toFixed(1)} KiB`);
+for (const pack of packs) {
+  const overlap = pack.overlap ? Object.entries(pack.overlap).map(([owner, list]) => `${list.length} de ${owner}`).join(', ') : null;
+  if (overlap) console.log(`  ${pack.id}: ${overlap} ya pertenecían a otro pack; quedan fuera del pack`);
+}
 if (previous) console.log(`índice v${previous.version} → v${index.version} (${index.packs.length} packs)`);
 console.log(`índice: ${join(outDir, 'index.json')}`);
 for (const pack of packs) console.log(`  ${pack.id}: ${pack.names.length} nombres, ${(pack.bytes / 1024).toFixed(1)} KiB, verified=${pack.verified}`);

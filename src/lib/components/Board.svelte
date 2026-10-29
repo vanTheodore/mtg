@@ -13,6 +13,7 @@
   import { session } from '#lib/game/session.svelte.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
   import { loadCatalog, loadPack, type Catalog, type CatalogIndex } from '#lib/game/catalog.ts';
+  import { mergeCatalogs } from '#lib/game/canonical.ts';
   import { toEngineDeck, deckSize, type DeckLine } from '#lib/game/decks.ts';
   import { impressions } from '#lib/game/impressions.svelte.ts';
 
@@ -31,6 +32,7 @@
   let unresolved = $state<string[]>([]);
   /** Cards the deck needs whose packs are not play-certified. */
   let uncertified = $state<string[]>([]);
+  let catalogConflicts = $state<string[]>([]);
   /** What the engine actually loaded, read back from its own snapshot. */
   let engineLoad = $state<{ requested: number; seats: number[] } | null>(null);
   let catalogReady = $state(false);
@@ -96,7 +98,13 @@
     loadingPacks = true;
     try {
       const pack = await loadPack(fetch, catalogIndex, id);
-      catalog = { ...catalog, ...pack };
+      // Same rule as the loader: first definition wins and an overwrite is
+      // reported, never merged by spread order.
+      const merged = mergeCatalogs([{ id: 'loaded', catalog }, { id, catalog: pack }]);
+      catalog = merged.catalog;
+      if (merged.conflicts.length) {
+        catalogConflicts = merged.conflicts.map((entry) => `${entry.name} (${entry.kept} vs ${entry.dropped}${entry.conflict ? `, ${entry.conflict}` : ''})`);
+      }
     } catch (e) {
       loadError = e instanceof Error ? e.message : String(e);
     } finally {
@@ -119,6 +127,13 @@
     }
     // `verified: false` means Phase never parsed these cards and no game proved
     // them. Starting anyway is exactly the silent half-game this gate prevents.
+    if (loaded.conflicts.length) {
+      // Two packs defined the same name and their faces disagree: the engine
+      // would play one of them silently. Refuse and name them.
+      const detail = loaded.conflicts.slice(0, 6).map((entry) => `${entry.name}: ${entry.kept} vs ${entry.dropped} (${entry.conflict ?? 'idénticas'})`);
+      loadError = `Cartas definidas dos veces con reglas distintas: ${detail.join('; ')}. El motor usaría una sola versión en silencio.`;
+      return false;
+    }
     if (loaded.unverified.length) {
       const packs = loaded.unverifiedPacks.join(', ');
       loadError = `Cartas sin certificar (${loaded.unverified.length}): ${loaded.unverified.slice(0, 8).join(', ')}${loaded.unverified.length > 8 ? '…' : ''}. `
@@ -191,6 +206,12 @@
   {/if}
   {#if session.error}
     <div class="notice error" role="alert">{session.error}</div>
+  {/if}
+  {#if catalogConflicts.length}
+    <div class="notice warn" role="status">
+      Nombres definidos por más de un pack: {catalogConflicts.slice(0, 4).join('; ')}{catalogConflicts.length > 4 ? '…' : ''}.
+      Se usa la primera definición (el pack dueño del nombre) y el resto no sobrescribe nada.
+    </div>
   {/if}
   {#if engineLoad && snapshot}
     {@const short = engineLoad.seats.filter((size) => size !== engineLoad!.requested)}
