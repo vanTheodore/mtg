@@ -1,0 +1,30 @@
+{
+  "environment": {
+    "browser": "Chromium 153 (headless)",
+    "viewport": "1440x900",
+    "scryfall": "blocked (deterministic fallback)"
+  },
+  "startup": {
+    "dom_content_loaded_ms": 33.09999999962747,
+    "load_ms": 33.399999998509884,
+    "used_js_heap_bytes": 18200000,
+    "js_heap_limit_bytes": 2190000000
+  },
+  "initial_metrics_text": "Motor 0.5 ms\nSerialización 11.6 ms\nWorker 16.8 ms\nWASM 328 ms\n70475 B\n82 objetos\nMemoria WASM 27.2 MiB",
+  "final_metrics_text": "Motor 1.0 ms\nSerialización 11.4 ms\nWorker 14.5 ms\nWASM 328 ms\n70470 B\n82 objetos\nMemoria WASM 27.2 MiB",
+  "pass_priority_round_trip_ms": [
+    68,
+    69,
+    144,
+    89,
+    81,
+    59,
+    76,
+    49,
+    63,
+    85
+  ],
+  "idle_fps": 61,
+  "final_used_js_heap_bytes": 18200000,
+  "page_errors": []
+}

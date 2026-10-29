@@ -14,14 +14,26 @@ use engine::types::{GameAction, ActionResult};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::sync::Arc;
-use web_time::Instant;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_random {
-    fn unsupported(_buf: &mut [u8]) -> Result<(), getrandom::Error> {
-        Err(getrandom::Error::UNSUPPORTED)
+    // getrandom 0.3's custom backend calls this extern symbol. Game randomness
+    // is seeded by GameState; this fallback only satisfies non-game OS entropy
+    // requests (e.g. hash-table seeding) deterministically instead of trapping.
+    static mut STATE: u64 = 0x9e3779b97f4a7c15;
+
+    #[no_mangle]
+    pub extern "Rust" fn __getrandom_v03_custom(dest: *mut u8, len: usize) -> Result<(), getrandom::Error> {
+        unsafe {
+            let out = std::slice::from_raw_parts_mut(dest, len);
+            for chunk in out.chunks_mut(8) {
+                STATE = STATE.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                let bytes = STATE.to_le_bytes();
+                chunk.copy_from_slice(&bytes[..chunk.len()]);
+            }
+        }
+        Ok(())
     }
-    getrandom::register_custom_getrandom!(unsupported);
 }
 
 struct Session {
@@ -29,6 +41,23 @@ struct Session {
     db: Arc<CardDatabase>,
     seed: u64,
     actions: u64,
+}
+
+#[cfg(target_arch = "wasm32")]
+extern "C" {
+    fn mesa_now_ms() -> f64;
+}
+
+fn now_ms() -> f64 {
+    #[cfg(target_arch = "wasm32")]
+    unsafe { mesa_now_ms() }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64() * 1000.0)
+            .unwrap_or(0.0)
+    }
 }
 
 thread_local! {
@@ -101,7 +130,7 @@ fn submit(input: &[u8]) -> Vec<u8> {
             Some(v) => v,
             None => return Err(err("engine not initialized")),
         };
-        let started = Instant::now();
+        let started = now_ms();
         let actor = PlayerId(req.actor);
         let result = match apply_with_rejection(&mut session.state, actor, req.action) {
             Ok(r) => r,
@@ -114,7 +143,7 @@ fn submit(input: &[u8]) -> Vec<u8> {
                 })).unwrap());
             }
         };
-        let engine_ms = started.elapsed().as_secs_f64() * 1000.0;
+        let engine_ms = now_ms() - started;
         session.actions += 1;
         Ok((result, engine_ms))
     });
@@ -133,7 +162,7 @@ fn snapshot_reply(result: ActionResult, engine_ms: f64, _serialize_ms: f64) -> V
         let borrow = s.borrow();
         let session = borrow.as_ref().expect("session");
         let viewer = current_viewer(&session.state);
-        let started = Instant::now();
+        let started = now_ms();
         let filtered = filter_state_for_viewer(&session.state, viewer);
         let derived = derive_filtered_views(&session.state, &filtered, Some(viewer));
         let (actions, spell_costs, by_object) =
@@ -155,7 +184,7 @@ fn snapshot_reply(result: ActionResult, engine_ms: f64, _serialize_ms: f64) -> V
             "waiting_for": result.waiting_for,
             "metrics": {
                 "engine_ms": engine_ms,
-                "serialize_ms": started.elapsed().as_secs_f64() * 1000.0,
+                "serialize_ms": now_ms() - started,
                 "objects": filtered.objects.len(),
             }
         });
@@ -225,19 +254,21 @@ fn dispatch(op: u32, input: &[u8]) -> Vec<u8> {
     }
 }
 
-/// Allocate a writable buffer for the host. The host must free it with mtg_free.
+/// Allocate a writable buffer for the host. The host must free it with mtg_free
+/// using the same length. Uses an exact-size global-allocator layout so the
+/// deallocation layout always matches (Vec capacity is not part of the ABI).
 #[no_mangle]
 pub extern "C" fn mtg_alloc(len: usize) -> *mut u8 {
-    let mut buf = Vec::<u8>::with_capacity(len);
-    let ptr = buf.as_mut_ptr();
-    std::mem::forget(buf);
-    ptr
+    if len == 0 { return std::ptr::null_mut(); }
+    unsafe { std::alloc::alloc(std::alloc::Layout::from_size_align(len, 1).unwrap()) }
 }
 
-/// Free a buffer previously returned by mtg_alloc.
+/// Free a buffer previously returned by mtg_alloc or mtg_request.
 #[no_mangle]
 pub extern "C" fn mtg_free(ptr: *mut u8, len: usize) {
-    if !ptr.is_null() { unsafe { drop(Vec::from_raw_parts(ptr, len, len)); } }
+    if !ptr.is_null() && len > 0 {
+        unsafe { std::alloc::dealloc(ptr, std::alloc::Layout::from_size_align(len, 1).unwrap()); }
+    }
 }
 
 /// Request/response ABI. Returns (ptr << 32) | len. Host reads UTF-8 JSON and
@@ -246,10 +277,11 @@ pub extern "C" fn mtg_free(ptr: *mut u8, len: usize) {
 pub extern "C" fn mtg_request(op: u32, ptr: *const u8, len: usize) -> u64 {
     let input = unsafe { std::slice::from_raw_parts(ptr, len) };
     let out = dispatch(op, input);
-    let len = out.len() as u64;
-    let ptr = out.as_ptr() as u64;
-    std::mem::forget(out);
-    (ptr << 32) | len
+    let out_len = out.len();
+    let out_ptr = mtg_alloc(out_len);
+    if out_ptr.is_null() { return 0; }
+    unsafe { std::ptr::copy_nonoverlapping(out.as_ptr(), out_ptr, out_len); }
+    (out_ptr as u64) << 32 | out_len as u64
 }
 
 /// Catalog export helper shared by the native catalog binary and tests.

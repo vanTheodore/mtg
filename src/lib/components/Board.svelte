@@ -160,6 +160,7 @@
         <span>WASM {session.lastMetrics.wasm_compile_ms?.toFixed(0) ?? '—'} ms</span>
         <span>{session.lastMetrics.response_bytes ?? '—'} B</span>
         <span>{session.lastMetrics.objects ?? '—'} objetos</span>
+        <span>Memoria WASM {session.lastMetrics.wasm_memory_bytes ? (session.lastMetrics.wasm_memory_bytes / 1048576).toFixed(1) : '—'} MiB</span>
       {/if}
     </footer>
   {/if}

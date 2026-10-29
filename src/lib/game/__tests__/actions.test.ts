@@ -15,6 +15,6 @@ test('actionsForObject returns empty array for unknown id', () => {
 });
 
 test('describes mulligan decisions in Spanish', () => {
-  expect(describeAction({ type: 'MulliganDecision', data: { choice: 'Keep' } })).toBe('Conservar mano');
-  expect(describeAction({ type: 'MulliganDecision', data: { choice: 'Mulligan' } })).toBe('Hacer mulligan');
+  expect(describeAction({ type: 'MulliganDecision', data: { choice: { type: 'Keep' } } })).toBe('Conservar mano');
+  expect(describeAction({ type: 'MulliganDecision', data: { choice: { type: 'Mulligan' } } })).toBe('Hacer mulligan');
 });

@@ -81,6 +81,8 @@ export interface EngineSnapshot {
     objects?: number;
     worker_ms?: number;
     wasm_compile_ms?: number;
+    wasm_transfer_bytes?: number;
+    wasm_memory_bytes?: number;
   };
 }
 

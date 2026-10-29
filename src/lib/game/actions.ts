@@ -15,8 +15,10 @@ export function describeAction(action: GameAction, objects: Record<string, GameO
   const base = LABELS[action.type] ?? action.type;
   const data = action.data ?? {};
   if (action.type === 'MulliganDecision') {
-    if (data.choice === 'Keep') return 'Conservar mano';
-    if (data.choice === 'Mulligan') return 'Hacer mulligan';
+    const choice = mulliganChoice(action);
+    if (choice === 'Keep') return 'Conservar mano';
+    if (choice === 'Mulligan') return 'Hacer mulligan';
+    if (choice === 'FreeReveal') return 'Revelar y robar de nuevo';
     return 'Usar Serum Powder';
   }
   const id = (data.object_id ?? data.source_id) as number | undefined;
@@ -38,9 +40,20 @@ export function actionsForObject(byObject: Record<string, GameAction[]>, id: num
 }
 
 /** Keep the safest, most common decision visible without scrolling. */
+export function mulliganChoice(action: GameAction): string | undefined {
+  const choice = action.data?.choice;
+  if (typeof choice === 'string') return choice;
+  if (choice && typeof choice === 'object' && 'type' in choice) return String((choice as { type: unknown }).type);
+  return undefined;
+}
+
+export function isKeepHand(action: GameAction): boolean {
+  return action.type === 'MulliganDecision' && mulliganChoice(action) === 'Keep';
+}
+
 export function actionPriority(action: GameAction): number {
   if (action.type === 'PassPriority') return 0;
-  if (action.type === 'MulliganDecision' && action.data?.choice === 'Keep') return 0;
+  if (isKeepHand(action)) return 0;
   if (action.type === 'PlayLand') return 1;
   if (action.type === 'CastSpell') return 2;
   if (action.type === 'DeclareAttackers' || action.type === 'DeclareBlockers') return 2;

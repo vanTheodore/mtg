@@ -18,12 +18,14 @@ await page.waitForSelector('.hand-scroll [data-card-id]', { timeout: 60_000 });
 
 async function ready() {
   const btn = page.getByRole('button', { name: 'Estoy listo' });
-  if (await btn.isVisible().catch(() => false)) await btn.click();
+  await btn.waitFor({ state: 'visible', timeout: 2500 }).then(() => btn.click()).catch(() => {});
 }
 await ready();
-for (let i = 0; i < 2; i++) {
-  const keep = page.getByRole('button', { name: 'Conservar mano' });
-  if (await keep.isVisible().catch(() => false)) { await keep.click(); await ready(); }
+for (let i = 0; i < 4; i++) {
+  const keep = page.getByRole('button', { name: 'Conservar mano' }).first();
+  if (!(await keep.isVisible().catch(() => false))) break;
+  await keep.click();
+  await ready();
 }
 
 const startup = await page.evaluate(() => {

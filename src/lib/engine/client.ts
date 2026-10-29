@@ -30,22 +30,24 @@ export class EngineClient {
     return this.worker;
   }
 
-  private send(op: number, payload: unknown): Promise<EngineReply> {
+  private send(op: number, payload: unknown, timeoutMs = 30_000): Promise<EngineReply> {
     const worker = this.ensure();
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error('El motor no respondió a tiempo.'));
-      }, 30_000);
+      }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      const msg: WorkerRequest = { id, op, payload };
+      // Svelte runes proxies are not structured-cloneable; cross the worker
+      // boundary with plain JSON only.
+      const msg: WorkerRequest = { id, op, payload: JSON.parse(JSON.stringify(payload)) };
       worker.postMessage(msg);
     });
   }
 
   async init(payload: unknown): Promise<EngineReply> {
-    return this.send(OP.INIT, payload);
+    return this.send(OP.INIT, payload, 120_000);
   }
 
   async action(actor: number, action: GameAction): Promise<EngineReply> {

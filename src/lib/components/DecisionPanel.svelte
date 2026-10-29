@@ -1,16 +1,39 @@
 <script lang="ts">
   import { session } from '#lib/game/session.svelte.ts';
-  import { actionPriority, actionsForObject, describeAction } from '#lib/game/actions.ts';
+  import { actionPriority, actionsForObject, describeAction, isKeepHand } from '#lib/game/actions.ts';
   import type { GameAction } from '#lib/engine/types.ts';
 
   const snapshot = $derived(session.snapshot);
   const waiting = $derived(snapshot?.state.waiting_for);
-  const actions = $derived([...(snapshot?.legal.actions ?? [])].sort((a, b) => actionPriority(a) - actionPriority(b)));
+  const actions = $derived.by(() => {
+    const seen = new Set<string>();
+    return [...(snapshot?.legal.actions ?? [])]
+      .sort((a, b) => actionPriority(a) - actionPriority(b))
+      .filter((action) => {
+        const key = JSON.stringify(action);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  });
   const objects = $derived(snapshot?.state.objects ?? {});
   let showAll = $state(false);
-  const visible = $derived(showAll ? actions : actions.slice(0, 8));
+  // Object-specific actions are shown contextually when a card is selected;
+  // the global list stays limited to seat-level decisions (priority, mulligan,
+  // combat declarations) so a hand full of identical lands is not duplicated.
+  const contextActions = $derived(actions.filter((a) => a.data?.object_id === undefined && a.data?.source_id === undefined));
+  const visible = $derived(showAll ? contextActions : contextActions.slice(0, 8));
   const selectedObject = $derived(session.selected !== null ? objects[String(session.selected)] : undefined);
-  const selectedActions = $derived(selectedObject ? actionsForObject(snapshot?.legal.by_object ?? {}, selectedObject.id) : []);
+  const selectedActions = $derived.by(() => {
+    if (!selectedObject) return [];
+    const seen = new Set<string>();
+    return actionsForObject(snapshot?.legal.by_object ?? {}, selectedObject.id).filter((a) => {
+      const key = JSON.stringify(a);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  });
 
   const PHASES: Record<string, string> = {
     Untap: 'Enderezar', Upkeep: 'Mantenimiento', Draw: 'Robar',
@@ -41,19 +64,19 @@
         <button type="button" class="link" onclick={() => { session.inspect = selectedObject.id; }}>Ampliar carta</button>
       </div>
     {/if}
-    {#if actions.length === 0}
-      <p class="muted">No hay acciones legales disponibles.</p>
+    {#if contextActions.length === 0 && !selectedObject}
+      <p class="muted">No hay acciones legales disponibles. Selecciona una carta para ver sus acciones.</p>
     {:else}
       <div class="actions">
         {#each visible as action, i (i)}
-          <button type="button" class:primary={action.type === 'PassPriority' || (action.type === 'MulliganDecision' && action.data?.choice === 'Keep')} disabled={session.busy} onclick={() => play(action)}>
+          <button type="button" class:primary={action.type === 'PassPriority' || isKeepHand(action)} disabled={session.busy} onclick={() => play(action)}>
             {describeAction(action, objects)}
           </button>
         {/each}
       </div>
-      {#if actions.length > 8}
+      {#if contextActions.length > 8}
         <button type="button" class="link" onclick={() => showAll = !showAll}>
-          {showAll ? 'Mostrar menos' : `Ver ${actions.length - 8} acciones más`}
+          {showAll ? 'Mostrar menos' : `Ver ${contextActions.length - 8} acciones más`}
         </button>
       {/if}
     {/if}
