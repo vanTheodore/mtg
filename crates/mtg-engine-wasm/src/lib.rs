@@ -174,13 +174,23 @@ fn snapshot_reply(result: ActionResult, engine_ms: f64, _serialize_ms: f64) -> V
         let borrow = s.borrow();
         let session = borrow.as_ref().expect("session");
         let viewer = current_viewer(&session.state);
-        let started = now_ms();
-        let filtered = filter_state_for_viewer(&session.state, viewer);
-        let derived = derive_filtered_views(&session.state, &filtered, Some(viewer));
+        let legal_started = now_ms();
         let (actions, spell_costs, by_object) =
             engine::ai_support::legal_actions_for_viewer(&session.state, viewer);
+        let auto_pass = engine::ai_support::auto_pass_recommended_for_viewer(&session.state, viewer, &actions);
+        let legal_ms = now_ms() - legal_started;
+        let projection_started = now_ms();
+        let filtered = filter_state_for_viewer(&session.state, viewer);
+        let derived = derive_filtered_views(&session.state, &filtered, Some(viewer));
         let state_json = project_state(&filtered);
         let events = engine::game::visibility::filter_events_for_viewer(&result.events, &session.state, viewer);
+        let projection_ms = now_ms() - projection_started;
+        let serialize_started = now_ms();
+        let projection_bytes = serde_json::to_vec(&state_json).map(|b| b.len()).unwrap_or(0)
+            + serde_json::to_vec(&derived).map(|b| b.len()).unwrap_or(0)
+            + serde_json::to_vec(&actions).map(|b| b.len()).unwrap_or(0)
+            + serde_json::to_vec(&events).map(|b| b.len()).unwrap_or(0);
+        let serialize_ms = now_ms() - serialize_started;
         let reply = serde_json::json!({
             "ok": true,
             "protocol_version": PROTOCOL_VERSION,
@@ -197,10 +207,14 @@ fn snapshot_reply(result: ActionResult, engine_ms: f64, _serialize_ms: f64) -> V
                 "by_object": by_object,
             },
             "events": events,
+            "auto_pass_recommended": auto_pass,
             "waiting_for": result.waiting_for,
             "metrics": {
                 "engine_ms": engine_ms,
-                "serialize_ms": now_ms() - started,
+                "legal_ms": legal_ms,
+                "projection_ms": projection_ms,
+                "serialize_ms": serialize_ms,
+                "projection_bytes": projection_bytes,
                 "objects": filtered.objects.len(),
             }
         });
@@ -281,7 +295,9 @@ fn dispatch(op: u32, input: &[u8]) -> Vec<u8> {
                 let filtered = filter_state_for_viewer(&session.state, PlayerId(viewer));
                 let derived = derive_filtered_views(&session.state, &filtered, Some(PlayerId(viewer)));
                 let (actions, spell_costs, by_object) = engine::ai_support::legal_actions_for_viewer(&session.state, PlayerId(viewer));
+                let auto_pass = engine::ai_support::auto_pass_recommended_for_viewer(&session.state, PlayerId(viewer), &actions);
                 serde_json::to_vec(&serde_json::json!({
+                    "auto_pass_recommended": auto_pass,
                     "ok": true, "protocol_version": PROTOCOL_VERSION, "viewer": viewer,
                     "revision": session.actions, "actions_applied": session.actions, "seed": session.seed,
                     "outcome": outcome_json(&session.state), "state": project_state(&filtered), "derived": derived,
