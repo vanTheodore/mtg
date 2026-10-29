@@ -1,6 +1,6 @@
 {
   "name": "mesa-mtg",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.4",
@@ -17,6 +17,8 @@
     "engine:build": "bun scripts/build-engine.ts",
     "engine:optimize": "bun scripts/optimize-wasm.ts",
     "catalog:build": "bun scripts/build-catalog.ts",
+    "catalog:packs": "bun scripts/catalog-packs.ts",
+    "impressions:es": "bun scripts/build-impressions-es.ts",
     "verify": "bun run check && bun test src/lib && bun run engine:verify && bun run build",
     "engine:parity": "bun scripts/parity.ts",
     "engine:scenarios": "bun scripts/scenarios.ts",
