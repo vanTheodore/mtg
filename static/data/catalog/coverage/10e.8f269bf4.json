@@ -1,0 +1,2997 @@
+{
+ "cards": [
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "abundance",
+   "name": "Abundance",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "academy researchers",
+   "name": "Academy Researchers",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "adarkar wastes",
+   "name": "Adarkar Wastes",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "afflict",
+   "name": "Afflict",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "aggressive urge",
+   "name": "Aggressive Urge",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "agonizing memories",
+   "name": "Agonizing Memories",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "air elemental",
+   "name": "Air Elemental",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {3}: Target player puts the top three cards of his or her library into his or her graveyard."
+   ],
+   "key": "ambassador laquatus",
+   "name": "Ambassador Laquatus",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "anaba bodyguard",
+   "name": "Anaba Bodyguard",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "ancestor's chosen",
+   "name": "Ancestor's Chosen",
+   "supported": true
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "angel of mercy",
+   "name": "Angel of Mercy",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "angel's feather",
+   "name": "Angel's Feather",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "angelic blessing",
+   "name": "Angelic Blessing",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "angelic chorus",
+   "name": "Angelic Chorus",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "angelic wall",
+   "name": "Angelic Wall",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "arcane teachings",
+   "name": "Arcane Teachings",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "arcanis the omnipotent",
+   "name": "Arcanis the Omnipotent",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "ascendant evincar",
+   "name": "Ascendant Evincar",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "assassinate",
+   "name": "Assassinate",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "aura graft",
+   "name": "Aura Graft",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "aura of silence",
+   "name": "Aura of Silence",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:static_structure: If an opponent controls at least four more creatures than you, ~ costs {6} less to cast."
+   ],
+   "key": "avatar of might",
+   "name": "Avatar of Might",
+   "supported": false
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "aven cloudchaser",
+   "name": "Aven Cloudchaser",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "aven fisher",
+   "name": "Aven Fisher",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "aven windreader",
+   "name": "Aven Windreader",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "ballista squad",
+   "name": "Ballista Squad",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "bandage",
+   "name": "Bandage",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "battlefield forge",
+   "name": "Battlefield Forge",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "beacon of destruction",
+   "name": "Beacon of Destruction",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "beacon of immortality",
+   "name": "Beacon of Immortality",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "beacon of unrest",
+   "name": "Beacon of Unrest",
+   "supported": true
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "benalish knight",
+   "name": "Benalish Knight",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "birds of paradise",
+   "name": "Birds of Paradise",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "blanchwood armor",
+   "name": "Blanchwood Armor",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "blaze",
+   "name": "Blaze",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "bloodfire colossus",
+   "name": "Bloodfire Colossus",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "bloodrock cyclops",
+   "name": "Bloodrock Cyclops",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "bog wraith",
+   "name": "Bog Wraith",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "bogardan firefiend",
+   "name": "Bogardan Firefiend",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "boomerang",
+   "name": "Boomerang",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "bottle gnomes",
+   "name": "Bottle Gnomes",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "brushland",
+   "name": "Brushland",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "canopy spider",
+   "name": "Canopy Spider",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "caves of koilos",
+   "name": "Caves of Koilos",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cephalid constable",
+   "name": "Cephalid Constable",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "ParserMisfire:InvalidSubtype(Construct)"
+   ],
+   "key": "chimeric staff",
+   "name": "Chimeric Staff",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cho-manno, revolutionary",
+   "name": "Cho-Manno, Revolutionary",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "chromatic star",
+   "name": "Chromatic Star",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "citanul flute",
+   "name": "Citanul Flute",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "civic wayfinder",
+   "name": "Civic Wayfinder",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:static_structure: You may have ~ enter the battlefield as a copy of any creature on the battlefield."
+   ],
+   "key": "clone",
+   "name": "Clone",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cloud elemental",
+   "name": "Cloud Elemental",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cloud sprite",
+   "name": "Cloud Sprite",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "coat of arms",
+   "name": "Coat of Arms",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "colossus of sardia",
+   "name": "Colossus of Sardia",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "commune with nature",
+   "name": "Commune with Nature",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: Sacrifice ~: Add {W}{U}{B}{R}{G} to your mana pool."
+   ],
+   "key": "composite golem",
+   "name": "Composite Golem",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "condemn",
+   "name": "Condemn",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cone of flame",
+   "name": "Cone of Flame",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "consume spirit",
+   "name": "Consume Spirit",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "contaminated bond",
+   "name": "Contaminated Bond",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "counsel of the soratami",
+   "name": "Counsel of the Soratami",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "crafty pathmage",
+   "name": "Crafty Pathmage",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "craw wurm",
+   "name": "Craw Wurm",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "creeping mold",
+   "name": "Creeping Mold",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "crucible of worlds",
+   "name": "Crucible of Worlds",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cruel edict",
+   "name": "Cruel Edict",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cryoclasm",
+   "name": "Cryoclasm",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "deathmark",
+   "name": "Deathmark",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "dehydration",
+   "name": "Dehydration",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "deluge",
+   "name": "Deluge",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "demolish",
+   "name": "Demolish",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "demon's horn",
+   "name": "Demon's Horn",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "demystify",
+   "name": "Demystify",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "denizen of the deep",
+   "name": "Denizen of the Deep",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "diabolic tutor",
+   "name": "Diabolic Tutor",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "discombobulate",
+   "name": "Discombobulate",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "distress",
+   "name": "Distress",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "doomed necromancer",
+   "name": "Doomed Necromancer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "doubling cube",
+   "name": "Doubling Cube",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "dragon roost",
+   "name": "Dragon Roost",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "dragon's claw",
+   "name": "Dragon's Claw",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_quantity: put the top X cards of his or her library into his or her graveyard, where X is the number of cards in his or her hand"
+   ],
+   "key": "dreamborn muse",
+   "name": "Dreamborn Muse",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "dross crocodile",
+   "name": "Dross Crocodile",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "drudge skeletons",
+   "name": "Drudge Skeletons",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "duct crawler",
+   "name": "Duct Crawler",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "dusk imp",
+   "name": "Dusk Imp",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "earth elemental",
+   "name": "Earth Elemental",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "elven riders",
+   "name": "Elven Riders",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "elvish berserker",
+   "name": "Elvish Berserker",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "elvish champion",
+   "name": "Elvish Champion",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "elvish piper",
+   "name": "Elvish Piper",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "enormous baloth",
+   "name": "Enormous Baloth",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "essence drain",
+   "name": "Essence Drain",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "evacuation",
+   "name": "Evacuation",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {U} to your mana pool."
+   ],
+   "key": "faerie conclave",
+   "name": "Faerie Conclave",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "fear",
+   "name": "Fear",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "femeref archers",
+   "name": "Femeref Archers",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "festering goblin",
+   "name": "Festering Goblin",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "field marshal",
+   "name": "Field Marshal",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "firebreathing",
+   "name": "Firebreathing",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "fists of the anvil",
+   "name": "Fists of the Anvil",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "flamewave invoker",
+   "name": "Flamewave Invoker",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "flashfreeze",
+   "name": "Flashfreeze",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "flowstone slide",
+   "name": "Flowstone Slide",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "fog elemental",
+   "name": "Fog Elemental",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {W} to your mana pool."
+   ],
+   "key": "forbidding watchtower",
+   "name": "Forbidding Watchtower",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "fountain of youth",
+   "name": "Fountain of Youth",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "fugitive wizard",
+   "name": "Fugitive Wizard",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "furnace of rath",
+   "name": "Furnace of Rath",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "furnace whelp",
+   "name": "Furnace Whelp",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "gaea's herald",
+   "name": "Gaea's Herald",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {R} to your mana pool."
+   ],
+   "key": "ghitu encampment",
+   "name": "Ghitu Encampment",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "ghost warden",
+   "name": "Ghost Warden",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "giant spider",
+   "name": "Giant Spider",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "glorious anthem",
+   "name": "Glorious Anthem",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "goblin elite infantry",
+   "name": "Goblin Elite Infantry",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "goblin king",
+   "name": "Goblin King",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "goblin lore",
+   "name": "Goblin Lore",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "goblin piker",
+   "name": "Goblin Piker",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "goblin sky raider",
+   "name": "Goblin Sky Raider",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "grave pact",
+   "name": "Grave Pact",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "graveborn muse",
+   "name": "Graveborn Muse",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "gravedigger",
+   "name": "Gravedigger",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Trigger:When a spell or ability an opponent controls causes you to discard ~: When a spell or ability an opponent controls causes you to discard ~, ~ deals 4 damage to target creature or player."
+   ],
+   "key": "guerrilla tactics",
+   "name": "Guerrilla Tactics",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "hail of arrows",
+   "name": "Hail of Arrows",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "hate weaver",
+   "name": "Hate Weaver",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 2,
+   "gaps": [
+    "Effect:shuffle: shuffles his or her library",
+    "Effect:unparsed_verb_arguments: put those cards into his or her hand"
+   ],
+   "key": "head games",
+   "name": "Head Games",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "heart of light",
+   "name": "Heart of Light",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "hidden horror",
+   "name": "Hidden Horror",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "high ground",
+   "name": "High Ground",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "highway robber",
+   "name": "Highway Robber",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "hill giant",
+   "name": "Hill Giant",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "holy day",
+   "name": "Holy Day",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "holy strength",
+   "name": "Holy Strength",
+   "supported": false
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "honor guard",
+   "name": "Honor Guard",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "horseshoe crab",
+   "name": "Horseshoe Crab",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "howling mine",
+   "name": "Howling Mine",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "hunted wumpus",
+   "name": "Hunted Wumpus",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "hurkyl's recall",
+   "name": "Hurkyl's Recall",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "hurricane",
+   "name": "Hurricane",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "hypnotic specter",
+   "name": "Hypnotic Specter",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "icatian priest",
+   "name": "Icatian Priest",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "icy manipulator",
+   "name": "Icy Manipulator",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "incinerate",
+   "name": "Incinerate",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "jayemdae tome",
+   "name": "Jayemdae Tome",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "joiner adept",
+   "name": "Joiner Adept",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "juggernaut",
+   "name": "Juggernaut",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "kamahl, pit fighter",
+   "name": "Kamahl, Pit Fighter",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "karplusan forest",
+   "name": "Karplusan Forest",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "karplusan strider",
+   "name": "Karplusan Strider",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "kavu climber",
+   "name": "Kavu Climber",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_replacement: {T}: All combat damage that would be dealt to you by unblocked creatures this turn is dealt to ~ instead."
+   ],
+   "key": "kjeldoran royal guard",
+   "name": "Kjeldoran Royal Guard",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "knight of dusk",
+   "name": "Knight of Dusk",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "kraken's eye",
+   "name": "Kraken's Eye",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "lava axe",
+   "name": "Lava Axe",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "lavaborn muse",
+   "name": "Lavaborn Muse",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "legacy weapon",
+   "name": "Legacy Weapon",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "leonin scimitar",
+   "name": "Leonin Scimitar",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "lightning elemental",
+   "name": "Lightning Elemental",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {G} to your mana pool."
+   ],
+   "key": "llanowar elves",
+   "name": "Llanowar Elves",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "llanowar sentinel",
+   "name": "Llanowar Sentinel",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "llanowar wastes",
+   "name": "Llanowar Wastes",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "looming shade",
+   "name": "Looming Shade",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: Flying, trample"
+   ],
+   "key": "lord of the pit",
+   "name": "Lord of the Pit",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "lord of the undead",
+   "name": "Lord of the Undead",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "loxodon mystic",
+   "name": "Loxodon Mystic",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "loxodon warhammer",
+   "name": "Loxodon Warhammer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "loyal sentry",
+   "name": "Loyal Sentry",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "lumengrid warden",
+   "name": "Lumengrid Warden",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "luminesce",
+   "name": "Luminesce",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "lure",
+   "name": "Lure",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mahamoti djinn",
+   "name": "Mahamoti Djinn",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "manabarbs",
+   "name": "Manabarbs",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mantis engine",
+   "name": "Mantis Engine",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "march of the machines",
+   "name": "March of the Machines",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mass of ghouls",
+   "name": "Mass of Ghouls",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "megrim",
+   "name": "Megrim",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "merfolk looter",
+   "name": "Merfolk Looter",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "midnight ritual",
+   "name": "Midnight Ritual",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "might of oaks",
+   "name": "Might of Oaks",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "might weaver",
+   "name": "Might Weaver",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {2}, {T}: Target player puts the top two cards of his or her library into his or her graveyard."
+   ],
+   "key": "millstone",
+   "name": "Millstone",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mind bend",
+   "name": "Mind Bend",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mind rot",
+   "name": "Mind Rot",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "mind stone",
+   "name": "Mind Stone",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: First strike, forestwalk, vigilance"
+   ],
+   "key": "mirri, cat warrior",
+   "name": "Mirri, Cat Warrior",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mobilization",
+   "name": "Mobilization",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mogg fanatic",
+   "name": "Mogg Fanatic",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "molimo, maro-sorcerer",
+   "name": "Molimo, Maro-Sorcerer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mortal combat",
+   "name": "Mortal Combat",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mortivore",
+   "name": "Mortivore",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "nantuko husk",
+   "name": "Nantuko Husk",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "natural spring",
+   "name": "Natural Spring",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "nekrataal",
+   "name": "Nekrataal",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "nightmare",
+   "name": "Nightmare",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "no rest for the wicked",
+   "name": "No Rest for the Wicked",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "nomad mythmaker",
+   "name": "Nomad Mythmaker",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "orcish artillery",
+   "name": "Orcish Artillery",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "ornithopter",
+   "name": "Ornithopter",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 2,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: add {G}{G} to his or her mana pool",
+    "SilentDrop:1_of_2"
+   ],
+   "key": "overgrowth",
+   "name": "Overgrowth",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "overrun",
+   "name": "Overrun",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "pacifism",
+   "name": "Pacifism",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: First strike, protection from black and from red"
+   ],
+   "key": "paladin en-vec",
+   "name": "Paladin en-Vec",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "pariah",
+   "name": "Pariah",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "peek",
+   "name": "Peek",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "persuasion",
+   "name": "Persuasion",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "phage the untouchable",
+   "name": "Phage the Untouchable",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "phantom warrior",
+   "name": "Phantom Warrior",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "phyrexian rager",
+   "name": "Phyrexian Rager",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "phyrexian vault",
+   "name": "Phyrexian Vault",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: Shroud"
+   ],
+   "key": "pincher beetles",
+   "name": "Pincher Beetles",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: As ~ enters the battlefield, name a card."
+   ],
+   "key": "pithing needle",
+   "name": "Pithing Needle",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_replacement: if target player would draw a card, instead that player skips that draw"
+   ],
+   "key": "plagiarize",
+   "name": "Plagiarize",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "plague beetle",
+   "name": "Plague Beetle",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "plague wind",
+   "name": "Plague Wind",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "platinum angel",
+   "name": "Platinum Angel",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "primal rage",
+   "name": "Primal Rage",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "prodigal pyromancer",
+   "name": "Prodigal Pyromancer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "puppeteer",
+   "name": "Puppeteer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "pyroclasm",
+   "name": "Pyroclasm",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "quicksand",
+   "name": "Quicksand",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "quirion dryad",
+   "name": "Quirion Dryad",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rage weaver",
+   "name": "Rage Weaver",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "raging goblin",
+   "name": "Raging Goblin",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rain of tears",
+   "name": "Rain of Tears",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "ravenous rats",
+   "name": "Ravenous Rats",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "razormane masticore",
+   "name": "Razormane Masticore",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "recollect",
+   "name": "Recollect",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "recover",
+   "name": "Recover",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "regeneration",
+   "name": "Regeneration",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "relentless assault",
+   "name": "Relentless Assault",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "relentless rats",
+   "name": "Relentless Rats",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:shuffle: Target player shuffles his or her graveyard into his or her library."
+   ],
+   "key": "reminisce",
+   "name": "Reminisce",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "remove soul",
+   "name": "Remove Soul",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "reviving dose",
+   "name": "Reviving Dose",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "reya dawnbringer",
+   "name": "Reya Dawnbringer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rhox",
+   "name": "Rhox",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "righteousness",
+   "name": "Righteousness",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "robe of mirrors",
+   "name": "Robe of Mirrors",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rock badger",
+   "name": "Rock Badger",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rod of ruin",
+   "name": "Rod of Ruin",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: Artifacts and lands enter the battlefield tapped."
+   ],
+   "key": "root maze",
+   "name": "Root Maze",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rootwalla",
+   "name": "Rootwalla",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rootwater commando",
+   "name": "Rootwater Commando",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rootwater matriarch",
+   "name": "Rootwater Matriarch",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "royal assassin",
+   "name": "Royal Assassin",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rule of law",
+   "name": "Rule of Law",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rushwood dryad",
+   "name": "Rushwood Dryad",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sage owl",
+   "name": "Sage Owl",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "samite healer",
+   "name": "Samite Healer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unrecognized_clause_head: repeat this process"
+   ],
+   "key": "scalpelexis",
+   "name": "Scalpelexis",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "scathe zombies",
+   "name": "Scathe Zombies",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "scion of the wild",
+   "name": "Scion of the Wild",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "scoria wurm",
+   "name": "Scoria Wurm",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:static_structure: You may have ~ enter the battlefield as a copy of any artifact on the battlefield."
+   ],
+   "key": "sculpting steel",
+   "name": "Sculpting Steel",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sea monster",
+   "name": "Sea Monster",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "seedborn muse",
+   "name": "Seedborn Muse",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "seismic assault",
+   "name": "Seismic Assault",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sengir vampire",
+   "name": "Sengir Vampire",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "serra's embrace",
+   "name": "Serra's Embrace",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "severed legion",
+   "name": "Severed Legion",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "shatterstorm",
+   "name": "Shatterstorm",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:2_of_3"
+   ],
+   "key": "shimmering wings",
+   "name": "Shimmering Wings",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "shivan dragon",
+   "name": "Shivan Dragon",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "shivan hellkite",
+   "name": "Shivan Hellkite",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "shivan reef",
+   "name": "Shivan Reef",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "shunt",
+   "name": "Shunt",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "siege-gang commander",
+   "name": "Siege-Gang Commander",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sift",
+   "name": "Sift",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sky weaver",
+   "name": "Sky Weaver",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: Flying, first strike"
+   ],
+   "key": "skyhunter patrol",
+   "name": "Skyhunter Patrol",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: Flying, vigilance"
+   ],
+   "key": "skyhunter prowler",
+   "name": "Skyhunter Prowler",
+   "supported": false
+  },
+  {
+   "exercised": true,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: Flying, double strike"
+   ],
+   "key": "skyhunter skirmisher",
+   "name": "Skyhunter Skirmisher",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unrecognized_clause_head: Activate this ability only any time you could cast a sorcery"
+   ],
+   "key": "skyshroud ranger",
+   "name": "Skyshroud Ranger",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sleeper agent",
+   "name": "Sleeper Agent",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "smash",
+   "name": "Smash",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "snapping drake",
+   "name": "Snapping Drake",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "soul feast",
+   "name": "Soul Feast",
+   "supported": true
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "soul warden",
+   "name": "Soul Warden",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 2,
+   "gaps": [
+    "Effect:unparsed_quantity: ~ deals damage to target creature or player equal to the total power of the sacrificed creatures.",
+    "SilentDrop:1_of_2"
+   ],
+   "key": "soulblast",
+   "name": "Soulblast",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: Trample, haste"
+   ],
+   "key": "spark elemental",
+   "name": "Spark Elemental",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {B} to your mana pool."
+   ],
+   "key": "spawning pool",
+   "name": "Spawning Pool",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "spellbook",
+   "name": "Spellbook",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "spiketail hatchling",
+   "name": "Spiketail Hatchling",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "spined wurm",
+   "name": "Spined Wurm",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "spineless thug",
+   "name": "Spineless Thug",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "spirit link",
+   "name": "Spirit Link",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "spirit weaver",
+   "name": "Spirit Weaver",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "spitting earth",
+   "name": "Spitting Earth",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "squee, goblin nabob",
+   "name": "Squee, Goblin Nabob",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "stalking tiger",
+   "name": "Stalking Tiger",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "stampeding wildebeests",
+   "name": "Stampeding Wildebeests",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "starlight invoker",
+   "name": "Starlight Invoker",
+   "supported": true
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "steadfast guard",
+   "name": "Steadfast Guard",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "steel golem",
+   "name": "Steel Golem",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "story circle",
+   "name": "Story Circle",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_quantity: Each player loses 1 life for each creature he or she controls."
+   ],
+   "key": "stronghold discipline",
+   "name": "Stronghold Discipline",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "stun",
+   "name": "Stun",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sudden impact",
+   "name": "Sudden Impact",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "sulfurous springs",
+   "name": "Sulfurous Springs",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sunken hope",
+   "name": "Sunken Hope",
+   "supported": true
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "suntail hawk",
+   "name": "Suntail Hawk",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sylvan basilisk",
+   "name": "Sylvan Basilisk",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sylvan scrying",
+   "name": "Sylvan Scrying",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "tangle spider",
+   "name": "Tangle Spider",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "telepathy",
+   "name": "Telepathy",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "telling time",
+   "name": "Telling Time",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "tempest of light",
+   "name": "Tempest of Light",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "terramorphic expanse",
+   "name": "Terramorphic Expanse",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "terror",
+   "name": "Terror",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "the hive",
+   "name": "The Hive",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "thieving magpie",
+   "name": "Thieving Magpie",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "threaten",
+   "name": "Threaten",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unrecognized_clause_head: Activate this ability only any time you could cast a sorcery"
+   ],
+   "key": "thrull surgeon",
+   "name": "Thrull Surgeon",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "thundering giant",
+   "name": "Thundering Giant",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "tidings",
+   "name": "Tidings",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "time stop",
+   "name": "Time Stop",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "time stretch",
+   "name": "Time Stretch",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: Target player puts the top half of his or her library, rounded down, into his or her graveyard."
+   ],
+   "key": "traumatize",
+   "name": "Traumatize",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "treasure hunter",
+   "name": "Treasure Hunter",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "treetop bracers",
+   "name": "Treetop Bracers",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 2,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {G} to your mana pool.",
+    "ParserMisfire:InvalidSubtype(Ape)"
+   ],
+   "key": "treetop village",
+   "name": "Treetop Village",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "troll ascetic",
+   "name": "Troll Ascetic",
+   "supported": true
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "true believer",
+   "name": "True Believer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "tundra wolves",
+   "name": "Tundra Wolves",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "twincast",
+   "name": "Twincast",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "twitch",
+   "name": "Twitch",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "uncontrollable anger",
+   "name": "Uncontrollable Anger",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "underground river",
+   "name": "Underground River",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "underworld dreams",
+   "name": "Underworld Dreams",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "SilentDrop:1_of_2"
+   ],
+   "key": "unholy strength",
+   "name": "Unholy Strength",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: Mana pools don't empty as steps and phases end."
+   ],
+   "key": "upwelling",
+   "name": "Upwelling",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "vampire bats",
+   "name": "Vampire Bats",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "vedalken mastermind",
+   "name": "Vedalken Mastermind",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "venerable monk",
+   "name": "Venerable Monk",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "verdant force",
+   "name": "Verdant Force",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "viashino runner",
+   "name": "Viashino Runner",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "viashino sandscout",
+   "name": "Viashino Sandscout",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "viridian shaman",
+   "name": "Viridian Shaman",
+   "supported": true
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "voice of all",
+   "name": "Voice of All",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unknown: Defender, flying"
+   ],
+   "key": "wall of air",
+   "name": "Wall of Air",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "wall of fire",
+   "name": "Wall of Fire",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "wall of swords",
+   "name": "Wall of Swords",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "wall of wood",
+   "name": "Wall of Wood",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 2,
+   "gaps": [
+    "Effect:shuffle: Each player shuffles all permanents he or she owns into his or her library, then reveals that many cards from the top of his or her library. Each player puts all artifact, creature, and land cards revealed this way onto the battlefield, then does the same for enchantment cards, then puts all cards revealed this way that weren't put onto the battlefield on the bottom of his or her library.",
+    "Effect:unparsed_verb_arguments: reveal that many cards from the top of his or her library"
+   ],
+   "key": "warp world",
+   "name": "Warp World",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "warrior's honor",
+   "name": "Warrior's Honor",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "whispersilk cloak",
+   "name": "Whispersilk Cloak",
+   "supported": true
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "wild griffin",
+   "name": "Wild Griffin",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Swallow:DynamicQty: [warning:swallowed-clause] DynamicQty — Flying\nCreatures can't attack you unless their controller pays {2} for each creature he or she controls that's attacking you."
+   ],
+   "key": "windborn muse",
+   "name": "Windborn Muse",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "wurm's tooth",
+   "name": "Wurm's Tooth",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:unparsed_verb_arguments: {T}: Add {C} to your mana pool."
+   ],
+   "key": "yavimaya coast",
+   "name": "Yavimaya Coast",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "yavimaya enchantress",
+   "name": "Yavimaya Enchantress",
+   "supported": true
+  },
+  {
+   "exercised": true,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "youthful knight",
+   "name": "Youthful Knight",
+   "supported": true
+  }
+ ],
+ "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
+ "faces": 354,
+ "generated_by": "coveragepack (phase engine)",
+ "levels": {
+  "coverage_known": "analyze_coverage conoce el soporte de reglas y las limitaciones",
+  "exercised": "la carta apareció en la partida de certificación",
+  "parsed": "Phase deserializó la cara (CardDatabase::from_json_str)",
+  "present": "el nombre está en el pack"
+ },
+ "pack": "10e",
+ "pack_bytes": 497611,
+ "summary": {
+  "cards": 354,
+  "exercised": 12,
+  "supported": 286,
+  "with_known_gaps": 68
+ },
+ "pack_sha256": "8f269bf417b9953b4650ba0b9a198e444ceb74e03c569790b678fcf2baa588c5",
+ "verified": true,
+ "generated_at": "2026-10-29T21:28:21.599Z"
+}

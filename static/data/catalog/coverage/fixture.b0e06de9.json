@@ -1,0 +1,746 @@
+{
+ "cards": [
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "armored armadillo",
+   "name": "Armored Armadillo",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "ash zealot",
+   "name": "Ash Zealot",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "augur of bolas",
+   "name": "Augur of Bolas",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "baneslayer angel",
+   "name": "Baneslayer Angel",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "banishing light",
+   "name": "Banishing Light",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "blade splicer",
+   "name": "Blade Splicer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "blood burglar",
+   "name": "Blood Burglar",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "blood petal celebrant",
+   "name": "Blood Petal Celebrant",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "bomat courier",
+   "name": "Bomat Courier",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "bonesplitter",
+   "name": "Bonesplitter",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "brainstorm",
+   "name": "Brainstorm",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cancel",
+   "name": "Cancel",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cast down",
+   "name": "Cast Down",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "champion of arashin",
+   "name": "Champion of Arashin",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "charging paladin",
+   "name": "Charging Paladin",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "chop down",
+   "name": "Chop Down",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cleric of the forward order",
+   "name": "Cleric of the Forward Order",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cloudreader sphinx",
+   "name": "Cloudreader Sphinx",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "colossal might",
+   "name": "Colossal Might",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "counterspell",
+   "name": "Counterspell",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "cut down",
+   "name": "Cut Down",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "darksteel myr",
+   "name": "Darksteel Myr",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "delver of secrets",
+   "name": "Delver of Secrets",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "disenchant",
+   "name": "Disenchant",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "divine offering",
+   "name": "Divine Offering",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "divine verdict",
+   "name": "Divine Verdict",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "doom blade",
+   "name": "Doom Blade",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "drannith healer",
+   "name": "Drannith Healer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "eager cadet",
+   "name": "Eager Cadet",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "elite vanguard",
+   "name": "Elite Vanguard",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "enduring innocence",
+   "name": "Enduring Innocence",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "essence scatter",
+   "name": "Essence Scatter",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "eye collector",
+   "name": "Eye Collector",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "faerie miscreant",
+   "name": "Faerie Miscreant",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 1,
+   "gaps": [
+    "Effect:static_structure: Each Vampire creature card you own that isn't on the battlefield has madness. The madness cost is equal to its mana cost."
+   ],
+   "key": "falkenrath gorger",
+   "name": "Falkenrath Gorger",
+   "supported": false
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "fervent champion",
+   "name": "Fervent Champion",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "forest",
+   "name": "Forest",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "giant growth",
+   "name": "Giant Growth",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "giant killer",
+   "name": "Giant Killer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "gifted aetherborn",
+   "name": "Gifted Aetherborn",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "glory seeker",
+   "name": "Glory Seeker",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "go for the throat",
+   "name": "Go for the Throat",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "goblin chainwhirler",
+   "name": "Goblin Chainwhirler",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "goblin guide",
+   "name": "Goblin Guide",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "grizzly bears",
+   "name": "Grizzly Bears",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "gutterbones",
+   "name": "Gutterbones",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "healer's hawk",
+   "name": "Healer's Hawk",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "heart's desire",
+   "name": "Heart's Desire",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "immersturm raider",
+   "name": "Immersturm Raider",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "insectile aberration",
+   "name": "Insectile Aberration",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "island",
+   "name": "Island",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "jace, the mind sculptor",
+   "name": "Jace, the Mind Sculptor",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "kalonian tusker",
+   "name": "Kalonian Tusker",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "lava spike",
+   "name": "Lava Spike",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "leatherback baloth",
+   "name": "Leatherback Baloth",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "lightning bolt",
+   "name": "Lightning Bolt",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "lightning strike",
+   "name": "Lightning Strike",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "linden, the steadfast queen",
+   "name": "Linden, the Steadfast Queen",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "lovestruck beast",
+   "name": "Lovestruck Beast",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "monastery swiftspear",
+   "name": "Monastery Swiftspear",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mountain",
+   "name": "Mountain",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "mox pearl",
+   "name": "Mox Pearl",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "murder",
+   "name": "Murder",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "naturalize",
+   "name": "Naturalize",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "negate",
+   "name": "Negate",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "opt",
+   "name": "Opt",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "path to exile",
+   "name": "Path to Exile",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "plains",
+   "name": "Plains",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rampant growth",
+   "name": "Rampant Growth",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "rancor",
+   "name": "Rancor",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "revitalize",
+   "name": "Revitalize",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sakashima of a thousand faces",
+   "name": "Sakashima of a Thousand Faces",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "savannah lions",
+   "name": "Savannah Lions",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "searing spear",
+   "name": "Searing Spear",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "serra angel",
+   "name": "Serra Angel",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "shock",
+   "name": "Shock",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "soldier of the pantheon",
+   "name": "Soldier of the Pantheon",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "spectral sailor",
+   "name": "Spectral Sailor",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "sphinx of the steel wind",
+   "name": "Sphinx of the Steel Wind",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "swamp",
+   "name": "Swamp",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "swords to plowshares",
+   "name": "Swords to Plowshares",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "tarmogoyf",
+   "name": "Tarmogoyf",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "think twice",
+   "name": "Think Twice",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "ultimate price",
+   "name": "Ultimate Price",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "unsummon",
+   "name": "Unsummon",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "vampire nighthawk",
+   "name": "Vampire Nighthawk",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "viashino pyromancer",
+   "name": "Viashino Pyromancer",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "walk the plank",
+   "name": "Walk the Plank",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "witherbloom apprentice",
+   "name": "Witherbloom Apprentice",
+   "supported": true
+  },
+  {
+   "exercised": false,
+   "gap_count": 0,
+   "gaps": [],
+   "key": "wrath of god",
+   "name": "Wrath of God",
+   "supported": true
+  }
+ ],
+ "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
+ "faces": 90,
+ "generated_by": "coveragepack (phase engine)",
+ "levels": {
+  "coverage_known": "analyze_coverage conoce el soporte de reglas y las limitaciones",
+  "exercised": "la carta apareció en la partida de certificación",
+  "parsed": "Phase deserializó la cara (CardDatabase::from_json_str)",
+  "present": "el nombre está en el pack"
+ },
+ "pack": "fixture",
+ "pack_bytes": 125111,
+ "summary": {
+  "cards": 90,
+  "exercised": 0,
+  "supported": 89,
+  "with_known_gaps": 1
+ },
+ "pack_sha256": "b0e06de97473e9a60f0d569b3a5b70fed297ca11690cf2660ed30088c6c4c428",
+ "verified": true,
+ "generated_at": "2026-10-29T21:28:04.520Z"
+}

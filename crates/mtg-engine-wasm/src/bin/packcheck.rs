@@ -121,6 +121,10 @@ fn main() {
     let mut steps = 0usize;
     let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
     let mut game_over: Option<Option<usize>> = None;
+    // Which cards actually appeared in this game. Coverage says whether the
+    // engine understands a card; this says whether it was ever used, and the two
+    // are different claims (23 of 354 faces were used in the 10E certifying game).
+    let mut exercised: BTreeSet<String> = BTreeSet::new();
     for _ in 0..max_steps {
         if let WaitingFor::GameOver { winner } = &state.waiting_for {
             game_over = Some(winner.map(|p| p.0 as usize));
@@ -130,8 +134,31 @@ fn main() {
         let (legal, _, _) = engine::ai_support::legal_actions_for_viewer(&state, viewer);
         let Some(action) = choose(&legal, &state) else { break };
         *kinds.entry(action_kind(&action)).or_insert(0) += 1;
+        if let GameAction::CastSpell { object_id, .. } = &action {
+            if let Some(object) = state.objects.get(object_id) {
+                exercised.insert(object.name.to_lowercase());
+            }
+        }
         if apply_with_rejection(&mut state, viewer, action).is_err() {
             break;
+        }
+        // A card is "exercised" once it leaves the hidden zones: being cast,
+        // entering the battlefield, dying or being exiled. Cards that only ever
+        // sat in a library or hand are not counted — they were never played.
+        let mut touched: Vec<_> = state.battlefield.iter().copied().collect();
+        for player in &state.players {
+            touched.extend(player.graveyard.iter().copied());
+        }
+        for id in &state.exile {
+            touched.push(*id);
+        }
+        for entry in &state.stack {
+            touched.push(entry.source_id);
+        }
+        for id in touched {
+            if let Some(object) = state.objects.get(&id) {
+                exercised.insert(object.name.to_lowercase());
+            }
         }
         steps += 1;
     }
@@ -173,6 +200,7 @@ fn main() {
         "action_kinds": kinds,
         "game_over": game_over.map(|winner| serde_json::json!({ "winner": winner })),
         "library_counts": library_counts,
+        "exercised_names": exercised.into_iter().collect::<Vec<_>>(),
         "timing_ms": {
             "pack_parse": (parse_ms * 10.0).round() / 10.0,
             "deck_resolve": (resolve_ms * 10.0).round() / 10.0,

@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "generated_at": "2026-10-29T21:23:22.789Z",
+  "version": 4,
+  "generated_at": "2026-10-29T21:27:07.296Z",
   "format": "atomic",
   "packs": [
     {
@@ -469,20 +469,20 @@
       "core": false,
       "verified": true,
       "faces": 354,
-      "bytes": 515285,
-      "sha256": "2a1ac7e5af2e53b6781dbc4bed575938333e2e9e92ac3765fd8a96ce22f5d9e5",
+      "bytes": 497611,
+      "sha256": "8f269bf417b9953b4650ba0b9a198e444ceb74e03c569790b678fcf2baa588c5",
       "source": "MTGJSON 10E.es.json (v3) → scripts/import-set.ts → bin catalog (CardDatabase::from_mtgjson + export_subset_json)",
       "overlap": {
         "fixture": [
-          "serra angel",
-          "cancel",
           "giant growth",
-          "rampant growth",
-          "unsummon",
           "naturalize",
+          "unsummon",
           "shock",
           "wrath of god",
-          "grizzly bears"
+          "grizzly bears",
+          "serra angel",
+          "cancel",
+          "rampant growth"
         ]
       }
     }

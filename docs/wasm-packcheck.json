@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-29T21:08:14.008Z",
+  "generated_at": "2026-10-29T21:29:19.227Z",
   "engine": "static/wasm/mtg_engine_wasm.wasm",
   "engine_bytes": 48374605,
   "packs": [
@@ -10,16 +10,16 @@
     },
     {
       "path": "static/data/catalog/packs/10e.json",
-      "bytes": 525607,
+      "bytes": 497611,
       "faces": 354
     }
   ],
   "catalog_faces": 444,
-  "merge_ms": 6.8,
-  "compile_ms": 823.3,
-  "instantiate_ms": 19.6,
-  "wasm_memory_mb": 33.6,
-  "init_ms": 203.2,
+  "merge_ms": 4.1,
+  "compile_ms": 718.7,
+  "instantiate_ms": 14.9,
+  "wasm_memory_mb": 33.1,
+  "init_ms": 176.3,
   "decks": "docs/packcheck-10e-decks.json",
   "seed": 7,
   "requested": {
@@ -30,26 +30,26 @@
     40,
     40
   ],
-  "steps": 1063,
+  "steps": 1055,
   "action_kinds": {
     "MulliganDecision": 2,
-    "PassPriority": 866,
+    "PassPriority": 862,
     "PlayLand": 18,
-    "CastSpell": 16,
-    "ActivateAbility": 115,
+    "CastSpell": 18,
+    "ActivateAbility": 111,
     "DeclareAttackers": 27,
     "DeclareBlockers": 15,
     "ChooseOption": 1,
-    "SelectCards": 3
+    "SelectCards": 1
   },
   "step_ms": {
-    "median": 10.27,
-    "p90": 12.42,
-    "max": 31.62
+    "median": 9.43,
+    "p90": 11.86,
+    "max": 21.93
   },
-  "wasm_calls": 1064,
-  "wasm_call_ms": 10819,
-  "max_response_bytes": 229758,
+  "wasm_calls": 1056,
+  "wasm_call_ms": 9915.3,
+  "max_response_bytes": 216375,
   "outcome": {
     "draw": false,
     "winner": 1

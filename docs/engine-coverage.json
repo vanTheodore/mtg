@@ -33,25 +33,29 @@
     },
     {
       "id": "10e",
-      "sha256": "2a1ac7e5af2e53b6781dbc4bed575938333e2e9e92ac3765fd8a96ce22f5d9e5",
+      "sha256": "8f269bf417b9953b4650ba0b9a198e444ceb74e03c569790b678fcf2baa588c5",
       "faces": 354,
       "levels": {
         "found": true,
         "parsed": true,
-        "coverage_known": false,
+        "coverage_known": true,
         "exercised": "parcial"
       },
       "evidence": [
         {
           "kind": "parse",
-          "detail": "data/mtgjson/10E.es.json (MTGJSON v3, 363 cartas) -> scripts/import-set.ts (v5) -> bin `catalog` de mtg-engine-wasm (CardDatabase::from_mtgjson + export_subset_json) escribe static/data/catalog/packs/10e.json (354 caras, sha256 65711d59...). `packcheck` vuelve a deserializarlo con CardDatabase::from_json_str, la misma funcion que usa el puente WASM."
+          "detail": "data/mtgjson/10E.es.json (MTGJSON v3, 363 cartas) -> scripts/import-set.ts (v5, con keywords derivadas de la linea de la propia carta) -> bin `catalog` de mtg-engine-wasm (CardDatabase::from_mtgjson + export_subset_json) escribe static/data/catalog/packs/10e.json (354 caras; 9 nombres los aporta el pack core y quedan en `overlap`)."
         },
         {
           "kind": "game",
-          "detail": "docs/packcheck-10e.json (nativo, semilla 7): 444 caras cargadas, 40/40 cartas resueltas por asiento, 1063 pasos, ganador asiento 1. docs/wasm-packcheck.json (WASM publicado, misma semilla): mismos 1063 pasos, mismas acciones y mismo ganador; resolved_after_init [40,40]. src/lib/game/__tests__/engine-parity.test.ts exige esa coincidencia."
+          "detail": "docs/packcheck-10e.json (nativo, semilla 7): 444 caras cargadas, 40/40 resueltas por asiento, 1055 pasos, ganador asiento 1. docs/wasm-packcheck.json (WASM publicado, misma semilla): mismos 1055 pasos, mismas acciones y mismo ganador. src/lib/game/__tests__/engine-parity.test.ts exige esa coincidencia."
+        },
+        {
+          "kind": "coverage",
+          "detail": "static/data/catalog/coverage/10e.8f269bf4.json, generado por crates/mtg-engine-wasm/src/bin/coveragepack.rs con analyze_coverage de Phase: 354 caras, 286 soportadas, 68 con limitaciones conocidas, 12 ejercitadas. Los estados se separan en present/parsed/coverage_known/exercised y la politica de inicio vive en src/lib/game/coverage.ts."
         }
       ],
-      "note": "`exercised` es parcial: la partida ejercita 23 caras distintas de 10E. La cobertura por carta necesita la API coverage.rs, que el puente todavia no expone. El WASM se reconstruyo en este entorno (48,3 MB) y jugo la misma partida que el motor nativo; no hay evidencia de navegador (Chromium no disponible)."
+      "note": "`exercised` es parcial: la partida de certificacion ejercita 12 de las 354 caras. `coverage_known` ya es true: Phase conoce que falta en cada carta y el cliente lo usa para bloquear por defecto las cartas con limitaciones (con opcion explicita del jugador). Soporte del parser != correccion exhaustiva: 286 caras sin limitaciones conocidas no garantizan todas las interacciones posibles."
     }
   ]
 }

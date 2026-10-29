@@ -33,6 +33,8 @@ export interface MtgjsonCard {
   multiverseid?: number | string;
   number?: string;
   rarity?: string;
+  /** MTGJSON v5 only: v3 set files carry no keyword list. */
+  keywords?: string[];
 }
 
 export interface MtgjsonSetFile {
@@ -57,6 +59,7 @@ export interface AtomicFace {
   toughness?: string;
   loyalty?: string;
   layout?: string;
+  keywords?: string[];
   identifiers?: { scryfallOracleId?: string; multiverseId?: string };
 }
 
@@ -90,6 +93,8 @@ export function atomicFromMtgjsonSet(file: MtgjsonSetFile): Record<string, Atomi
       toughness: card.toughness,
       loyalty: card.loyalty,
       layout: card.layout,
+      // v5 carries `keywords`; if it does not, read them from the keyword line.
+      keywords: card.keywords ?? deriveKeywords(card.text),
       identifiers: card.multiverseid !== undefined ? { multiverseId: String(card.multiverseid) } : undefined
     };
     out[key] = [...(out[key] ?? []), stripUndefined(face) as AtomicFace];
@@ -158,6 +163,49 @@ export interface AtomicFromV3Result {
   language: string | null;
 }
 
+/**
+ * Keyword abilities MTGJSON v5 declares as a list, which v3 does not carry at
+ * all. Without them Phase loads the face with `keywords: []` and a creature
+ * literally printed "Flying" has no flying — a rules difference, not cosmetics.
+ *
+ * The list is a *mechanical* reading of the card's own keyword line: the line
+ * has to be exactly the keyword, optionally followed by its reminder text
+ * ("First strike (This creature deals…"). Nothing is inferred from the effect
+ * text, and parameterised keywords (protection from X, landwalk with a variable
+ * type, ward N) are left out and reported instead of guessed.
+ */
+const KEYWORD_NAMES: string[] = [
+  'Flying', 'First strike', 'Double strike', 'Deathtouch', 'Defender', 'Haste',
+  'Hexproof', 'Indestructible', 'Intimidate', 'Lifelink', 'Menace', 'Reach',
+  'Trample', 'Vigilance', 'Banding', 'Flanking', 'Phasing', 'Rampage', 'Shadow',
+  'Bushido', 'Prowess', 'Wither', 'Infect', 'Exalted', 'Storm', 'Flash',
+  'Frenzy', 'Vanishing', 'Absorb', 'Affinity', 'Amplify', 'Aura swap',
+  'Bloodthirst', 'Cascade', 'Champion', 'Changeling', 'Convoke', 'Cycling',
+  'Delve', 'Dredge', 'Echo', 'Entwine', 'Epic', 'Evoke', 'Fading', 'Fear',
+  'Graft', 'Gravestorm', 'Haunt', 'Improvise', 'Kicker', 'Madness', 'Morph',
+  'Ninjutsu', 'Offering', 'Provoke', 'Rebound', 'Retrace', 'Ripple', 'Scry',
+  'Split second', 'Splice', 'Suspend', 'Totem armor', 'Transfigure', 'Transmute',
+  'Unearth', 'Unleash', 'Buyback', 'Enchant', 'Equip', 'Fortify', 'Reinforce',
+  'Swampwalk', 'Islandwalk', 'Forestwalk', 'Mountainwalk', 'Plainswalk',
+  'Desertwalk', 'Legendary landwalk', 'Snow landwalk'
+];
+const KEYWORD_BY_LOWER = new Map(KEYWORD_NAMES.map((keyword) => [keyword.toLowerCase(), keyword]));
+
+/** Keyword lines in the card's own text. Returns the ones we can state exactly. */
+export function deriveKeywords(text: string | undefined): string[] {
+  if (!text) return [];
+  const out: string[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    // Reminder text is parenthesised: "Trample (This creature can deal excess…)".
+    const head = line.split(' (')[0]!.trim().toLowerCase();
+    const keyword = KEYWORD_BY_LOWER.get(head);
+    if (keyword && !out.includes(keyword)) out.push(keyword);
+  }
+  return out;
+}
+
 export function mtgjsonV3ToAtomic(file: MtgjsonSetFile): AtomicFromV3Result {
   const data: Record<string, AtomicFace[]> = {};
   const skipped: AtomicFromV3Result['skipped'] = [];
@@ -184,6 +232,8 @@ export function mtgjsonV3ToAtomic(file: MtgjsonSetFile): AtomicFromV3Result {
       toughness: card.toughness,
       loyalty: card.loyalty,
       layout: card.layout,
+      // v3 has no keyword list; read it back from the card's own keyword line.
+      keywords: deriveKeywords(card.text),
       identifiers: card.multiverseid !== undefined ? { multiverseId: String(card.multiverseid) } : undefined
     };
     const clean = stripUndefined(face);

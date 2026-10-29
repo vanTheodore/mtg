@@ -14,6 +14,7 @@
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
   import { loadCatalog, loadPack, type Catalog, type CatalogIndex } from '#lib/game/catalog.ts';
   import { mergeCatalogs } from '#lib/game/canonical.ts';
+  import { assessDeck, describeAssessment, loadCoverage, type CardAssessment } from '#lib/game/coverage.ts';
   import { toEngineDeck, deckSize, type DeckLine } from '#lib/game/decks.ts';
   import { impressions } from '#lib/game/impressions.svelte.ts';
 
@@ -33,6 +34,13 @@
   /** Cards the deck needs whose packs are not play-certified. */
   let uncertified = $state<string[]>([]);
   let catalogConflicts = $state<string[]>([]);
+  /**
+   * Cards Phase reports as having known gaps, and the explicit opt-in that lets
+   * a game start with them anyway. Default is conservative: no opt-in, no game.
+   */
+  let limitedCards = $state<CardAssessment[]>([]);
+  let allowLimited = $state(false);
+  let coverageNotice = $state<string | null>(null);
   /** What the engine actually loaded, read back from its own snapshot. */
   let engineLoad = $state<{ requested: number; seats: number[] } | null>(null);
   let catalogReady = $state(false);
@@ -140,6 +148,19 @@
         + `Están en ${loaded.unverifiedPacks.length === 1 ? 'el pack' : 'los packs'} ${packs}, que Phase todavía no validó. No inicio la partida con cartas sin admitir.`;
       return false;
     }
+    // Coverage comes from Phase (`analyze_coverage`), one artifact per pack,
+    // content-addressed by the pack digest. Missing artifact = unknown, not
+    // incompatible; `supported: false` = known limitation, blocked by default.
+    const coverage = await loadCoverage(fetch, loaded.index.packs.filter((pack) => loaded.packs.includes(pack.id)));
+    const assessment = assessDeck(names, loaded.index, coverage, loaded.catalog);
+    limitedCards = assessment.limited;
+    coverageNotice = describeAssessment(assessment);
+    if (assessment.limited.length && !allowLimited) {
+      const detail = assessment.limited.slice(0, 6).map((card) => `${card.name}: ${card.gaps[0] ?? 'sin detalle'}`);
+      loadError = `Phase conoce limitaciones en ${assessment.limited.length} carta(s) del mazo: ${detail.join('; ')}${assessment.limited.length > 6 ? '…' : ''}. `
+        + 'No inicio la partida con cartas que el motor declara incompletas. Marcá «Permitir limitaciones conocidas» si querés jugarla igual.';
+      return false;
+    }
     loadError = null;
     session.modeLabel = label;
     await session.start(loaded.catalog, deck, seed);
@@ -207,6 +228,11 @@
   {#if session.error}
     <div class="notice error" role="alert">{session.error}</div>
   {/if}
+  {#if coverageNotice && snapshot}
+    <div class="notice warn" role="status">
+      Cobertura: {coverageNotice}.{limitedCards.length ? ' Partida iniciada con permiso explícito.' : ''}
+    </div>
+  {/if}
   {#if catalogConflicts.length}
     <div class="notice warn" role="status">
       Nombres definidos por más de un pack: {catalogConflicts.slice(0, 4).join('; ')}{catalogConflicts.length > 4 ? '…' : ''}.
@@ -244,6 +270,12 @@
           <label><input type="radio" bind:group={mode} value="custom" /> Mazo propio: {customName} <span>{deckSize(customLines)} cartas, {customLines.length} distintas. Sólo se cargan los packs que necesita.</span></label>
         {/if}
       </fieldset>
+      {#if limitedCards.length}
+        <label class="allow-limited">
+          <input type="checkbox" bind:checked={allowLimited} />
+          Permitir {limitedCards.length} carta(s) con limitaciones conocidas del parser
+        </label>
+      {/if}
       <DeckBuilder
         catalog={catalog}
         index={catalogIndex}
@@ -352,6 +384,7 @@
   .auto-pass { display: flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--ink-muted); }
   .seat { font-size: .8rem; color: var(--ink-muted); }
   .seat.mode { border: 1px solid var(--line); border-radius: 999px; padding: .1rem .5rem; }
+  .allow-limited { display: flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--ink-muted); }
   .notice { padding: .7rem .9rem; border-radius: 10px; font-size: .88rem; }
   .notice.error { background: color-mix(in srgb, var(--danger) 14%, var(--surface)); border: 1px solid var(--danger); color: var(--danger); }
   .notice.ok { background: color-mix(in srgb, var(--ok) 10%, var(--surface)); border: 1px solid var(--ok); color: var(--ok); }
