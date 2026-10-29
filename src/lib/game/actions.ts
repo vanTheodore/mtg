@@ -6,8 +6,7 @@ const LABELS: Record<string, string> = {
   CastSpell: 'Lanzar hechizo',
   DeclareAttackers: 'Declarar atacantes',
   DeclareBlockers: 'Declarar bloqueadoras',
-  KeepHand: 'Conservar mano',
-  Mulligan: 'Hacer mulligan',
+  MulliganDecision: 'Decisión de mulligan',
   ChooseOption: 'Elegir opción',
   ActivateAbility: 'Activar habilidad'
 };
@@ -15,6 +14,11 @@ const LABELS: Record<string, string> = {
 export function describeAction(action: GameAction, objects: Record<string, GameObject> = {}): string {
   const base = LABELS[action.type] ?? action.type;
   const data = action.data ?? {};
+  if (action.type === 'MulliganDecision') {
+    if (data.choice === 'Keep') return 'Conservar mano';
+    if (data.choice === 'Mulligan') return 'Hacer mulligan';
+    return 'Usar Serum Powder';
+  }
   const id = (data.object_id ?? data.source_id) as number | undefined;
   const obj = id !== undefined ? objects[String(id)] : undefined;
   if (obj && (action.type === 'PlayLand' || action.type === 'CastSpell' || action.type === 'ActivateAbility')) {

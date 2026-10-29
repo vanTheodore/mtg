@@ -93,29 +93,35 @@ fn submit(input: &[u8]) -> Vec<u8> {
         Ok(v) => v,
         Err(e) => return err(format!("action payload: {e}")),
     };
-    SESSION.with(|s| {
+    // Drop the mutable borrow before projecting a snapshot; snapshot_reply
+    // takes its own immutable borrow of the same thread-local session.
+    let outcome = SESSION.with(|s| -> Result<(ActionResult, f64), Vec<u8>> {
         let mut borrow = s.borrow_mut();
         let session = match borrow.as_mut() {
             Some(v) => v,
-            None => return err("engine not initialized"),
+            None => return Err(err("engine not initialized")),
         };
         let started = Instant::now();
         let actor = PlayerId(req.actor);
         let result = match apply_with_rejection(&mut session.state, actor, req.action) {
             Ok(r) => r,
             Err(rejection) => {
-                return serde_json::to_vec(&serde_json::json!({
+                return Err(serde_json::to_vec(&serde_json::json!({
                     "ok": false,
                     "rejected": true,
                     "code": format!("{:?}", rejection.code),
                     "error": "La acción no es legal en este estado."
-                })).unwrap();
+                })).unwrap());
             }
         };
         let engine_ms = started.elapsed().as_secs_f64() * 1000.0;
         session.actions += 1;
-        snapshot_reply(result, engine_ms, 0.0)
-    })
+        Ok((result, engine_ms))
+    });
+    match outcome {
+        Ok((result, engine_ms)) => snapshot_reply(result, engine_ms, 0.0),
+        Err(bytes) => bytes,
+    }
 }
 
 fn current_viewer(state: &GameState) -> PlayerId {

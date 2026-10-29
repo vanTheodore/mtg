@@ -46,7 +46,7 @@
     {:else}
       <div class="actions">
         {#each visible as action, i (i)}
-          <button type="button" class:primary={action.type === 'PassPriority' || action.type === 'KeepHand'} disabled={session.busy} onclick={() => play(action)}>
+          <button type="button" class:primary={action.type === 'PassPriority' || (action.type === 'MulliganDecision' && action.data?.choice === 'Keep')} disabled={session.busy} onclick={() => play(action)}>
             {describeAction(action, objects)}
           </button>
         {/each}

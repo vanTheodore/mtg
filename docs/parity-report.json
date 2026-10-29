@@ -1,0 +1,26 @@
+{
+  "harness": "direct Phase API vs raw wrapper ABI",
+  "reports": [
+    {
+      "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
+      "final_state_fingerprint": "89964b45825650b8",
+      "mismatches": [],
+      "seed": 42,
+      "steps": 80
+    },
+    {
+      "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
+      "final_state_fingerprint": "ceaa1e1c02ba14a5",
+      "mismatches": [],
+      "seed": 7,
+      "steps": 80
+    },
+    {
+      "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
+      "final_state_fingerprint": "9e245574a02f3076",
+      "mismatches": [],
+      "seed": 123,
+      "steps": 80
+    }
+  ]
+}

@@ -9,6 +9,7 @@ use engine::game::{load_and_hydrate_decks, turn_control};
 use engine::types::format::FormatConfig;
 use engine::types::game_state::GameState;
 use engine::types::player::PlayerId;
+use engine::types::actions::MulliganChoice;
 use engine::types::GameAction;
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -21,10 +22,11 @@ fn wrapper(op: u32, payload: &serde_json::Value) -> serde_json::Value {
 
 fn choose(actions: &[GameAction]) -> Option<GameAction> {
     let priority = |a: &GameAction| match a {
-        GameAction::KeepHand => 0,
-        GameAction::PlayLand { .. } => 1,
-        GameAction::PassPriority => 2,
-        _ => 3,
+        GameAction::MulliganDecision { choice: MulliganChoice::Keep } => 0,
+        GameAction::MulliganDecision { .. } => 1,
+        GameAction::PlayLand { .. } => 2,
+        GameAction::PassPriority => 3,
+        _ => 4,
     };
     actions.iter().min_by_key(|a| priority(a)).cloned()
 }
