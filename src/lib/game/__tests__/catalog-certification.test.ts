@@ -16,6 +16,15 @@ interface Served {
   packs: Record<string, Record<string, unknown>>;
 }
 
+/** The index must describe the bytes it serves, or the loader refuses them. */
+const describeBody = (body: unknown) => {
+  const text = JSON.stringify(body);
+  return {
+    bytes: Buffer.byteLength(text),
+    sha256: new Bun.CryptoHasher('sha256').update(text).digest('hex')
+  };
+};
+
 let served: Served;
 let requests: string[];
 let server: ReturnType<typeof Bun.serve>;
@@ -34,22 +43,23 @@ const pack = (overrides: Partial<CatalogPackMeta> & { id: string; names: string[
 
 beforeEach(() => {
   requests = [];
+  const bodies: Record<string, Record<string, unknown>> = {
+    lands: { plains: { name: 'Plains' }, mountain: { name: 'Mountain' } },
+    certified: { shock: { name: 'Shock' } },
+    raw: { 'ancestor\'s chosen': { name: "Ancestor's Chosen" } }
+  };
   served = {
     index: {
       version: 1,
       generated_at: '2026-10-29T00:00:00.000Z',
       format: 'atomic',
       packs: [
-        pack({ id: 'lands', names: ['Plains', 'Mountain'], core: true }),
-        pack({ id: 'certified', names: ['Shock'] }),
-        pack({ id: 'raw', names: ['Ancestor\'s Chosen'], verified: false })
+        pack({ id: 'lands', names: ['Plains', 'Mountain'], core: true, ...describeBody(bodies.lands) }),
+        pack({ id: 'certified', names: ['Shock'], ...describeBody(bodies.certified) }),
+        pack({ id: 'raw', names: ["Ancestor's Chosen"], verified: false, ...describeBody(bodies.raw) })
       ]
     },
-    packs: {
-      lands: { plains: { name: 'Plains' }, mountain: { name: 'Mountain' } },
-      certified: { shock: { name: 'Shock' } },
-      raw: { 'ancestor\'s chosen': { name: 'Ancestor\'s Chosen' } }
-    }
+    packs: bodies
   };
   server = Bun.serve({
     port: 0,
@@ -130,12 +140,12 @@ describe('pack cache identity', () => {
     expect(first.catalog.shock).toEqual({ name: 'Shock' });
 
     // Same id, new bytes, new hash, new index version: a rebuild.
+    served.packs.certified = { shock: { name: 'Shock', oracle_text: 'rebuilt' } };
     served.index = {
       ...served.index,
       version: 2,
-      packs: served.index.packs.map((entry) => (entry.id === 'certified' ? { ...entry, sha256: 'sha-certified-v2' } : entry))
+      packs: served.index.packs.map((entry) => (entry.id === 'certified' ? { ...entry, ...describeBody(served.packs.certified) } : entry))
     };
-    served.packs.certified = { shock: { name: 'Shock', oracle_text: 'rebuilt' } };
 
     const second = await loadCatalog(fetcher, ['Shock'], options);
     expect(second.catalog.shock).toEqual({ name: 'Shock', oracle_text: 'rebuilt' });

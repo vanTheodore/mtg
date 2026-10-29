@@ -8,6 +8,9 @@
 | Verificación de procedencia | 868 archivos de `crates/phase-engine/src` coinciden con el hash fijado | Comportamiento correcto de esas reglas |
 | Integración nativa (`engine:parity`, `engine:scenarios`) | API directa de Phase y ABI raw producen el mismo estado; escenarios explícitos alcanzan maná, lanzamiento, objetivos, combate, trigger, ficha y victoria | Que una persona pueda operar la UI |
 | Certificación de pack (`cargo run --bin packcheck`) | El pack que descarga el cliente lo deserializa Phase (`from_json_str`), resuelve el mazo completo y juega una partida real | Que el pack sea correcto por sí solo: sólo dice que el motor lo carga y juega |
+| Integridad de packs (`pack-integrity.test.ts`) | Un pack alterado, truncado, intercambiado o viejo se rechaza por longitud o sha256 antes de usarse; la URL es direccionada por contenido y el rechazo no envenena la caché | Que el índice no pueda mentir: si índice y archivo se regeneran juntos, ambos coinciden |
+| Cobertura por carta (`coverage.test.ts`, `coveragepack`) | El artefacto de cobertura publicado es el de ese sha256, suma lo que declara y la política de inicio bloquea lo limitado | Que una carta «soportada» esté jugada: eso exige `exercised` |
+| Paridad paso a paso (`scripts/parity-trace.ts`) | Nativo y WASM coinciden en actor, acción con argumentos, conjunto de legales y estado proyectado en **cada** paso | Más mazos y semillas: cubre un escenario, no el espacio de partidas |
 | Puente WASM (`bun scripts/wasm-packcheck.ts`) | El `.wasm` publicado instancia con los imports del cliente y juega la misma partida que el motor nativo (mismos pasos, mismo ganador) | Pintado, controles Svelte y a11y: siguen necesitando Chromium |
 | Integración WASM (`engine-gameplay.spec.ts`) | El Worker, ABI, catálogo, revisión y proyección reales alcanzan victoria y combate | Que los controles Svelte sean usables; llama al cliente desde el test |
 | Interacción visual (`ui-game.spec.ts`) | Una partida se inicia, conserva manos, juega tierras, lanza criaturas, ataca y gana pulsando controles Svelte; sin importar `EngineClient` ni fabricar acciones | IA, red, formatos completos o todas las cartas |
@@ -22,13 +25,18 @@ bun test src/lib
 bun run engine:verify
 bun run engine:parity
 bun run engine:scenarios
+bun run coverage:build
+bun run parity:trace <nativo.jsonl> <wasm.jsonl>
 bun run build
 bun run test:e2e
 MESA_SCRYFALL_LIVE=1 bun run test:e2e -- images-live.spec.ts
 ```
 
 `engine:parity` y `engine:scenarios` requieren el toolchain Rust y compilan Phase
-de forma nativa; son trabajos separados en CI. La compilación WASM usa el
+de forma nativa; son trabajos separados en CI. `packcheck --trace` y
+`wasm-packcheck --trace` escriben un JSONL por paso (≈100 MB por partida): se
+generan en `/tmp` y `parity-trace.ts` deja solo el resumen versionado en
+`docs/parity-trace.json`. La compilación WASM usa el
 toolchain fijado, `Cargo.lock`, `rust-src`, `--locked` y Binaryen 132. CI publica
 el SHA-256 del artefacto y la versión de Binaryen, pero **no** afirma que dos
 máquinas produzcan bytes idénticos: la reproducibilidad se limita a entradas y

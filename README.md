@@ -181,9 +181,12 @@ El contrato ABI/worker vigente se documenta en
 protocolo, revisión de acciones obsoletas, resultado de partida, resumen de
 maná, eventos filtrados, entropía de host y lista explícita de imports WASM.
 
-La evidencia de esta fase (packs, constructor, impresiones, mediciones y límites)
-está en [`docs/VERIFICATION-0.4.md`](docs/VERIFICATION-0.4.md); la anterior sigue
-en [`docs/VERIFICATION-0.3.md`](docs/VERIFICATION-0.3.md) y
+La evidencia vigente —índice canónico, certificación por carta, paridad paso a
+paso e integridad de packs— está en
+[`docs/VERIFICATION-0.4.2.md`](docs/VERIFICATION-0.4.2.md). Las rondas anteriores
+siguen en [`docs/VERIFICATION-0.4.1.md`](docs/VERIFICATION-0.4.1.md),
+[`docs/VERIFICATION-0.4.md`](docs/VERIFICATION-0.4.md),
+[`docs/VERIFICATION-0.3.md`](docs/VERIFICATION-0.3.md) y
 [`docs/VERIFICATION-0.2.md`](docs/VERIFICATION-0.2.md). Los niveles de prueba se
 explican en [`docs/TESTING.md`](docs/TESTING.md).
 

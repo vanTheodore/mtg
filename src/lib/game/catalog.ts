@@ -154,9 +154,42 @@ export function mergePacks(packs: Catalog[], ids?: readonly string[]): MergeResu
   return mergeCatalogs(inputs);
 }
 
-export type Fetcher = (url: string) => Promise<{ ok: boolean; status?: number; json: () => Promise<unknown> }>;
+export type Fetcher = (url: string) => Promise<{ ok: boolean; status?: number; text: () => Promise<string> }>;
 
-const packUrl = (id: string) => `/data/catalog/packs/${id}.json`;
+/**
+ * Packs are addressed **by content**: the digest travels in the URL, so a new
+ * index cannot be answered with an old cached file. The digest is also verified
+ * after download, because a URL is a request, not a proof.
+ */
+const packUrl = (pack: CatalogPackMeta) => `/data/catalog/packs/${pack.id}.json?v=${pack.sha256}`;
+
+async function sha256Hex(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Download one pack and prove it is the file the index promised: same byte
+ * length and same SHA-256. A pack that fails either check is refused, and the
+ * error names what was expected and what arrived — a truncated or swapped file
+ * must never become a half-loaded game.
+ */
+export async function fetchVerifiedPack(fetcher: Fetcher, pack: CatalogPackMeta): Promise<Catalog> {
+  const url = packUrl(pack);
+  const response = await fetcher(url);
+  if (!response.ok) throw new Error(`No se pudo cargar el pack ${pack.id} (HTTP ${response.status ?? '?'})`);
+  const text = await response.text();
+  const bytes = new TextEncoder().encode(text).length;
+  if (typeof pack.bytes === 'number' && bytes !== pack.bytes) {
+    throw new Error(`El pack ${pack.id} llegó incompleto: ${bytes} bytes, el índice declara ${pack.bytes}.`);
+  }
+  const digest = await sha256Hex(text);
+  if (digest !== pack.sha256) {
+    throw new Error(`El pack ${pack.id} no coincide con el índice: sha256 ${digest.slice(0, 12)}… ≠ ${pack.sha256.slice(0, 12)}….`);
+  }
+  return JSON.parse(text) as Catalog;
+}
 
 /**
  * Process-wide cache so repeated starts in one tab do not refetch packs.
@@ -172,7 +205,8 @@ export function clearCatalogCache() { packCache.clear(); }
 async function fetchJson(fetcher: Fetcher, url: string): Promise<unknown> {
   const response = await fetcher(url);
   if (!response.ok) throw new Error(`No se pudo cargar ${url} (HTTP ${response.status ?? '?'})`);
-  return response.json();
+  const text = await response.text();
+  return JSON.parse(text);
 }
 
 /**
@@ -198,10 +232,11 @@ export async function loadCatalog(
   let loaded = 0;
   const packs = await Promise.all(plan.required.map(async (id) => {
     const meta = index.packs.find((pack) => pack.id === id);
-    const key = meta ? cacheKey(meta, index.version) : `${index.version}:${id}`;
+    if (!meta) throw new Error(`El índice no conoce el pack ${id}`);
+    const key = cacheKey(meta, index.version);
     let pending = packCache.get(key);
     if (!pending) {
-      pending = fetchJson(fetcher, packUrl(id)).then((payload) => payload as Catalog);
+      pending = fetchVerifiedPack(fetcher, meta);
       packCache.set(key, pending);
       // A failed download must not poison the cache for a retry.
       pending.catch(() => packCache.delete(key));
@@ -237,7 +272,7 @@ export async function loadPack(fetcher: Fetcher, index: CatalogIndex, id: string
   const key = cacheKey(meta, index.version);
   let pending = packCache.get(key);
   if (!pending) {
-    pending = fetchJson(fetcher, packUrl(id)).then((payload) => payload as Catalog);
+    pending = fetchVerifiedPack(fetcher, meta);
     packCache.set(key, pending);
     pending.catch(() => packCache.delete(key));
   }

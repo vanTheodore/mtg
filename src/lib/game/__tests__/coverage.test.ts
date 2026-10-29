@@ -70,10 +70,12 @@ describe('the start policy', () => {
     for (const pack of packs) {
       if (url === coverageUrl(pack)) {
         const document = documents.get(pack.id);
-        return document ? { ok: true, json: async () => document } : { ok: false, status: 404 };
+        return document
+          ? { ok: true, text: async () => JSON.stringify(document) }
+          : { ok: false, status: 404, text: async () => '' };
       }
     }
-    return { ok: false, status: 404 };
+    return { ok: false, status: 404, text: async () => '' };
   };
 
   test('an admitted card is admitted; a limited one is listed with gaps', () => {

@@ -27,7 +27,9 @@
  * evidence of a known limitation, not a proof that the card is broken, and
  * nothing here claims more than that.
  */
-import type { Catalog, CatalogIndex, CatalogPackMeta } from './catalog.ts';
+import type { Catalog, CatalogIndex, CatalogPackMeta, Fetcher } from './catalog.ts';
+
+export type { Fetcher };
 import { canonicalIndex, normalizeName, type CanonicalEntry } from './canonical.ts';
 
 export type CoverageLevel = 'supported' | 'limited' | 'unknown';
@@ -56,7 +58,7 @@ export function coverageUrl(pack: CatalogPackMeta): string {
   return `/data/catalog/coverage/${pack.id}.${pack.sha256.slice(0, 8)}.json`;
 }
 
-export type Fetcher = (url: string) => Promise<{ ok: boolean; status?: number; json: () => Promise<unknown> }>;
+
 
 /**
  * Load coverage for the packs a game is about to use. A missing artifact is
@@ -72,7 +74,7 @@ export async function loadCoverage(
     try {
       const response = await fetcher(url);
       if (!response.ok) return [pack.id, null] as const;
-      const document = (await response.json()) as CoverageDocument;
+      const document = JSON.parse(await response.text()) as CoverageDocument;
       // The name is content-addressed, so a mismatched digest means the server
       // answered with something else; refuse it instead of believing it.
       if (document.pack_sha256 !== pack.sha256) return [pack.id, null] as const;

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-29T21:29:19.227Z",
+  "generated_at": "2026-10-29T21:39:56.891Z",
   "engine": "static/wasm/mtg_engine_wasm.wasm",
   "engine_bytes": 48374605,
   "packs": [
@@ -15,11 +15,11 @@
     }
   ],
   "catalog_faces": 444,
-  "merge_ms": 4.1,
-  "compile_ms": 718.7,
-  "instantiate_ms": 14.9,
+  "merge_ms": 17.2,
+  "compile_ms": 739.8,
+  "instantiate_ms": 20.3,
   "wasm_memory_mb": 33.1,
-  "init_ms": 176.3,
+  "init_ms": 214.4,
   "decks": "docs/packcheck-10e-decks.json",
   "seed": 7,
   "requested": {
@@ -43,12 +43,13 @@
     "SelectCards": 1
   },
   "step_ms": {
-    "median": 9.43,
-    "p90": 11.86,
-    "max": 21.93
+    "median": 9.54,
+    "p90": 12.25,
+    "max": 19.92
   },
+  "rejections": 0,
   "wasm_calls": 1056,
-  "wasm_call_ms": 9915.3,
+  "wasm_call_ms": 10085.3,
   "max_response_bytes": 216375,
   "outcome": {
     "draw": false,
