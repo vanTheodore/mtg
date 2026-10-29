@@ -8,6 +8,7 @@
 | Verificación de procedencia | 868 archivos de `crates/phase-engine/src` coinciden con el hash fijado | Comportamiento correcto de esas reglas |
 | Integración nativa (`engine:parity`, `engine:scenarios`) | API directa de Phase y ABI raw producen el mismo estado; escenarios explícitos alcanzan maná, lanzamiento, objetivos, combate, trigger, ficha y victoria | Que una persona pueda operar la UI |
 | Certificación de pack (`cargo run --bin packcheck`) | El pack que descarga el cliente lo deserializa Phase (`from_json_str`), resuelve el mazo completo y juega una partida real | Que el pack sea correcto por sí solo: sólo dice que el motor lo carga y juega |
+| Puente WASM (`bun scripts/wasm-packcheck.ts`) | El `.wasm` publicado instancia con los imports del cliente y juega la misma partida que el motor nativo (mismos pasos, mismo ganador) | Pintado, controles Svelte y a11y: siguen necesitando Chromium |
 | Integración WASM (`engine-gameplay.spec.ts`) | El Worker, ABI, catálogo, revisión y proyección reales alcanzan victoria y combate | Que los controles Svelte sean usables; llama al cliente desde el test |
 | Interacción visual (`ui-game.spec.ts`) | Una partida se inicia, conserva manos, juega tierras, lanza criaturas, ataca y gana pulsando controles Svelte; sin importar `EngineClient` ni fabricar acciones | IA, red, formatos completos o todas las cartas |
 | Imágenes (contrato/mock) | Fallback identificable, oracle/nombre/cara/ficha, 429, caché y hidden | Arte real descargado de Scryfall |

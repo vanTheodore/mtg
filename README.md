@@ -94,6 +94,8 @@ bun install
 bun run catalog:build        # static/data/cards.json + card-meta.json
 bun run catalog:packs        # static/data/catalog/index.json + packs/
 bun run engine:build         # static/wasm/mtg_engine_wasm.wasm
+bun run wasm:packcheck static/data/catalog/packs/fixture.json,static/data/catalog/packs/10e.json \
+  --decks docs/packcheck-10e-decks.json   # partida real por el puente, sin navegador
 bun run impressions:es --set-file data/mtgjson/10E.es.json   # opcional
 bun run dev
 ```
@@ -110,9 +112,20 @@ cargo run -p mtg-engine-wasm --bin catalog -- /tmp/10E.atomic.json /tmp/10e   # 
 bun run catalog:packs -- --set-file /tmp/10e/cards.json --set-code 10E --pack-id 10e
 ```
 
+Para añadir un set real al índice que ya existe (sin perder el pack `core` de
+tierras básicas) se usa `--append`: reemplaza un pack con el mismo id, conserva
+los demás y sube la versión del índice para que la caché del cliente no sirva
+bytes viejos.
+
+```sh
+bun run catalog:packs -- --set-file /tmp/10e/cards.json --set-code 10E --pack-id 10e --append --verified
+```
+
 Un pack sin `--verified` queda marcado como no certificado: se puede buscar y
 cargar, pero **el inicio de partida se niega** con el diagnóstico concreto
-(`docs/engine-coverage.json` guarda qué evidencia respalda cada pack certificado).
+(`docs/engine-coverage.json` guarda qué evidencia respalda cada pack certificado,
+y `packcheck` es el binario que la produce: carga el pack con
+`CardDatabase::from_json_str`, resuelve el mazo y juega una partida real).
 
 `engine:build` usa el target `wasm32-unknown-unknown` preinstalado. Si solo
  dispones de `rust-src` y necesitas compilar std, usa `ENGINE_BUILD_STD=1`
@@ -269,7 +282,16 @@ del tamaño de un set, jugar un mazo descarga ~414 KiB tanto a 5× como a 20×, 
 a 619 KiB y 2.4 MiB del archivo único. El plan de carga cuesta 0.1–1.0 ms y el
 índice mide 48 KiB a 1800 cartas.
 
-Limitaciones actuales: catálogo demo de 90 caras, sin base completa de cartas,
+Motor y set real (`docs/wasm-packcheck.json`, sin navegador): el `.wasm` publicado
+(48,3 MB) compila en 823 ms e instancia en 19,6 ms; `init` con 444 caras y dos
+mazos de 40 tarda 203 ms; una partida de 1063 pasos corre a 10,3 ms de mediana por
+acción (p90 12,4 ms) con 33,6 MB de memoria. La misma semilla en el motor nativo da
+los mismos 1063 pasos y el mismo ganador (`engine-parity.test.ts`): el puente no
+altera la partida. Producto real: un mazo de 10E descarga 635 KiB (índice 12,4 KiB
++ 2 packs) y abrir el constructor cuesta sólo el índice.
+
+Limitaciones actuales: 453 caras reales (90 del fixture + 363 de Décima Edición),
+sin base completa de cartas (falta AtomicCards completo),
 sin IA, sin multijugador red, sin recuperación de partida y con artefacto WASM
 todavía grande. La prioridad es una experiencia real, verificable y accesible
 antes que ampliar cobertura.

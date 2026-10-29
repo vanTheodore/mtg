@@ -79,11 +79,77 @@ Ahora:
 
 ## 5. Lo que se ejecutó en este entorno
 
-<!-- EJECUTADO -->
+Todo lo de esta sección se ejecutó en este checkout, con el árbol de trabajo de
+esta ronda. No reutiliza cifras de fases anteriores.
+
+### 5.1 Set real, de punta a punta
+
+| Paso | Comando | Resultado |
+| --- | --- | --- |
+| Adaptar el esquema | `bun scripts/import-set.ts --set-file data/mtgjson/10E.es.json --out /tmp/10E.atomic.json` | 363/363 caras, 0 omitidas |
+| Parsear y exportar con Phase | `target/…/debug/catalog /tmp/10E.atomic.json /tmp/10e-engine` | `exported 363 faces` (513 KiB/`cards.json`) |
+| Empaquetar junto al fixture | `bun scripts/catalog-packs.ts --set-file … --append --verified` | índice **v1 → v2**, packs `fixture` (90, `core`) + `10e` (363) |
+| Certificar el pack | `packcheck packs/fixture.json,packs/10e.json docs/packcheck-10e-decks.json 7 4000` | 444 caras, **40/40 resueltas** por asiento, **1063 pasos**, ganador asiento 1 → `docs/packcheck-10e.json` |
+| Repetir por el WASM publicado | `bun scripts/wasm-packcheck.ts packs/fixture.json,packs/10e.json --seed 7` | **mismos 1063 pasos, mismo ganador**, `resolved_after_init [40, 40]` → `docs/wasm-packcheck.json` |
+
+Dos defectos reales aparecieron al ejecutarlo, y están corregidos:
+
+- `mtgjsonV3ToAtomic` omitía `colors` en cartas incoloras y `manaValue` en cartas
+  sin coste: Phase abortaba con `missing field colors` / `missing field manaValue`.
+  Ahora escribe `[]` y `0`, y `catalog-source.test.ts` lo comprueba sobre todo el
+  set (no sólo sobre Serra Angel).
+- Los sets MTGJSON v3 **no traen tierras básicas** (363 cartas, ninguna `Plains`).
+  Un mazo de 10E resolvía 23 de 40 cartas y el motor seguía jugando con lo que
+  quedaba. El pack `core` aporta las básicas y `packcheck` compara pedidas contra
+  resueltas: la partida no se declara buena con cartas de menos.
+
+### 5.2 Pruebas
+
+- `bun test src/lib` → **121 pruebas, 0 fallos** (`catalog-packs-cli` 5,
+  `catalog-real-set` 7, `engine-parity` 5, `catalog-source` 9, `certification-evidence` 5).
+- `bun run check` → 0 errores, 0 avisos.
+- `bun run build` → correcto.
+
+### 5.3 Medido, no estimado
+
+Motor WASM publicado (`static/wasm/mtg_engine_wasm.wasm`, 48 374 605 B):
+
+| Medida | Valor |
+| --- | --- |
+| Compilación del módulo (`WebAssembly.compile`) | 823 ms |
+| Instanciación | 19,6 ms |
+| Memoria WASM tras la partida | 33,6 MB |
+| `init` con catálogo de 444 caras y dos mazos de 40 | 203 ms |
+| Paso de acción (mediana / p90 / máx) | 10,3 / 12,4 / 31,6 ms |
+| Partida completa (1063 pasos) | ≈ 12,5 s |
+
+Cliente, datos (`docs/performance-catalog.json` → `shipped`): índice 12,4 KiB,
+plan 0,34–0,37 ms, parseo de los dos packs 3,5–3,7 ms, merge 0,24 ms. Un mazo de
+10E descarga 635 KiB (fixture 122 + 10E 513) frente a 625 KiB de un archivo único
+equivalente: **a este tamaño no hay ahorro de bytes**, y decirlo importa. El
+ahorro está donde sí se mide: abrir el constructor cuesta 12 KiB de índice y una
+partida de sólo cartas `core` sigue en 122 KiB.
+
+Nativo (debug, `docs/packcheck-10e.json` → `timing_ms`): parseo de los 444
+registros 77,6 ms, resolución de mazos 0,3 ms, arranque del motor 160,4 ms y
+6,07 ms por paso (1063 pasos, 6,45 s). Ganador asiento 1, igual que el WASM
+(`engine-parity.test.ts` lo exige).
 
 ## 6. Lo que quedó bloqueado
 
-<!-- BLOQUEADO -->
+- **Chromium/Playwright**: no hay navegador ni librerías en este entorno
+  (`apt` no disponible). `tests/e2e/*.spec.ts` no se ejecutó: ni capturas, ni
+  interacción real, ni comprobación de a11y en 320/375/390/768/1440. La UI de
+  esta ronda no se declara verificada visualmente.
+- **Cobertura por carta**: el puente sigue sin exponer `coverage` de Phase. Un
+  pack `verified` significa «Phase lo parseó y una partida real lo usó», no «las
+  363 caras están soportadas una por una». `exercised` queda en `parcial` y el
+  documento lo repite donde importa.
+- **Multifaz, alias y duplicados entre sets**: 10E no tiene cartas de doble cara
+  ni nombres impresos alternativos, así que esta ronda **no** los prueba. El
+  código los contempla (claves por cara, `faceNames`) pero no hay evidencia.
+- **GitHub Actions**: sigue sin asignar runners (ver `docs/CI-DIAGNOSIS.md`); la
+  verificación es local y así se reporta.
 
 ## 7. Lecciones y límites
 
@@ -100,3 +166,6 @@ Ahora:
 - Rama `arena/5f317145-mtg`, PR #1 abierto (sin merge ni despliegue).
 - Motor Phase: `c2fbb7a6634a440c7c6b47e6a87a554cc7382f05` (sin cambios).
 - Dependencias: `rolldown` 1.2.15 → 1.2.16; TypeScript sigue en 6.0.3.
+- Artefactos de evidencia: `docs/packcheck-10e.json` (nativo),
+  `docs/wasm-packcheck.json` (WASM), `docs/packcheck-10e-decks.json` (mazos),
+  `docs/engine-coverage.json` (registro de certificación).

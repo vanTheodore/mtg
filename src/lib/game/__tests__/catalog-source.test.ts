@@ -70,6 +70,23 @@ describe('mtgjsonV3ToAtomic on the real 10E set', () => {
     expect(face.identifiers?.multiverseId).toBeDefined();
   });
 
+  test('a colourless land gets empty colours and mana value 0, not missing keys', () => {
+    // Phase's `CardFace` rejects a card with no `colors` and no `manaValue`; the
+    // first real set exposed both: MTGJSON omits `colors` for lands and `cmc`
+    // for cards with no mana cost. Omitting the keys made the engine panic with
+    // "missing field `colors`" instead of loading the set.
+    const face = converted.atomic.data['Terramorphic Expanse']![0]!;
+    expect(face.colors).toEqual([]);
+    expect(face.colorIdentity).toBeDefined();
+    expect(face.manaValue).toBe(0);
+    for (const entry of Object.values(converted.atomic.data)) {
+      for (const card of entry) {
+        expect(Array.isArray(card.colors)).toBe(true);
+        expect(typeof card.manaValue).toBe('number');
+      }
+    }
+  });
+
   test('the rules text comes from the English field, not the Spanish one', () => {
     const face = converted.atomic.data['Wrath of God']![0]!;
     // `text` is English in a localized v3 file; `originalText` is the Spanish one.

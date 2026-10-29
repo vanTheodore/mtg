@@ -99,6 +99,41 @@ describe('catalog-packs --set-file reads the file it was given', () => {
     }
   });
 
+  test('--append adds a real set next to the fixture and bumps the index version', () => {
+    const out = tempDir('append');
+    const atomicPath = join(out, '10e.atomic.json');
+    try {
+      // 1. The curated fixture, exactly as it ships.
+      expect(run(['--out', out, '--pack-id', 'fixture', '--verified', '--core', 'plains,forest']).code).toBe(0);
+      const first = readJson(join(out, 'index.json')) as CatalogIndex;
+      expect(first.packs.map((pack) => pack.id)).toEqual(['fixture']);
+      const firstDigest = first.packs[0]!.sha256;
+
+      // 2. A real set appended: the fixture must survive, bytes unchanged.
+      const converted = mtgjsonV3ToAtomic(readJson('data/mtgjson/10E.es.json') as MtgjsonSetFile);
+      Bun.write(atomicPath, JSON.stringify(converted.atomic));
+      const appended = run(['--set-file', atomicPath, '--out', out, '--append', '--set-code', '10E', '--pack-id', '10e']);
+      expect(appended.code).toBe(0);
+      expect(appended.stdout).toContain('v1 → v2');
+
+      const second = readJson(join(out, 'index.json')) as CatalogIndex;
+      expect(second.version).toBe(first.version + 1);
+      expect(second.packs.map((pack) => pack.id)).toEqual(['fixture', '10e']);
+      expect(second.packs[0]!.sha256).toBe(firstDigest);
+      // Core packs stay first: every game loads basics before a set pack.
+      expect(second.packs[0]!.core).toBe(true);
+      expect(second.packs[1]!.core).toBe(false);
+
+      // 3. Re-appending the same pack id replaces it instead of duplicating it.
+      expect(run(['--set-file', atomicPath, '--out', out, '--append', '--set-code', '10E', '--pack-id', '10e']).code).toBe(0);
+      const third = readJson(join(out, 'index.json')) as CatalogIndex;
+      expect(third.version).toBe(3);
+      expect(third.packs.map((pack) => pack.id)).toEqual(['fixture', '10e']);
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
+  });
+
   test('the demo fixture still packages with no flags, into the directory given', () => {
     const out = tempDir('fixture');
     try {
