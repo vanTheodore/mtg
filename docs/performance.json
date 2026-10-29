@@ -1,29 +1,29 @@
 {
-  "wasm_file_bytes": 42901891,
+  "wasm_file_bytes": 42922043,
   "environment": {
     "browser": "Chromium 153 (headless)",
     "viewport": "1440x900",
     "scryfall": "blocked (deterministic fallback)"
   },
   "startup": {
-    "dom_content_loaded_ms": 20.5,
-    "load_ms": 20.699999999254942,
+    "dom_content_loaded_ms": 49.200000000186265,
+    "load_ms": 49.90000000037253,
     "used_js_heap_bytes": 18200000,
     "js_heap_limit_bytes": 2190000000
   },
-  "initial_metrics_text": "Motor 0.9 ms\nSerialización 20.9 ms\nWorker 24.9 ms\nWASM 223 ms\n70488 B\n82 objetos\nMemoria WASM 27.2 MiB",
-  "final_metrics_text": "Motor 0.7 ms\nSerialización 5.0 ms\nWorker 7.3 ms\nWASM 223 ms\n70470 B\n82 objetos\nMemoria WASM 27.2 MiB",
+  "initial_metrics_text": "Motor 0.6 ms\nSerialización 31.3 ms\nWorker 35.8 ms\nWASM 361 ms\n70660 B\n82 objetos\nMemoria WASM 27.1 MiB",
+  "final_metrics_text": "Motor 0.8 ms\nSerialización 3.6 ms\nWorker 6.4 ms\nWASM 361 ms\n70656 B\n82 objetos\nMemoria WASM 27.1 MiB",
   "pass_priority_round_trip_ms": [
+    47,
+    72,
+    84,
+    82,
+    35,
     57,
-    51,
+    49,
     55,
-    63,
-    56,
-    41,
-    54,
-    56,
-    58,
-    42
+    57,
+    54
   ],
   "idle_fps": 61,
   "final_used_js_heap_bytes": 18200000,

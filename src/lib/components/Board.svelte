@@ -7,6 +7,7 @@
   import InspectDialog from './InspectDialog.svelte';
   import Settings from './Settings.svelte';
   import CardView from './CardView.svelte';
+  import ManaPool from './ManaPool.svelte';
   import { session } from '#lib/game/session.svelte.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
 
@@ -83,6 +84,12 @@
   {#if session.error}
     <div class="notice error" role="alert">{session.error}</div>
   {/if}
+  {#if snapshot?.outcome}
+    <div class="game-over" role="status">
+      <strong>{snapshot.outcome.draw ? 'Empate' : `Jugador ${snapshot.outcome.winner! + 1} gana`}</strong>
+      <span>La partida terminó. Puedes revisar el tablero, pero no hay más acciones legales.</span>
+    </div>
+  {/if}
 
   {#if !snapshot}
     <section class="start-panel">
@@ -105,6 +112,7 @@
           <span>Mano {rival?.hand.length ?? 0}</span>
           <span>Biblioteca {rival?.library_count ?? 0}</span>
           <span>Cementerio {rival?.graveyard.length ?? 0}</span>
+          <ManaPool pool={rival?.mana_pool} />
         </div>
       </section>
 
@@ -134,6 +142,7 @@
           <span>Biblioteca {player?.library_count ?? 0}</span>
           <span>Cementerio {player?.graveyard.length ?? 0}</span>
           <span>Exilio {player?.exile.length ?? 0}</span>
+          <ManaPool pool={player?.mana_pool} />
         </div>
       </section>
 
@@ -179,6 +188,9 @@
 </div>
 
 <style>
+  .game-over { padding: 14px 18px; border-radius: var(--radius-lg); background: var(--accent-dim); border: 1px solid var(--accent); display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+  .game-over strong { font: 700 20px var(--font-serif); }
+  .game-over span { color: var(--text-secondary); font-size: 13px; }
   .app { min-height: 100vh; display: flex; flex-direction: column; gap: .8rem; padding: .8rem clamp(.6rem, 2vw, 1.4rem); max-width: 1600px; margin: 0 auto; }
   .topbar { display: flex; justify-content: space-between; align-items: center; gap: .8rem; }
   .brand { display: flex; align-items: center; gap: .65rem; }

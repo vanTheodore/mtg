@@ -11,6 +11,8 @@ Vertical slice jugable local de dos jugadores (hot-seat) con el motor real:
 
 - Inicialización de partida, catálogo mínimo y mazos de demo.
 - Mulligan, prioridad, fases, pila y acciones legales consultadas al motor.
+- Maná, lanzamiento de coste simple, objetivos, criaturas, combate y victoria
+  determinista verificados contra el WASM real (ver `docs/VERIFICATION-0.2.md`).
 - Campo de batalla, mano, biblioteca, cementerio y exilio.
 - Imágenes Scryfall con fallback identificable, reintento y caché.
 - Agrupación de fichas, cartas giradas/transformadas/adjuntas.
@@ -66,7 +68,8 @@ bun run check           # svelte-check + TypeScript
 bun test src/lib        # pruebas unitarias Bun
 bun run engine:verify   # hash del árbol de reglas Phase
 bun run engine:parity   # paridad API directa vs wrapper (semillas 42/7/123)
-bun run test:e2e        # Chromium real (visibilidad, a11y, partida)
+bun run engine:scenarios # escenarios explícitos: maná, lanzamiento, combate, objetivos, triggers, reemplazo, victoria
+bun run test:e2e        # Chromium real (visibilidad, a11y, partida, motor)
 bun run build           # build estático
 ```
 
@@ -84,6 +87,14 @@ La fotografía inicial de Mesa 0.2 está en [`docs/AUDIT-0.2.md`](docs/AUDIT-0.2
 Distingue las reglas disponibles en Phase, las acciones transportadas por Mesa,
 los flujos realmente utilizables en Svelte y las mecánicas verificadas en una
 partida. Una etiqueta de acción no equivale a soporte completo.
+
+El contrato ABI/worker vigente se documenta en
+[`docs/ENGINE-CONTRACT-0.2.md`](docs/ENGINE-CONTRACT-0.2.md): versión de
+protocolo, revisión de acciones obsoletas, resultado de partida, resumen de
+maná, eventos filtrados, entropía de host y lista explícita de imports WASM.
+
+La evidencia ejecutada (tests, paridad, escenarios, rendimiento y límites) está
+en [`docs/VERIFICATION-0.2.md`](docs/VERIFICATION-0.2.md).
 
 ## Arquitectura
 
@@ -137,11 +148,11 @@ axe-core sin violaciones críticas/serias y una partida real que juega una tierr
 `docs/performance.json`. En Chromium 153 headless, 1440×900, Scryfall bloqueado
 y WASM optimizado con `wasm-opt -O1`:
 
-- Artefacto WASM: ≈40.9 MiB; compilación ≈220 ms; memoria lineal WASM ≈27.2 MiB.
-- Heap JS usado ≈18 MB; FPS en reposo ≈61.
+- Artefacto WASM: 42 922 043 B (≈40.93 MiB); compilación ≈361 ms; memoria lineal WASM ≈27.1 MiB.
+- Heap JS usado ≈18.2 MB; FPS en reposo ≈61.
 - Round-trip de `PassPriority` (UI → Worker → motor → snapshot → UI):
-  mediana ≈55 ms, rango ≈41–63 ms en 10 muestras.
-- Snapshot serializado ≈70 KB para 82 objetos; coste de motor por acción <1 ms
+  mediana ≈56 ms, rango ≈35–84 ms en 10 muestras.
+- Snapshot serializado ≈70.6 KB para 82 objetos; coste de motor por acción <1 ms
   en este subconjunto (la serialización y el postMessage dominan).
 
 Limitaciones actuales: catálogo demo de 90 caras, sin base completa de cartas,

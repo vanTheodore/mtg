@@ -3,14 +3,16 @@
   const snapshot = $derived(session.snapshot);
   const stack = $derived(snapshot?.state.stack ?? []);
   const objects = $derived(snapshot?.state.objects ?? {});
+  const KINDS: Record<string, string> = { Spell: 'Hechizo', ActivatedAbility: 'Habilidad activada', TriggeredAbility: 'Habilidad disparada' };
   const entries = $derived(stack.map((raw, i) => {
-    const entry = raw as { source_id?: number; controller?: number; kind?: { type?: string } };
+    const entry = raw as { source_id?: number; controller?: number; kind?: { type?: string; description?: string; source_name?: string } };
     const source = entry.source_id !== undefined ? objects[String(entry.source_id)] : undefined;
     return {
       key: i,
-      name: source?.name ?? `Objeto en la pila #${i + 1}`,
+      name: source?.name ?? entry.kind?.source_name ?? `Objeto en la pila #${i + 1}`,
       controller: entry.controller !== undefined ? `Jugador ${entry.controller + 1}` : '',
-      kind: entry.kind?.type ?? ''
+      kind: KINDS[entry.kind?.type ?? ''] ?? entry.kind?.type ?? '',
+      description: entry.kind?.description ?? ''
     };
   }));
 </script>
@@ -25,6 +27,7 @@
         <li>
           <strong>{entry.name}</strong>
           <span>{[entry.controller, entry.kind].filter(Boolean).join(' · ')}</span>
+          {#if entry.description}<span class="desc">{entry.description}</span>{/if}
         </li>
       {/each}
     </ol>

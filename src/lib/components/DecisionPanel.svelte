@@ -1,6 +1,6 @@
 <script lang="ts">
   import { session } from '#lib/game/session.svelte.ts';
-  import { actionPriority, actionsForObject, describeAction, isKeepHand } from '#lib/game/actions.ts';
+  import { actionPriority, actionsForObject, decisionGuide, describeAction, isKeepHand } from '#lib/game/actions.ts';
   import type { GameAction } from '#lib/engine/types.ts';
 
   const snapshot = $derived(session.snapshot);
@@ -23,6 +23,8 @@
   // combat declarations) so a hand full of identical lands is not duplicated.
   const contextActions = $derived(actions.filter((a) => a.data?.object_id === undefined && a.data?.source_id === undefined));
   const visible = $derived(showAll ? contextActions : contextActions.slice(0, 8));
+  const blockerPairs = $derived((snapshot?.derived?.blocker_assignment_pairs ?? []) as [number, number][]);
+  const canBlockAll = $derived(waiting?.type === 'DeclareBlockers' && blockerPairs.length > 0);
   const selectedObject = $derived(session.selected !== null ? objects[String(session.selected)] : undefined);
   const selectedActions = $derived.by(() => {
     if (!selectedObject) return [];
@@ -50,7 +52,8 @@
   <h2>Decisión</h2>
   {#if snapshot}
     <p class="phase">Turno {snapshot.state.turn_number} · {PHASES[snapshot.state.phase] ?? snapshot.state.phase}</p>
-    <p class="waiting">{waiting?.type === 'Priority' ? `Prioridad: Jugador ${snapshot.state.priority_player + 1}` : waiting?.type ?? '—'}</p>
+    <p class="waiting" aria-label="Guía de decisión">{decisionGuide(waiting?.type, snapshot.state.phase, snapshot.state.priority_player)}</p>
+    <p class="phase">Prioridad: Jugador {snapshot.state.priority_player + 1}</p>
     {#if selectedObject}
       <div class="selected" aria-label={`Acciones para ${selectedObject.name}`}>
         <strong>{selectedObject.name}</strong>
@@ -64,7 +67,12 @@
         <button type="button" class="link" onclick={() => { session.inspect = selectedObject.id; }}>Ampliar carta</button>
       </div>
     {/if}
-    {#if contextActions.length === 0 && !selectedObject}
+    {#if canBlockAll}
+      <button type="button" class="primary block-all" disabled={session.busy} onclick={() => play({ type: 'DeclareBlockers', data: { assignments: blockerPairs } })}>
+        Bloquear con {new Set(blockerPairs.map(([b]) => b)).size} criatura(s)
+      </button>
+    {/if}
+    {#if contextActions.length === 0 && !selectedObject && !canBlockAll}
       <p class="muted">No hay acciones legales disponibles. Selecciona una carta para ver sus acciones.</p>
     {:else}
       <div class="actions">
