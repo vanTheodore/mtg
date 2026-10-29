@@ -9,19 +9,37 @@
   import CardView from './CardView.svelte';
   import PlayerPanel from './PlayerPanel.svelte';
   import HistoryPanel from './HistoryPanel.svelte';
+  import DeckBuilder from './DeckBuilder.svelte';
   import { session } from '#lib/game/session.svelte.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
+  import { loadCatalog, clearCatalogCache, type Catalog } from '#lib/game/catalog.ts';
+  import { toEngineDeck, deckSize, type DeckLine } from '#lib/game/decks.ts';
+  import { impressions } from '#lib/game/impressions.svelte.ts';
 
-  let catalog = $state<unknown>(null);
+  let catalog = $state<Catalog>({});
   let metas = $state<Record<string, CardMeta>>({});
   let decks = $state<unknown>(null);
   let loadError = $state<string | null>(null);
   let seed = $state(42);
-  let mode = $state<'practice' | 'sparks' | 'standard'>('practice');
+  let mode = $state<'practice' | 'sparks' | 'standard' | 'custom'>('practice');
+  /** Deck chosen in the builder, if any. */
+  let customLines = $state<DeckLine[]>([]);
+  let customName = $state('');
+  /** Names the index could not serve for the last started game. */
+  let unresolved = $state<string[]>([]);
+  /** What the engine actually loaded, read back from its own snapshot. */
+  let engineLoad = $state<{ requested: number; seats: number[] } | null>(null);
+  let catalogReady = $state(false);
+  let loadingPacks = $state(false);
   const PRACTICE = { player: { main_deck: [...Array(18).fill('Plains'), ...Array(22).fill('Savannah Lions')] }, opponent: { main_deck: [...Array(18).fill('Plains'), ...Array(22).fill('Savannah Lions')] } };
   // Teaching duel for targeted damage: one Mountain pays one Lightning Bolt.
   const SPARKS = { player: { main_deck: [...Array(24).fill('Mountain'), ...Array(16).fill('Lightning Bolt')] }, opponent: { main_deck: [...Array(40).fill('Island')] } };
   const deckFor = (value: typeof mode) => value === 'practice' ? PRACTICE : value === 'sparks' ? SPARKS : decks;
+  /** Card names a deck needs, de-duplicated: what the load plan resolves. */
+  const deckNames = (deck: unknown): string[] => {
+    const seats = deck as { player?: { main_deck?: string[] }; opponent?: { main_deck?: string[] } };
+    return [...new Set([...(seats.player?.main_deck ?? []), ...(seats.opponent?.main_deck ?? [])])];
+  };
   let handoffButton = $state<HTMLButtonElement | undefined>();
 
   const snapshot = $derived(session.snapshot);
@@ -42,12 +60,16 @@
 
   onMount(async () => {
     try {
-      const [cards, meta, deckData] = await Promise.all([
-        fetch('/data/cards.json').then((r) => r.ok ? r.json() : Promise.reject(new Error('Falta static/data/cards.json. Ejecuta bun run catalog:build.'))),
+      // Only the core packs load up front; a deck's packs are fetched when a game
+      // actually needs them.
+      const [loaded, meta, deckData] = await Promise.all([
+        loadCatalog(fetch, [], { corePacksOnly: true }),
         fetch('/data/card-meta.json').then((r) => r.ok ? r.json() : {}),
-        fetch('/data/decks.json').then((r) => r.ok ? r.json() : Promise.reject(new Error('Falta static/data/decks.json')))
+        fetch('/data/decks.json').then((r) => r.ok ? r.json() : Promise.reject(new Error('Falta static/data/decks.json'))),
+        impressions.load(fetch)
       ]);
-      catalog = cards;
+      catalog = loaded.catalog;
+      catalogReady = true;
       metas = meta as Record<string, CardMeta>;
       decks = deckData;
       const params = new URLSearchParams(location.search);
@@ -57,9 +79,66 @@
     }
   });
 
+  /** Packs needed by the search surface: every pack the index knows. */
+  async function loadSearchCatalog() {
+    if (loadingPacks) return;
+    loadingPacks = true;
+    try {
+      const loaded = await loadCatalog(fetch, [], { allPacks: true });
+      catalog = { ...catalog, ...loaded.catalog };
+    } catch (e) {
+      loadError = e instanceof Error ? e.message : String(e);
+    } finally {
+      loadingPacks = false;
+    }
+  }
+
+  /**
+   * Start a game from deck *names*: only the packs holding those cards are
+   * fetched. `missing` comes from the index, never from guessing.
+   */
+  async function startWith(deck: unknown, label: string): Promise<boolean> {
+    const names = deckNames(deck);
+    const loaded = await loadCatalog(fetch, names);
+    unresolved = loaded.missing;
+    if (loaded.missing.length) {
+      loadError = `El catálogo no contiene: ${loaded.missing.slice(0, 8).join(', ')}${loaded.missing.length > 8 ? '…' : ''}. El motor las omitiría; la partida no se inicia.`;
+      return false;
+    }
+    loadError = null;
+    session.modeLabel = label;
+    await session.start(loaded.catalog, deck, seed);
+    return true;
+  }
+
   async function start() {
-    if (!catalog || !decks) return;
-    await session.start(catalog, deckFor(mode), seed);
+    if (!decks) return;
+    if (mode === 'custom' && !customLines.length) return;
+    try {
+      const deck = mode === 'custom' ? toEngineDeck(customLines) : deckFor(mode);
+      const label = mode === 'custom' ? (customName || 'Mazo propio')
+        : mode === 'practice' ? 'Duelo de práctica'
+        : mode === 'sparks' ? 'Duelo de chispas' : 'Mazos de demostración';
+      const requested = (deck as { player: { main_deck: string[] } }).player.main_deck.length;
+      const started = await startWith(deck, label);
+      // Read back what the engine loaded: the only authority on deck resolution.
+      engineLoad = started && session.snapshot ? { requested, seats: seatSizes(session.snapshot) } : null;
+    } catch (e) {
+      loadError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  /** Cards the engine put into each seat's library + hand after starting. */
+  function seatSizes(snapshot: typeof session.snapshot): number[] {
+    if (!snapshot) return [];
+    return snapshot.state.players.map((player) => (player.library_count ?? 0) + (player.hand?.length ?? 0));
+  }
+
+  function playCustom(lines: DeckLine[], name: string) {
+    customLines = lines;
+    customName = name;
+    mode = 'custom';
+    void start();
   }
 
   const cardWidth = $derived(Math.round(148 * session.cardScale));
@@ -79,6 +158,7 @@
     <div class="top-actions">
       {#if snapshot}
         <span class="seat">Jugador {viewer + 1}</span>
+        {#if session.modeLabel}<span class="seat mode">{session.modeLabel}</span>{/if}
       {/if}
       <label class="auto-pass"><input type="checkbox" checked={session.autoPass} onchange={(e) => session.setAutoPass(e.currentTarget.checked)} /> Auto-pasar ventanas sin acciones</label>
       <label class="auto-pass"><input type="checkbox" checked={session.handoffMode === 'every'} onchange={(e) => session.setHandoffMode(e.currentTarget.checked ? 'every' : 'turn')} /> Confirmar cada cambio de asiento</label>
@@ -91,6 +171,17 @@
   {/if}
   {#if session.error}
     <div class="notice error" role="alert">{session.error}</div>
+  {/if}
+  {#if engineLoad && snapshot}
+    {@const short = engineLoad.seats.filter((size) => size !== engineLoad!.requested)}
+    <div class="notice {short.length ? 'warn' : 'ok'}" role="status" aria-live="polite">
+      Motor: {engineLoad.seats.join(' / ')} cartas cargadas por asiento ({engineLoad.requested} pedidas).
+      {#if short.length}
+        <strong>Algunas cartas no se resolvieron; revisa el mazo antes de jugar.</strong>
+      {:else}
+        El mazo se cargó completo.
+      {/if}
+    </div>
   {/if}
   {#if snapshot?.outcome}
     <div class="game-over" role="status">
@@ -108,7 +199,17 @@
         <label><input type="radio" bind:group={mode} value="practice" /> Duelo de práctica <span>Savannah Lions 1/1 contra Savannah Lions 1/1; 18 Plains por asiento. Permite aprender y completar una partida.</span></label>
         <label><input type="radio" bind:group={mode} value="sparks" /> Duelo de chispas <span>24 Mountain y 16 Lightning Bolt contra 40 Island. Practica objetivos y daño directo.</span></label>
         <label><input type="radio" bind:group={mode} value="standard" /> Mazos de demostración <span>40 cartas cada uno, con costes variados y más decisiones.</span></label>
+        {#if customLines.length}
+          <label><input type="radio" bind:group={mode} value="custom" /> Mazo propio: {customName} <span>{deckSize(customLines)} cartas, {customLines.length} distintas. Sólo se cargan los packs que necesita.</span></label>
+        {/if}
       </fieldset>
+      <DeckBuilder
+        catalog={catalog}
+        catalogMissing={unresolved}
+        loading={loadingPacks}
+        onopen={loadSearchCatalog}
+        onplay={playCustom}
+      />
       <label>Semilla <input type="number" bind:value={seed} min="0" step="1" /></label>
       <button type="button" class="primary" disabled={!catalog || !decks || session.status === 'loading'} onclick={start}>
         {session.status === 'loading' ? 'Inicializando motor…' : 'Iniciar partida'}
@@ -207,8 +308,11 @@
   .top-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
   .auto-pass { display: flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--ink-muted); }
   .seat { font-size: .8rem; color: var(--ink-muted); }
+  .seat.mode { border: 1px solid var(--line); border-radius: 999px; padding: .1rem .5rem; }
   .notice { padding: .7rem .9rem; border-radius: 10px; font-size: .88rem; }
   .notice.error { background: color-mix(in srgb, var(--danger) 14%, var(--surface)); border: 1px solid var(--danger); color: var(--danger); }
+  .notice.ok { background: color-mix(in srgb, var(--ok) 10%, var(--surface)); border: 1px solid var(--ok); color: var(--ok); }
+  .notice.warn { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border: 1px solid var(--accent); color: var(--ink); }
   .start-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 1.4rem; max-width: 560px; display: grid; gap: .8rem; }
   .start-panel h2 { margin: 0; font-size: 1.2rem; }
   .start-panel p { margin: 0; color: var(--ink-muted); font-size: .9rem; }

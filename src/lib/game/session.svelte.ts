@@ -9,6 +9,8 @@ export type Theme = 'light' | 'dark' | 'system';
 class GameSession {
   snapshot = $state.raw<EngineSnapshot | null>(null);
   status = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  /** Human label of the deck/format in play, set by the start screen. */
+  modeLabel = $state<string>('');
   busy = $state(false);
   error = $state<string | null>(null);
   selected = $state<number | null>(null);
