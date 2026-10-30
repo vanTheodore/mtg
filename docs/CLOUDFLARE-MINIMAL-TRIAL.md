@@ -8,30 +8,64 @@ No autorizado compilar Phase. No se han creado recursos ni credenciales.**
 
 | Gate | Estado |
 |---|---|
-| Plan Free real y ausencia de productos facturables en el ámbito | **Pendiente de evidencia del titular** |
+| Workers Free | **Confirmado por el titular; presupuesto autorizado $0 CLP** |
 | Workers y cuota Builds | **Revisados por el titular en solo lectura: 15 Workers, cuota no agotada** |
-| Plan Free/Paid | **No visible con los permisos actuales; pendiente** |
-| Configuración guardable sin despliegue inicial | **Pendiente** |
+| Gasto | **$0 CLP; prohibidos upgrades, R2, servicios o recursos facturables** |
+| Configuración segura antes de cualquier build | **No acreditada: flujo documentado exige Save and Deploy; alternativa detenida** |
 | Previews completamente desactivados | **Pendiente de configuración efectiva verificable** |
 | Producción no ejecuta deploy tras fallo de build | **Pendiente: un único run mínimo** |
 | Transferencia privada y descarga con hash idéntico | **Pendiente; solo después del gate anterior** |
 
 El titular informa de revisión autenticada de solo lectura: hay 15 Workers y
 la cuota Builds no está agotada. Se acepta esa información sin solicitar otro
-inventario. Esos permisos no permiten ver Free/Paid: plan y garantía de coste
-siguen pendientes. No ampliar permisos para inferirlos ni pedir tokens en chat.
+inventario. Aunque esos permisos no mostraban Free/Paid, el titular confirmó
+posteriormente Workers Free. No ampliar permisos ni pedir tokens en chat.
 Los límites publicados no son una auditoría de la cuenta.
+
+## Decisión actual: detener antes de crear o conectar
+
+El titular confirma Workers Free y presupuesto **$0 CLP**. Plan resuelto: no
+volver a pedirlo ni ampliar permisos para comprobarlo. No se autoriza upgrade,
+R2, servicios facturables ni recursos de pago. Los 15 Workers y la cuota disponible
+ya están revisados.
+
+Comprobación documental posterior a esa confirmación:
+
+- La guía oficial para **nuevo Worker** indica seleccionar repo, configurar y
+  pulsar **Save and Deploy**. No documenta un paso de guardar sin lanzar el
+  primer build: https://developers.cloudflare.com/workers/ci-cd/builds/
+- La casilla **Enable Preview Builds** permite desactivar previews, pero la
+  ruta documentada es dentro de un proyecto existente, Settings > Build >
+  Branch control. No acredita poder desactivarlos antes de la creación/conexión:
+  https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/
+- La API documenta comandos build/deploy al crear triggers y preview opcional,
+  pero requiere un **Worker tag ya existente**, conexión de repo y build token.
+  No demuestra cómo obtener un contenedor nuevo sin una ejecución/publicación:
+  https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/
+- Conectar uno de los 15 Workers existentes modificaría un recurso preexistente;
+  no es un atajo autorizado. Tampoco crear un Worker de ejemplo desplegado.
+
+**Resultado:** no hay ruta documentada verificada que cumpla las tres condiciones
+antes de cualquier ejecución. No se pulsa Save and Deploy ni se intenta un build
+fallido para descubrir qué hace. Cloudflare queda detenida bajo las condiciones
+actuales. Esto no prueba que una función no documentada sea imposible: no se
+inspeccionó un asistente autenticado ni se modificó la cuenta. Si el dashboard
+ofrece en el futuro Save-only y control previo de previews, esa evidencia permitiría
+reabrir la evaluación sin autorizar automáticamente la ejecución.
+
+No se necesitan más datos de plan/inventario ni credenciales. Las secciones que
+siguen conservan la especificación del ensayo **condicionada** a resolver este
+gate; no son instrucciones para ejecutarlo ahora. Ningún recurso, conexión,
+secreto, build o despliegue creado en esta revisión.
 
 ## 0. Confirmaciones del titular ANTES de conectar o crear
 
 Solicitar únicamente capturas/exportaciones **sin secretos**, o que el titular
 haga las comprobaciones en su sesión autenticada:
 
-1. Elegir un ámbito aislado y mostrar plan **Workers Free**, cuota Builds restante,
-   suscripciones activas y si existe auto-upgrade/consumo facturable. No trial,
-   Paid, R2 ni productos facturables usados por el ensayo. No cambiar facturación.
-   Free publica 3.000 minutos/mes; Paid permite sobreconsumo cobrado [A]. Si no
-   se puede excluir gasto adicional, **STOP**. No interpretar una alerta como cap.
+1. Plan **Workers Free** confirmado; presupuesto **$0 CLP**. Mantenerlo sin
+   cambios de facturación, upgrades, R2 ni servicios facturables. No solicitar
+   nuevamente esa comprobación. Una alerta de gasto no sustituye estos límites.
 2. Reutilizar la información ya revisada de los **15 Workers** y cuota disponible.
    No solicitar inventario completo nuevo, ni crear otra cuenta para repetir la
    revisión. Cualquier preparación futura se limita al proyecto nuevo aprobado;
@@ -204,26 +238,16 @@ registro nunca es consumible. Los consumidores rechazan assets sin registro o
 con hash distinto; un build fallido no sube ningún WASM. No confiar en extensión,
 exports aislados ni presencia de un archivo no vacío como prueba de completitud.
 
-## 4. Próxima acción exacta requerida del titular
+## 4. Próxima acción
 
-**Ahora solo dos confirmaciones, sin crear ni conectar nada:**
+**Ninguna acción de creación/conexión solicitada.** El plan ya está confirmado.
+La ruta documentada no satisface guardar todo antes de cualquier ejecución,
+así que detenemos esta alternativa; evaluar otra gratuita requiere una revisión
+separada, no un cambio de condiciones para hacer encajar Workers Builds.
 
-1. En una sesión que ya permita ver el plan, confirmar **Free o Paid** del ámbito
-   revisado y las condiciones de cobro aplicables. No repetir inventario ni cuota,
-   cambiar plan, facturación o permisos. Si no se puede consultar, queda pendiente.
-2. Inspeccionar la pantalla PREVIA a conectar/crear y confirmar que permite guardar
-   build seguro, deploy centinela y previews desactivados **antes de ejecutar
-   cualquier build**, no solo antes de publicar. No pulsar Connect/Create/Deploy.
-   Si obliga a un run/deployment inicial, STOP sin crear recursos.
-
-El acceso GitHub ya concedido y cualquier token requerido se comprobarán antes
-de una eventual conexión, sin ampliar integraciones ni crear credenciales
-permanentes. No se requiere hacerlo ahora para estas dos confirmaciones.
-
-Con esas evidencias decidiremos si se puede realizar A cumpliendo las condiciones.
-No hace falta ningún secreto GitHub de escritura para A. B exige confirmación
-separada de release borrador y alcance/caducidad del token. **No solicitado ni
-permitido el build completo de Phase. PR #1 abierto, sin merge ni despliegue.**
+Solo evidencia futura de una opción real de guardar sin ejecutar podría reabrir
+el gate. No pulsar Save and Deploy para comprobarlo. B sigue bloqueada por A;
+Phase sigue sin autorización. PR #1 abierto, sin merge ni despliegue.
 
 Fuentes oficiales consultadas:
 
