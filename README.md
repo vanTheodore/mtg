@@ -147,12 +147,22 @@ WASM_OPT=/ruta/a/wasm-opt ENGINE_OPTIMIZE=1 bun run engine:build
 En este repositorio `-O1` redujo el artefacto de ≈46 MiB a ≈41 MiB (43 036 524 B)
 y pasó la partida real E2E. `-Oz` puede reducir más, pero es mucho más lento.
 
+El binario no se versiona. Se firma con `bun run engine:artifact` (escribe
+`docs/wasm-artifact.json`: sha256, tamaño, commit y digest de Phase, `Cargo.lock`,
+compilador, flags y ABI) y viaja como archivo único en la rama `artifacts/wasm`;
+otra máquina lo recupera con `bun run engine:fetch`, que **solo instala si
+coincide** con el manifiesto y expone el puente de Mesa. Si el entorno no tiene
+memoria para compilarlo, `docs/ENGINE-ARTIFACT.md` tiene la medición del límite y
+los pasos exactos para producirlo fuera.
+
 ### Verificación
 
 ```sh
 bun run check           # svelte-check + TypeScript
 bun test src/lib        # pruebas unitarias Bun
 bun run engine:verify   # hash del árbol de reglas Phase
+bun run engine:attest   # sha256, tamaño, Cargo.lock y ABI del .wasm instalado
+bun run engine:fetch    # recupera el artefacto de la rama artifacts/wasm y lo verifica
 bun run engine:parity   # paridad API directa vs wrapper (semillas 42/7/123)
 bun run engine:scenarios # escenarios explícitos: maná, lanzamiento, combate, objetivos, triggers, reemplazo, victoria
 bun run test:e2e        # Chromium real (visibilidad, a11y, partida completa por UI, motor)
