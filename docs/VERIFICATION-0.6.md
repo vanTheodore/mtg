@@ -159,8 +159,25 @@ forzar.
 Este entorno **no puede ejecutar** esa suite: no hay Rust ni el artefacto WASM,
 y el motor no compila aquí por falta de RAM. La evidencia sale de CI, en un
 workflow **nuevo y aparte** (`.github/workflows/lesson.yml`) que compila
-Phase, juega la lección en Chromium y publica las capturas en la rama
-`ci/lesson-screenshots`.
+Phase, juega la lección en Chromium y publica las capturas y el informe de la
+prueba en la rama `ci/lesson-screenshots` (un revisor puede leerlos sin
+descargar artefactos).
+
+### 4.3 Lo que encontraron las primeras ejecuciones en Chromium
+
+La lección se ejecutó de verdad en CI varias veces, y cada ejecución encontró
+un defecto que ninguna prueba unitaria podía ver (todas necesitan el motor).
+El rastro de decisiones que la lección escribe en la consola durante el
+desarrollo es lo que permitió localizarlos:
+
+| Defecto | Síntoma | Causa | Corrección |
+|---|---|---|---|
+| La decisión se perdía | La tierra nunca se resaltaba: la lección esperaba un momento que no llegaba | La decisión que llegaba mientras el motor atendía la anterior se descartaba | `ActionSlot`: la decisión espera a que el motor quede libre |
+| El maniquí no sabía responder a la limpieza | La lección se quedaba en «Termina tu turno» | Al final del turno el motor pide descartar hasta siete cartas (CR 705.2) y el maniquí no contestaba | `discardAction`: se responde con una de las selecciones legales que publica el motor |
+| El paso de ataque se completaba demasiado pronto | El texto del daño se leía antes de que el daño existiera | El paso se completaba al declarar el ataque, no al recibir el daño | El paso se completa cuando las vidas del maniquí bajan |
+
+Los tres están cubiertos ahora por pruebas unitarias (39 en total para la
+lección) y por la suite de navegador.
 
 > El workflow principal (`ci.yml`) está siendo arreglado en el PR #2 (el
 > diagnóstico de `Cargo.lock`) y este PR **no lo toca**: por eso la evidencia
