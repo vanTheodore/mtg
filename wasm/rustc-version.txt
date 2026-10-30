@@ -1,0 +1,7 @@
+rustc 1.87.0-nightly (8c392966a 2025-03-01)
+binary: rustc
+commit-hash: 8c392966a013fd8a09e6b78b3c8d6e442bc278e1
+commit-date: 2025-03-01
+host: x86_64-unknown-linux-gnu
+release: 1.87.0-nightly
+LLVM version: 20.1.0
