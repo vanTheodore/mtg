@@ -175,17 +175,26 @@ test('the attack step declares the attack with the action Phase published', () =
   expect(STEPS[6].perform?.(withTargets, CTX)).toEqual(attack);
 });
 
-test('the attack step completes once the combat state lists the attacker', () => {
+test('the attack step waits for the damage, not only for the declaration', () => {
   const played = card(1, 'Plains', ['Land'], { zone: 'Battlefield' });
   const creature = card(2, 'Savannah Lions', ['Creature'], { zone: 'Battlefield' });
-  const snapshot = makeSnapshot({
+  const declared = makeSnapshot({
     battlefield: [played, creature],
     waiting: 'CombatDamage',
     combat: { attackers: [{ object_id: 2, defending_player: 1, attack_target: { type: 'Player', data: 1 }, blocked: false }], blocker_assignments: {}, blocker_to_attacker: {} }
   });
   const state: MachineState = { ...initialState(), step: 6, acknowledged: 4, sawOpponentTurn: true, learnerTurn: 2 };
-  const result = reduce(state, snapshot, CTX);
-  expect(result.state.step).toBe(7);
+  // The attack is declared but nobody has taken damage yet: the next step
+  // explains the damage, so the lesson stays here.
+  expect(reduce(state, declared, CTX).state.step).toBe(6);
+
+  // The damage lands: the dummy goes from 20 to 18 lives.
+  const damaged = makeSnapshot({
+    battlefield: [played, creature],
+    life: [20, 18],
+    waiting: 'EndCombat'
+  });
+  expect(reduce(state, damaged, CTX).state.step).toBe(7);
 });
 
 test('the damage step reads what happened and the lesson finishes after it', () => {

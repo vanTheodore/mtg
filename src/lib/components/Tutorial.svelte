@@ -144,20 +144,20 @@
           <p class="combat-line" role="status">Atacan: {attackNames}</p>
         {/if}
 
-        <div class="actions">
-          <button
-            type="button"
-            class="primary"
-            disabled={view.busy || (view.kind === 'act' && !view.actionReady)}
-            aria-describedby="lesson-goal"
-            onclick={() => tutorial.act()}
-          >
-            {view.action}
-          </button>
-          {#if !isFinal}
+        {#if !isFinal}
+          <div class="actions">
+            <button
+              type="button"
+              class="primary"
+              disabled={view.busy || (view.kind === 'act' && !view.actionReady)}
+              aria-describedby="lesson-goal"
+              onclick={() => tutorial.act()}
+            >
+              {view.action}
+            </button>
             <button type="button" class="ghost" onclick={() => tutorial.skip()}>Saltar este paso</button>
-          {/if}
-        </div>
+          </div>
+        {/if}
 
         {#if view.message}
           <p class="message" role="status">{view.message}</p>

@@ -390,7 +390,9 @@ export function battleStepIsDone(
       // The dummy's turn happened and the learner is back: a new turn.
       return state.sawOpponentTurn && snapshot.state.active_player === ctx.learner;
     case 'attack':
-      return (snapshot.state.combat?.attackers?.length ?? 0) > 0 || lifeOf(snapshot, ctx.dummy) < 20;
+      // The step is done when the damage has landed, not when the attack was
+      // declared: the next step explains the damage, so it has to exist.
+      return lifeOf(snapshot, ctx.dummy) < 20;
     case 'damage':
       return lifeOf(snapshot, ctx.dummy) < 20;
     default:

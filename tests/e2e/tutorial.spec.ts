@@ -41,6 +41,10 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   // ── Paso 1: leer ───────────────────────────────────────────────────────────
   await panel(page).getByRole('button', { name: 'Continuar' }).click();
   await expect(stepTitle(page)).toHaveText('Juega tu primera tierra');
+  // La mano inicial, ya resuelta el mulligan: es la que la repetición debe
+  // volver a dar.
+  const openingHand = await handNames(page);
+  expect(openingHand.length).toBeGreaterThan(0);
 
   // ── Una acción inesperada no rompe la lección ─────────────────────────────
   const lions = page.locator('section[aria-label^="Tu mano"] [data-card-id]', { hasText: 'Savannah Lions' }).first();
@@ -107,13 +111,12 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await page.screenshot({ path: `${shotsDir}tutorial-final-1440.png`, fullPage: true });
 
   // ── Repetir es determinista ───────────────────────────────────────────────
-  const firstHand = await handNames(page);
   await panel(page).getByRole('button', { name: 'Repetir la lección' }).click();
   await expect(stepTitle(page)).toHaveText('Tu primera partida', { timeout: 180_000 });
   await expect(page.locator('section[aria-label="Jugador 2"]')).toContainText('20', { timeout: 60_000 });
   await panel(page).getByRole('button', { name: 'Continuar' }).click();
   await expect(stepTitle(page)).toHaveText('Juega tu primera tierra', { timeout: 30_000 });
-  expect(await handNames(page)).toEqual(firstHand);
+  expect(await handNames(page)).toEqual(openingHand);
 });
 
 test('la lección se puede usar con teclado y sinaxe grave', async ({ page }) => {
