@@ -43,6 +43,8 @@ jobs:
     name: WASM build (pinned Rust and lockfile)
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -76,6 +78,31 @@ jobs:
           name: mtg-engine-wasm
           path: static/wasm
           retention-days: 7
+      # The same binary, published on a branch of its own, so the Chromium
+      # suite can also be run outside GitHub Actions (the artifacts of a run
+      # cannot be downloaded from every environment). It is written only once:
+      # the engine does not change while this branch is being reviewed.
+      - name: Publish the engine build for local runs
+        if: always()
+        run: |
+          set -euo pipefail
+          test -s static/wasm/mtg_engine_wasm.wasm
+          if git ls-remote --exit-code --heads origin ci/wasm-mirror > /dev/null 2>&1; then
+            echo "ci/wasm-mirror ya existe: no se vuelve a publicar."
+            exit 0
+          fi
+          git config user.name "mesa-ci"
+          git config user.email "mesa-ci@users.noreply.github.com"
+          git checkout --orphan ci/wasm-mirror
+          rm -rf .git/index
+          mkdir -p wasm
+          cp -f static/wasm/mtg_engine_wasm.wasm wasm/
+          cp -f static/wasm/mtg_engine_wasm.wasm.sha256 wasm/ 2>/dev/null || true
+          cp -f static/wasm/Cargo.lock.sha256 wasm/ 2>/dev/null || true
+          cp -f static/wasm/rustc-version.txt wasm/ 2>/dev/null || true
+          git add -f wasm
+          git commit -m "engine: binario WASM de Phase para la suite de navegador" --allow-empty
+          git push origin ci/wasm-mirror
 
   native-integration:
     name: Native parity and explicit mechanics scenarios
