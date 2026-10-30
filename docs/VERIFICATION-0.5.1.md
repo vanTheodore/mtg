@@ -140,19 +140,22 @@ LD_LIBRARY_PATH=~/.cache/mesa-chromium/al2023/lib:~/.cache/mesa-chromium \
 bun x playwright test --reporter=line
 ```
 
-Resultado de la suite completa (**25 pruebas, 20.4 min**):
+Resultado de la corrida final de la suite completa (**27 pruebas, 20.5 min**,
+rama `af12af9`, tras corregir los defectos de §4):
 
 ```
-  1 skipped
-  14 passed
   10 failed
+  1 skipped
+  16 passed (20.5m)
 ```
 
-**Las 14 que pasan** (ninguna necesita el motor):
+En esa misma corrida, las 10 fallas son las de abajo: ni una es de interfaz.
+
+**Las 16 que pasan** (ninguna necesita el motor):
 
 | Archivo | Qué cubre |
 |---|---|
-| `visibility.spec.ts` | Mano de 30 a 320/375/390/768/1440, sin desborde horizontal, todas las cartas enfocables, grupo de 20 fichas expandible, fallback/error/reintento de imagen, información oculta, ampliación por teclado, transformada y adjuntos |
+| `visibility.spec.ts` (7) | Mano de 30 a 320/375/390/768/1440, sin desborde horizontal, todas las cartas enfocables, grupo de 20 fichas expandible, fallback/error/reintento de imagen, información oculta, ampliación por teclado, transformada y adjuntos; **más las dos nuevas de §4** |
 | `a11y.spec.ts` | axe sin violaciones críticas ni serias en el fixture |
 | `images.spec.ts` | oracle, nombre, cara DFC y ficha con reserva real; reintento recupera arte; oculta no busca |
 | `deck-builder.spec.ts` (2 de 3) | Buscar, cantidades, guardar, recargar y persistir; carta fuera del catálogo bloquea el inicio |
@@ -173,7 +176,8 @@ sin egress a Scryfall no se puede afirmar nada de imágenes reales.
 
 Esto **corrige** lo que decía `docs/VERIFICATION-0.5.md`: allí los E2E figuraban
 como no ejecutados por falta de navegador. Ya no: el navegador existe y lo que
-falta es solo el motor.
+falta es solo el motor. La primera corrida dio 14 aciertos con 25 pruebas; la
+segunda, con las dos de regresión de §4, 16 de 27.
 
 ## 4. Lo que se vio, y los defectos corregidos
 
