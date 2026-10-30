@@ -5,6 +5,10 @@ Investigación documental: 2026-10-30. Base: HEAD de PR #1
 proveedores. No se han creado proyectos, almacenamiento, tokens, releases ni
 despliegues; no se ha tocado facturación.** No se hicieron builds locales.
 
+> **Protocolo actualizado:** [CLOUDFLARE-MINIMAL-TRIAL.md](CLOUDFLARE-MINIMAL-TRIAL.md).
+> Las etapas A/B y sus gates sustituyen la ejecución propuesta aquí. No se han
+> verificado plan, permisos ni ausencia de despliegue inicial en la cuenta.
+
 ## Dictamen
 
 **Workers Builds es candidato viable para un ensayo autorizado, no una solución
@@ -118,67 +122,15 @@ la evidencia de éxito son archivo exportado + hash + log, no el check verde.
 Este comportamiento de separación debe confirmarse primero en un ensayo mínimo
 sin secretos y sin compilar, después de autorizar la creación del proyecto.
 
-## 4. Receta del ensayo (borrador para ejecutar solo tras aprobación)
+## 4. Receta retirada: no ejecutar
 
-Variables de build:
-
-```text
-BUN_VERSION=1.4.4
-SKIP_DEPENDENCY_INSTALL=1
-CARGO_LOCKED=1
-RUSTUP_TOOLCHAIN=nightly-2025-03-02
-ENGINE_PROFILE=release
-```
-
-No configurar `ENGINE_BUILD_STD`, `ENGINE_OPTIMIZE`, flags extra ni `RUSTFLAGS`
-heredados. Trabajar sobre un SHA completo aprobado y registrarlo. Comandos
-centrales del procedimiento Linux (todavía no probados en la plataforma):
-
-```sh
-set -euo pipefail
-umask 077
-mkdir -p evidence static/wasm
-# EXPECTED_MESA_SHA debe ser un SHA real aprobado, no una rama móvil.
-test "$(git rev-parse HEAD)" = "$EXPECTED_MESA_SHA"
-test "$(bun --version)" = 1.4.4
-uname -a > evidence/host.txt
-cat /proc/meminfo >> evidence/host.txt
-df -h >> evidence/host.txt
-curl --proto '=https' --tlsv1.2 -fsSLo rustup-init.sh https://sh.rustup.rs
-sh rustup-init.sh -y --profile minimal --default-toolchain nightly-2025-03-02
-export PATH="$HOME/.cargo/bin:$PATH"
-rustup target add --toolchain nightly-2025-03-02 wasm32-unknown-unknown
-rustc -Vv > evidence/rustc.txt
-cargo -V > evidence/cargo.txt
-bun --version > evidence/bun.txt
-unset RUSTFLAGS MESA_RUSTFLAGS_EXTRA ENGINE_BUILD_STD ENGINE_OPTIMIZE
-export CARGO_LOCKED=1 ENGINE_PROFILE=release
-bun run engine:verify > evidence/phase-source.json
-sha256sum Cargo.lock > evidence/Cargo.lock.sha256
-git rev-parse HEAD > evidence/mesa-commit.txt
-printf '%s\n' c2fbb7a6634a440c7c6b47e6a87a554cc7382f05 > evidence/phase-commit.txt
-cp scripts/build-engine.ts evidence/build-engine.ts
-# Se usa el Bun del entorno; este script no necesita las deps JS de la UI.
-# Fijar timeout restante real: 14 min es un presupuesto, no medición.
-SECONDS=0
-timeout 840 bun run engine:build 2>&1 | tee evidence/build.log
-printf '%s\n' "$SECONDS" > evidence/build-seconds.txt
-git diff --exit-code -- Cargo.lock crates/phase-engine crates/mtg-engine-wasm
-WASM=static/wasm/mtg_engine_wasm.wasm
-test -s "$WASM"
-sha256sum "$WASM" > evidence/WASM.sha256
-wc -c < "$WASM" > evidence/WASM.bytes
-# Registrar también ID/URL del build y fecha UTC, sin imprimir variables secretas.
-date -u +%FT%TZ > evidence/completed-at.txt
-tar -czf mesa-wasm-evidence.tar.gz evidence
-# Exportar WASM + evidence.tar.gz + checksum a destino privado aprobado (§5).
-# El wrapper exterior SIEMPRE sale 1 y bloquea deploy.
-```
-
-Este borrador requiere validar `timeout`, acceso a sh.rustup.rs,
-static.rust-lang.org y crates.io desde el runner. Las restricciones de red del
-sandbox Arena **no prueban** cuáles son las de ese runner. No se cambian los
-fuentes Phase ni se usa una toolchain alternativa para ocultar un fallo.
+Se retira la receta de compilación anterior: `set -e` podía saltarse la
+exportación de evidencia al fallar el build. No se autoriza Phase todavía.
+El protocolo corregido está en [CLOUDFLARE-MINIMAL-TRIAL.md](CLOUDFLARE-MINIMAL-TRIAL.md):
+supervisor, deadline global, logs en streaming, finalización de mejor esfuerzo
+y respaldo externo para SIGKILL/timeout duro; ningún WASM de un build fallido.
+Primero etapa A sin secretos de escritura GitHub, después B con archivo pequeño
+y credencial efímera. No ampliar instalaciones GitHub existentes sin permiso.
 
 ## 5. Conservar y recuperar sin publicación ni almacenamiento facturable
 
