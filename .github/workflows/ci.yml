@@ -40,7 +40,7 @@ jobs:
           retention-days: 7
 
   wasm:
-    name: WASM build (pinned Rust, lockfile and Binaryen)
+    name: WASM build (pinned Rust and lockfile)
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -52,22 +52,14 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           targets: wasm32-unknown-unknown
-          components: rust-src
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ". -> target-wasm"
           shared-key: mesa-wasm-${{ hashFiles('Cargo.lock', 'crates/mtg-engine-wasm/**') }}
       - name: Validate Cargo.lock with pinned Rust
         run: cargo metadata --locked --format-version 1 > /dev/null
-      - name: Install Binaryen 132 (same version used by engine:optimize)
-        run: |
-          mkdir -p "$RUNNER_TEMP/binaryen"
-          curl -fsSL https://registry.npmjs.org/binaryen/-/binaryen-132.0.0.tgz | tar -xz -C "$RUNNER_TEMP/binaryen"
-          echo "WASM_OPT=$RUNNER_TEMP/binaryen/package/bin/wasm-opt" >> "$GITHUB_ENV"
-      - name: Build optimized engine
+      - name: Build Phase bridge with precompiled wasm32 std
         env:
-          ENGINE_BUILD_STD: "1"
-          ENGINE_OPTIMIZE: "1"
           CARGO_TARGET_DIR: target-wasm
           CARGO_LOCKED: "1"
         run: bun run engine:build
@@ -77,7 +69,8 @@ jobs:
           WASM=static/wasm/mtg_engine_wasm.wasm
           test -s "$WASM"
           sha256sum "$WASM" | tee static/wasm/mtg_engine_wasm.wasm.sha256
-          "$WASM_OPT" --version | tee static/wasm/wasm-opt.version
+          sha256sum Cargo.lock | tee static/wasm/Cargo.lock.sha256
+          rustc -Vv | tee static/wasm/rustc-version.txt
       - uses: actions/upload-artifact@v4
         with:
           name: mtg-engine-wasm
