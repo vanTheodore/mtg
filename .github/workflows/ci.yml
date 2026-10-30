@@ -87,8 +87,14 @@ jobs:
         run: |
           set -euo pipefail
           test -s static/wasm/mtg_engine_wasm.wasm
+          wanted=$(cut -d' ' -f1 static/wasm/mtg_engine_wasm.wasm.sha256)
+          published=""
           if git ls-remote --exit-code --heads origin ci/wasm-mirror > /dev/null 2>&1; then
-            echo "ci/wasm-mirror ya existe: no se vuelve a publicar."
+            git fetch --depth=1 origin ci/wasm-mirror:refs/remotes/origin/ci/wasm-mirror
+            published=$(git show refs/remotes/origin/ci/wasm-mirror:wasm/mtg_engine_wasm.wasm.sha256 2>/dev/null | cut -d' ' -f1 || true)
+          fi
+          if [ "$published" = "$wanted" ]; then
+            echo "ci/wasm-mirror ya tiene este binario: no se vuelve a publicar."
             exit 0
           fi
           git config user.name "mesa-ci"
@@ -102,7 +108,7 @@ jobs:
           cp -f static/wasm/rustc-version.txt wasm/ 2>/dev/null || true
           git add -f wasm
           git commit -m "engine: binario WASM de Phase para la suite de navegador" --allow-empty
-          git push origin ci/wasm-mirror
+          git push --force origin ci/wasm-mirror
 
   native-integration:
     name: Native parity and explicit mechanics scenarios

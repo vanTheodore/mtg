@@ -331,7 +331,11 @@
     <svelte:boundary>
     <main class="layout" inert={needsHandoff} aria-hidden={needsHandoff}>
       <PlayerPanel player={rival!} showHand />
-      {#if rivalHand.length}
+      <!-- While the device changes hands the board is covered and inert, so
+           the other seat's hand is not drawn either: the dialog promises that
+           the previous player's hand stays hidden, and the count of those
+           backs would say how many cards they are holding. -->
+      {#if rivalHand.length && !needsHandoff}
         <div class="rival-hand" aria-label={`Mano oculta del Jugador ${opponent + 1}`}>
           {#each rivalHand as obj (obj.id)}<div class="mini-back" aria-hidden="true"></div>{/each}
         </div>

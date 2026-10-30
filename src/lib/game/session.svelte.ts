@@ -2,8 +2,9 @@ import { tick } from 'svelte';
 import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
 import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId } from '#lib/engine/types.ts';
 import {
-  attackDeclaration, attackTargets, blockDeclaration, blockTargets, manaActions,
-  nextBlockAssignment, objectTarget, playerTarget, secondActivation, targetAction
+  attackDeclaration, attackTargets, blockDeclaration, blockTargets, discardSelection,
+  discardPrompt as readDiscardPrompt, manaActions, nextBlockAssignment, objectTarget,
+  playerTarget, secondActivation, targetAction
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
 
@@ -180,12 +181,7 @@ class GameSession {
   }
   /** Discard prompts publish the chooseable set and exact count; the UI only picks among them. */
   get discardPrompt() {
-    const w = this.snapshot?.state.waiting_for;
-    if (!w || (w.type !== 'DiscardToHandSize' && w.type !== 'ConniveDiscard')) return null;
-    const data = w.data ?? {};
-    const cards = (data.cards ?? []) as number[];
-    const count = typeof data.count === 'number' ? data.count : 0;
-    return { count, cards, player: typeof data.player === 'number' ? data.player : this.snapshot!.viewer };
+    return readDiscardPrompt(this.snapshot);
   }
   toggleChoice(id: number) {
     const prompt = this.discardPrompt;
@@ -199,7 +195,7 @@ class GameSession {
     if (!prompt || this.choosing.length !== prompt.count) return;
     const cards = [...this.choosing];
     this.choosing = [];
-    void this.dispatch({ type: 'SelectCards', data: { cards } });
+    void this.dispatch(discardSelection(cards));
   }
 
   private async apply(reply: EngineReply) {

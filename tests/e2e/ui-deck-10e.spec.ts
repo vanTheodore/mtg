@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { createBoardDriver } from './support/board-driver.ts';
 
 /**
  * 0.5 — a pasted 10E deck played through the Svelte controls, including a real
@@ -11,10 +12,16 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  * known-limitation card (`SilentDrop:1_of_2`), so the game only starts with
  * explicit consent.
  *
+ * The board is played with the shared driver (`tests/e2e/support/board-driver.ts`):
+ * it only clicks what Mesa shows — the panel, the hand, the cards — and Phase
+ * decides what is legal. The driver knows how to answer every decision the
+ * interface offers, including the cleanup discard (CR 514.1): without that the
+ * game froze at the end of the first turn with more than seven cards.
+ *
  * Selectors were checked against the components (`DeckBuilder.svelte`,
  * `Board.svelte`, `DecisionPanel.svelte`, `Hand.svelte`, `CardView.svelte`,
- * `HistoryPanel.svelte`). **NO EJECUTADO en este entorno**: no hay navegador
- * (ver `docs/VERIFICATION-0.5.md` §1 y `docs/BROWSER-RUNBOOK.md`).
+ * `HistoryPanel.svelte`). First executed in a browser with the real engine in
+ * CI (2026-10-30): see `docs/VERIFICATION-0.5.2.md`.
  */
 
 /** 17 + 1 + 22 = 40. All but Plains live in the `10e` pack only. */
@@ -37,13 +44,6 @@ const DECK = [
 const LIMITED = 'Arcane Teachings';
 
 const hand = (page: Page) => page.locator('section[aria-label^="Tu mano"]');
-const decision = (page: Page) => page.locator('section[aria-label="Decisión pendiente"]');
-const battlefield = (page: Page) => page.locator('section[aria-label^="Tu campo de batalla"]');
-const rivalField = (page: Page) => page.locator('section[aria-label^="Campo de batalla"]');
-const log = (page: Page) => page.locator('section[aria-label="Registro de la partida"]');
-const app = (page: Page) => page.locator('.app');
-
-const revision = async (page: Page) => Number(await app(page).getAttribute('data-actions-applied'));
 
 async function openBuilder(page: Page) {
   await page.getByRole('button', { name: 'Mis mazos' }).click();
@@ -78,36 +78,6 @@ async function startDeckGame(page: Page) {
   await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
   await answerHandoff(page);
   await expect(hand(page).locator('[data-card-id]').first()).toBeVisible({ timeout: 180_000 });
-}
-
-/** One click on a card, retrying while the seat dialog settles. */
-async function clickCard(page: Page, card: Locator) {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try { await card.click({ timeout: 2_500 }); return; } catch { await page.waitForTimeout(60); }
-  }
-  throw new Error('No se pudo pulsar la carta');
-}
-
-/** Click a panel button and report whether Phase moved the game. */
-async function press(page: Page, button: Locator): Promise<boolean> {
-  if (!(await button.count())) return false;
-  const before = await revision(page);
-  await button.click({ timeout: 2_000 }).catch(() => {});
-  await page
-    .waitForFunction((value) => Number(document.querySelector('.app')?.getAttribute('data-actions-applied')) > value, before, { timeout: 4_000 })
-    .catch(() => {});
-  return (await revision(page)) > before;
-}
-
-/** Pass, keep, confirm whatever the panel is currently asking. */
-async function answerAnyPrompt(page: Page): Promise<boolean> {
-  const d = decision(page);
-  if (await press(page, d.locator('button').filter({ hasText: 'Conservar mano' }).first())) return true;
-  if (await press(page, d.locator('button').filter({ hasText: 'Confirmar pago' }).first())) return true;
-  if (await press(page, d.locator('button').filter({ hasText: /^No atacar$/ }).first())) return true;
-  if (await press(page, d.locator('button').filter({ hasText: /^No bloquear$/ }).first())) return true;
-  if (await press(page, d.locator('.confirmations button').filter({ hasText: /^Pasar/ }).first())) return true;
-  return press(page, d.locator('.confirmations button:not([disabled])').first());
 }
 
 test('mazo pegado de 10E: estados, descarga selectiva y arranque 40/40', async ({ page }) => {
@@ -157,7 +127,13 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
 
   await page.goto('/');
+  // The board is read with the automatic pass off: the test wants to see the
+  // combat state that Phase published when the blocks were declared, not the
+  // state left after the game moved on (a blocker that died is no longer on
+  // the battlefield, and its role with it).
+  await page.getByRole('checkbox', { name: 'Auto-pasar ventanas sin acciones' }).uncheck();
   await startDeckGame(page);
+  const driver = createBoardDriver(page);
 
   // Play until seat 0 has an attacker and seat 1 a valid blocker. Bounded on
   // purpose: the test fails with the last state instead of hanging.
@@ -165,31 +141,35 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   let attackerName = '';
   for (let step = 0; step < 400 && !attacked; step += 1) {
     if (await page.locator('.game-over').isVisible().catch(() => false)) break;
-    const waiting = await decision(page).getAttribute('data-waiting');
-    const viewer = Number(await app(page).getAttribute('data-viewer'));
+    const waiting = await driver.waiting();
+    const viewer = await driver.viewer();
 
     if (waiting === 'DeclareAttackers' && viewer === 0) {
-      const candidates = battlefield(page).locator('[data-card-id][data-attack-options]:not([data-attack-options="0"])');
+      const candidates = driver.battlefield.locator('[data-card-id][data-attack-options]:not([data-attack-options="0"])');
       if (await candidates.count()) {
         const attacker = candidates.first();
         const id = await attacker.getAttribute('data-card-id');
-        await clickCard(page, attacker);
+        await driver.clickCard(attacker);
         // A single destination is auto-assigned by the controller; if there are
         // several, the panel offers one button per destination.
-        const destination = decision(page).locator('button').filter({ hasText: /^Atacar a / }).first();
-        if (await destination.count()) await press(page, destination);
-        const confirm = decision(page).locator('button').filter({ hasText: /^Confirmar ataque/ }).first();
-        if (await press(page, confirm)) {
-          await expect(battlefield(page).locator(`[data-card-id="${id}"][data-combat-role="Atacando"]`)).toHaveCount(1);
+        const destination = driver.decision.locator('button').filter({ hasText: /^Atacar a / }).first();
+        if (await destination.count()) await driver.press(destination);
+        const confirm = driver.decision.locator('button').filter({ hasText: /^Confirmar ataque/ }).first();
+        if (await driver.press(confirm)) {
+          // The board changes hands right after the attack (the defending
+          // seat is the one that has to block), so the attacking creature is
+          // looked up wherever the board is showing it now.
+          await expect(page.locator(`[data-card-id="${id}"][data-combat-role="Atacando"]`)).toHaveCount(1);
           attacked = true;
-          attackerName = (await battlefield(page).locator(`[data-card-id="${id}"] .fallback-name`).innerText()).trim();
+          attackerName = (await page.locator(`[data-card-id="${id}"] .fallback-name`).innerText()).trim();
           break;
         }
       }
     }
-    if (!(await answerAnyPrompt(page)) && !(await press(page, hand(page).locator('[data-card-id]').first()))) {
-      await page.waitForTimeout(80);
-    }
+    // A seat with no attackers yet has to build one: play the cards Mesa
+    // marks as playable, and answer the cleanup discard that closes the turn.
+    if (waiting === 'Priority' && (await driver.playPlayableCard())) continue;
+    if (!(await driver.answerAnyPrompt())) await page.waitForTimeout(80);
   }
   expect(attacked, 'no se llegó a declarar un atacante').toBe(true);
 
@@ -197,46 +177,49 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   // priority windows in between.
   let blocking = false;
   for (let step = 0; step < 200; step += 1) {
-    const waiting = await decision(page).getAttribute('data-waiting');
-    const viewer = Number(await app(page).getAttribute('data-viewer'));
+    const waiting = await driver.waiting();
+    const viewer = await driver.viewer();
     if (waiting === 'DeclareBlockers' && viewer === 1) { blocking = true; break; }
     if (await page.locator('.game-over').isVisible().catch(() => false)) break;
-    if (!(await answerAnyPrompt(page))) await page.waitForTimeout(80);
+    if (!(await driver.answerAnyPrompt())) await page.waitForTimeout(80);
   }
   expect(blocking, 'no se llegó a la ventana de bloqueo').toBe(true);
 
   // The attacking creature is visible with its combat role from Phase's state.
-  const attackerCard = rivalField(page).locator('[data-combat-role="Atacando"]').first();
+  const attackerCard = driver.rivalField.locator('[data-combat-role="Atacando"]').first();
   await expect(attackerCard).toHaveCount(1);
   const attackerId = await attackerCard.getAttribute('data-card-id');
 
   // A creature the engine reports as able to block.
-  const blockerCard = battlefield(page).locator('[data-card-id][data-block-options]:not([data-block-options="0"])').first();
+  const blockerCard = driver.battlefield.locator('[data-card-id][data-block-options]:not([data-block-options="0"])').first();
   await expect(blockerCard, 'Phase no ofrece ninguna bloqueadora válida').toHaveCount(1);
   const blockerId = await blockerCard.getAttribute('data-card-id');
   const blockerName = (await blockerCard.locator('.fallback-name').innerText()).trim();
 
   // 1) select the blocker, 2) click the attacker it will block.
-  await clickCard(page, blockerCard);
-  await clickCard(page, rivalField(page).locator(`[data-card-id="${attackerId}"]`));
+  await driver.clickCard(blockerCard);
+  await driver.clickCard(driver.rivalField.locator(`[data-card-id="${attackerId}"]`));
 
   // The draft is the pair the player is about to send, named not numeric.
-  const draft = decision(page).locator('ul[aria-label="Bloqueos elegidos"]');
+  const draft = driver.decision.locator('ul[aria-label="Bloqueos elegidos"]');
   await expect(draft).toContainText(blockerName);
   await expect(draft).toContainText(attackerName);
 
   // 3) confirm: Phase validates the assignment and answers with a new revision.
-  const before = await revision(page);
-  await press(page, decision(page).locator('button').filter({ hasText: /^Confirmar bloqueos/ }).first());
-  expect(await revision(page)).toBeGreaterThan(before);
+  const before = await driver.revision();
+  await driver.press(driver.decision.locator('button').filter({ hasText: /^Confirmar bloqueos/ }).first());
+  expect(await driver.revision()).toBeGreaterThan(before);
 
   // 4) Proof that Phase accepted it: its own event, in the game log.
-  await expect(log(page)).toContainText(`${blockerName} bloquea a ${attackerName}`, { timeout: 15_000 });
+  await expect(driver.log).toContainText(`${blockerName} bloquea a ${attackerName}`, { timeout: 15_000 });
   // 5) And the visible state: the blocker keeps the blocking role, the attacker
-  //    is still marked as the one that attacked.
-  const blockerAfter = battlefield(page).locator(`[data-card-id="${blockerId}"]`);
+  //    is still marked as the one that attacked. The board changes hands again
+  //    when the damage is dealt, so both creatures are looked up wherever the
+  //    board is showing them now.
+  const blockerAfter = page.locator(`[data-card-id="${blockerId}"]`);
   await expect(blockerAfter).toHaveAttribute('data-combat-role', 'Bloqueando');
-  await expect(battlefield(page).locator('.status-strip')).toContainText('Bloqueando');
+  await expect(blockerAfter.locator('.status-strip')).toContainText('Bloqueando');
+  await expect(page.locator(`[data-card-id="${attackerId}"][data-combat-role="Atacando"]`)).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 
@@ -254,8 +237,16 @@ test('estado de bloqueo: el tablero queda inerte, cubierto y sin fuga de mano', 
   await page.getByRole('checkbox', { name: /Permitir 1 carta\(s\) con limitaciones conocidas/ }).check();
   await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
 
+  const driver = createBoardDriver(page);
+  // The board changes hands when the seat that is looking at it answers its
+  // mulligan: the other seat is the one that has to decide next (CR 103.5),
+  // and Mesa asks for the device before showing that seat's cards.
+  const keep = driver.decision.locator('button').filter({ hasText: 'Conservar mano' }).first();
+  await expect(keep).toBeVisible({ timeout: 180_000 });
+  await keep.click({ timeout: 5_000 });
+
   const dialog = page.getByRole('dialog', { name: 'Paso de asiento' });
-  await expect(dialog).toBeVisible({ timeout: 180_000 });
+  await expect(dialog).toBeVisible({ timeout: 30_000 });
   await expect(dialog.getByRole('button', { name: 'Estoy listo' })).toBeFocused();
 
   const board = page.locator('main.layout');
@@ -293,6 +284,7 @@ test('la partida se juega hasta el final con acciones, combate y resultado', asy
 
   await page.goto('/');
   await startDeckGame(page);
+  const driver = createBoardDriver(page);
 
   let sawAttack = false;
   let sawBlock = false;
@@ -301,34 +293,36 @@ test('la partida se juega hasta el final con acciones, combate y resultado', asy
 
   for (let step = 0; step < 600; step += 1) {
     if (await page.locator('.game-over').isVisible().catch(() => false)) break;
-    const waiting = await decision(page).getAttribute('data-waiting');
-    const viewer = Number(await app(page).getAttribute('data-viewer'));
+    const waiting = await driver.waiting();
+    const viewer = await driver.viewer();
 
     if (waiting === 'DeclareAttackers' && viewer === 0) {
-      const attackers = battlefield(page).locator('[data-card-id][data-attack-options]:not([data-attack-options="0"])');
+      const attackers = driver.battlefield.locator('[data-card-id][data-attack-options]:not([data-attack-options="0"])');
       if (await attackers.count()) sawAttack = true;
-      for (const card of await attackers.all()) await clickCard(page, card);
-      const confirm = decision(page).locator('button').filter({ hasText: /^Confirmar ataque/ }).first();
-      if (await press(page, confirm)) interactions += 1; else await answerAnyPrompt(page);
+      for (const card of await attackers.all()) await driver.clickCard(card);
+      const confirm = driver.decision.locator('button').filter({ hasText: /^Confirmar ataque/ }).first();
+      if (await driver.press(confirm)) interactions += 1; else await driver.answerAnyPrompt();
       continue;
     }
     if (waiting === 'DeclareBlockers' && viewer === 1) {
       // A block only counts once Phase logged it; the prompt alone proves nothing.
-      const blocker = battlefield(page).locator('[data-card-id][data-block-options]:not([data-block-options="0"])').first();
-      const attacker = rivalField(page).locator('[data-combat-role="Atacando"]').first();
+      const blocker = driver.battlefield.locator('[data-card-id][data-block-options]:not([data-block-options="0"])').first();
+      const attacker = driver.rivalField.locator('[data-combat-role="Atacando"]').first();
       if (await blocker.count() && await attacker.count()) {
-        await clickCard(page, blocker);
-        await clickCard(page, attacker);
-        const confirm = decision(page).locator('button').filter({ hasText: /^Confirmar bloqueos/ }).first();
-        if (await press(page, confirm)) {
+        await driver.clickCard(blocker);
+        await driver.clickCard(attacker);
+        const confirm = driver.decision.locator('button').filter({ hasText: /^Confirmar bloqueos/ }).first();
+        if (await driver.press(confirm)) {
           interactions += 1;
-          if (await log(page).locator('li').filter({ hasText: /bloquea a/ }).count()) sawBlock = true;
+          if (await driver.log.locator('li').filter({ hasText: /bloquea a/ }).count()) sawBlock = true;
           continue;
         }
       }
-      if (await press(page, decision(page).locator('button').filter({ hasText: /^No bloquear/ }).first())) { interactions += 1; continue; }
+      if (await driver.press(driver.decision.locator('button').filter({ hasText: /^No bloquear/ }).first())) { interactions += 1; continue; }
     }
-    if (await answerAnyPrompt(page)) { interactions += 1; continue; }
+    // Play what the interface offers, then answer the decision that is open.
+    if (waiting === 'Priority' && (await driver.playPlayableCard())) { interactions += 1; continue; }
+    if (await driver.answerAnyPrompt()) { interactions += 1; continue; }
 
     if (++stalls > 40) {
       throw new Error(`La interfaz se bloqueó en el paso ${step}: waiting=${waiting}, viewer=${viewer}`);
