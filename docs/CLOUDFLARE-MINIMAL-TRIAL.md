@@ -1,6 +1,6 @@
 # Ensayo mínimo Cloudflare: gates de aislamiento y transferencia
 
-Fecha: 2026-10-30. Preparación sobre `483bcbc`. Sustituye para cualquier ensayo
+Fecha: 2026-10-30. Actualizado sobre `62c2f30`. Sustituye para cualquier ensayo
 el procedimiento de REMOTE-WASM-BUILD-EVALUATION.md. **No ejecutado en Cloudflare.
 No autorizado compilar Phase. No se han creado recursos ni credenciales.**
 
@@ -9,14 +9,17 @@ No autorizado compilar Phase. No se han creado recursos ni credenciales.**
 | Gate | Estado |
 |---|---|
 | Plan Free real y ausencia de productos facturables en el ámbito | **Pendiente de evidencia del titular** |
-| Inventario de Workers/proyectos/integraciones/permisos existentes | **Pendiente** |
+| Workers y cuota Builds | **Revisados por el titular en solo lectura: 15 Workers, cuota no agotada** |
+| Plan Free/Paid | **No visible con los permisos actuales; pendiente** |
 | Configuración guardable sin despliegue inicial | **Pendiente** |
-| Producción y preview no ejecutan deploy tras fallo de build | **Pendiente: dos runs independientes** |
+| Previews completamente desactivados | **Pendiente de configuración efectiva verificable** |
+| Producción no ejecuta deploy tras fallo de build | **Pendiente: un único run mínimo** |
 | Transferencia privada y descarga con hash idéntico | **Pendiente; solo después del gate anterior** |
 
-El conector Cloudflare no está disponible en Arena y no hay acceso autenticado
-al dashboard. Por tanto no puedo afirmar que la cuenta sea Free, que no pueda
-facturar ni que sus permisos actuales sean adecuados. No pedir tokens en chat.
+El titular informa de revisión autenticada de solo lectura: hay 15 Workers y
+la cuota Builds no está agotada. Se acepta esa información sin solicitar otro
+inventario. Esos permisos no permiten ver Free/Paid: plan y garantía de coste
+siguen pendientes. No ampliar permisos para inferirlos ni pedir tokens en chat.
 Los límites publicados no son una auditoría de la cuenta.
 
 ## 0. Confirmaciones del titular ANTES de conectar o crear
@@ -29,10 +32,10 @@ haga las comprobaciones en su sesión autenticada:
    Paid, R2 ni productos facturables usados por el ensayo. No cambiar facturación.
    Free publica 3.000 minutos/mes; Paid permite sobreconsumo cobrado [A]. Si no
    se puede excluir gasto adicional, **STOP**. No interpretar una alerta como cap.
-2. Confirmar el ámbito exacto y guardar inventario inicial con fecha: IDs/nombres
-   de Workers, proyectos, rutas, dominios, bindings, triggers, integraciones y
-   alcances de tokens visibles. Conservarlo privado, no en el repo. Una cuenta
-   Free aislada sin proyectos previos es preferible. No crear cuenta sin permiso.
+2. Reutilizar la información ya revisada de los **15 Workers** y cuota disponible.
+   No solicitar inventario completo nuevo, ni crear otra cuenta para repetir la
+   revisión. Cualquier preparación futura se limita al proyecto nuevo aprobado;
+   no modificar Workers, proyectos, integraciones o permisos existentes.
 3. GitHub: comprobar si la App Cloudflare **ya tiene** acceso a `vanTheodore/mtg`.
    Si no, **STOP**: agregar el repo cambia permisos existentes y requiere una
    autorización específica nueva. No ampliar la instalación, reinstalarla ni
@@ -51,8 +54,9 @@ haga las comprobaciones en su sesión autenticada:
    automáticamente una credencial persistente o de alcance amplio, STOP antes
    de aceptar. No reutilizar tokens existentes. No añadir un secreto de exportación.
 
-No hay cambios previstos en objetos preexistentes. Comparar inventario/config
-antes y después de cada etapa; si hay un cambio inesperado, detener y reportar,
+No hay cambios previstos en objetos preexistentes. Reutilizar el inventario ya
+disponible y limitar las comprobaciones futuras a configuración y actividad del
+ensayo; si hay un cambio inesperado en objetos existentes, detener y reportar,
 no intentar una «reparación» que afecte otros proyectos. No es posible demostrar
 este punto solo revisando los archivos del repo.
 
@@ -77,25 +81,28 @@ printf 'MESA_TRIAL_FORBIDDEN_PRODUCTION_DEPLOY_REACHED\n'
 exit 97
 ```
 
-```sh
-# Preview command: centinela, NUNCA publica preview/version
-printf 'MESA_TRIAL_FORBIDDEN_PREVIEW_DEPLOY_REACHED\n'
-exit 98
-```
+### Previews desactivados; un solo run de producción
 
-Los centinelas son defensa adicional: incluso si la plataforma alcanza el paso
-prohibido, no publican nada, y su presencia implica que **el ensayo falló**.
+Antes de cualquier build futuro, comprobar en configuración efectiva que los
+preview builds están **deshabilitados por completo**: sin trigger preview activo,
+reglas wildcard de ramas alternativas ni mecanismo de preview automático que
+pueda publicar. Guardar evidencia del estado deshabilitado (UI y, si ya está
+accesible en solo lectura, listado/configuración de triggers). Campo Preview
+command vacío o no haber visto URLs **no demuestra** desactivación.
+
+No ejecutar un run preview ni reactivar previews para probarlos. La conclusión
+será «previews desactivados», no «fallo de build probado en preview».
+Si no se puede verificar la desactivación total, STOP y volver a consultar;
+no reemplazar este ensayo por dos runs automáticamente.
+
+El centinela de deploy es defensa adicional: incluso si se alcanza el paso
+prohibido no publica nada, y su ejecución implica que **el ensayo falló**.
 No basta con que el resultado global sea rojo ni con no encontrar una URL.
 
-### Dos runs y evidencia positiva
-
-Primero run por trigger de producción y después run por trigger de preview,
-ambos del proyecto dedicado. No crear ni cambiar ramas en este repo: usar
-`arena/5f317145-mtg` y su mismo SHA completo. Si se requiere distinguir ramas,
-solo en la configuración del proyecto NUEVO, tras aprobación, cambiar cuál se
-clasifica como producción, sin construir la otra rama. Registrar ambas configs.
-Si no permite probar los dos contextos sin nuevas ramas/despliegues, STOP;
-producción sola **no certifica preview**. No forzar un contexto API no soportado.
+Tras confirmar plan y configuración segura, y obtener aprobación para crear el
+proyecto, usar un único run por trigger de producción del proyecto dedicado:
+`arena/5f317145-mtg`, con SHA completo fijado. No crear/cambiar ramas ni construir
+`main`. Nada de build todavía en la preparación actual.
 
 Guardar por run: build UUID, SHA, trigger UUID/tipo, configuración efectiva,
 horas UTC, log completo y estado de cada fase. Exigir:
@@ -115,7 +122,8 @@ usar IDs reales descubiertos, no inventados. No crear un token amplio solo
 para leer si el titular puede exportar desde dashboard. SHA-256 de las evidencias
 exportadas; registrar estado final **pendiente/aprobado/fallido**, no «pasó» sin datos.
 
-**Etapa B prohibida hasta aprobar ambos runs.** Desactivar triggers tras cada run
+**Etapa B prohibida hasta verificar previews desactivados y aprobar el único
+run de producción.** Desactivar el trigger de ensayo tras el run
 para no dispararlos por los pushes documentales de este PR.
 
 ## 2. Etapa B: archivo pequeño y credenciales temporales mínimas
@@ -198,13 +206,19 @@ exports aislados ni presencia de un archivo no vacío como prueba de completitud
 
 ## 4. Próxima acción exacta requerida del titular
 
-1. En Cloudflare: confirmar cuenta/ámbito Free aislado con evidencia de §0.1–2,
-   sin cambiar plan ni activar servicios.
-2. En GitHub: confirmar si la App Cloudflare **ya** tiene acceso al repo; no
-   instalarla ni agregar permisos todavía.
-3. En Cloudflare: mostrar la pantalla PREVIA a conectar/crear, con posibilidad de
-   configurar comandos y token sin despliegue inicial. No pulsar Deploy. Si el
-   flujo obliga a desplegar o crea un token permanente, informar y detenerse.
+**Ahora solo dos confirmaciones, sin crear ni conectar nada:**
+
+1. En una sesión que ya permita ver el plan, confirmar **Free o Paid** del ámbito
+   revisado y las condiciones de cobro aplicables. No repetir inventario ni cuota,
+   cambiar plan, facturación o permisos. Si no se puede consultar, queda pendiente.
+2. Inspeccionar la pantalla PREVIA a conectar/crear y confirmar que permite guardar
+   build seguro, deploy centinela y previews desactivados **antes de ejecutar
+   cualquier build**, no solo antes de publicar. No pulsar Connect/Create/Deploy.
+   Si obliga a un run/deployment inicial, STOP sin crear recursos.
+
+El acceso GitHub ya concedido y cualquier token requerido se comprobarán antes
+de una eventual conexión, sin ampliar integraciones ni crear credenciales
+permanentes. No se requiere hacerlo ahora para estas dos confirmaciones.
 
 Con esas evidencias decidiremos si se puede realizar A cumpliendo las condiciones.
 No hace falta ningún secreto GitHub de escritura para A. B exige confirmación
@@ -218,5 +232,5 @@ Fuentes oficiales consultadas:
 - [C] https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/
 
 B describe build seguido de deploy y comandos production/preview distintos;
-no sustituye la evidencia de dos runs. C describe tokens API user-scoped y
+no sustituye la evidencia de previews desactivados y del único run de producción. C describe tokens API user-scoped y
 permisos; no es autorización para crearlos ni garantía de creación sin deploy.

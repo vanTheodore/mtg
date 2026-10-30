@@ -8,6 +8,8 @@ despliegues; no se ha tocado facturación.** No se hicieron builds locales.
 > **Protocolo actualizado:** [CLOUDFLARE-MINIMAL-TRIAL.md](CLOUDFLARE-MINIMAL-TRIAL.md).
 > Las etapas A/B y sus gates sustituyen la ejecución propuesta aquí. No se han
 > verificado plan, permisos ni ausencia de despliegue inicial en la cuenta.
+> Actualización del titular: 15 Workers revisados y cuota disponible. El ensayo
+> actual prevé previews desactivados y un solo build de producción, no dos runs.
 
 ## Dictamen
 
