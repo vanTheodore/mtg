@@ -1,161 +1,141 @@
-# El artefacto del motor: por qué falta, cómo se recupera y cómo se confía en él
+# 0.5.2 — motor WASM: bloqueo y alternativa mínima
 
-> Estado: **no hay binario en este workspace**. Esta máquina no puede compilarlo;
-> la medición que lo demuestra está abajo. El resto del documento describe el
-> camino para producirlo en otra máquina y traerlo de vuelta sin confiar en nada
-> que no se pueda verificar.
+## Estado
 
-## 1. Qué falta exactamente
+**Bloqueado por infraestructura; no listo para recomendar el merge.** No se ha
+producido ni recuperado un WASM en esta ronda. No hay SHA-256, tamaño ni capturas
+de partida nuevos que reportar. Phase y Cargo.lock permanecen intactos. No se
+contrataron recursos, modificaron límites de gasto ni cambiaron la visibilidad
+del repositorio. PR #1 abierto, sin merge ni despliegue.
 
-`static/wasm/mtg_engine_wasm.wasm` (el motor Phase compilado a WebAssembly) no
-existe en este checkout. Está en `.gitignore` a propósito: son ~46 MB de un
-binario generado. Sin él, el cliente arranca y el worker de motor falla al
-bootear, así que todo el E2E de juego falla por `404` — no por reglas, no por UI.
+## Entorno de más memoria investigado
 
-Lo que **sí** está en el repo y no depende del binario:
+El checkout partió del HEAD remoto del PR: `fa940c5275d2ff962800689b70a7fef16929c0f8`.
 
-| Pieza | Dónde | Qué garantiza |
-| --- | --- | --- |
-| Phase fijado | `Cargo.toml`, `Cargo.lock`, `vendor/` | El commit `c2fbb7a6634a440c7c6b47e6a87a554cc7382f05` y sus dependencias exactas. |
-| Digest de las fuentes | `scripts/verify-engine.ts` | `7ca901b3…` sobre los 581 archivos de `crates/phase-engine/src`. |
-| Contrato ABI | `src/lib/engine/engine.worker.ts`, `src/lib/engine/wasm-imports.ts` | Qué exports/imports debe tener el módulo para que el cliente lo pueda usar. |
-| Identidad del binario | `scripts/engine-artifact.ts` | sha256, tamaño, lockfile, compilador, flags y ABI en `docs/wasm-artifact.json`. |
-| Transporte | `scripts/engine-fetch.ts` | Traerlo por git y **rechazarlo** si no coincide. |
+La alternativa accesible es el workflow existente `.github/workflows/ci.yml`,
+que ya compila el puente Mesa con Rust `nightly-2025-03-02`, Bun 1.4.4,
+`Cargo.lock` y Binaryen 132. **No está disponible ahora.** La anotación de
+GitHub para el check `123830687772` del run `40984036044` dice literalmente:
 
-## 2. Por qué esta máquina no lo compila
+> The job was not started because recent account payments have failed or your
+> spending limit needs to be increased. Please check the 'Billing & plans'
+> section in your settings
 
-Medido, no supuesto. Cuatro intentos, siempre el mismo final: `SIGKILL` del
-OOM killer (`signal: 9`) sobre `rustc --crate-name engine`.
+Consultado con:
 
-| # | Configuración | Pico RSS | Resultado |
-| --- | --- | --- | --- |
-| 1 | `opt-level=1`, `codegen-units=256` | ~3544 MB | SIGKILL |
-| 2 | `opt-level=0`, `codegen-units=1024`, `-Zmir-opt-level=0`, `-Zinline-mir=no` | ~3544 MB | SIGKILL |
-| 3 | Como 2, `--emit=metadata` (sin codegen) | **3.385.660 kB** | SIGKILL a los ~9 min |
-| 4 | Como 2, `+ -Zno-parallel-backend` y `MALLOC_TRIM_THRESHOLD_=0` | ~3540 MB | SIGKILL a los ~24 min |
+```sh
+gh api repos/vanTheodore/mtg/check-runs/123830687772/annotations
+```
 
-Datos de la caja: `MemTotal` 4.034.452 kB (3,9 GB), **swap 0**, `CapEff
-0000000000000000` (sin privilegios para montar swap ni subir el cgroup), sin
-`memory.max` que ajustar. El intento 3 importa: **quitar la generación de código
-no bajó el pico**, así que el muro no es LLVM sino el parseo/chequeo de tipos de
-un crate de 1,39 millones de líneas en un binario de 64 bits de rustc. No hay
-flag que lo esquive; el proceso necesita más RAM de la que hay.
+Esto precisa el diagnóstico anterior de «sin runner»: no demuestra ausencia de
+runners, sino un bloqueo de facturación de la cuenta. No se cambia sin permiso.
+La integración tampoco puede despachar workflows (403). No se dispone de otro
+host de 8–16 GB ni de una API autorizada para ampliar este sandbox.
 
-Conclusión: **no se relanza la matriz de flags**. Está agotada. Lo que falta es
-una máquina con más memoria.
+Localmente: MemTotal 4 034 452 kB, sin swap, CapEff=0; no hay un límite cgroup
+editable accesible. No puedo aumentar memoria ni habilitar swap desde aquí.
 
-## 3. Compilarlo donde sí hay memoria
+## Intentos adicionales: resultado y corrección del diagnóstico
 
-Requisito real: **8 GB de RAM** (el pico observado es 3,6 GB en un solo proceso;
-8 GB deja margen para el resto del sistema). 16 GB sobra. Disco: ~13 GB libres.
+Se hicieron dos intentos locales adicionales, que **no resolvieron el bloqueo**:
 
-Requisitos de entorno, todos ya fijados por el repo:
+- Una sonda pretendidamente de metadata terminó también en SIGKILL. **No prueba
+  que el front-end sea el único responsable**: la invocación efectiva de cargo
+  conservaba `--emit=dep-info,metadata,link` además de `--emit=metadata`.
+- Heap glibc recortado y `-Zno-parallel-backend`, sin el servidor Vite residente:
+  también SIGKILL, pico observado de aproximadamente 3,54 GiB.
 
-- Rust **nightly** (el build usa `-Z` y `getrandom_backend="custom"`).
-- Target `wasm32-unknown-unknown` (`rustup target add wasm32-unknown-unknown`).
-- Bun 1.4.4.
-- Dependencias offline: `vendor/` + `.cargo/offline.toml` (o red hacia crates.io).
+No debí seguir explorando flags locales ante la petición de buscar más memoria.
+No se repiten. Tampoco se afirma que 8 GB basten por medición: 8–16 GB es el
+siguiente entorno candidato, no una compilación ya verificada.
 
-```bash
-git clone <repo> && cd mtg
-git checkout arena/5f317145-mtg
+## Alternativa mínima reproducible
 
-# 1. Confirmar que el Phase es el fijado (falla si alguien tocó las fuentes).
+Requiere una máquina **ya disponible/autorizada** con 8–16 GB o más, disco libre
+y acceso a crates.io. No requiere contratar nada ni publicar el repositorio.
+Usar el HEAD de esta misma rama, no crear otra rama para binarios.
+
+```sh
+# En el checkout del PR #1, limpio:
+bun install --frozen-lockfile
+rustup toolchain install nightly-2025-03-02 --profile minimal
+rustup target add --toolchain nightly-2025-03-02 wasm32-unknown-unknown
+export RUSTUP_TOOLCHAIN=nightly-2025-03-02
+unset RUSTFLAGS MESA_RUSTFLAGS_EXTRA ENGINE_BUILD_STD ENGINE_OPTIMIZE
+export CARGO_LOCKED=1
 bun run engine:verify
-
-# 2. Compilar. Sin MESA_RUSTFLAGS_EXTRA: perfil release del repo.
 bun run engine:build
-
-# 3. Firmar la identidad del binario -> docs/wasm-artifact.json
-bun run engine:artifact
-
-# 4. Verificar de inmediato (el mismo chequeo que usará cualquier otra sesión).
-bun run engine:attest
 ```
 
-`engine:build` escribe `static/wasm/mtg_engine_wasm.wasm`; `engine:artifact`
-rechaza cualquier archivo que no empiece con `\0asm`, que pese menos de 1 MB o
-que no exponga el puente de Mesa.
+Bun debe ser 1.4.4. El build aplica los feature gates y el backend de entropía de
+Mesa sin editar Phase. `--locked` prohíbe resolver otras versiones. Esta ruta
+usa la std precompilada; no requiere Binaryen porque no optimiza después del
+link. Si se usa el workflow existente en su lugar, registrar también el
+build-std y Binaryen 132 que ese workflow aplica.
 
-## 4. El contrato ABI que se exige
+### Identidad y compatibilidad antes de reutilizar
 
-El módulo tiene que ser **exactamente** el puente de Mesa, o no sirve:
+Guardar junto al WASM un registro de:
 
-- **exports**: `memory`, `mtg_alloc(len) → ptr`, `mtg_free(ptr, len)`,
-  `mtg_request(op, ptr, len) → bigint` (los 32 bits altos son `outPtr`, los 32
-  bajos `outLen`).
-- **imports**: `env.mesa_now_ms`, `env.mesa_random(ptr, len)`.
-- Un import desconocido es un error de arranque, no un aviso.
+- SHA-256 y bytes del archivo **final**, tras cualquier optimización;
+- commit Mesa y Phase `c2fbb7a6634a440c7c6b47e6a87a554cc7382f05`;
+- salida de `bun run engine:verify`, hash de Cargo.lock;
+- `rustc -Vv`, `cargo -V`, `bun --version`, SO/memoria;
+- log completo, perfil release, flags efectivos de `scripts/build-engine.ts`,
+  variables adicionales y cualquier postprocesado.
 
-Ese contrato está en `src/lib/engine/engine.worker.ts` y
-`src/lib/engine/wasm-imports.ts`, y está cubierto por
-`src/lib/engine/__tests__/artifact-verify.test.ts`: ocho pruebas construyen
-módulos wasm a mano (con y sin cada export, con y sin los imports, con un byte
-cambiado) y comprueban que el gate acepta solo el correcto.
-
-## 5. Traerlo a una sesión nueva (`scripts/engine-fetch.ts`)
-
-Los *release assets* de GitHub no sirven aquí: redirigen a
-`objects.githubusercontent.com`, que esta caja no alcanza. Git sí funciona, así
-que el binario viaja como un **archivo único en la rama `artifacts/wasm`**, fuera
-de `main`.
-
-Publicarlo (una vez, desde la máquina que compiló):
-
-```bash
-git checkout --orphan artifacts/wasm
-git add -f static/wasm/mtg_engine_wasm.wasm docs/wasm-artifact.json
-git commit -m "engine artifact: <sha256 corto>"
-git push origin artifacts/wasm
-git checkout -            # volver; la rama no se mezcla nunca
+```sh
+sha256sum static/wasm/mtg_engine_wasm.wasm Cargo.lock
+wc -c < static/wasm/mtg_engine_wasm.wasm
+rustc -Vv
+cargo -V
 ```
 
-Recuperarlo (en cualquier sesión, incluida esta):
+Los exports `memory`, `mtg_alloc`, `mtg_free`, `mtg_request` son necesarios pero
+**no suficientes** para demostrar que el motor es Phase y habla el protocolo
+actual. Verificar las fuentes y ejecutar el módulo con el host real del cliente:
 
-```bash
-bun run engine:fetch     # git fetch origin artifacts/wasm
-bun run engine:attest    # opcional: fetch ya verifica antes de instalar
+```sh
+bun run wasm:packcheck -- --seed 7
+# Consultar scripts/parity-trace.ts y scripts/parity-seeds.ts para comparar
+# la misma secuencia/semillas con la referencia nativa, sin reciclar reportes.
 ```
 
-`engine-fetch` no instala por confianza:
+No aceptar un binario por nombre, exports o un manifiesto autocertificado.
+La evidencia de compilación y las partidas/paridad deben acompañar al hash.
 
-1. Si ya hay un artefacto que verifica, no toca nada (salvo `--force`).
-2. Sin `docs/wasm-artifact.json` no hay digest de referencia y **no instala**.
-3. Trae el archivo a `static/wasm/mtg_engine_wasm.wasm.incoming`, calcula sha256
-   y tamaño, y los compara con el manifiesto.
-4. Si no coinciden, **borra el archivo temporal y no instala nada**.
-5. Solo si coinciden lo renombra y corre la verificación completa (ABI incluida).
-   Si esa verificación falla, **elimina el archivo instalado**.
+### Conservación entre sesiones
 
-Los cuatro caminos se probaron de verdad con un repositorio git desechable y
-módulos wasm sintéticos: sin manifiesto, digest ajeno, digest correcto con ABI
-inválida y trayecto completo correcto. Los dos últimos instalan o descartan
-según el ABI, no según el nombre del archivo.
+No añadir el WASM a Git. Guardar el archivo, registro y logs en almacenamiento
+privado duradero controlado por el usuario (o el artefacto del workflow existente
+mientras siga vigente su retención de 7 días). No se ha comprobado todavía un
+almacenamiento duradero accesible desde este sandbox; **recuperación pendiente**.
 
-## 6. Por qué el binario no se versiona en `main`
+Para restaurar, transferir el archivo por un canal autorizado a
+`static/wasm/mtg_engine_wasm.wasm`, comparar su SHA-256 con el registro de la
+compilación confiable y volver a ejecutar `wasm:packcheck`. Si cambian Phase,
+puente o Cargo.lock, reconstruir; no asumir compatibilidad.
 
-- Son ~46 MB; cada recompilación infla el historial para siempre.
-- El binario es *derivado*: no debe sobrevivir a un cambio de `Cargo.lock` ni de
-  fuentes de Phase, y `engine:attest` lo detecta.
-- La rama `artifacts/wasm` es descartable: se puede borrar y volver a publicar
-  sin tocar el historial del proyecto.
+## Orden de cierre cuando exista el artefacto
 
-**Un binario de procedencia desconocida no se instala nunca**, ni siquiera para
-"probar rápido": el manifiesto registra qué Phase y qué flags lo produjeron, y
-si no hay manifiesto, no hay binario.
-
-## 7. Qué sigue cuando el binario exista
-
-En orden, sin saltos:
-
-```bash
-bun run engine:attest                  # 1. identidad + ABI
-bun run engine:packcheck               # 2. partidas reales headless (sin navegador)
-bun run test:e2e --grep "10E|combat|block"   # 3. E2E de juego: 10E, combate, bloqueo
-bun run test:e2e                        # 4. las 27
+```sh
+bun run test:e2e -- tests/e2e/ui-deck-10e.spec.ts tests/e2e/engine-gameplay.spec.ts
+bun run test:e2e
 ```
 
-Estado esperado en esta sesión mientras falte el binario: el cliente compila,
-las pruebas unitarias pasan, y **todo E2E de juego falla con 404 del motor**.
-Eso es una falla de infraestructura, no de código, y no se reporta como
-resultado de juego.
+Primero 10E, combate y bloqueo; después la suite completa de 27. Obtener capturas
+por controles reales de mano/campo, selección de bloqueadoras y resultado;
+probar que Phase aceptó el bloqueo y el final. Separar infraestructura, cliente
+y motor al corregir fallos. Hasta entonces **no recomendar fusionar**.
+
+## Comprobaciones de esta ronda
+
+Tras retirar herramientas experimentales de distribución/verificación que no
+aportaban un artefacto real, se mantienen los comandos existentes. No cambia la
+versión aceptada 0.5.1: 0.5.2 no está completada.
+
+Se reejecutaron 10 pruebas de visibilidad y 4 de a11y/imágenes: 14 pasan. La
+prueba `engine-gameplay` falla inmediatamente con el 404 del WASM, no constituye
+una partida. No se volvió a ejecutar la suite completa ni se obtuvieron capturas
+de partida. La primera invocación visual sin la variable de ruta Chromium falló
+por configuración; el reintento correcto es el resultado informado.

@@ -7,7 +7,7 @@
  * with rust-src is required when prebuilt wasm32 std is unavailable;
  * `-Z build-std` compiles it from source.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const cargo = process.env.CARGO ?? 'cargo';
@@ -79,37 +79,6 @@ const env = {
   MALLOC_ARENA_MAX: process.env.MALLOC_ARENA_MAX ?? '1'
 };
 
-/**
- * Say how much RAM this needs *before* spending the build, not after.
- *
- * Measured on a 3.9 GB box: rustc reaches ~3.6 GB of RSS while type-checking
- * `crates/phase-engine` (1.39 M lines, one crate) and is then killed by the OOM
- * killer. Lowering opt-level, codegen-units, mirror optimizations, the LLVM
- * backend or `--emit=metadata` does not move that peak: it is the front end.
- * Five configurations were tried; the numbers are in docs/ENGINE-ARTIFACT.md.
- * Without this warning the next person loses the same 20 minutes we did.
- */
-function memoryWarning(): void {
-  const meminfo = existsSync('/proc/meminfo') ? readFileSync('/proc/meminfo', 'utf8') : '';
-  const totalKb = Number(/^MemTotal:\s+(\d+)/m.exec(meminfo)?.[1] ?? 0);
-  const swapKb = Number(/^SwapTotal:\s+(\d+)/m.exec(meminfo)?.[1] ?? 0);
-  if (!totalKb) return; // not Linux, or not readable: say nothing rather than guess
-  const totalGb = (totalKb + swapKb) / 1024 / 1024;
-  if (totalGb >= 7) return;
-  console.warn(
-    `\n⚠ Esta máquina tiene ${totalGb.toFixed(1)} GiB de memoria (${(totalKb / 1024 / 1024).toFixed(1)} GiB de RAM + ` +
-      `${(swapKb / 1024 / 1024).toFixed(1)} GiB de swap).\n` +
-      '  Compilar `phase-engine` pidió ~3.6 GB de RSS y murió por OOM en todas las\n' +
-      '  configuraciones probadas. Si esta termina, es la excepción; si muere con\n' +
-      '  `signal: 9`, no es un flag que falte: es RAM.\n' +
-      '  Camino documentado: docs/ENGINE-ARTIFACT.md (§2 el muro, §3 otra máquina,\n' +
-      '  §5 traer el binario con `bun run engine:fetch`).\n' +
-      '  Para seguir igual: MESA_ALLOW_LOW_MEMORY=1.\n'
-  );
-  if (process.env.MESA_ALLOW_LOW_MEMORY !== '1') process.exit(3);
-}
-
-memoryWarning();
 console.log(`Building mtg-engine-wasm (${profile}, ${target})…`);
 const result = Bun.spawnSync(args, { stdout: 'inherit', stderr: 'inherit', env });
 if (result.exitCode !== 0) process.exit(result.exitCode ?? 1);

@@ -238,15 +238,10 @@ al mismo RSS, señal 9:
 | 1 | release por defecto (`opt-level=z`) | 3 540 MB → SIGKILL |
 | 2 | `opt-level=1 -C codegen-units=256` | 3 543 MB → SIGKILL |
 | 3 | `opt-level=0 -C codegen-units=1024 -Zinline-mir=no -Zcross-crate-inline-threshold=0`, `MALLOC_ARENA_MAX=1` | 3 544 MB → SIGKILL |
-| 4 | intento 3 + `--emit=metadata` (**sin** generación de código) | 3 385 MB → SIGKILL a los ~9 min |
-| 5 | intento 3 + `-Zno-parallel-backend`, `MALLOC_TRIM_THRESHOLD_=0`, `MALLOC_TOP_PAD_=0` | 3 540 MB → SIGKILL a los ~24 min |
 
-Que las cinco mueran en el mismo punto descarta la optimización como causa: el
-pico está en el front-end, y 3.5 GB es simplemente la memoria que queda libre
-antes de que el kernel elija una víctima. El intento 4 es el decisivo: aun
-quitando LLVM del camino, el chequeo de tipos solo ya pide 3.39 GB. La matriz de
-flags está agotada y no se repite. Detalle completo, y qué hacer en una máquina
-con memoria: [`docs/ENGINE-ARTIFACT.md`](ENGINE-ARTIFACT.md).
+Que las tres mueran en el mismo punto descarta la optimización como causa: el
+pico está en el front-end, y 3.54 GB es simplemente la memoria que queda libre
+antes de que el kernel elija una víctima.
 
 `MESA_RUSTFLAGS_EXTRA` existe para esto: una máquina con poca RAM puede bajar
 el pico sin editar el script.
@@ -254,34 +249,9 @@ el pico sin editar el script.
   MESA_RUSTFLAGS_EXTRA="-C opt-level=1 -C codegen-units=256" CARGO_OFFLINE=1 bun run engine:build
 
 Con 8 GB o más, `CARGO_OFFLINE=1 bun run engine:build` termina y escribe
-`static/wasm/mtg_engine_wasm.wasm`. El artefacto **no se versiona**: se firma con
-`bun run engine:artifact` (escribe `docs/wasm-artifact.json`) y se publica en la
-rama `artifacts/wasm` para que otra sesión lo recupere con `bun run engine:fetch`,
-que lo rechaza si el sha256, el tamaño o el ABI no coinciden.
-
-## 3d. El binario como archivo único en una rama
-
-Publicar desde la máquina que compiló:
-
-```bash
-git checkout --orphan artifacts/wasm
-git add -f static/wasm/mtg_engine_wasm.wasm docs/wasm-artifact.json
-git commit -m "engine artifact: $(sha256sum static/wasm/mtg_engine_wasm.wasm | cut -c1-16)"
-git push origin artifacts/wasm
-git checkout -            # la rama no se mezcla con main nunca
-```
-
-Recuperar en cualquier otra sesión:
-
-```bash
-bun run engine:fetch     # trae origin/artifacts/wasm y verifica antes de instalar
-bun run engine:attest    # confirma digest, Phase, Cargo.lock y ABI
-```
-
-`engine:fetch` no instala nada si falta el manifiesto, si el digest no coincide
-o si el módulo no expone el puente de Mesa; en esos casos borra el archivo
-temporal. Probado con repositorio desechable y módulos sintéticos, en los cuatro
-caminos (ver `docs/ENGINE-ARTIFACT.md` §5).
+`static/wasm/mtg_engine_wasm.wasm`. El artefacto **no se versiona**; si se
+publica fuera del repo, conviene guardar su sha256 junto a
+`docs/wasm-packcheck.json` para poder decir qué binario se verificó.
 
 ## 4. Qué ejecutar y qué mirar
 
