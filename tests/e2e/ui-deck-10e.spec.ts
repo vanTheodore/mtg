@@ -248,11 +248,11 @@ test('estado de bloqueo: el tablero queda inerte, cubierto y sin fuga de mano', 
   await page.getByRole('checkbox', { name: 'Confirmar cada cambio de asiento' }).check();
   await importDeck(page);
   await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
-  const alert = page.getByRole('alert');
-  if (await alert.isVisible().catch(() => false)) {
-    await page.getByRole('checkbox', { name: /Permitir 1 carta\(s\) con limitaciones conocidas/ }).check();
-    await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
-  }
+  // The 10E pack is loaded asynchronously; wait for Phase's actual warning
+  // instead of treating a not-yet-visible alert as permission to continue.
+  await expect(page.getByRole('alert')).toContainText(LIMITED, { timeout: 120_000 });
+  await page.getByRole('checkbox', { name: /Permitir 1 carta\(s\) con limitaciones conocidas/ }).check();
+  await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Paso de asiento' });
   await expect(dialog).toBeVisible({ timeout: 180_000 });
