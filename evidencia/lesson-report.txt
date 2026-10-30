@@ -1,0 +1,82 @@
+[WebServer] $ bun --bun node_modules/vite/bin/vite.js dev --host 0.0.0.0 --port "5173"
+
+Running 3 tests using 1 worker
+
+estado: {"paso":"1","fase":"PreCombatMain","turno":"1","espera":"Priority","activo":"0","visor":"0","titulo":"Juega tu primera tierra"}
+rastro de la lección:
+[lección] rev=0 paso=1/9 fase=Untap espera=MulliganDecision turno=1 activo=0 visor=0 → MulliganDecision
+[lección] rev=1 paso=1/9 fase=Untap espera=MulliganDecision turno=1 activo=0 visor=1 → MulliganDecision
+[lección] rev=2 paso=1/9 fase=Upkeep espera=Priority turno=1 activo=0 visor=0 → espera
+[lección] rev=2 paso=2/9 fase=Upkeep espera=Priority turno=1 activo=0 visor=0 → PassPriority
+[lección] rev=3 paso=2/9 fase=Upkeep espera=Priority turno=1 activo=0 visor=1 → PassPriority
+[lección] rev=4 paso=2/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=0 → espera
+[lección] rev=5 paso=3/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=0 → espera
+[lección] rev=6 paso=4/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=0 → espera
+[lección] rev=7 paso=4/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=0 → PassPriority
+[lección] rev=8 paso=4/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=1 → PassPriority
+[lección] rev=9 paso=5/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=0 → espera
+[lección] rev=9 paso=6/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=0 → espera
+[lección] rev=9 paso=6/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=0 → PassPriority
+[lección] rev=10 paso=6/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=1 → PassPriority
+[lección] rev=11 paso=6/9 fase=BeginCombat espera=Priority turno=1 activo=0 visor=0 → PassPriority
+[lección] rev=12 paso=6/9 fase=BeginCombat espera=Priority turno=1 activo=0 visor=1 → PassPriority
+[lección] rev=13 paso=6/9 fase=EndCombat espera=Priority turno=1 activo=0 visor=0 → PassPriority
+[lección] rev=14 paso=6/9 fase=EndCombat espera=Priority turno=1 activo=0 visor=1 → PassPriority
+[lección] rev=15 paso=6/9 fase=PostCombatMain espera=Priority turno=1 activo=0 visor=0 → PassPriority
+[lección] rev=16 paso=6/9 fase=PostCombatMain espera=Priority turno=1 activo=0 visor=1 → PassPriority
+[lección] rev=17 paso=6/9 fase=End espera=Priority turno=1 activo=0 visor=0 → PassPriority
+[lección] rev=18 paso=6/9 fase=End espera=Priority turno=1 activo=0 visor=1 → PassPriority
+[lección] rev=19 paso=6/9 fase=Upkeep espera=Priority turno=2 activo=1 visor=1 → PassPriority
+[lección] rev=20 paso=6/9 fase=Upkeep espera=Priority turno=2 activo=1 visor=0 → PassPriority
+[lección] rev=21 paso=6/9 fase=Draw espera=Priority turno=2 activo=1 visor=1 → PassPriority
+[lección] rev=22 paso=6/9 fase=Draw espera=Priority turno=2 activo=1 visor=0 → PassPriority
+[lección] rev=23 paso=6/9 fase=PreCombatMain espera=Priority turno=2 activo=1 visor=1 → PassPriority
+[lección] rev=24 paso=6/9 fase=PreCombatMain espera=Priority turno=2 activo=1 visor=0 → PassPriority
+[lección] rev=25 paso=6/9 fase=BeginCombat espera=Priority turno=2 activo=1 visor=1 → PassPriority
+[lección] rev=26 paso=6/9 fase=BeginCombat espera=Priority turno=2 activo=1 visor=0 → PassPriority
+[lección] rev=27 paso=6/9 fase=EndCombat espera=Priority turno=2 activo=1 visor=1 → PassPriority
+[lección] rev=28 paso=6/9 fase=EndCombat espera=Priority turno=2 activo=1 visor=0 → PassPriority
+[lección] rev=29 paso=6/9 fase=PostCombatMain espera=Priority turno=2 activo=1 visor=1 → PassPriority
+[lección] rev=30 paso=6/9 fase=PostCombatMain espera=Priority turno=2 activo=1 visor=0 → PassPriority
+[lección] rev=31 paso=6/9 fase=End espera=Priority turno=2 activo=1 visor=1 → PassPriority
+[lección] rev=32 paso=6/9 fase=End espera=Priority turno=2 activo=1 visor=0 → PassPriority
+[lección] rev=33 paso=6/9 fase=Cleanup espera=DiscardToHandSize turno=2 activo=1 visor=1 → SelectCards
+[lección] rev=34 paso=7/9 fase=Upkeep espera=Priority turno=3 activo=0 visor=0 → PassPriority
+[lección] rev=35 paso=7/9 fase=Upkeep espera=Priority turno=3 activo=0 visor=1 → PassPriority
+[lección] rev=36 paso=7/9 fase=Draw espera=Priority turno=3 activo=0 visor=0 → PassPriority
+[lección] rev=37 paso=7/9 fase=Draw espera=Priority turno=3 activo=0 visor=1 → PassPriority
+[lección] rev=38 paso=7/9 fase=PreCombatMain espera=Priority turno=3 activo=0 visor=0 → PassPriority
+[lección] rev=39 paso=7/9 fase=PreCombatMain espera=Priority turno=3 activo=0 visor=1 → PassPriority
+[lección] rev=40 paso=7/9 fase=BeginCombat espera=Priority turno=3 activo=0 visor=0 → PassPriority
+[lección] rev=41 paso=7/9 fase=BeginCombat espera=Priority turno=3 activo=0 visor=1 → PassPriority
+[lección] rev=42 paso=7/9 fase=DeclareAttackers espera=DeclareAttackers turno=3 activo=0 visor=0 → espera
+[lección] rev=43 paso=7/9 fase=DeclareAttackers espera=Priority turno=3 activo=0 visor=0 → PassPriority
+[lección] rev=44 paso=7/9 fase=DeclareAttackers espera=Priority turno=3 activo=0 visor=1 → PassPriority
+[lección] rev=45 paso=7/9 fase=DeclareBlockers espera=Priority turno=3 activo=0 visor=0 → PassPriority
+[lección] rev=46 paso=7/9 fase=DeclareBlockers espera=Priority turno=3 activo=0 visor=1 → PassPriority
+[lección] rev=47 paso=8/9 fase=CombatDamage espera=Priority turno=3 activo=0 visor=0 → espera
+[lección] rev=0 paso=1/9 fase=Untap espera=MulliganDecision turno=1 activo=0 visor=0 → MulliganDecision
+[lección] rev=1 paso=1/9 fase=Untap espera=MulliganDecision turno=1 activo=0 visor=1 → MulliganDecision
+[lección] rev=2 paso=1/9 fase=Upkeep espera=Priority turno=1 activo=0 visor=0 → espera
+[lección] rev=2 paso=2/9 fase=Upkeep espera=Priority turno=1 activo=0 visor=0 → PassPriority
+[lección] rev=3 paso=2/9 fase=Upkeep espera=Priority turno=1 activo=0 visor=1 → PassPriority
+[lección] rev=4 paso=2/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=0 → espera
+  ✓  1 [chromium] › tests/e2e/tutorial.spec.ts:70:1 › la lección se completa jugrando de verdad con el motor Phase (4.5s)
+estado: {"paso":"2","fase":"PreCombatMain","turno":"1","espera":"Priority","activo":"0","visor":"0","titulo":"Genera maná"}
+rastro de la lección:
+[lección] rev=0 paso=1/9 fase=Untap espera=MulliganDecision turno=1 activo=0 visor=0 → MulliganDecision
+[lección] rev=1 paso=1/9 fase=Untap espera=MulliganDecision turno=1 activo=0 visor=1 → MulliganDecision
+[lección] rev=2 paso=1/9 fase=Upkeep espera=Priority turno=1 activo=0 visor=0 → espera
+[lección] rev=2 paso=2/9 fase=Upkeep espera=Priority turno=1 activo=0 visor=0 → PassPriority
+[lección] rev=3 paso=2/9 fase=Upkeep espera=Priority turno=1 activo=0 visor=1 → PassPriority
+[lección] rev=4 paso=2/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=0 → espera
+[lección] rev=5 paso=3/9 fase=PreCombatMain espera=Priority turno=1 activo=0 visor=0 → espera
+  ✓  2 [chromium] › tests/e2e/tutorial.spec.ts:163:1 › la lección se puede usar con teclado y sinaxe grave (3.0s)
+estado: {"paso":"0","fase":"Upkeep","turno":"1","espera":"Priority","activo":"0","visor":"0","titulo":"Tu primera partida"}
+rastro de la lección:
+[lección] rev=0 paso=1/9 fase=Untap espera=MulliganDecision turno=1 activo=0 visor=0 → MulliganDecision
+[lección] rev=1 paso=1/9 fase=Untap espera=MulliganDecision turno=1 activo=0 visor=1 → MulliganDecision
+[lección] rev=2 paso=1/9 fase=Upkeep espera=Priority turno=1 activo=0 visor=0 → espera
+  ✓  3 [chromium] › tests/e2e/tutorial.spec.ts:194:1 › la lección se ve entera en 320, 375, 390, 768 y 1440 px (2.1s)
+
+  3 passed (12.9s)
