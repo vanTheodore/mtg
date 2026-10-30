@@ -17,6 +17,7 @@
   import { assessDeck, describeAssessment, loadCoverage, type CardAssessment, type CoverageDocument } from '#lib/game/coverage.ts';
   import { toEngineDeck, deckSize, type DeckLine } from '#lib/game/decks.ts';
   import { impressions } from '#lib/game/impressions.svelte.ts';
+  import { TUTORIAL_STORAGE_KEY } from '#lib/tutorial/lesson.ts';
 
   let catalog = $state<Catalog>({});
   /** The index, without the packs: what the builder searches before fetching. */
@@ -44,6 +45,8 @@
   /** What the engine actually loaded, read back from its own snapshot. */
   let engineLoad = $state<{ requested: number; seats: number[] } | null>(null);
   let catalogReady = $state(false);
+  /** True when the learner already finished the guided lesson in this browser. */
+  let lessonDone = $state(false);
   let loadingPacks = $state(false);
   /**
    * Coverage artifacts already fetched, keyed by pack. Shared by the deck
@@ -81,6 +84,7 @@
 
   onMount(async () => {
     try {
+      lessonDone = localStorage.getItem(TUTORIAL_STORAGE_KEY) === '1';
       // Only the core packs load up front; a deck's packs are fetched when a game
       // actually needs them.
       const [loaded, meta, deckData] = await Promise.all([
@@ -293,6 +297,16 @@
 
   {#if !snapshot}
     <section class="start-panel">
+      <div class="learn">
+        <h2>¿Primera vez con Magic?</h2>
+        <p>
+          Empieza por la lección guiada: diez minutos, sin construir un mazo, sin importar cartas y sin configurar dos jugadores.
+          Juegas de verdad — Phase mueve cada carta — y aprendes a jugar una tierra, generar maná, lanzar una criatura y atacar.
+        </p>
+        <a class="learn-button" href="/aprender">Aprender a jugar</a>
+        {#if lessonDone}<span class="learn-done">Ya completaste la lección. Puedes repetirla cuando quieras.</span>{/if}
+      </div>
+
       <h2>Partida local de dos jugadores</h2>
       <p>Motor Rust/WASM real. No hay IA ni turnos ocultos: juegas ambos asientos en este dispositivo y confirmas el paso de asiento.</p>
       <fieldset class="modes">
@@ -426,6 +440,11 @@
   .notice.ok { background: color-mix(in srgb, var(--ok) 10%, var(--surface)); border: 1px solid var(--ok); color: var(--ok); }
   .notice.warn { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border: 1px solid var(--accent); color: var(--ink); }
   .start-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 1.4rem; max-width: 560px; display: grid; gap: .8rem; }
+  .learn { background: var(--surface-2); border: 1px solid var(--accent); border-radius: 14px; padding: .9rem 1rem; display: grid; gap: .5rem; }
+  .learn h2 { margin: 0; font-size: 1.05rem; }
+  .learn p { margin: 0; }
+  .learn-button { justify-self: start; background: var(--accent); color: var(--accent-ink); border-radius: 10px; padding: .6rem 1.1rem; font-weight: 700; text-decoration: none; min-height: 40px; display: inline-grid; place-items: center; }
+  .learn-done { font-size: .8rem; color: var(--ok); font-weight: 650; }
   .start-panel h2 { margin: 0; font-size: 1.2rem; }
   .start-panel p { margin: 0; color: var(--ink-muted); font-size: .9rem; }
   .start-panel label { display: grid; gap: .3rem; font-size: .85rem; color: var(--ink-muted); }

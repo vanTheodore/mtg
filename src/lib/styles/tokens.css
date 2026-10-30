@@ -18,6 +18,17 @@
   --shadow: 0 8px 24px rgb(25 30 38 / 14%);
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  /* Aliases the components already use. Defining them here keeps every
+     surface (cards, mana pips, the lesson panel) on the same palette instead
+     of leaving a property undefined and silently dropping the declaration. */
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-muted);
+  --text-muted: var(--ink-muted);
+  --border: var(--line);
+  --bg-card: var(--surface);
+  --radius-lg: 14px;
+  --accent-dim: color-mix(in srgb, var(--accent) 24%, transparent);
+  --font-serif: Georgia, "Times New Roman", serif;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;

@@ -5,7 +5,23 @@
   import { combatRole, permanentStates } from '#lib/game/interaction.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
 
-  let { objects, metas, owner, label }: { objects: GameObject[]; metas: Record<string, CardMeta>; owner: number; label: string } = $props();
+  let {
+    objects,
+    metas,
+    owner,
+    label,
+    focusId = null,
+    onselect
+  }: {
+    objects: GameObject[];
+    metas: Record<string, CardMeta>;
+    owner: number;
+    label: string;
+    /** The tutorial points at this card. */
+    focusId?: number | null;
+    /** Overrides the default selection (the tutorial performs the step). */
+    onselect?: (id: number) => void;
+  } = $props();
   let expanded = $state<Record<string, boolean>>({});
   const mine = $derived(objects.filter((o) => o.controller === owner));
   const lands = $derived(mine.filter((o) => !isToken(o) && o.card_types?.core_types?.includes('Land')));
@@ -24,13 +40,13 @@
   <h2>{label} <span class="count">{mine.length}</span></h2>
   {#if mine.length === 0}<p class="empty">Campo de batalla vacío.</p>{:else}
     {#if lands.length}
-      <div class="row" aria-label="Tierras">{#each lands as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} />{/each}</div>
+      <div class="row" aria-label="Tierras">{#each lands as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} highlight={focusId === obj.id} {onselect} />{/each}</div>
     {/if}
     {#if creatures.length}
-      <div class="row" aria-label="Criaturas">{#each creatures as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} />{/each}</div>
+      <div class="row" aria-label="Criaturas">{#each creatures as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} highlight={focusId === obj.id} {onselect} />{/each}</div>
     {/if}
     {#if other.length}
-      <div class="row" aria-label="Otros permanentes">{#each other as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} />{/each}</div>
+      <div class="row" aria-label="Otros permanentes">{#each other as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} highlight={focusId === obj.id} {onselect} />{/each}</div>
     {/if}
     {#each tokenGroups as group (group.key)}
       <div class="token-group">

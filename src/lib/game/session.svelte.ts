@@ -105,6 +105,32 @@ class GameSession {
     } catch (e) { this.status = 'error'; this.error = e instanceof Error ? e.message : String(e); }
   }
 
+  /**
+   * Forget the current game and go back to the start screen.
+   *
+   * The engine keeps one session at a time, so leaving the tutorial (or
+   * starting a different game) has to release it: the worker is terminated
+   * and the next {@link start} builds a fresh one.
+   */
+  reset() {
+    this.client.terminate();
+    this.snapshot = null;
+    this.status = 'idle';
+    this.error = null;
+    this.modeLabel = '';
+    this.selected = null;
+    this.inspect = null;
+    this.revealedViewer = null;
+    this.revealedTurn = null;
+    this.attacks = {};
+    this.blocks = {};
+    this.choosing = [];
+    this.history = [];
+    this.lifeChanges = {};
+    this.lastMetrics = null;
+    this.busy = false;
+  }
+
   dispatch(action: GameAction): Promise<void> {
     const run = async () => {
       if (!this.snapshot || this.busy || this.snapshot.outcome) return;

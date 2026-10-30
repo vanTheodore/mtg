@@ -26,8 +26,14 @@ function argOf(flag: string): string | undefined {
 const outDir = resolve(argOf('--out') ?? 'docs/screenshots');
 const port = argOf('--port') ?? '5178';
 const baseURL = `http://127.0.0.1:${port}`;
-rmSync(outDir, { recursive: true, force: true });
+// The gallery is rebuilt, but the lesson's screenshots are kept: they come
+// from the e2e suite running against the real WASM engine, and this script
+// cannot produce them (it never boots the engine).
 mkdirSync(outDir, { recursive: true });
+for (const entry of readdirSync(outDir)) {
+  if (entry.startsWith('tutorial-')) continue;
+  rmSync(join(outDir, entry), { recursive: true, force: true });
+}
 
 const server = Bun.spawn(['bun', 'run', 'dev', '--port', port], { stdout: 'ignore', stderr: 'ignore' });
 async function waitForServer(): Promise<void> {

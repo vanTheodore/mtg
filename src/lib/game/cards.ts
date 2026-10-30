@@ -67,6 +67,41 @@ export function manaText(cost: unknown): string {
   return generic + shards;
 }
 
+export interface ManaPip {
+  /** The symbol printed on the card: W, U, B, R, G, C or a generic number. */
+  symbol: string;
+  kind: 'white' | 'blue' | 'black' | 'red' | 'green' | 'colorless' | 'generic';
+}
+
+const PIP_KINDS: Record<string, ManaPip['kind']> = {
+  White: 'white', Blue: 'blue', Black: 'black', Red: 'red', Green: 'green', Colorless: 'colorless'
+};
+
+/**
+ * The same cost as {@link manaText}, but as separate pips so the interface
+ * can *show* the cost instead of only naming it. Presentation only: it reads
+ * the engine's DTO and never decides what a card costs or what is payable.
+ */
+export function manaPips(cost: unknown): ManaPip[] {
+  if (!cost || typeof cost !== 'object') return [];
+  const c = cost as Record<string, unknown>;
+  if (typeof c.type === 'string' && c.type !== 'Cost') return [];
+  const pips: ManaPip[] = [];
+  const generic = typeof c.generic === 'number' && c.generic > 0 ? c.generic : 0;
+  if (generic > 0) pips.push({ symbol: String(generic), kind: 'generic' });
+  for (const shard of Array.isArray(c.shards) ? c.shards : []) {
+    const name = typeof shard === 'string'
+      ? shard
+      : shard && typeof shard === 'object' && 'type' in shard
+        ? String((shard as { type: unknown }).type)
+        : '';
+    const kind = PIP_KINDS[name];
+    if (!kind) continue;
+    pips.push({ symbol: COLOR_SYMBOLS[name] ?? name, kind });
+  }
+  return pips;
+}
+
 /**
  * Spanish (es-419) rendering of Phase's English type DTOs. This is presentation
  * only: grouping, filters and rules still read the engine's English keys. When a

@@ -5,7 +5,21 @@
   import { objectSelectLabel } from '#lib/game/interaction.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
 
-  let { objects, metas, title }: { objects: GameObject[]; metas: Record<string, CardMeta>; title: string } = $props();
+  let {
+    objects,
+    metas,
+    title,
+    focusId = null,
+    onselect
+  }: {
+    objects: GameObject[];
+    metas: Record<string, CardMeta>;
+    title: string;
+    /** The tutorial points at this card. */
+    focusId?: number | null;
+    /** Overrides the default selection (the tutorial performs the step). */
+    onselect?: (id: number) => void;
+  } = $props();
   let scroller: HTMLDivElement | undefined = $state();
   let overflow = $state(false);
 
@@ -41,8 +55,10 @@
   <div class="hand-scroll" bind:this={scroller} onscroll={updateOverflow} role="region" tabindex="0" aria-label={`${title}, ${objects.length} cartas. Desplázate para ver todas.`}>
     {#each objects as obj (obj.id)}
       <div class="hand-card">
-        <BoardCard object={obj} meta={metaFor(obj)} />
-        {#if objectSelectLabel(session.snapshot, obj.id)}
+        <BoardCard object={obj} meta={metaFor(obj)} highlight={focusId === obj.id} {onselect} />
+        {#if focusId === obj.id}
+          <span class="playable focus">Toca esta carta</span>
+        {:else if objectSelectLabel(session.snapshot, obj.id)}
           <span class="playable">{objectSelectLabel(session.snapshot, obj.id)}</span>
         {:else if actionsForObject(session.snapshot?.legal.by_object ?? {}, obj.id).some((a) => a.type === 'CastSpell' || a.type === 'PlayLand')}
           <span class="playable">Disponible para jugar</span>
@@ -65,6 +81,8 @@
   .hand-scroll { min-width: 0; max-width: 100%; display: flex; gap: .65rem; overflow-x: auto; overflow-y: visible; padding: .6rem .2rem .8rem; scroll-snap-type: x proximity; }
   .hand-card { position: relative; scroll-snap-align: start; display: flex; flex-direction: column; gap: .2rem; }
   .playable { color: var(--ok); font-size: .68rem; text-align: center; max-width: var(--card-w); }
+  /* The tutorial's cue: written, not only coloured. */
+  .playable.focus { color: var(--accent); font-weight: 700; }
   .empty { color: var(--ink-muted); font-size: .85rem; margin: .5rem 0; }
   .more-hint { margin: .1rem 0 0; font-size: .72rem; color: var(--ink-muted); }
 </style>
