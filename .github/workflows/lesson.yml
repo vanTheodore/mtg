@@ -76,19 +76,32 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - run: bun --bun playwright install --with-deps chromium
       - name: Play the whole lesson in Chromium
-        run: bun --bun playwright test tests/e2e/tutorial.spec.ts
+        run: |
+          set -o pipefail
+          bun --bun playwright test tests/e2e/tutorial.spec.ts 2>&1 | tee lesson-report.txt
       - uses: actions/upload-artifact@v4
         with:
           name: lesson-screenshots
-          path: docs/screenshots/tutorial-*.png
-          if-no-files-found: error
+          path: |
+            docs/screenshots/tutorial-*.png
+            lesson-report.txt
+            test-results
+          if-no-files-found: warn
           retention-days: 7
-      - name: Publish the screenshots on their own branch
+      # The report travels with the screenshots on a branch of its own: a
+      # reviewer can read what the browser did without downloading an artifact.
+      - name: Publish the evidence on their own branch
+        if: always()
         run: |
           set -euo pipefail
           git config user.name "mesa-ci"
           git config user.email "mesa-ci@users.noreply.github.com"
           git checkout --orphan ci/lesson-screenshots
-          git add docs/screenshots/tutorial-*.png
-          git commit -m "docs: capturas de la lección guiada de Mesa 0.6"
+          rm -rf .git/index
+          mkdir -p evidencia
+          cp -f docs/screenshots/tutorial-*.png evidencia/ 2>/dev/null || true
+          cp -f lesson-report.txt evidencia/ 2>/dev/null || true
+          cp -r test-results evidencia/test-results 2>/dev/null || true
+          git add evidencia
+          git commit -m "evidencia: lección guiada de Mesa 0.6" --allow-empty
           git push --force origin ci/lesson-screenshots
