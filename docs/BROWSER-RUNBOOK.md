@@ -287,7 +287,10 @@ Recorrido manual para mirar con ojos de jugador (`bun run dev`, abrir
    bloqueadora y después el atacante: la lista debe mostrar «X bloquea a Y» y,
    al confirmar, el registro «X bloquea a Y.»
 8. **Paso de asiento**: activar «Confirmar cada cambio de asiento»; el tablero
-   queda `inert`, tapado y sin la mano del rival.
+   queda `inert`, tapado y **sin ninguna mano** (ni la del asiento entrante ni
+   los dorsos de la otra). Ojo: el diálogo aparece cuando el tablero cambia de
+   manos, y eso ocurre **después** de que el primer asiento responda su
+   mulligan («Conservar mano»).
 9. **Resultado**: jugar hasta `Jugador N gana`.
 10. **Tamaños**: 320, 375, 390, 768, 1440 px con `visibility.spec.ts` o a mano;
     el objetivo es que ninguna carta quede cortada y que la mano siga siendo
@@ -295,8 +298,16 @@ Recorrido manual para mirar con ojos de jugador (`bun run dev`, abrir
 
 ## 5. Lo que este runbook no promete
 
-- Que los E2E pasen a la primera: son 25 pruebas de UI sobre un motor real y
-  nunca se ejecutaron en un navegador. La primera corrida es parte del trabajo.
+- Que los E2E pasen a la primera: son 27 pruebas de UI sobre un motor real.
+  Ya se ejecutaron en Chromium con el WASM que compila CI (26 aprobadas y 1
+  omitida: la de Scryfall en vivo, que necesita salida a internet), pero cada
+  corrida es una partida de verdad y puede cambiar. Lo que nunca conviene es
+  subir un timeout para que la redness desaparezca.
+- Que `tests/e2e/ui-deck-10e.spec.ts` sepa jugar por su cuenta: usa el
+  conductor compartido de `tests/e2e/support/board-driver.ts`, que responde el
+  descarte de limpieza, el mulligan, el pago de maná y las ventanas de combate
+  pulsando lo que la interfaz muestra. Si una prueba nueva necesita otro
+  paso, el sitio natural es ese conductor, no un `GameAction` a mano.
 - Que el arte de las cartas aparezca sin red: no hay egress a Scryfall desde el
   sandbox; el fallback es el comportamiento diseñado, no un defecto.
 - Nada sobre rendimiento de pintado: `scripts/measure-interaction.ts` mide el
