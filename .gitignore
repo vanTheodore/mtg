@@ -17,3 +17,5 @@ static/wasm/
 Cargo.sandbox.lock
 
 target-*/
+vendor/
+# Chromium fetched from npm for Linux E2E (scripts/fetch-chromium.ts).

@@ -52,7 +52,9 @@
     const rules = rulesText;
     const pt = object.power != null && object.toughness != null ? `${object.power}/${object.toughness}` : '';
     const art = imageState === 'error' && failureReason ? failureLabels[failureReason] : imageState === 'resolving' || imageState === 'loading-art' ? 'Buscando ilustración' : '';
-    return [object.name || meta?.name || 'Carta', cost, type, rules, pt, art, ...states, selectLabel].filter(Boolean).join(', ');
+    // Same order as the DOM: the note inside the art box comes before the rules
+    // text. axe compares sequences, so the label's order is the assertion.
+    return [object.name || meta?.name || 'Carta', cost, type, art, rules, pt, ...states, selectLabel].filter(Boolean).join(', ');
   });
   const accessibleName = $derived(hidden ? 'Carta oculta' : visibleName);
   const lookup = $derived.by(() => {
@@ -147,14 +149,19 @@
         </div>
         <div class="fallback-type" aria-hidden="true">{typeLine(object, meta)}</div>
         <div class="fallback-art" aria-hidden="true">
-          {#if imageState === 'resolving' || imageState === 'loading-art'}<!-- The glyph is decorative and lives in CSS so it never becomes text content. --><span class="spinner"></span>{/if}
+          {#if imageState === 'error' && failureReason}
+            <!-- The note lives in the empty art box: on the card face it was one
+                 more cramped line pushing the rules text out (see
+                 docs/screenshots/cartas-1440.png in 0.5.1). -->
+            <span class="art-status">{failureLabels[failureReason]}</span>
+          {:else if imageState === 'resolving' || imageState === 'loading-art'}
+            <span class="spinner"></span><span class="art-status">Buscando ilustración…</span>
+          {/if}
         </div>
         <p class="fallback-text" aria-hidden="true" lang={rulesLang}>{rulesText}</p>
         {#if object.power != null && object.toughness != null}
           <span class="fallback-pt" aria-hidden="true">{object.power}/{object.toughness}</span>
         {/if}
-        {#if imageState === 'error' && failureReason}<span class="art-status" aria-hidden="true">{failureLabels[failureReason]}</span>
-        {:else if imageState === 'resolving' || imageState === 'loading-art'}<span class="art-status" aria-hidden="true">Buscando ilustración…</span>{/if}
       </div>
     {/if}
     {#if !hidden && states.length}
@@ -176,6 +183,10 @@
   .card-shell.compact { width: calc(var(--card-w) * .78); }
   .card {
     position: relative;
+    /* The face adapts to its own width, not to the window: the same card is
+       148 px on a desktop board, 216 px in the inspect dialog and 112 px in a
+       two-column 320 px board. */
+    container-type: inline-size;
     width: 100%;
     aspect-ratio: 488 / 680;
     padding: 0;
@@ -197,19 +208,53 @@
   .back { width: 100%; height: 100%; border-radius: calc(var(--card-radius) - 2px); background: repeating-linear-gradient(45deg, var(--surface-3), var(--surface-3) 8px, var(--surface-2) 8px, var(--surface-2) 16px); display: grid; place-content: center; gap: .4rem; text-align: center; }
   .back-mark { font-size: 2rem; font-weight: 700; color: var(--accent); }
   .back-text { font-size: .72rem; color: var(--ink-muted); }
-  .fallback { width: 100%; height: 100%; border-radius: calc(var(--card-radius) - 2px); background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; padding: .45rem; gap: .25rem; text-align: left; overflow: hidden; }
+  /* The card's height comes from `aspect-ratio`; the fallback is out of flow so
+     its content can never make one card taller than its neighbour (measured:
+     lands came out ~80 px shorter than creatures on the same battlefield). */
+  .fallback { position: absolute; inset: 0; height: 100%; border-radius: calc(var(--card-radius) - 2px); background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; padding: .45rem; gap: .25rem; text-align: left; overflow: hidden; }
   .fallback-head { display: flex; justify-content: space-between; gap: .25rem; align-items: baseline; }
-  .fallback-name { font-weight: 650; font-size: .78rem; line-height: 1.15; }
-  .fallback-cost { font-size: .68rem; color: var(--ink-muted); white-space: nowrap; }
+  /* The mana cost must stay whole; a long name wraps, it does not push the
+     cost past the card edge ("Hechizo 5 {2}{U}" lost its cost at 148 px). */
+  .fallback-name { font-weight: 650; font-size: .78rem; line-height: 1.15; min-width: 0; overflow-wrap: anywhere; }
+  .fallback-cost { font-size: .68rem; color: var(--ink-muted); white-space: nowrap; flex: 0 0 auto; }
   .fallback-type { font-size: .66rem; color: var(--ink-muted); }
-  .fallback-art { flex: 1; min-height: 2rem; display: grid; place-items: center; background: var(--surface-2); border-radius: 6px; color: var(--accent); font-size: 1.4rem; }
+  .fallback-art { flex: 1 1 0; min-height: 0; display: grid; place-items: center; align-content: center; gap: .15rem; background: var(--surface-2); border-radius: 6px; color: var(--accent); font-size: 1.4rem; padding: .1rem; text-align: center; }
   .fallback-art::after { content: '◇'; }
-  .fallback-text { margin: 0; font-size: .62rem; line-height: 1.25; max-height: 4.5em; overflow: hidden; }
+  .fallback-art:has(.art-status)::after { display: none; }
+  .fallback-text { margin: 0; font-size: .62rem; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; }
   .fallback-pt { align-self: flex-end; font-size: .72rem; font-weight: 700; }
-  .art-status { font-size: .58rem; color: var(--ink-muted); }
-  .card-tools { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .25rem; }
+  /* The failure note is a full sentence; on a narrow card it must stay on one
+     line instead of pushing into the badges below. */
+  /* Below ~132 px of face there is no room for name + cost + type + art +
+     rules + P/T at 1.25 card ratio (measured: content 150 px inside a 150 px
+     box, art squeezed to 3 px). The rules text is what gets dropped, and it is
+     still readable in "Ampliar" and in the button's accessible name. */
+  @container (max-width: 132px) {
+    .fallback { padding: .3rem; gap: .15rem; }
+    .fallback-name { font-size: .7rem; }
+    .fallback-cost, .fallback-type { font-size: .58rem; }
+    .fallback-text { display: none; }
+    .fallback-pt { font-size: .66rem; }
+    .fallback-art { min-height: 1.4rem; }
+  }
+
+  .art-status { font-size: .55rem; color: var(--ink-muted); line-height: 1.15; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .card-tools { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .25rem; transition: opacity .12s ease; }
+  /* Two buttons per card is a wall of chrome on a 40-permanent board (counted:
+     80 buttons for 40 permanents). They come back on pointer hover and on
+     keyboard focus, so they stay reachable with Tab; touch keeps them visible
+     because there is no hover there. */
+  @media (hover: hover) and (pointer: fine) {
+    .card-shell .card-tools { opacity: 0; }
+    .card-shell:hover .card-tools,
+    .card-shell:focus-within .card-tools { opacity: 1; }
+  }
   .card-tools button { font-size: .65rem; padding: .2rem .35rem; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--ink); min-height: 24px; }
   .status-strip { position: absolute; z-index: 2; left: .2rem; bottom: .2rem; right: .2rem; display: flex; flex-wrap: wrap; gap: .2rem; align-content: flex-end; pointer-events: none; }
+  /* The strip floats over the card, so the fallback has to leave that band
+     empty: without this, "Girada" is painted on top of the rules text and the
+     failure note (measured in docs/screenshots/cartas-1440.png before the fix). */
+  .card:has(.status-strip) .fallback { padding-bottom: 2.1rem; }
   .badge { font-size: .6rem; padding: .1rem .3rem; border-radius: 5px; background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--line); color: var(--ink); font-weight: 650; }
   .combat-badge { background: var(--accent); color: var(--accent-ink); }
   .spinner { width: 1rem; height: 1rem; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }

@@ -73,6 +73,42 @@ Comprobación sin navegador (funciona en cualquier máquina):
 MESA_BROWSER=msedge bun x playwright test --list   # 25 tests en 9 archivos
 ```
 
+## 2b. Linux sin CDN: un Chromium que llega por npm
+
+El CDN de Playwright no es la única fuente de un navegador. En un contenedor
+Linux sin Edge ni Chrome instalados, y sin egress a `cdn.playwright.dev`, esto
+funciona y es lo que se usó para verificar Mesa:
+
+```sh
+bun scripts/fetch-chromium.ts                     # ~/.cache/mesa-chromium
+export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=~/.cache/mesa-chromium/chromium
+export LD_LIBRARY_PATH=~/.cache/mesa-chromium/al2023/lib:~/.cache/mesa-chromium
+bun x playwright test --reporter=line
+```
+
+Qué hace el script: descarga `@sparticuz/chromium` (153.0.8010.0, 199 MiB
+descomprimido) desde el registro de npm —el mismo HTTPS que usa `bun install`—
+y descomprime `chromium.br`, `al2023.tar.br` (las bibliotecas que en Debian no
+están: `libnss3`, `libnspr4`…), `swiftshader.tar.br` y `fonts.tar.br`. No añade
+nada a `package.json`: el navegador es un artefacto de la máquina, no una
+dependencia del proyecto.
+
+**La trampa que costó una tarde**: el `fonts.conf` que trae el paquete apunta a
+`/var/task/.fonts` y `/tmp/fonts`. Si exportas `FONTCONFIG_PATH` hacia él, el
+navegador arranca, la página se "pinta" y **el texto no aparece**: las capturas
+salen en blanco y Playwright da el test por bueno si no miras la imagen. La ruta
+correcta es **no definir** `FONTCONFIG_PATH` y dejar que use
+`/etc/fonts/fonts.conf` del sistema (DejaVu está instalado aquí). Comprobación
+rápida de que hay texto:
+
+```sh
+bun -e "const { chromium } = require('@playwright/test'); (async () => {
+  const b = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
+  const p = await b.newPage(); await p.setContent('<h1>Mesa</h1>');
+  const png = await p.screenshot(); console.log('bytes', png.length); await b.close();
+})()"   # >1 KB = hay texto; ~800 B = página en blanco
+```
+
 ## 3. El artefacto WASM no está en el repositorio
 
 `static/wasm/mtg_engine_wasm.wasm` (≈46 MiB) es un artefacto generado y está en
@@ -147,6 +183,70 @@ required by package `phase-engine v0.119.0 (/home/user/mtg/crates/phase-engine)`
 ```
 
 En una máquina normal la Ruta A lo resuelve en un comando.
+
+## 3b. Compilar sin crates.io: `vendor/`
+
+Cuando `crates.io`, su índice y `static.crates.io` no responden pero GitHub sí,
+las 71 dependencias de `Cargo.lock` se traen de sus etiquetas de Git:
+
+```sh
+bun scripts/vendor-crates.ts        # ~30 s, escribe vendor/ (28 MiB) y PROVENANCE.txt
+CARGO_OFFLINE=1 bun run engine:build
+```
+
+`vendor/` y `.cargo/offline.toml` están en `.gitignore`: se regeneran, no se
+versionan. El script lee `Cargo.lock` (nombres y versiones, sin excepciones),
+busca en cada repositorio la etiqueta que corresponde a esa versión —o la de un
+hermano del mismo repo, como `js-sys` bajo la etiqueta de `wasm-bindgen`—,
+descarga `codeload.github.com/<repo>/tar.gz/<tag>` y copia el paquete al
+directorio `vendor/<crate>/`. `PROVENANCE.txt` deja por escrito de qué
+repositorio y etiqueta salió cada uno, con su sha256.
+
+Lo que el script **tiene** que arreglar, y por qué (cada punto fue un error real
+de cargo hasta que se resolvió):
+
+| Problema | Qué hace el script |
+|---|---|
+| Una etiqueta de Git tiene el manifiesto **sin expandir** (`version.workspace = true`) | Lo expande desde el `[workspace.package]`/`[workspace.dependencies]` del repo, como haría el `.crate` publicado |
+| `path = "../hermano"` deja de existir al copiar solo un paquete | Quita `path`; la versión la sigue fijando `Cargo.lock` |
+| `dev-dependencies` con solo `path` (futures-core → `../futures`) | Las elimina y limpia las features que solo existían para activarlas |
+| Manifiestos con `[target."cfg(any(...))".dependencies]` opcionales y nunca activables | Quita las de tabla de target que ninguna feature puede activar; una opcional normal **falla** en vez de perderse |
+| Dependencias de plataformas que este build nunca resuelve (`r-efi`, `winapi-util`, `wasip2`) | Descarta las de tabla de target que **no están en `Cargo.lock`**: si el lock no la fija, no forma parte de esta compilación |
+| `build = "build/build.rs"` (rustversion), `include_str!("../examples/...")` (winnow) | Conserva el árbol completo salvo `tools/`, `vendor/`, `target/`, `.github/`… (zerocopy trae 600 MB de eso) |
+| Claves TOML como `[target."cfg(all(...))"]` | Las vuelve a emitir entrecomilladas; sin comillas el TOML es inválido |
+
+## 3c. Cuando la máquina no alcanza: el límite real
+
+Con `vendor/` completo la compilación **avanza** hasta `phase-engine` y ahí la
+mata el OOM killer. No es un error de configuración, es tamaño:
+
+- `crates/phase-engine/src`: **581 archivos, 1 377 540 líneas**, una sola unidad
+  de compilación que rustc no puede partir.
+- La máquina de este sandbox: **3.9 GB de RAM y 0 de swap** (no hay `swapon` ni
+  permisos para crear swap).
+
+Medido con `ps` durante tres configuraciones distintas, el proceso muere siempre
+al mismo RSS, señal 9:
+
+| Intentos | Ajustes | RSS al morir |
+|---|---|---|
+| 1 | release por defecto (`opt-level=z`) | 3 540 MB → SIGKILL |
+| 2 | `opt-level=1 -C codegen-units=256` | 3 543 MB → SIGKILL |
+| 3 | `opt-level=0 -C codegen-units=1024 -Zinline-mir=no -Zcross-crate-inline-threshold=0`, `MALLOC_ARENA_MAX=1` | 3 544 MB → SIGKILL |
+
+Que las tres mueran en el mismo punto descarta la optimización como causa: el
+pico está en el front-end, y 3.54 GB es simplemente la memoria que queda libre
+antes de que el kernel elija una víctima.
+
+`MESA_RUSTFLAGS_EXTRA` existe para esto: una máquina con poca RAM puede bajar
+el pico sin editar el script.
+
+  MESA_RUSTFLAGS_EXTRA="-C opt-level=1 -C codegen-units=256" CARGO_OFFLINE=1 bun run engine:build
+
+Con 8 GB o más, `CARGO_OFFLINE=1 bun run engine:build` termina y escribe
+`static/wasm/mtg_engine_wasm.wasm`. El artefacto **no se versiona**; si se
+publica fuera del repo, conviene guardar su sha256 junto a
+`docs/wasm-packcheck.json` para poder decir qué binario se verificó.
 
 ## 4. Qué ejecutar y qué mirar
 

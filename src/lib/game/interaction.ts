@@ -119,7 +119,8 @@ export function permanentStates(o: GameObject, combat?: string): string[] {
   if (o.tapped) states.push('Girada');
   if (o.damage_marked) states.push(`${o.damage_marked} daño`);
   if (o.transformed) states.push('Transformada');
-  if (o.attachments?.length) states.push(`${o.attachments.length} adjuntos`);
+  // Singular/plural: "1 adjuntos" is the kind of thing a player notices.
+  if (o.attachments?.length) states.push(o.attachments.length === 1 ? '1 adjunto' : `${o.attachments.length} adjuntos`);
   const counters = Array.isArray(o.counters) ? o.counters : Object.entries(o.counters ?? {});
   for (const [kind, count] of counters) if (count) states.push(`${count} ${counterLabel(kind)}`);
   return states;

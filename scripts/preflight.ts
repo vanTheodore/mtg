@@ -16,9 +16,12 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const json = process.argv.includes('--json');
-const root = new URL('..', import.meta.url).pathname;
+// `URL.pathname` is percent-encoded and keeps a leading slash on Windows
+// (`/C:/Users/...`), so joining it produces paths that do not exist there.
+const root = fileURLToPath(new URL('..', import.meta.url));
 
 interface Check {
   id: string;
@@ -90,7 +93,25 @@ push({
   label: 'Navegadores de Playwright',
   ok: bundled.some((name) => name.startsWith('chromium')),
   detail: bundled.length ? `${playwrightCache}: ${bundled.join(', ')}` : `${playwrightCache}: vacío o inexistente`,
-  fix: 'bunx playwright install chromium   (descarga desde cdn.playwright.dev)'
+  fix: 'bun x playwright install chromium   (descarga desde cdn.playwright.dev)'
+});
+
+/**
+ * A Chromium that is not Playwright's own build — a package, a serverless
+ * bundle, an installed Edge — is selected with
+ * PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH, so it has to count as "a browser".
+ */
+const customChromium = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+push({
+  id: 'custom-chromium',
+  label: 'Chromium por variable',
+  ok: Boolean(customChromium && existsSync(customChromium)),
+  detail: customChromium
+    ? existsSync(customChromium)
+      ? `${customChromium} (${(statSync(customChromium).size / 1024 / 1024).toFixed(0)} MiB)`
+      : `${customChromium} no existe`
+    : 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH sin definir',
+  fix: customChromium ? undefined : 'selecciona un navegador ya presente con PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'
 });
 
 const candidates: { label: string; paths: string[] }[] = [
@@ -142,7 +163,7 @@ push({
 
 // ── report ───────────────────────────────────────────────────────────────────
 
-const browserReady = checks.some((check) => (check.id === 'msedge' || check.id === 'chrome') && check.ok)
+const browserReady = checks.some((check) => (check.id === 'msedge' || check.id === 'chrome' || check.id === 'custom-chromium') && check.ok)
   || checks.some((check) => check.id === 'playwright-browsers' && check.ok);
 const engineReady = checks.some((check) => check.id === 'engine' && check.ok);
 const ready = browserReady && engineReady;
@@ -161,7 +182,7 @@ if (json) {
     if (!process.env.MESA_BROWSER) console.log('Sugerencia: usa un navegador ya instalado, MESA_BROWSER=msedge (Windows/Edge) o MESA_BROWSER=chrome.');
   } else {
     console.log('No listo para E2E. Bloqueos:');
-    if (!browserReady) console.log('  · no hay navegador: instala uno o ejecuta en una máquina con Edge/Chrome (MESA_BROWSER=msedge).');
+    if (!browserReady) console.log('  · no hay navegador: instala uno, usa Edge/Chrome (MESA_BROWSER=msedge) o apunta a un Chromium existente (PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH).');
     if (!engineReady) console.log('  · falta el artefacto WASM: `bun run engine:build` (no se versiona, ver docs/BROWSER-RUNBOOK.md).');
   }
 }

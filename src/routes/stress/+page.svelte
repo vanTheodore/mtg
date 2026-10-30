@@ -61,7 +61,7 @@
 
 <svelte:head><title>Mesa · pruebas de visibilidad</title></svelte:head>
 
-<div class="stress" style="--card-w: {cardWidth}px" data-testid="stress-page">
+<div class="stress" style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2))" data-testid="stress-page">
   <header>
     <h1>Pruebas de visibilidad</h1>
     <p>Fixture de interfaz determinista. No ejecuta reglas; la partida real está en <a href="/">/</a>.</p>
@@ -87,7 +87,9 @@
   .stress > * { min-width: 0; }
   header { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; }
   h1 { font-size: 1.2rem; margin: 0; }
-  header p { margin: 0; color: var(--ink-muted); font-size: .85rem; flex: 1; }
+  /* `flex: 1` (basis 0) lets the paragraph shrink under the heading and its
+     text spills over it at 320 px. A real minimum basis makes it wrap instead. */
+  header p { margin: 0; color: var(--ink-muted); font-size: .85rem; flex: 1 1 16rem; }
   .controls { display: flex; flex-wrap: wrap; gap: .8rem; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: .6rem; }
   label { display: grid; gap: .25rem; font-size: .8rem; color: var(--ink-muted); }
   input, select { background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: .35rem; }

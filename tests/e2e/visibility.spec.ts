@@ -68,5 +68,72 @@ test('ampliación por teclado y transformación/adjuntos', async ({ page }) => {
   await expect(dialog).toContainText('Insectile Aberration');
   await dialog.getByRole('button', { name: 'Cerrar' }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(page.locator('[data-card-id="2101"]')).toContainText('1 adjuntos');
+  // A single attachment says "1 adjunto": the old assertion froze the plural
+  // bug (found in docs/screenshots/cartas-1440.png, fixed in interaction.ts).
+  await expect(page.locator('[data-card-id="2101"]')).toContainText('1 adjunto');
+  await expect(page.locator('[data-card-id="2101"]')).not.toContainText('1 adjuntos');
+});
+
+/**
+ * Regression for what the 0.5.1 screenshots showed and the old suite did not
+ * look at: the card face itself.
+ *
+ * Before: lands were ~50 px shorter than creatures on the same row; the status
+ * strip ("Girada") was painted over the rules text and over the image note; the
+ * rules text was cut in half with no ellipsis; a creature taller than its card
+ * at 320 px pushed the power/toughness out of the box; and a long name pushed
+ * the mana cost past the card edge.
+ */
+test('la cara de la carta no se desborda ni tapa texto, a 320 y 1440', async ({ page }) => {
+  for (const width of [320, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/stress?hand=12&tokens=0');
+    const battlefield = page.locator('.battlefield [data-card-id]');
+    await expect(battlefield.first()).toBeVisible();
+
+    const faces = await battlefield.evaluateAll((cards) => cards.map((card) => {
+      const face = card.querySelector('.fallback') as HTMLElement;
+      const art = card.querySelector('.fallback-art') as HTMLElement;
+      const name = card.querySelector('.fallback-name') as HTMLElement;
+      const cost = card.querySelector('.fallback-cost') as HTMLElement;
+      const box = card.getBoundingClientRect();
+      const artBox = art.getBoundingClientRect();
+      const costBox = cost.getBoundingClientRect();
+      return {
+        height: Math.round(box.height),
+        overflows: face.scrollHeight - face.clientHeight,
+        artHeight: Math.round(artBox.height),
+        artText: art.textContent?.trim() ?? '',
+        costClipped: costBox.right > box.right + 1,
+        nameVisible: name.offsetParent !== null
+      };
+    }));
+
+    // Every card on a row is the same height, whatever its fields.
+    const heights = new Set(faces.map((face) => face.height));
+    expect(heights.size, `alturas distintas a ${width}px: ${[...heights].join(', ')}`).toBe(1);
+
+    for (const face of faces) {
+      expect(face.overflows, `contenido fuera de la cara a ${width}px`).toBeLessThanOrEqual(1);
+      expect(face.costClipped, `coste recortado a ${width}px`).toBe(false);
+      expect(face.nameVisible).toBe(true);
+      // The art box keeps room for its note; it must never collapse to a sliver.
+      if (face.artText) expect(face.artHeight, `caja de arte aplastada a ${width}px`).toBeGreaterThan(12);
+    }
+  }
+});
+
+test('el nombre accesible de la carta sigue el orden visible', async ({ page }) => {
+  await page.goto('/stress?hand=3&tokens=0');
+  const card = page.locator('[data-card-id="1001"]');
+  const { visible, label } = await card.evaluate((element) => ({
+    visible: (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
+    label: element.getAttribute('aria-label') ?? ''
+  }));
+  // axe's label-content-name-mismatch compares sequences, not sets: the note
+  // lives in the art box, so it must come before the rules text in the name.
+  const words = visible.split(' ').filter((word) => word.length > 2);
+  for (const word of words) expect(label, `«${word}» falta en «${label}»`).toContain(word);
+  expect(label.indexOf('Criatura')).toBeLessThan(label.indexOf('Una criatura sencilla'));
+  expect(label.indexOf('Sin conexión')).toBeLessThan(label.indexOf('Una criatura sencilla'));
 });

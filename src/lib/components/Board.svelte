@@ -231,7 +231,12 @@
 
 <svelte:head><title>Mesa · Cliente MTG</title></svelte:head>
 
-<div class="app" style="--card-w: {cardWidth}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
+<!-- Two cards per row is the minimum a board needs to be readable as a board.
+     On a 320 px screen a fixed 148 px card left exactly one column, turning the
+     battlefield into a 70-card vertical marathon (docs/screenshots/cartas-320.png
+     in 0.5.1). The cap only bites on narrow screens; the density control still
+     wins everywhere else. -->
+<div class="app" style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2))" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
   <header class="topbar">
     <div class="brand">
       <span class="mark" aria-hidden="true">M</span>
