@@ -104,13 +104,23 @@ jobs:
       - name: Play the whole lesson in Chromium
         run: |
           set -o pipefail
-          bun --bun playwright test tests/e2e/tutorial.spec.ts 2>&1 | tee lesson-report.txt
+          set +e
+          PLAYWRIGHT_JSON_OUTPUT_FILE=results.json \
+            bun --bun playwright test tests/e2e/tutorial.spec.ts --reporter=list,json 2>&1 | tee lesson-report.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          # El código de salida del runner puede ser distinto de cero aunque
+          # todas las pruebas hayan pasado (apagar el servidor de desarrollo
+          # también cuenta). El veredicto sale del informe de cada prueba.
+          echo "Playwright terminó con el código $code; el veredicto sale de su informe."
+          bun scripts/lesson-verdict.ts results.json
       - uses: actions/upload-artifact@v4
         with:
           name: lesson-screenshots
           path: |
             docs/screenshots/tutorial-*.png
             lesson-report.txt
+            results.json
             test-results
           if-no-files-found: warn
           retention-days: 7
