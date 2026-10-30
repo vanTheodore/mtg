@@ -8,6 +8,13 @@ de partida nuevos que reportar. Phase y Cargo.lock permanecen intactos. No se
 contrataron recursos, modificaron límites de gasto ni cambiaron la visibilidad
 del repositorio. PR #1 abierto, sin merge ni despliegue.
 
+## Alternativa remota posterior: pendiente de autorización
+
+La evaluación de Workers Builds y Vercel Hobby, con procedimiento sin deploy,
+cuotas y recuperación privada, está en
+[REMOTE-WASM-BUILD-EVALUATION.md](REMOTE-WASM-BUILD-EVALUATION.md). Es investigación
+documental; no se han creado recursos ni realizado compilaciones remotas.
+
 ## Entorno de más memoria investigado
 
 El checkout partió del HEAD remoto del PR: `fa940c5275d2ff962800689b70a7fef16929c0f8`.
