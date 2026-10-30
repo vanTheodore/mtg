@@ -69,8 +69,12 @@ function answerHandoff(page: Page) {
 async function startDeckGame(page: Page) {
   await importDeck(page);
   await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
+  // Loading the 10E pack and discovering parser limitations is asynchronous.
+  // Do not skip the explicit consent merely because the checkbox has not appeared yet.
+  await expect(page.getByRole('alert')).toContainText(LIMITED, { timeout: 120_000 });
   const consent = page.getByRole('checkbox', { name: /Permitir 1 carta\(s\) con limitaciones conocidas/ });
-  if (await consent.isVisible().catch(() => false)) await consent.check();
+  await expect(consent).toBeVisible();
+  await consent.check();
   await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
   await answerHandoff(page);
   await expect(hand(page).locator('[data-card-id]').first()).toBeVisible({ timeout: 180_000 });

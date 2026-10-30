@@ -124,8 +124,12 @@ test('la cara de la carta no se desborda ni tapa texto, a 320 y 1440', async ({ 
 });
 
 test('el nombre accesible de la carta sigue el orden visible', async ({ page }) => {
+  // Wait for the deliberately unavailable artwork to settle before checking
+  // that both the visible fallback and accessible name describe the same state.
+  await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/stress?hand=3&tokens=0');
   const card = page.locator('[data-card-id="1001"]');
+  await expect(card).toHaveAttribute('data-image-state', 'error', { timeout: 30_000 });
   const { visible, label } = await card.evaluate((element) => ({
     visible: (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
     label: element.getAttribute('aria-label') ?? ''
