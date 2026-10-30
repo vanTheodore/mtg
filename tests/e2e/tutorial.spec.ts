@@ -152,6 +152,11 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await expect(page.locator('section[aria-label="Jugador 2"]')).toContainText('20', { timeout: 60_000 });
   await panel(page).getByRole('button', { name: 'Continuar' }).click();
   await expect(stepTitle(page)).toHaveText('Juega tu primera tierra', { timeout: 30_000 });
+  // La mano se ve cuando el motor ya repartió: antes, el rival tiene el
+  // asiento y la mano del aprendiz no se muestra.
+  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({
+    timeout: 60_000
+  });
   expect(await handNames(page)).toEqual(openingHand);
 });
 
