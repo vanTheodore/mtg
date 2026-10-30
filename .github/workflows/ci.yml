@@ -57,22 +57,8 @@ jobs:
         with:
           workspaces: ". -> target-wasm"
           shared-key: mesa-wasm-${{ hashFiles('Cargo.lock', 'crates/mtg-engine-wasm/**') }}
-      - name: Check and report Cargo.lock resolution
-        run: |
-          set -euo pipefail
-          cargo metadata --format-version 1 > /dev/null
-          if ! git diff --quiet -- Cargo.lock; then
-            echo "::error::Cargo.lock does not match the manifests for the pinned Rust toolchain"
-            git diff -- Cargo.lock
-            exit 1
-          fi
-      - name: Save resolved Cargo.lock for review
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-lock-review
-          path: Cargo.lock
-          retention-days: 7
+      - name: Validate Cargo.lock with pinned Rust
+        run: cargo metadata --locked --format-version 1 > /dev/null
       - name: Install Binaryen 132 (same version used by engine:optimize)
         run: |
           mkdir -p "$RUNNER_TEMP/binaryen"
