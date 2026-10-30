@@ -66,10 +66,14 @@ herramientas fijadas y a los hashes publicados.
 ## CI
 
 `.github/workflows/ci.yml` crea cuatro trabajos (estático, WASM, integración
-nativa y navegador). **Ninguno se ejecuta**: en las corridas `40984036044`,
-`40965975724` y `4096396118` los tres primeros terminan en 2 s con
-`runner_name` vacío y `steps: []`, es decir, sin que se asigne una máquina. Eso
-convierte a CI en una vía muerta también para obtener el `.wasm`: no hay runners
-en esta cuenta, y `gh workflow run` responde 403 porque la integración no puede
-despachar. Los trabajos están escritos para ejecutar los comandos de verdad, pero
-**no se afirma cobertura CI** ni se usa CI como fuente de artefactos.
+nativa y navegador). **Ahora sí se ejecutan**: con el toolchain fijado y el
+`Cargo.lock` versionado (PR #2) y las correcciones de las pruebas de interfaz
+(PR #4), la corrida `41135151173` terminó con los cuatro trabajos en verde,
+incluida la suite de Chromium con el WASM real (26 aprobadas y 1 omitida).
+
+Antes de eso, en las corridas `40984036044`, `40965975724` y `4096396118` los
+tres primeros trabajos terminaban en 2 s con `runner_name` vacío y `steps: []`,
+sin que se asignara una máquina: CI era una vía muerta también para obtener
+el `.wasm`. Para poder correr la suite de navegador fuera de Actions, el
+trabajo de WASM publica además el binario en la rama `ci/wasm-mirror` (48 MiB,
+solo se republica si cambia su `sha256`).
