@@ -5,9 +5,11 @@ objetivo es concreto: alguien que nunca ha jugado Magic (y viene de otro
 TCG) abre Mesa, entra desde la portada y termina una secuencia jugable de
 diez minutos sin tener que saber nada de reglas.
 
-Este documento separa lo que se comprobó en este entorno de lo que depende de
-CI, porque aquí el motor WASM no compila (3.54 GB de pico frente a 3.9 GB de
-RAM, sin swap) y los artefactos de CI no se pueden descargar.
+Este documento separa lo que se comprobó en este entorno de lo que tuvo que
+ir a CI, porque aquí el motor WASM no compila (3.54 GB de pico frente a 3.9 GB
+de RAM, sin swap) y los artefactos de CI no se pueden descargar. La lección se
+ejecutó de verdad en CI, con Phase compilado a WASM y Chromium real: los
+resultados están en §4.2.
 
 ## 0. Resumen
 
@@ -18,8 +20,8 @@ RAM, sin swap) y los artefactos de CI no se pueden descargar.
 | Rival guiado, sin IA | **Hecho** (§3.3): el maniquí solo responde a lo que el motor pregunta |
 | Entrada visible desde la portada | **Hecho** (§2.1): «¿Primera vez con Magic?» → «Aprender a jugar» |
 | Diseño, accesibilidad y anchos | **Hecho** (§5): 320/375/390/768/1440, teclado, foco visible, sin color solo |
-| Pruebas de la lección | **Hecho** (§4.1): 34 pruebas unitarias, todas en verde; 222 en el repositorio |
-| Lección jugada en Chromium con el WASM real | **En CI** (§4.2): workflow `lesson.yml`, con capturas |
+| Pruebas de la lección | **Hecho** (§4.1): 39 pruebas unitarias, todas en verde; 227 en el repositorio |
+| Lección jugada en Chromium con el WASM real | **Hecho** (§4.2): 3/3 pruebas en verde en CI, con capturas publicadas |
 | Cambios en Phase | **Ninguno** (§6) |
 
 ## 1. La lección en una línea
@@ -123,17 +125,19 @@ dos veces.
 
 ```
 $ bun test src/lib
-222 pass
+227 pass
 0 fail
-2213 expect() calls
+2229 expect() calls
 ```
 
-De ellas, 34 son de la lección:
+De ellas, 39 son de la lección:
 
 - `src/lib/tutorial/__tests__/lesson.test.ts` (14): el guion, el mazo, la
   semilla, los selectores de acción, el glosario y los pips de coste.
-- `src/lib/tutorial/__tests__/machine.test.ts` (20): la máquina con snapshots
+- `src/lib/tutorial/__tests__/machine.test.ts` (22): la máquina con snapshots
   sintéticos que tienen **la misma forma que los que publica el motor**.
+- `src/lib/tutorial/__tests__/action-slot.test.ts` (3): la decisión que
+  espera a que el motor quede libre.
 
 Las pruebas comprueban, entre otras cosas, que la máquina **solo propone
 acciones que el motor publicó** (comparando el JSON de la acción con la lista
@@ -162,6 +166,21 @@ workflow **nuevo y aparte** (`.github/workflows/lesson.yml`) que compila
 Phase, juega la lección en Chromium y publica las capturas y el informe de la
 prueba en la rama `ci/lesson-screenshots` (un revisor puede leerlos sin
 descargar artefactos).
+
+**Resultado (ejecución `41024422260`, commit `c937be0`):**
+
+| Prueba | Resultado |
+|---|---|
+| La lección se completa jugando de verdad con el motor Phase | ✓ (4.4 s) |
+| La lección se puede usar con teclado y sin axe grave | ✓ (2.8 s) |
+| La lección se ve entera en 320, 375, 390, 768 y 1440 px | ✓ (2.8 s) |
+
+Las tres en verde: `3 passed`, y el rastro de decisiones que el motor dejó en
+el informe va de `MulliganDecision` (rev 0) al daño de combate (rev 47). El
+veredicto del workflow sale del **informe de cada prueba** (JSON de
+Playwright), no del código de salida del proceso: en una ejecución anterior el
+runner terminó con un código distinto de cero aunque las tres pruebas
+hubieran pasado, y ese rojo no era de la lección.
 
 ### 4.3 Lo que encontraron las primeras ejecuciones en Chromium
 
@@ -198,6 +217,18 @@ lección) y por la suite de navegador.
 | Teclado | Todo son botones y enlaces reales, con foco visible |
 | No solo color | El resaltado combina anillo, texto y posición; el daño se anuncia con texto |
 
+### 5.1 Capturas
+
+Las hizo el navegador de CI, con el motor real de fondo:
+
+| Captura | Qué muestra |
+|---|---|
+| `docs/screenshots/tutorial-1440.png` | Paso 4: la criatura resaltada en la mano, el coste en pips y el maná en la reserva |
+| `docs/screenshots/tutorial-combate-1440.png` | Paso 8: el maniquí pasa de 20 a 18 vidas |
+| `docs/screenshots/tutorial-final-1440.png` | Paso 9: «¡Lo lograste!» y el botón de repetir |
+| `docs/screenshots/tutorial-320.png` | La misma lección en 320 px: el panel arriba y la mano deslizable |
+| `docs/screenshots/tutorial-{375,390,768}.png` | Los otros tres anchos |
+
 ## 6. Lo que este PR no toca
 
 - **Phase** (`crates/phase-engine`, `crates/mtg-engine-wasm`): ni una línea.
@@ -212,7 +243,9 @@ lección) y por la suite de navegador.
   contralados, reemplazos ni estados de juego.
 - El maniquí no bloquea ni ataca: el bloqueo se explica, pero no se practica.
 - La evidencia de navegador depende de CI mientras el motor no se pueda
-  compilar en el entorno de desarrollo.
+  compilar en el entorno de desarrollo (aquí no entra).
+- El job `browser` del CI principal sigue en rojo por el diagnóstico de
+  `Cargo.lock` que trabaja el PR #2; esta fase no lo toca.
 
 ## 8. Mesa 0.7 (propuesta)
 
