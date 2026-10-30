@@ -101,12 +101,18 @@ export class TutorialController {
   private error: string | null = null;
   private busy = false;
   private privateAutoPass = true;
+  /** The revision of the last snapshot the machine already decided about. */
+  private lastRevision = -1;
+  /** True when the lesson changed the machine without the engine moving. */
+  private localChange = false;
 
   async start(): Promise<void> {
     this.machine = initialState();
     this.message = null;
     this.error = null;
     this.busy = false;
+    this.lastRevision = -1;
+    this.localChange = false;
     this.status = 'loading';
     this.publish();
     try {
@@ -164,6 +170,16 @@ export class TutorialController {
     // Keep the seat handoff in sync so leaving the lesson does not leave a
     // stale "pass the device" dialog behind on the main board.
     session.confirmHandoff();
+    // One decision per snapshot: the same revision always yields the same
+    // answer, and deciding twice about the same state would let the lesson
+    // skip a step. A local change (the learner read, skipped or asked to pass)
+    // is the only reason to decide again about the same revision.
+    if (snapshot.revision === this.lastRevision && !this.localChange) {
+      this.publish();
+      return;
+    }
+    this.lastRevision = snapshot.revision;
+    this.localChange = false;
     const result = reduce(this.machine, snapshot, this.context);
     this.machine = result.state;
     if (result.message) this.message = result.message;
@@ -184,6 +200,11 @@ export class TutorialController {
         .finally(() => {
           this.busy = false;
           this.publish();
+          // The engine moved while the action was in flight: decide again
+          // about the new state, or the lesson would wait for a decision that
+          // nobody is going to take.
+          const current = this.engine.snapshot;
+          if (current && current.revision !== this.lastRevision) this.observe();
         });
       return;
     }
@@ -197,12 +218,14 @@ export class TutorialController {
     this.message = null;
     if (step.kind === 'read') {
       this.machine = { ...this.machine, acknowledged: this.machine.step };
+      this.localChange = true;
       this.publish();
       this.observe();
       return;
     }
     if (step.kind === 'wait') {
       this.machine = { ...this.machine, autoPassing: true };
+      this.localChange = true;
       this.publish();
       this.observe();
       return;
@@ -240,6 +263,7 @@ export class TutorialController {
   skip(): void {
     const next = Math.min(this.machine.step + 1, STEPS.length - 1);
     this.machine = { ...this.machine, step: next, acknowledged: next, autoPasses: 0 };
+    this.localChange = true;
     this.message = 'Paso saltado. La partida sigue igual: solo se saltó la explicación.';
     this.publish();
     this.observe();
