@@ -101,7 +101,9 @@ export class TutorialController {
   private message: string | null = null;
   private error: string | null = null;
   private busy = false;
-  private privateAutoPass = true;
+  private privateAutoPass: boolean | null = null;
+  /** Invalidates a lesson start if the user navigates away during loading. */
+  private startGeneration = 0;
   /** The revision of the last snapshot the machine already decided about. */
   private lastRevision = -1;
   /** True when the lesson changed the machine without the engine moving. */
@@ -115,6 +117,7 @@ export class TutorialController {
   private slot = new ActionSlot();
 
   async start(): Promise<void> {
+    const generation = ++this.startGeneration;
     this.machine = initialState();
     this.message = null;
     this.error = null;
@@ -126,6 +129,7 @@ export class TutorialController {
     this.publish();
     try {
       const loaded = await loadCatalog(fetch, TUTORIAL_CARD_NAMES);
+      if (generation !== this.startGeneration) return;
       if (loaded.missing.length) {
         throw new Error(`El catálogo no tiene: ${loaded.missing.join(', ')}.`);
       }
@@ -139,9 +143,11 @@ export class TutorialController {
       session.autoPass = false;
       session.modeLabel = 'Lección · Mi primera partida';
       await session.start(loaded.catalog, TUTORIAL_DECK, TUTORIAL_SEED);
+      if (generation !== this.startGeneration) return;
       if (session.status === 'error') throw new Error(session.error ?? 'El motor no pudo iniciar la lección.');
       this.status = 'running';
     } catch (error) {
+      if (generation !== this.startGeneration) return;
       this.status = 'error';
       this.error = error instanceof Error ? error.message : String(error);
     }
@@ -150,7 +156,10 @@ export class TutorialController {
 
   /** Leave the lesson and give the main game back its auto-pass setting. */
   stop(): void {
-    session.autoPass = this.privateAutoPass;
+    if (this.privateAutoPass !== null) {
+      session.autoPass = this.privateAutoPass;
+      this.privateAutoPass = null;
+    }
     session.modeLabel = '';
   }
 
@@ -159,8 +168,11 @@ export class TutorialController {
    * board shows its start screen again instead of the lesson's game.
    */
   leave(): void {
+    ++this.startGeneration;
+    this.slot.propose(null);
     this.stop();
     session.reset();
+    this.status = 'idle';
   }
 
   /** Restart the lesson. Same deck, same seed: the same game, every time. */

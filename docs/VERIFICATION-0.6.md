@@ -16,7 +16,7 @@ resultados están en §4.2.
 | Punto | Estado |
 |---|---|
 | Lección completa, 9 pasos, con el motor Phase | **Hecho** (§2): guion, máquina y panel |
-| Phase es la única autoridad | **Hecho** (§3): toda acción sale copiada de la lista legal del motor |
+| Phase es la única autoridad | **Hecho** (§3): cada acción debe ser aceptada por Phase; el ataque combina objetivos que Phase habilita |
 | Rival guiado, sin IA | **Hecho** (§3.3): el maniquí solo responde a lo que el motor pregunta |
 | Entrada visible desde la portada | **Hecho** (§2.1): «¿Primera vez con Magic?» → «Aprender a jugar» |
 | Diseño, accesibilidad y anchos | **Hecho** (§5): 320/375/390/768/1440, teclado, foco visible, sin color solo |
@@ -71,10 +71,15 @@ de pantalla lea la lección antes que las cartas.
 
 ### 3.1 Toda acción viene del motor
 
-Cada paso declara un `perform(snapshot, ctx)` que **devuelve una acción
-publicada por el motor** (`snapshot.legal.by_object` o `snapshot.legal.actions`).
-Si el motor no la ofrece todavía, la máquina pasa la prioridad —una acción que
-el motor sí ofrece— para llegar al momento en que la acción existe. Si nunca
+Cada paso declara un `perform(snapshot, ctx)` que devuelve una acción basada
+en el estado y las opciones autorizadas por Phase. Para tierras, maná y hechizos,
+usa acciones publicadas en `snapshot.legal`. Para **declarar atacantes**, primero
+comprueba `valid_attacker_ids` y `valid_attack_targets_by_attacker` publicados por
+Phase y construye la declaración en el formato que utiliza Mesa; **Phase vuelve
+a validar esa declaración**. No debe describirse como una copia literal de
+`snapshot.legal`.
+Si el motor no ofrece la oportunidad todavía, la máquina pasa la prioridad —
+una acción publicada por el motor— para llegar al momento oportuno. Si nunca
 llega, la lección lo dice y ofrece «Saltar este paso»: **nunca fuerza un
 estado**.
 
@@ -139,9 +144,9 @@ De ellas, 39 son de la lección:
 - `src/lib/tutorial/__tests__/action-slot.test.ts` (3): la decisión que
   espera a que el motor quede libre.
 
-Las pruebas comprueban, entre otras cosas, que la máquina **solo propone
-acciones que el motor publicó** (comparando el JSON de la acción con la lista
-legal del snapshot) y que ante un estado inesperado se detiene en vez de
+Las pruebas comprueban, entre otras cosas, que la máquina **respeta las opciones autorizadas por Phase**:
+usa las acciones publicadas por el motor donde existen y, en la declaración
+de ataque, solo objetivos que Phase declara atacables y que ante un estado inesperado se detiene en vez de
 forzar.
 
 ### 4.2 Pruebas de navegador (Chromium + WASM real)
@@ -163,9 +168,9 @@ forzar.
 Este entorno **no puede ejecutar** esa suite: no hay Rust ni el artefacto WASM,
 y el motor no compila aquí por falta de RAM. La evidencia sale de CI, en un
 workflow **nuevo y aparte** (`.github/workflows/lesson.yml`) que compila
-Phase, juega la lección en Chromium y publica las capturas y el informe de la
-prueba en la rama `ci/lesson-screenshots` (un revisor puede leerlos sin
-descargar artefactos).
+Phase, juega la lección en Chromium y sube las capturas y el informe como
+**artefactos de GitHub Actions**. Ya no fuerza escrituras en una rama de evidencias;
+el token del workflow es de solo lectura.
 
 **Resultado (ejecución `41024422260`, commit `c937be0`):**
 

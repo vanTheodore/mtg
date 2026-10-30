@@ -6,8 +6,9 @@
  * the network, so the whole lesson can be exercised in a unit test with
  * synthetic snapshots.
  *
- * The rules stay in Phase: every action this machine returns is one the
- * engine published in `snapshot.legal`. When the engine does not offer the
+ * The rules stay in Phase: published legal actions are used where available;
+ * the attack declaration uses only targets Phase marked valid and is validated
+ * by Phase when submitted. When the engine does not offer the
  * action a step wants, the machine passes priority (so the game reaches the
  * moment where the action exists) and, if that never happens, it stops and
  * lets the learner skip the step. It never forces a state.

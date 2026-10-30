@@ -44,11 +44,22 @@
     End: 'Final del turno', Cleanup: 'Limpieza'
   };
 
-  onMount(async () => {
-    metas = await fetch('/data/card-meta.json')
-      .then((response) => (response.ok ? response.json() : {}))
-      .catch(() => ({}));
-    await tutorial.start();
+  onMount(() => {
+    // Svelte requires a synchronous cleanup function; an async onMount
+    // callback would leave the singleton game active on browser Back.
+    let mounted = true;
+    void (async () => {
+      const loadedMetas = await fetch('/data/card-meta.json')
+        .then((response) => (response.ok ? response.json() : {}))
+        .catch(() => ({}));
+      if (!mounted) return;
+      metas = loadedMetas;
+      await tutorial.start();
+    })();
+    return () => {
+      mounted = false;
+      tutorial.leave();
+    };
   });
 
   // The engine publishes a snapshot; the machine reads it and proposes at most

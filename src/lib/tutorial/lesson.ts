@@ -5,9 +5,9 @@
  * and the legal action each step performs.
  *
  * Rules never live in this file. Every action returned here is copied
- * **verbatim** from the `legal` list Phase itself published in the snapshot;
- * the tutorial only chooses *between* the actions the engine offers and never
- * forges one. When the engine does not offer an action, this module reports
+ * from Phase's legal list where enumerated. For attack declaration, it composes
+ * the same request as the main UI using Phase's valid attacker/target pairs.
+ * Phase validates every action before changing the game state. When the engine does not offer an action, this module reports
  * "not available" and the tutorial offers a safe alternative instead of
  * forcing the state.
  *
@@ -81,7 +81,7 @@ export interface LessonStep {
   words?: string[];
   /** The card the learner has to use, when there is one. */
   focus?: (snapshot: EngineSnapshot, ctx: TutorialContext) => ObjectId | undefined;
-  /** The action to perform — always copied from Phase's legal list. */
+  /** The action to perform — based on Phase-provided legal actions or valid targets. */
   perform?: (snapshot: EngineSnapshot, ctx: TutorialContext) => GameAction | undefined;
   /** Why the pick was not possible, when the learner picks the wrong card. */
   blocked?: string;
