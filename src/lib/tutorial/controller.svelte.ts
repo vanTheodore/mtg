@@ -16,6 +16,7 @@ import { loadCatalog } from '#lib/game/catalog.ts';
 import { session } from '#lib/game/session.svelte.ts';
 import type { EngineSnapshot, GameAction, ObjectId } from '#lib/engine/types.ts';
 import { initialState, reduce, type LessonNote, type MachineState } from './machine.ts';
+import { ActionSlot } from './action-slot.ts';
 import {
   STEPS,
   TUTORIAL_CARD_NAMES,
@@ -105,6 +106,13 @@ export class TutorialController {
   private lastRevision = -1;
   /** True when the lesson changed the machine without the engine moving. */
   private localChange = false;
+  /**
+   * The action the machine proposed and that is waiting for the engine to be
+   * free. It is kept (and replaced by a newer decision) instead of dropped:
+   * dropping it would break the chain of priority windows the lesson walks
+   * through to reach the moment the learner can act.
+   */
+  private slot = new ActionSlot();
 
   async start(): Promise<void> {
     this.machine = initialState();
@@ -113,6 +121,7 @@ export class TutorialController {
     this.busy = false;
     this.lastRevision = -1;
     this.localChange = false;
+    this.slot = new ActionSlot();
     this.status = 'loading';
     this.publish();
     try {
@@ -186,29 +195,42 @@ export class TutorialController {
     if (this.machine.completed) {
       this.status = 'completed';
       this.markCompleted();
+      this.slot.propose(null);
       this.publish();
       return;
     }
-    if (result.action && !this.busy) {
-      this.busy = true;
-      this.publish();
-      void this.engine
-        .dispatch(result.action)
-        .catch((failure: unknown) => {
-          this.error = failure instanceof Error ? failure.message : String(failure);
-        })
-        .finally(() => {
-          this.busy = false;
-          this.publish();
-          // The engine moved while the action was in flight: decide again
-          // about the new state, or the lesson would wait for a decision that
-          // nobody is going to take.
-          const current = this.engine.snapshot;
-          if (current && current.revision !== this.lastRevision) this.observe();
-        });
-      return;
-    }
+    // The newest decision replaces the waiting one: both describe the same
+    // (latest) snapshot, and only the newest one can still be legal.
+    this.slot.propose(result.action ?? null);
     this.publish();
+    this.flush();
+  }
+
+  /**
+   * Send the action the machine proposed, if the engine is free.
+   *
+   * The engine can only take one action at a time, so a decision that arrives
+   * while another one is in flight waits here instead of being thrown away.
+   */
+  private flush(): void {
+    const action = this.slot.take();
+    if (!action) return;
+    this.busy = true;
+    this.publish();
+    void this.engine
+      .dispatch(action)
+      .catch((failure: unknown) => {
+        this.error = failure instanceof Error ? failure.message : String(failure);
+      })
+      .finally(() => {
+        this.busy = false;
+        this.slot.release();
+        this.publish();
+        // The engine moved: the snapshot changed, the effect will call
+        // observe() again and decide about the new state. If a decision was
+        // already made while this action was in flight, it goes now.
+        this.flush();
+      });
   }
 
   /** The primary button of the lesson panel. */
