@@ -1,0 +1,61 @@
+{
+  "action_kinds": {
+    "ActivateAbility": 111,
+    "CastSpell": 18,
+    "ChooseOption": 1,
+    "DeclareAttackers": 27,
+    "DeclareBlockers": 15,
+    "MulliganDecision": 2,
+    "PassPriority": 862,
+    "PlayLand": 18,
+    "SelectCards": 1
+  },
+  "decks": "docs/packcheck-10e-decks.json",
+  "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
+  "exercised_names": [
+    "angel of mercy",
+    "aven cloudchaser",
+    "benalish knight",
+    "honor guard",
+    "plains",
+    "serra angel",
+    "skyhunter skirmisher",
+    "soul warden",
+    "steadfast guard",
+    "suntail hawk",
+    "true believer",
+    "voice of all",
+    "wild griffin",
+    "youthful knight"
+  ],
+  "faces": 444,
+  "game_over": {
+    "winner": 1
+  },
+  "library_counts": [
+    0,
+    17
+  ],
+  "loaded": true,
+  "pack": "static/data/catalog/packs/fixture.json,static/data/catalog/packs/10e.json",
+  "requested": {
+    "opponent": 40,
+    "player": 40
+  },
+  "resolved": {
+    "opponent": 40,
+    "player": 40
+  },
+  "seed": 7,
+  "steps": 1055,
+  "timing_ms": {
+    "deck_resolve": 0.3,
+    "engine_start": 154.6,
+    "game": 6663.3,
+    "pack_parse": 76.6,
+    "per_step": 6.316,
+    "total": 6826.0
+  },
+  "trace": null,
+  "unresolved_names": []
+}

@@ -1,0 +1,78 @@
+{
+  "generated_at": "2026-10-29T19:43:59.805Z",
+  "runtime": "Bun 1.4.4",
+  "catalog_source": "static/data/cards.json",
+  "method": {
+    "tiers": "1× is the real 90-face catalog; 5× and 20× replicate it with a name suffix (synthetic scale, not game-verified cards).",
+    "packs": "4 shards split by sha256 of the card name; one shard marked core.",
+    "deck": "18 basic lands + 22 copies of one creature (the practice duel shape).",
+    "samples": 5,
+    "measured": "JSON parse, index plan and pack merge in Bun; heap is process-wide and includes the samples.",
+    "not_measured": "Browser fetch, WASM catalog load inside the engine, paint. Phase 0.3 numbers for those stand on their own commit."
+  },
+  "results": [
+    {
+      "label": "1× (real)",
+      "names": 90,
+      "singleFileBytes": 125111,
+      "singleFileParseMs": 0.94,
+      "packFiles": 4,
+      "packBytes": 125114,
+      "indexBytes": 2378,
+      "indexParseMs": 0.01,
+      "planMs": 0.122,
+      "packsFetchedForDeck": 3,
+      "bytesFetchedForDeck": 89978,
+      "mergeMs": 0.48,
+      "heapAfterMb": 4.7,
+      "setPolicy": {
+        "packCount": 1,
+        "packsTouched": 1,
+        "bytesFetchedForDeck": 125111,
+        "coreBytes": 0
+      }
+    },
+    {
+      "label": "5× (sintético)",
+      "names": 450,
+      "singleFileBytes": 633831,
+      "singleFileParseMs": 2.54,
+      "packFiles": 4,
+      "packBytes": 633834,
+      "indexBytes": 12034,
+      "indexParseMs": 0.04,
+      "planMs": 0.329,
+      "packsFetchedForDeck": 3,
+      "bytesFetchedForDeck": 477916,
+      "mergeMs": 1.79,
+      "heapAfterMb": 8.2,
+      "setPolicy": {
+        "packCount": 2,
+        "packsTouched": 1,
+        "bytesFetchedForDeck": 423631,
+        "coreBytes": 0
+      }
+    },
+    {
+      "label": "20× (sintético)",
+      "names": 1800,
+      "singleFileBytes": 2543331,
+      "singleFileParseMs": 10.39,
+      "packFiles": 4,
+      "packBytes": 2543334,
+      "indexBytes": 49114,
+      "indexParseMs": 0.16,
+      "planMs": 0.971,
+      "packsFetchedForDeck": 3,
+      "bytesFetchedForDeck": 1903394,
+      "mergeMs": 8.35,
+      "heapAfterMb": 21,
+      "setPolicy": {
+        "packCount": 6,
+        "packsTouched": 1,
+        "bytesFetchedForDeck": 423631,
+        "coreBytes": 0
+      }
+    }
+  ]
+}

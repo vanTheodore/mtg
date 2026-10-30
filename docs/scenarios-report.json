@@ -1,0 +1,164 @@
+{
+  "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
+  "goals_ok": true,
+  "harness": "explicit mechanics parity: direct Phase API vs raw wrapper ABI",
+  "parity_ok": true,
+  "protocol_rejected": true,
+  "reports": [
+    {
+      "final_state_fingerprint": "4d88924d2c984c5b",
+      "mismatches": [],
+      "missing": [],
+      "observed": [
+        "ability",
+        "attackers",
+        "cast",
+        "combat_damage",
+        "creature",
+        "damage",
+        "life_loss",
+        "mana",
+        "stack"
+      ],
+      "required": [
+        "mana",
+        "cast",
+        "stack",
+        "creature"
+      ],
+      "scenario": "mana_and_cast",
+      "seed": 42,
+      "steps": 160
+    },
+    {
+      "final_state_fingerprint": "6bed10aba8a10216",
+      "mismatches": [],
+      "missing": [],
+      "observed": [
+        "ability",
+        "attackers",
+        "blockers",
+        "cast",
+        "combat_damage",
+        "creature",
+        "damage",
+        "mana",
+        "stack"
+      ],
+      "required": [
+        "attackers",
+        "blockers",
+        "combat_damage"
+      ],
+      "scenario": "combat_attack_block_damage",
+      "seed": 42,
+      "steps": 300
+    },
+    {
+      "final_state_fingerprint": "bd8878b6df34483c",
+      "mismatches": [],
+      "missing": [],
+      "observed": [
+        "ability",
+        "cast",
+        "damage",
+        "life_loss",
+        "mana",
+        "stack",
+        "targets"
+      ],
+      "required": [
+        "targets",
+        "damage"
+      ],
+      "scenario": "targets_and_burn",
+      "seed": 42,
+      "steps": 200
+    },
+    {
+      "final_state_fingerprint": "658e91eadcdb6e2d",
+      "mismatches": [],
+      "missing": [],
+      "observed": [
+        "ability",
+        "attackers",
+        "cast",
+        "combat_damage",
+        "creature",
+        "damage",
+        "life_loss",
+        "mana",
+        "stack",
+        "trigger"
+      ],
+      "required": [
+        "trigger"
+      ],
+      "scenario": "trigger_delver_upkeep",
+      "seed": 42,
+      "steps": 200
+    },
+    {
+      "final_state_fingerprint": "521ea1a55270f647",
+      "mismatches": [],
+      "missing": [],
+      "observed": [
+        "ability",
+        "attackers",
+        "cast",
+        "combat_damage",
+        "creature",
+        "damage",
+        "life_loss",
+        "mana",
+        "stack",
+        "token"
+      ],
+      "required": [
+        "token"
+      ],
+      "scenario": "token_heart_desire",
+      "seed": 42,
+      "steps": 200
+    },
+    {
+      "final_state_fingerprint": "f57ad229553fca0b",
+      "mismatches": [],
+      "missing": [],
+      "observed": [
+        "ability",
+        "mana"
+      ],
+      "required": [],
+      "scenario": "replacement_copy_pending",
+      "seed": 42,
+      "steps": 400
+    },
+    {
+      "final_state_fingerprint": "2b8847eea386336",
+      "mismatches": [],
+      "missing": [],
+      "observed": [
+        "ability",
+        "cast",
+        "damage",
+        "game_over",
+        "life_loss",
+        "mana",
+        "stack",
+        "targets",
+        "victory"
+      ],
+      "required": [
+        "life_loss",
+        "game_over",
+        "victory"
+      ],
+      "scenario": "endgame_burn_victory",
+      "seed": 42,
+      "steps": 434
+    }
+  ],
+  "revision_unchanged": true,
+  "stale_rejected": true
+}

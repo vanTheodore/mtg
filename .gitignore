@@ -1,0 +1,21 @@
+node_modules/
+.svelte-kit/
+build/
+dist/
+target/
+playwright-report/
+test-results/
+*.log
+.env
+.env.*
+!.env.example
+# Generated engine artifacts; rebuild with scripts/build-engine.ts.
+static/wasm/
+# Local offline Cargo bootstrap, never commit toolchains or vendored crates.
+.cargo/vendor/
+.cargo/offline.toml
+Cargo.sandbox.lock
+
+target-*/
+vendor/
+# Chromium fetched from npm for Linux E2E (scripts/fetch-chromium.ts).

@@ -1,0 +1,9 @@
+[target.wasm32-unknown-unknown]
+rustflags = [
+  "-C", "link-arg=-z",
+  "-C", "link-arg=stack-size=16777216",
+  "--cfg", "getrandom_backend=\"custom\"",
+]
+
+[env]
+RUST_MIN_STACK = "16777216"

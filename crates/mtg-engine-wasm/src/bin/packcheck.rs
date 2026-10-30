@@ -1,0 +1,244 @@
+//! Certify a catalog *pack*: load the exact flat export the client ships
+//! (`CardDatabase::from_json_str`, the same call the WASM bridge makes), resolve a
+//! deck against it, and play a real game with the engine's own legal actions.
+//!
+//! This is the link between "the pack file looks right" and "the engine plays
+//! with it". Output is JSON so the certification report is reproducible.
+//!
+//! usage: packcheck <pack.json[,pack2.json…]> <decks.json> [seed] [max-steps] [--trace <path>]
+//!
+//! `--trace` writes one JSON line per step with the actor, the action applied,
+//! every legal action, and the projected state *for the acting viewer* — the same
+//! projection the WASM bridge returns. `scripts/parity-trace.ts` diffs it against
+//! the trace of the same game played through the shipped `.wasm`.
+//!
+//! Several packs may be listed: the client fetches every pack a deck needs and
+//! merges them into one flat catalog before the engine sees it, so the check
+//! merges them the same way. A later pack never overwrites an earlier one.
+use engine::database::CardDatabase;
+use engine::game::deck_loading::{resolve_deck_list, DeckList};
+use engine::game::engine::{apply_with_rejection, start_game_with_starting_player};
+use engine::game::visibility::filter_state_for_viewer;
+use engine::game::{load_and_hydrate_decks, turn_control};
+use engine::types::actions::MulliganChoice;
+use engine::types::format::FormatConfig;
+use engine::types::game_state::{GameState, WaitingFor};
+use engine::types::player::PlayerId;
+use engine::types::GameAction;
+use std::collections::{BTreeMap, BTreeSet};
+use std::time::Instant;
+
+fn choose(actions: &[GameAction], state: &GameState) -> Option<GameAction> {
+    let priority = |a: &GameAction| match a {
+        GameAction::MulliganDecision { choice: MulliganChoice::Keep } => (0, 0),
+        GameAction::SelectTargets { targets } => {
+            let hits_opponent = targets.iter().any(|t| {
+                matches!(t, engine::types::ability::TargetRef::Player(p) if p.0 != state.priority_player.0)
+            });
+            (if hits_opponent { 1 } else { 50 }, targets.len())
+        }
+        GameAction::ChooseTarget { target } => {
+            let hits_opponent =
+                matches!(target, Some(engine::types::ability::TargetRef::Player(p)) if p.0 != state.priority_player.0);
+            (if hits_opponent { 1 } else { 50 }, 0)
+        }
+        GameAction::DeclareAttackers { attacks, .. } => (if attacks.is_empty() { 80 } else { 2 }, 0),
+        GameAction::DeclareBlockers { assignments } => (if assignments.is_empty() { 80 } else { 3 }, 0),
+        GameAction::CastSpell { .. } => (4, 0),
+        GameAction::PlayLand { .. } => (5, 0),
+        GameAction::TapLandForMana { .. } | GameAction::ActivateManaSource { .. } => {
+            let total: usize = state.players.iter().map(|p| p.mana_pool.total()).sum();
+            if total < 8 { (6, 0) } else { (9, 0) }
+        }
+        GameAction::ActivateAbility { .. } => (7, 0),
+        GameAction::PassPriority => (8, 0),
+        _ => (1, 0),
+    };
+    actions.iter().min_by_key(|a| priority(a)).cloned()
+}
+
+fn action_kind(action: &GameAction) -> String {
+    serde_json::to_value(action)
+        .ok()
+        .and_then(|value| value.get("type").and_then(|t| t.as_str()).map(str::to_string))
+        .unwrap_or_else(|| "action".to_string())
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 3 {
+        eprintln!("usage: packcheck <pack.json> <decks.json> [seed] [max-steps]");
+        std::process::exit(2);
+    }
+    let started = Instant::now();
+    let seed: u64 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(42);
+    let max_steps: usize = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(400);
+    let trace_path = args.iter().position(|a| a == "--trace").and_then(|at| args.get(at + 1)).cloned();
+    let mut trace: Option<std::fs::File> = trace_path.as_ref().map(|path| {
+        std::fs::File::create(path).unwrap_or_else(|err| panic!("trace {path}: {err}"))
+    });
+
+    // Merge packs exactly like `mergeCatalogs` on the client: first wins.
+    let mut merged = serde_json::Map::new();
+    for path in args[1].split(',') {
+        let text = std::fs::read_to_string(path).expect("pack file");
+        let value: serde_json::Value = serde_json::from_str(&text).expect("pack json");
+        let object = value.as_object().expect("pack is a flat map");
+        for (name, face) in object {
+            merged.entry(name.clone()).or_insert_with(|| face.clone());
+        }
+    }
+    let pack_text = serde_json::Value::Object(merged).to_string();
+    let parse_started = Instant::now();
+    let db = match CardDatabase::from_json_str(&pack_text) {
+        Ok(db) => db,
+        Err(err) => {
+            println!("{}", serde_json::json!({
+                "pack": args[1],
+                "loaded": false,
+                "error": format!("{err}"),
+            }));
+            std::process::exit(1);
+        }
+    };
+    let faces = db.face_iter().count();
+    let parse_ms = parse_started.elapsed().as_secs_f64() * 1000.0;
+
+    let decks_text = std::fs::read_to_string(&args[2]).expect("decks file");
+    let decks: DeckList = serde_json::from_str(&decks_text).expect("deck list");
+
+    // Phase resolves names silently; report what it could not resolve.
+    let mut unresolved: BTreeSet<String> = BTreeSet::new();
+    for name in decks.player.main_deck.iter().chain(decks.opponent.main_deck.iter()) {
+        if db.get_face_by_name(name).is_none() {
+            unresolved.insert(name.clone());
+        }
+    }
+
+    let resolve_started = Instant::now();
+    let payload = resolve_deck_list(&db, &decks);
+    let resolved_player: u32 = payload.player.main_deck.iter().map(|entry| entry.count).sum();
+    let resolved_opponent: u32 = payload.opponent.main_deck.iter().map(|entry| entry.count).sum();
+
+    let resolve_ms = resolve_started.elapsed().as_secs_f64() * 1000.0;
+    let mut state = GameState::new(FormatConfig::limited(), 2, seed);
+    load_and_hydrate_decks(&mut state, &payload, Some(&db));
+    start_game_with_starting_player(&mut state, PlayerId(0));
+    let start_ms = started.elapsed().as_secs_f64() * 1000.0;
+
+    let game_started = Instant::now();
+    let mut steps = 0usize;
+    let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
+    let mut game_over: Option<Option<usize>> = None;
+    // Which cards actually appeared in this game. Coverage says whether the
+    // engine understands a card; this says whether it was ever used, and the two
+    // are different claims (23 of 354 faces were used in the 10E certifying game).
+    let mut exercised: BTreeSet<String> = BTreeSet::new();
+    for _ in 0..max_steps {
+        if let WaitingFor::GameOver { winner } = &state.waiting_for {
+            game_over = Some(winner.map(|p| p.0 as usize));
+            break;
+        }
+        let viewer = turn_control::authorized_submitter(&state).unwrap_or(state.priority_player);
+        let (legal, _, _) = engine::ai_support::legal_actions_for_viewer(&state, viewer);
+        let Some(action) = choose(&legal, &state) else { break };
+        if let Some(file) = trace.as_mut() {
+            use std::io::Write;
+            let filtered = filter_state_for_viewer(&state, viewer);
+            let legal_json: Vec<serde_json::Value> = legal
+                .iter()
+                .map(|candidate| serde_json::to_value(candidate).unwrap_or(serde_json::Value::Null))
+                .collect();
+            let line = serde_json::json!({
+                "step": steps,
+                "actor": viewer.0,
+                "waiting": serde_json::to_value(&state.waiting_for).ok().and_then(|v| v.get("type").cloned()).unwrap_or(serde_json::Value::Null),
+                "action": serde_json::to_value(&action).unwrap_or(serde_json::Value::Null),
+                "legal": legal_json,
+                "state": mtg_engine_wasm::project_state(&filtered),
+            });
+            writeln!(file, "{line}").expect("write trace");
+        }
+        *kinds.entry(action_kind(&action)).or_insert(0) += 1;
+        if let GameAction::CastSpell { object_id, .. } = &action {
+            if let Some(object) = state.objects.get(object_id) {
+                exercised.insert(object.name.to_lowercase());
+            }
+        }
+        if apply_with_rejection(&mut state, viewer, action).is_err() {
+            break;
+        }
+        // A card is "exercised" once it leaves the hidden zones: being cast,
+        // entering the battlefield, dying or being exiled. Cards that only ever
+        // sat in a library or hand are not counted — they were never played.
+        let mut touched: Vec<_> = state.battlefield.iter().copied().collect();
+        for player in &state.players {
+            touched.extend(player.graveyard.iter().copied());
+        }
+        for id in &state.exile {
+            touched.push(*id);
+        }
+        for entry in &state.stack {
+            touched.push(entry.source_id);
+        }
+        for id in touched {
+            if let Some(object) = state.objects.get(&id) {
+                exercised.insert(object.name.to_lowercase());
+            }
+        }
+        steps += 1;
+    }
+    if game_over.is_none() {
+        if let WaitingFor::GameOver { winner } = &state.waiting_for {
+            game_over = Some(winner.map(|p| p.0 as usize));
+        }
+    }
+
+    let game_ms = game_started.elapsed().as_secs_f64() * 1000.0;
+    let filtered = filter_state_for_viewer(&state, PlayerId(0));
+    let projected = mtg_engine_wasm::project_state(&filtered);
+    let library_counts: Vec<u64> = projected["players"]
+        .as_array()
+        .map(|players| {
+            players
+                .iter()
+                .map(|p| p.get("library_count").and_then(|c| c.as_u64()).unwrap_or(0))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let unresolved_list: Vec<String> = unresolved.into_iter().collect();
+    let ok = faces > 0 && resolved_player > 0 && steps > 0 && unresolved_list.is_empty();
+    let report = serde_json::json!({
+        "pack": args[1],
+        "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
+        "loaded": true,
+        "faces": faces,
+        "decks": args[2],
+        "seed": seed,
+        "requested": {
+            "player": decks.player.main_deck.len(),
+            "opponent": decks.opponent.main_deck.len()
+        },
+        "resolved": { "player": resolved_player, "opponent": resolved_opponent },
+        "unresolved_names": unresolved_list,
+        "steps": steps,
+        "action_kinds": kinds,
+        "game_over": game_over.map(|winner| serde_json::json!({ "winner": winner })),
+        "library_counts": library_counts,
+        "exercised_names": exercised.into_iter().collect::<Vec<_>>(),
+        "trace": trace_path,
+        "timing_ms": {
+            "pack_parse": (parse_ms * 10.0).round() / 10.0,
+            "deck_resolve": (resolve_ms * 10.0).round() / 10.0,
+            "engine_start": (start_ms * 10.0).round() / 10.0,
+            "game": (game_ms * 10.0).round() / 10.0,
+            "per_step": if steps > 0 { ((game_ms / steps as f64) * 1000.0).round() / 1000.0 } else { 0.0 },
+            "total": (started.elapsed().as_secs_f64() * 1000.0 * 10.0).round() / 10.0,
+        },
+    });
+    println!("{}", serde_json::to_string_pretty(&report).unwrap());
+    if !ok {
+        std::process::exit(1);
+    }
+}

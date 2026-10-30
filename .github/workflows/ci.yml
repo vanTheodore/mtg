@@ -1,0 +1,153 @@
+name: Mesa CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUN_VERSION: 1.4.4
+  RUST_TOOLCHAIN: nightly-2025-03-02
+
+jobs:
+  static:
+    name: Typecheck, unit tests and static build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - name: Phase source provenance
+        run: bun run engine:verify
+      - run: bun run check
+      - run: bun test src/lib
+      - run: bun run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: static-build
+          path: build
+          retention-days: 7
+
+  wasm:
+    name: WASM build (pinned Rust, lockfile and Binaryen)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+          components: rust-src
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target-wasm"
+          shared-key: mesa-wasm-${{ hashFiles('Cargo.lock', 'crates/mtg-engine-wasm/**') }}
+      - name: Install Binaryen 132 (same version used by engine:optimize)
+        run: |
+          mkdir -p "$RUNNER_TEMP/binaryen"
+          curl -fsSL https://registry.npmjs.org/binaryen/-/binaryen-132.0.0.tgz | tar -xz -C "$RUNNER_TEMP/binaryen"
+          echo "WASM_OPT=$RUNNER_TEMP/binaryen/package/bin/wasm-opt" >> "$GITHUB_ENV"
+      - name: Build optimized engine
+        env:
+          ENGINE_BUILD_STD: "1"
+          ENGINE_OPTIMIZE: "1"
+          CARGO_TARGET_DIR: target-wasm
+          CARGO_LOCKED: "1"
+        run: bun run engine:build
+      - name: Record artifact identity
+        run: |
+          set -euo pipefail
+          WASM=static/wasm/mtg_engine_wasm.wasm
+          test -s "$WASM"
+          sha256sum "$WASM" | tee static/wasm/mtg_engine_wasm.wasm.sha256
+          "$WASM_OPT" --version | tee static/wasm/wasm-opt.version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mtg-engine-wasm
+          path: static/wasm
+          retention-days: 7
+
+  native-integration:
+    name: Native parity and explicit mechanics scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target-native"
+          shared-key: mesa-native-${{ hashFiles('Cargo.lock', 'crates/**') }}
+      - run: bun install --frozen-lockfile
+      - name: Direct Phase API vs wrapper ABI
+        env:
+          CARGO_TARGET_DIR: target-native
+        run: bun run engine:parity
+      - name: Explicit mana, casting, combat, target, trigger and endgame scenarios
+        env:
+          CARGO_TARGET_DIR: target-native
+        run: bun run engine:scenarios
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-reports
+          path: |
+            docs/parity-report.json
+            docs/scenarios-report.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  browser:
+    name: Chromium integration and visual interaction
+    needs: [wasm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun --bun playwright install --with-deps chromium
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm
+          path: static/wasm
+      - run: bun --bun playwright test
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: |
+            test-results
+            docs/performance.json
+          if-no-files-found: warn
+          retention-days: 7

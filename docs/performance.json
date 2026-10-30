@@ -1,0 +1,108 @@
+{
+  "wasm_file_bytes": 43036524,
+  "wasm_sha256": "9ef61f91a98889159489bbcdf44de850fa2019268ee08880014eed7724c9560b",
+  "environment": {
+    "browser": "Chromium (headless)",
+    "viewport": "1440x900",
+    "scryfall": "blocked (deterministic fallback)"
+  },
+  "startup": {
+    "dom_content_loaded_ms": 20.5,
+    "load_ms": 21.199999999254942,
+    "used_js_heap_bytes": 16100000,
+    "js_heap_limit_bytes": 2190000000
+  },
+  "initial_metrics_text": "Reglas 0.0 ms\nLegales 18.8 ms\nProyección 21.1 ms\nSerialización 4.0 ms\nTransporte 53.2 ms\nEncode 7.0 ms\nDecode 0.8 ms\nCommit Svelte 17.7 ms\nAuto-pasos 0\nPresentación 47.1 ms\nWorker 424.7 ms\nWASM 273 ms\n81726 B\n80 objetos\nMemoria WASM 26.6 MiB",
+  "final_metrics_text": "Reglas 0.5 ms\nLegales 2.1 ms\nProyección 2.5 ms\nSerialización 1.2 ms\nTransporte 6.8 ms\nEncode 0.1 ms\nDecode 0.3 ms\nCommit Svelte 7.3 ms\nAuto-pasos 0\nPresentación 29.8 ms\nWorker 9.8 ms\nWASM 273 ms\n67377 B\n80 objetos\nMemoria WASM 26.6 MiB",
+  "phases_ms": {
+    "engine_ms": {
+      "n": 12,
+      "min": 0.4,
+      "median": 0.7,
+      "p90": 2.1,
+      "max": 7
+    },
+    "legal_ms": {
+      "n": 12,
+      "min": 1.8,
+      "median": 2.5,
+      "p90": 7.8,
+      "max": 14.2
+    },
+    "projection_ms": {
+      "n": 12,
+      "min": 1.9,
+      "median": 2.1,
+      "p90": 3.3,
+      "max": 4.8
+    },
+    "serialize_ms": {
+      "n": 12,
+      "min": 0.6,
+      "median": 0.8,
+      "p90": 1.2,
+      "max": 2.8
+    },
+    "transport_ms": {
+      "n": 12,
+      "min": 0.8,
+      "median": 5.5,
+      "p90": 6.8,
+      "max": 8.5
+    },
+    "worker_ms": {
+      "n": 12,
+      "min": 8,
+      "median": 10.5,
+      "p90": 21.5,
+      "max": 23.1
+    },
+    "svelte_commit_ms": {
+      "n": 12,
+      "min": 2.8,
+      "median": 3.9,
+      "p90": 7.3,
+      "max": 7.9
+    },
+    "presentation_ms": {
+      "n": 12,
+      "min": 21.9,
+      "median": 31.2,
+      "p90": 31.9,
+      "max": 32
+    },
+    "encode_ms": null,
+    "decode_ms": null
+  },
+  "pass_priority_round_trip_ms": [
+    106.3,
+    88.7,
+    91.2,
+    91.9,
+    91.9,
+    91.1,
+    92,
+    92.2,
+    93.3,
+    91.2,
+    92.9,
+    92.9
+  ],
+  "pass_priority_round_trip_summary": {
+    "n": 12,
+    "min": 88.72,
+    "median": 91.95,
+    "p90": 93.34,
+    "max": 106.34
+  },
+  "hand_card_selection_response_ms": null,
+  "two_frame_presentation_ms": 27.9,
+  "final_used_js_heap_bytes": 16100000,
+  "page_errors": [],
+  "notes": [
+    "presentation_ms is a proxy: it ends at the second animation frame after the Svelte commit, not at a GPU-composited frame.",
+    "Idle FPS is intentionally not reported: it does not measure any game interaction.",
+    "engine_ms is the Rust apply call only; legal_ms/projection_ms/serialize_ms are measured inside the worker separately.",
+    "One round-trip sample includes a seat handoff and is reported as the max, not hidden."
+  ]
+}

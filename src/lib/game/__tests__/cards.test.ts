@@ -1,0 +1,78 @@
+import { describe, expect, test } from 'bun:test';
+import { cardImageLookup, groupTokens, isHidden, typeLine } from '../cards';
+import type { GameObject } from '../../engine/types';
+
+const base: GameObject = {
+  id: 1, card_id: 1, owner: 0, controller: 0, zone: 'Hand', name: 'Delver of Secrets',
+  display_visible_to_viewer: true
+};
+
+describe('cardImageLookup', () => {
+  test('prefers printed_ref oracle id and face name', () => {
+    const lookup = cardImageLookup({ ...base, printed_ref: { oracle_id: 'abc', face_name: 'Insectile Aberration' }, transformed: true });
+    expect(lookup.oracleId).toBe('abc');
+    expect(lookup.faceName).toBe('Insectile Aberration');
+    expect(lookup.faceIndex).toBe(1);
+  });
+  test('falls back to back face name when transformed without printed_ref', () => {
+    const lookup = cardImageLookup({ ...base, transformed: true, back_face: { name: 'Insectile Aberration' } });
+    expect(lookup.name).toBe('Insectile Aberration');
+    expect(lookup.faceIndex).toBe(1);
+  });
+  test('hidden is distinct from missing image', () => {
+    expect(isHidden({ ...base, display_visible_to_viewer: false })).toBe(true);
+    expect(isHidden({ ...base, face_down: true })).toBe(true);
+    expect(isHidden(base)).toBe(false);
+  });
+});
+
+describe('groupTokens', () => {
+  test('groups by controller and name', () => {
+    const objs = [
+      { ...base, id: 1, name: 'Soldier', display_source: 'Token' },
+      { ...base, id: 2, name: 'Soldier', display_source: 'Token' },
+      { ...base, id: 3, name: 'Soldier', controller: 1, display_source: 'Token' }
+    ];
+    const groups = groupTokens(objs);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].items).toHaveLength(2);
+  });
+});
+
+describe('typeLine (es-419)', () => {
+  test('renders supertypes after the noun with gender agreement', () => {
+    expect(typeLine({ ...base, card_types: { supertypes: ['Legendary'], core_types: ['Creature'], subtypes: ['Human', 'Wizard'] } }))
+      .toBe('Criatura legendaria — Humano Mago');
+    expect(typeLine({ ...base, card_types: { supertypes: ['Basic'], core_types: ['Land'], subtypes: ['Plains'] } }))
+      .toBe('Tierra básica — Llanura');
+  });
+  test('keeps the Spanish word order for multi-type cards', () => {
+    expect(typeLine({ ...base, card_types: { core_types: ['Artifact', 'Creature'], subtypes: ['Golem'] } }))
+      .toBe('Criatura artefacto — Golem');
+  });
+  test('names token types as fichas', () => {
+    expect(typeLine({ ...base, card_types: { core_types: ['Token', 'Creature'], subtypes: ['Soldier'] } }))
+      .toBe('Ficha de criatura — Soldado');
+    expect(typeLine({ ...base, card_types: { core_types: ['Token'] } })).toBe('Ficha');
+  });
+  test('falls back to the engine words instead of mixing languages', () => {
+    expect(typeLine({ ...base, card_types: { core_types: ['Conspiracy'], subtypes: ['Scheme'] } }))
+      .toBe('Conspiracy — Scheme');
+    expect(typeLine({ ...base, card_types: { supertypes: ['World'], core_types: ['Enchantment'] } }))
+      .toBe('World Enchantment');
+  });
+});
+
+describe('conservative token equivalence', () => {
+  const token = { ...base, name: 'Soldier', display_source: 'Token', is_token: true, power: 1, toughness: 1, card_types: { core_types: ['Token', 'Creature'] } } as GameObject;
+  test('identical public characteristics group', () => {
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2 }])).toHaveLength(1);
+  });
+  test('counters, stats, abilities, tapped and combat state prevent grouping', () => {
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2, counters: { PlusOnePlusOne: 1 } }])).toHaveLength(2);
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2, power: 2 }])).toHaveLength(2);
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2, keywords: ['Flying'] }])).toHaveLength(2);
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2, tapped: true }])).toHaveLength(2);
+    expect(groupTokens([{ ...token, id: 1 }, { ...token, id: 2 }], { combatRole: (id) => id === 2 ? 'Atacando' : undefined })).toHaveLength(2);
+  });
+});

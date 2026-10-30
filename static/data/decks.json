@@ -1,0 +1,30 @@
+{
+  "player": {
+    "main_deck": [
+      "Forest","Forest","Forest","Forest","Forest","Forest","Forest","Forest","Forest",
+      "Plains","Plains","Plains","Plains","Plains","Plains","Plains","Plains",
+      "Grizzly Bears","Grizzly Bears","Grizzly Bears","Grizzly Bears",
+      "Armored Armadillo","Armored Armadillo","Armored Armadillo","Armored Armadillo",
+      "Rancor","Rancor","Rancor",
+      "Blade Splicer","Blade Splicer",
+      "Baneslayer Angel","Baneslayer Angel",
+      "Giant Killer // Chop Down","Giant Killer // Chop Down",
+      "Cloudreader Sphinx","Cloudreader Sphinx",
+      "Colossal Might","Colossal Might",
+      "Charging Paladin","Charging Paladin"
+    ]
+  },
+  "opponent": {
+    "main_deck": [
+      "Mountain","Mountain","Mountain","Mountain","Mountain","Mountain","Mountain","Mountain","Mountain",
+      "Island","Island","Island","Island","Island","Island","Island","Island",
+      "Lightning Bolt","Lightning Bolt","Lightning Bolt","Lightning Bolt",
+      "Shock","Shock","Shock","Shock",
+      "Goblin Guide","Goblin Guide","Goblin Guide","Goblin Guide",
+      "Monastery Swiftspear","Monastery Swiftspear","Monastery Swiftspear","Monastery Swiftspear",
+      "Lava Spike","Lava Spike","Lava Spike",
+      "Lightning Strike","Lightning Strike","Lightning Strike",
+      "Counterspell","Counterspell","Counterspell"
+    ]
+  }
+}

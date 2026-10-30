@@ -1,0 +1,471 @@
+use serde::{Deserialize, Serialize};
+
+use super::game_state::{LKISnapshot, ZoneChangeRecord};
+use super::zones::Zone;
+use crate::game::game_object::GameObject;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CardId(pub u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ObjectId(pub u64);
+
+/// CR 603.2 + CR 603.3b + CR 117.3b: parse-time placeholder for "the specific
+/// spell object that will cause this trigger to fire", embedded inside a
+/// `TargetFilter::SpecificObject` leaf of a floating (`TargetFilter::None`)
+/// replacement's `valid_card` tree by `parse_whenever_you_cast_enters_with_trigger`.
+/// `Effect::AddTargetReplacement` resolves it from the resolving carrier's
+/// captured `ObjectIncarnationRef`, requiring that exact spell to remain live
+/// on the stack. The same pin supplies the concrete selector id and the
+/// installed `ReplacementDefinition::triggering_spell`; missing, departed, or
+/// mismatched authority installs nothing. CR 400.7: later casts sharing the
+/// storage id cannot inherit this rider. Never a real object's id (the
+/// allocator starts well below `u64::MAX`), so no dedicated filter variant is
+/// needed.
+pub(crate) const TRIGGERING_SPELL_PLACEHOLDER: ObjectId = ObjectId(u64::MAX);
+
+/// Monotonic identity for one logical simultaneous zone-change action.
+///
+/// This remains distinct from an [`ObjectId`]: a logical group can contain
+/// several object incarnations, and a nested batch must never inherit its
+/// parent's trigger-observation authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct LogicalZoneChangeGroupId(pub u64);
+
+/// Monotonic identity for one operation-owned discard result frame. This is
+/// distinct from an object id: one discard instruction may be replaced or
+/// paused, while the frame remains the sole provenance authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct DiscardFrameId(pub u64);
+
+/// CR 500.8 + CR 500.9 + CR 500.10: monotonic identity of one scheduled extra
+/// phase or step, minted when an effect schedules it. Two scheduled units can
+/// share an anchor and a phase; this is what tells them apart. `0` is never
+/// minted: an entry written without an id (seeded, or saved before ids
+/// existed) reads the default and names no minted unit.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(transparent)]
+pub struct ExtraPhaseId(pub u64);
+
+/// Unique identifier for a set of objects tracked across delayed trigger boundaries.
+/// CR 603.7: Delayed triggers reference the specific objects from the originating effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TrackedSetId(pub u64);
+
+/// CR 702.50a: Names one rest-of-game Epic effect by its position in
+/// `GameState::epic_effects`, which only grows, so a position is a stable identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct EpicEffectId(pub u64);
+
+/// CR 615.5 + CR 614.6: names one runtime continuation of a resolution-installed
+/// replacement or prevention shield by its position in
+/// `GameState::replacement_continuations`, which only grows, so a position is a
+/// stable identity for the rest of the game.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ReplacementContinuationId(pub u64);
+
+/// CR 603.7: Monotonic identity of one installed delayed triggered ability.
+///
+/// This is deliberately distinct from its source object: multiple delayed
+/// triggers may be created by the same source, and a source can change zones
+/// before its trigger fires.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(transparent)]
+pub struct DelayedTriggerToken(pub u64);
+
+/// CR 603.7: Monotonic identity for one durable delayed-trigger installation.
+///
+/// This remains separate from [`DelayedTriggerToken`]: the token identifies the
+/// installation receipt while this value identifies the specific installed
+/// occurrence. Keeping both prevents a legacy record from being rebound to a
+/// later trigger merely because its source object is the same.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(transparent)]
+pub struct DelayedTriggerInstanceId(pub u64);
+
+/// Producer-issued identity for one paid cast offer made while an ability is
+/// resolving. It is distinct from the card and delayed-trigger identifiers so
+/// two otherwise equivalent offers cannot share cleanup authority.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(transparent)]
+pub struct ResolutionCastOfferId(pub u64);
+
+/// Private durable origin for a delayed-trigger installation.
+///
+/// This belongs to engine scheduling state, never to a public `GameEvent`.
+/// [`DelayedInstallIdentity::LegacyDelayed`] represents an older persisted
+/// record that cannot be matched unambiguously to a durable install command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(crate) struct DelayedTriggerOrigin {
+    pub(crate) token: DelayedTriggerToken,
+    pub(crate) instance: DelayedTriggerInstanceId,
+    pub(crate) source_id: ObjectId,
+    /// Present only when the trigger was installed by a paid offer's immediate
+    /// direct synchronous tail; legacy and ordinary triggers stay ownerless.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) offer_id: Option<ResolutionCastOfferId>,
+}
+
+/// Durable identity carried by a CR 603.7 delayed-trigger installation.
+///
+/// A legacy installation remains a delayed trigger for rules scheduling, but
+/// lacks the command-backed root required for prospective receipt tracking.
+/// A fresh installation always carries the full root and can be transported to
+/// the corresponding [`TriggerFiring`] without re-deriving it from a source.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(crate) enum DelayedInstallIdentity {
+    #[default]
+    LegacyDelayed,
+    ReceiptEligible(DelayedTriggerOrigin),
+}
+
+impl DelayedInstallIdentity {
+    pub(crate) fn origin(self) -> Option<DelayedTriggerOrigin> {
+        match self {
+            Self::LegacyDelayed => None,
+            Self::ReceiptEligible(origin) => Some(origin),
+        }
+    }
+
+    pub(crate) fn firing(self) -> TriggerFiring {
+        match self {
+            Self::LegacyDelayed => TriggerFiring::LegacyDelayed,
+            Self::ReceiptEligible(origin) => TriggerFiring::ReceiptEligible(origin),
+        }
+    }
+}
+
+/// Private classification of a triggered-ability firing.
+///
+/// CR 603.7: a delayed ability remains distinct from an ordinary triggered
+/// ability even when an older persisted delayed record has no reconstructible
+/// installation receipt. `UnknownLegacy` is intentionally fail-closed and is
+/// never inferred from an omitted historical discriminator.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(crate) enum TriggerFiring {
+    Ordinary,
+    LegacyDelayed,
+    ReceiptEligible(DelayedTriggerOrigin),
+    #[default]
+    UnknownLegacy,
+}
+
+impl TriggerFiring {
+    pub(crate) fn is_delayed(self) -> bool {
+        matches!(self, Self::LegacyDelayed | Self::ReceiptEligible(_))
+    }
+}
+
+/// Sentinel `incarnation` bound to a pre-migration `crew_activated_this_turn`
+/// record that serialized as a bare `ObjectId` (no incarnation was stored).
+///
+/// CR 400.7: a pre-migration record cannot prove which incarnation crewed, so it
+/// is bound to a value that can never collide with a real current incarnation.
+pub const LEGACY_INCARNATION: u64 = u64::MAX;
+
+/// CR 400.7: an object that changes zones becomes a new object. This pair is the
+/// exact cross-incarnation identity of one object: the stable storage `ObjectId`
+/// plus the monotonic `incarnation` epoch (see `GameObject::incarnation`).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize, Deserialize)]
+#[serde(from = "ObjectIncarnationRefCompat")]
+pub struct ObjectIncarnationRef {
+    pub object_id: ObjectId,
+    pub incarnation: u64,
+}
+
+impl ObjectIncarnationRef {
+    /// Construct a reference from an explicit id + incarnation.
+    pub fn of(object_id: ObjectId, incarnation: u64) -> Self {
+        Self {
+            object_id,
+            incarnation,
+        }
+    }
+
+    /// Convenience: capture the current incarnation of a live object.
+    pub fn from_object(obj: &GameObject) -> Self {
+        Self {
+            object_id: obj.id,
+            incarnation: obj.incarnation,
+        }
+    }
+
+    /// CR 400.7: True when this pinned reference still names the live object it
+    /// was captured from. An object that changed zones became a new object and
+    /// bumped its incarnation (`GameObject::bump_incarnation`), so a stale pin
+    /// matches nothing even though the engine reuses the `ObjectId` as storage
+    /// identity.
+    pub fn is_current(&self, state: &crate::types::game_state::GameState) -> bool {
+        state
+            .objects
+            .get(&self.object_id)
+            .is_some_and(|object| Self::from_object(object) == *self)
+    }
+}
+
+/// Private serde shim mirroring `PhaseStopCompat` (`types/phase.rs`): new writes
+/// emit the full `{ object_id, incarnation }` pair; legacy saves stored a bare
+/// `ObjectId` number. The two arms are shape-disjoint (map vs. number), so
+/// serde's untagged matching selects by shape regardless of declaration order.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ObjectIncarnationRefCompat {
+    Full {
+        object_id: ObjectId,
+        incarnation: u64,
+    },
+    Legacy(ObjectId),
+}
+
+impl From<ObjectIncarnationRefCompat> for ObjectIncarnationRef {
+    fn from(c: ObjectIncarnationRefCompat) -> Self {
+        match c {
+            ObjectIncarnationRefCompat::Full {
+                object_id,
+                incarnation,
+            } => Self {
+                object_id,
+                incarnation,
+            },
+            // CR 400.7: a pre-migration record cannot prove its incarnation; bind
+            // the sentinel so it never matches a current object's reference.
+            ObjectIncarnationRefCompat::Legacy(object_id) => Self {
+                object_id,
+                incarnation: LEGACY_INCARNATION,
+            },
+        }
+    }
+}
+
+/// CR 608.2h: an identity reference paired with the public zone the object was
+/// expected to be in. Phase 2B strict resolution consumes `expected_zone` to
+/// decide current-info vs. last-known-information.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct ObjectIdentityBinding {
+    pub reference: ObjectIncarnationRef,
+    pub expected_zone: Zone,
+}
+
+impl ObjectIdentityBinding {
+    pub fn new(reference: ObjectIncarnationRef, expected_zone: Zone) -> Self {
+        Self {
+            reference,
+            expected_zone,
+        }
+    }
+}
+
+/// CR 400.7 + CR 603.4 + CR 603.6a: the identity of the object whose zone change
+/// fired the trigger whose intervening-`if` is being evaluated — the referent of
+/// "another" in a trigger-anaphoric filter.
+///
+/// Deliberately NOT a bare [`ObjectId`]. CR 400.7: "an object that moves from one
+/// zone to another becomes a new object with no memory of, or relation to, its
+/// previous existence", but the engine REUSES the storage id across that move and
+/// records the discontinuity as an `incarnation` bump
+/// (`GameObject::bump_incarnation`). An exclusion keyed on the id alone therefore
+/// also excludes a *different* object that happens to occupy the same slot: blink
+/// the original entrant and re-play it before the CR 603.4 resolution recheck, and
+/// the new incarnation — which is "another creature you control" under CR 400.7 —
+/// is silently dropped from the reference population.
+///
+/// Deliberately NOT [`ObjectIncarnationRef`] either: that type asserts an exact,
+/// always-known incarnation, and the zone-change events this is bound from prove
+/// one only for battlefield entries (`ZoneChangeRecord::entered_incarnation`).
+/// `incarnation: None` is the honest spelling of "this event does not prove an
+/// incarnation", and it falls back to storage identity — the same
+/// `is_none_or` fallback the sibling `entered_incarnation` consumers in
+/// `game/filter.rs` and `game/triggers.rs` already use for legacy and synthesized
+/// records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TriggeringObjectRef {
+    pub object_id: ObjectId,
+    /// CR 400.7: the incarnation the triggering event proves for `object_id`, or
+    /// `None` when the event record stamps none.
+    pub incarnation: Option<u64>,
+}
+
+impl TriggeringObjectRef {
+    /// Bind from a zone-change event's subject id plus the incarnation its record
+    /// proves. `ZoneChangeRecord::entered_incarnation` is captured AFTER the
+    /// battlefield-entry bump, so it names the entrant that actually fired the
+    /// trigger rather than its pre-move self; it is `None` for every
+    /// non-battlefield destination, which degrades to storage identity.
+    pub fn from_zone_change(object_id: ObjectId, entered_incarnation: Option<u64>) -> Self {
+        Self {
+            object_id,
+            incarnation: entered_incarnation,
+        }
+    }
+
+    /// CR 400.7: true when `object` IS this triggering object — same storage id
+    /// AND, when the event proved one, the same incarnation. A re-entered object
+    /// at the same id answers `false`, which is what makes "another" honest.
+    pub fn is_object(self, object: &GameObject) -> bool {
+        object.id == self.object_id
+            && self
+                .incarnation
+                .is_none_or(|incarnation| object.incarnation == incarnation)
+    }
+
+    /// CR 400.7: record-side counterpart of [`Self::is_object`] for the last-known-information
+    /// path, which evaluates a `ZoneChangeRecord` projection rather than a live
+    /// object. The record's own `entered_incarnation` is the same authority this
+    /// reference is bound from, so the two agree exactly when the record describes
+    /// THIS triggering event; an unproven incarnation on either side degrades to
+    /// storage identity.
+    pub fn describes_record(self, record: &ZoneChangeRecord) -> bool {
+        record.object_id == self.object_id
+            && match (self.incarnation, record.entered_incarnation) {
+                (Some(bound), Some(recorded)) => bound == recorded,
+                _ => true,
+            }
+    }
+}
+
+/// CR 608.2h / CR 113.7a: a binding plus the last-known-information snapshot used
+/// when the object is no longer in its expected public zone. Defined in Phase 1;
+/// consumed by Phase 2B strict resolution.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct ObjectProvenance {
+    pub binding: ObjectIdentityBinding,
+    pub lki: Option<LKISnapshot>,
+}
+
+impl ObjectProvenance {
+    pub fn new(binding: ObjectIdentityBinding, lki: Option<LKISnapshot>) -> Self {
+        Self { binding, lki }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn card_id_and_object_id_are_distinct_types() {
+        let card_id = CardId(1);
+        let object_id = ObjectId(1);
+        // They have the same inner value but are different types.
+        // This test verifies they exist as separate newtypes.
+        assert_eq!(card_id.0, object_id.0);
+        // The following would not compile (different types):
+        // let _: CardId = object_id;
+    }
+
+    #[test]
+    fn card_id_serializes_as_number() {
+        let id = CardId(42);
+        let json = serde_json::to_value(id).unwrap();
+        assert_eq!(json, 42);
+    }
+
+    #[test]
+    fn object_id_serializes_as_number() {
+        let id = ObjectId(99);
+        let json = serde_json::to_value(id).unwrap();
+        assert_eq!(json, 99);
+    }
+
+    #[test]
+    fn identifiers_are_hashable() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(CardId(1));
+        set.insert(CardId(2));
+        set.insert(CardId(1));
+        assert_eq!(set.len(), 2);
+    }
+
+    // T-serde: a pre-migration `crew_activated_this_turn` entry serialized as a
+    // bare `ObjectId` number; it must still load, bound to the sentinel.
+    #[test]
+    fn object_incarnation_ref_legacy_bare_id_deserializes_to_sentinel() {
+        let r: ObjectIncarnationRef = serde_json::from_str("7").unwrap();
+        assert_eq!(r, ObjectIncarnationRef::of(ObjectId(7), LEGACY_INCARNATION));
+    }
+
+    // T-serde: a new write emits the full `{ object_id, incarnation }` pair and
+    // round-trips. Fails if the shape-disjoint compat arms are mis-declared such
+    // that the struct form is swallowed by the scalar arm.
+    #[test]
+    fn object_incarnation_ref_full_pair_roundtrips() {
+        let r = ObjectIncarnationRef::of(ObjectId(3), 5);
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(
+            json.contains("incarnation"),
+            "new writes emit the full pair"
+        );
+        let back: ObjectIncarnationRef = serde_json::from_str(&json).unwrap();
+        assert_eq!(r, back);
+    }
+
+    /// A battlefield-entry record for `object_id` stamped with `entered_incarnation`,
+    /// the shape `matches_zone_change_event_object_filter` binds a triggering object
+    /// from.
+    fn entry_record(object_id: ObjectId, entered_incarnation: Option<u64>) -> ZoneChangeRecord {
+        ZoneChangeRecord {
+            entered_incarnation,
+            ..ZoneChangeRecord::test_minimal(object_id, Some(Zone::Hand), Zone::Battlefield)
+        }
+    }
+
+    /// CR 400.7: the whole reason `TriggeringObjectRef` is not a bare `ObjectId`.
+    /// A record that proves an incarnation distinguishes the entrant from a LATER
+    /// object at the same storage id, so the "another" exclusion admits the
+    /// re-entered object. An id-keyed comparison cannot tell these two apart — it
+    /// answers `true` for both rows below.
+    #[test]
+    fn a_proven_incarnation_separates_the_entrant_from_a_reentry_at_the_same_id() {
+        let entrant = TriggeringObjectRef::from_zone_change(ObjectId(7), Some(3));
+
+        assert!(
+            entrant.describes_record(&entry_record(ObjectId(7), Some(3))),
+            "the entry record this reference was bound from IS the triggering object"
+        );
+        assert!(
+            !entrant.describes_record(&entry_record(ObjectId(7), Some(4))),
+            "CR 400.7: a later entry at the same id is a different object"
+        );
+        // A different storage id is never the triggering object, proven or not.
+        assert!(!entrant.describes_record(&entry_record(ObjectId(8), Some(3))));
+    }
+
+    /// An event that proves no incarnation must keep the pre-existing, purely
+    /// storage-keyed behavior rather than silently ceasing to exclude anything.
+    #[test]
+    fn an_unproven_incarnation_degrades_to_storage_identity() {
+        let entrant = TriggeringObjectRef::from_zone_change(ObjectId(7), None);
+        assert_eq!(entrant.incarnation, None);
+
+        assert!(
+            entrant.describes_record(&entry_record(ObjectId(7), Some(9))),
+            "with nothing proven, the id alone decides — the historical contract"
+        );
+        assert!(!entrant.describes_record(&entry_record(ObjectId(8), Some(9))));
+    }
+
+    // T-serde: a whole legacy `HashSet<ObjectId>` (array of bare numbers) loads as
+    // a `HashSet<ObjectIncarnationRef>` with every entry bound to the sentinel.
+    #[test]
+    fn legacy_crew_set_id_array_loads() {
+        use std::collections::HashSet;
+        let set: HashSet<ObjectIncarnationRef> = serde_json::from_str("[1,2]").unwrap();
+        assert!(set.contains(&ObjectIncarnationRef::of(ObjectId(1), LEGACY_INCARNATION)));
+        assert!(set.contains(&ObjectIncarnationRef::of(ObjectId(2), LEGACY_INCARNATION)));
+    }
+}

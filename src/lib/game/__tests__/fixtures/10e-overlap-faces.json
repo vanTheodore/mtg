@@ -1,0 +1,712 @@
+{
+ "cancel": {
+  "abilities": [
+   {
+    "condition": null,
+    "cost": null,
+    "description": "Counter target spell.",
+    "duration": null,
+    "effect": {
+     "target": {
+      "type": "StackSpell"
+     },
+     "type": "Counter"
+    },
+    "forward_result": false,
+    "kind": "Spell",
+    "optional": false,
+    "optional_targeting": false,
+    "sub_ability": null,
+    "target_prompt": null
+   }
+  ],
+  "bracket_signals": {
+   "efficient_tutor": false,
+   "extra_turn": false,
+   "game_changer": false,
+   "mass_land_denial": false
+  },
+  "card_type": {
+   "core_types": [
+    "Instant"
+   ],
+   "subtypes": [],
+   "supertypes": []
+  },
+  "color_identity": [
+   "Blue"
+  ],
+  "color_override": null,
+  "defense": null,
+  "face_index": null,
+  "flavor_name": null,
+  "keywords": [],
+  "layout": null,
+  "legalities": {},
+  "loyalty": null,
+  "mana_cost": {
+   "generic": 1,
+   "shards": [
+    "Blue",
+    "Blue"
+   ],
+   "type": "Cost"
+  },
+  "name": "Cancel",
+  "non_ability_text": null,
+  "oracle_text": "Counter target spell.",
+  "power": null,
+  "printings": [],
+  "replacements": [],
+  "rulings": [],
+  "scryfall_oracle_id": null,
+  "static_abilities": [],
+  "toughness": null,
+  "triggers": []
+ },
+ "giant growth": {
+  "abilities": [
+   {
+    "condition": null,
+    "cost": null,
+    "description": "Target creature gets +3/+3 until end of turn.",
+    "duration": "UntilEndOfTurn",
+    "effect": {
+     "power": {
+      "type": "Fixed",
+      "value": 3
+     },
+     "target": {
+      "controller": null,
+      "properties": [],
+      "type": "Typed",
+      "type_filters": [
+       "Creature"
+      ]
+     },
+     "toughness": {
+      "type": "Fixed",
+      "value": 3
+     },
+     "type": "Pump"
+    },
+    "forward_result": false,
+    "kind": "Spell",
+    "optional": false,
+    "optional_targeting": false,
+    "sub_ability": null,
+    "target_prompt": null
+   }
+  ],
+  "bracket_signals": {
+   "efficient_tutor": false,
+   "extra_turn": false,
+   "game_changer": false,
+   "mass_land_denial": false
+  },
+  "card_type": {
+   "core_types": [
+    "Instant"
+   ],
+   "subtypes": [],
+   "supertypes": []
+  },
+  "color_identity": [
+   "Green"
+  ],
+  "color_override": null,
+  "defense": null,
+  "face_index": null,
+  "flavor_name": null,
+  "keywords": [],
+  "layout": null,
+  "legalities": {},
+  "loyalty": null,
+  "mana_cost": {
+   "generic": 0,
+   "shards": [
+    "Green"
+   ],
+   "type": "Cost"
+  },
+  "name": "Giant Growth",
+  "non_ability_text": null,
+  "oracle_text": "Target creature gets +3/+3 until end of turn.",
+  "power": null,
+  "printings": [],
+  "replacements": [],
+  "rulings": [],
+  "scryfall_oracle_id": null,
+  "static_abilities": [],
+  "toughness": null,
+  "triggers": []
+ },
+ "grizzly bears": {
+  "abilities": [],
+  "bracket_signals": {
+   "efficient_tutor": false,
+   "extra_turn": false,
+   "game_changer": false,
+   "mass_land_denial": false
+  },
+  "card_type": {
+   "core_types": [
+    "Creature"
+   ],
+   "subtypes": [
+    "Bear"
+   ],
+   "supertypes": []
+  },
+  "color_identity": [
+   "Green"
+  ],
+  "color_override": null,
+  "defense": null,
+  "face_index": null,
+  "flavor_name": null,
+  "keywords": [],
+  "layout": null,
+  "legalities": {},
+  "loyalty": null,
+  "mana_cost": {
+   "generic": 1,
+   "shards": [
+    "Green"
+   ],
+   "type": "Cost"
+  },
+  "name": "Grizzly Bears",
+  "non_ability_text": null,
+  "oracle_text": null,
+  "power": {
+   "type": "Fixed",
+   "value": 2
+  },
+  "printings": [],
+  "replacements": [],
+  "rulings": [],
+  "scryfall_oracle_id": null,
+  "static_abilities": [],
+  "toughness": {
+   "type": "Fixed",
+   "value": 2
+  },
+  "triggers": []
+ },
+ "naturalize": {
+  "abilities": [
+   {
+    "condition": null,
+    "cost": null,
+    "description": "Destroy target artifact or enchantment.",
+    "duration": null,
+    "effect": {
+     "cant_regenerate": false,
+     "target": {
+      "filters": [
+       {
+        "controller": null,
+        "properties": [],
+        "type": "Typed",
+        "type_filters": [
+         "Artifact"
+        ]
+       },
+       {
+        "controller": null,
+        "properties": [],
+        "type": "Typed",
+        "type_filters": [
+         "Enchantment"
+        ]
+       }
+      ],
+      "type": "Or"
+     },
+     "type": "Destroy"
+    },
+    "forward_result": false,
+    "kind": "Spell",
+    "optional": false,
+    "optional_targeting": false,
+    "sub_ability": null,
+    "target_prompt": null
+   }
+  ],
+  "bracket_signals": {
+   "efficient_tutor": false,
+   "extra_turn": false,
+   "game_changer": false,
+   "mass_land_denial": false
+  },
+  "card_type": {
+   "core_types": [
+    "Instant"
+   ],
+   "subtypes": [],
+   "supertypes": []
+  },
+  "color_identity": [
+   "Green"
+  ],
+  "color_override": null,
+  "defense": null,
+  "face_index": null,
+  "flavor_name": null,
+  "keywords": [],
+  "layout": null,
+  "legalities": {},
+  "loyalty": null,
+  "mana_cost": {
+   "generic": 1,
+   "shards": [
+    "Green"
+   ],
+   "type": "Cost"
+  },
+  "name": "Naturalize",
+  "non_ability_text": null,
+  "oracle_text": "Destroy target artifact or enchantment.",
+  "power": null,
+  "printings": [],
+  "replacements": [],
+  "rulings": [],
+  "scryfall_oracle_id": null,
+  "static_abilities": [],
+  "toughness": null,
+  "triggers": []
+ },
+ "rampant growth": {
+  "abilities": [
+   {
+    "condition": null,
+    "cost": null,
+    "description": "Search your library for a basic land card and put that card onto the battlefield tapped. Then shuffle your library.",
+    "duration": null,
+    "effect": {
+     "count": {
+      "type": "Fixed",
+      "value": 1
+     },
+     "filter": {
+      "controller": null,
+      "properties": [
+       {
+        "type": "HasSupertype",
+        "value": "Basic"
+       }
+      ],
+      "type": "Typed",
+      "type_filters": [
+       "Land"
+      ]
+     },
+     "reveal": false,
+     "type": "SearchLibrary"
+    },
+    "forward_result": false,
+    "kind": "Spell",
+    "optional": false,
+    "optional_targeting": false,
+    "sub_ability": {
+     "condition": null,
+     "cost": null,
+     "description": null,
+     "duration": null,
+     "effect": {
+      "destination": "Battlefield",
+      "enter_tapped": true,
+      "enter_transformed": false,
+      "enters_attacking": false,
+      "origin": "Library",
+      "owner_library": false,
+      "target": {
+       "type": "Any"
+      },
+      "type": "ChangeZone"
+     },
+     "forward_result": false,
+     "kind": "Spell",
+     "optional": false,
+     "optional_targeting": false,
+     "sub_ability": {
+      "condition": null,
+      "cost": null,
+      "description": null,
+      "duration": null,
+      "effect": {
+       "target": {
+        "type": "Controller"
+       },
+       "type": "Shuffle"
+      },
+      "forward_result": false,
+      "kind": "Spell",
+      "optional": false,
+      "optional_targeting": false,
+      "sub_ability": null,
+      "sub_link": "SequentialSibling",
+      "target_prompt": null
+     },
+     "target_prompt": null
+    },
+    "target_prompt": null
+   }
+  ],
+  "bracket_signals": {
+   "efficient_tutor": false,
+   "extra_turn": false,
+   "game_changer": false,
+   "mass_land_denial": false
+  },
+  "card_type": {
+   "core_types": [
+    "Sorcery"
+   ],
+   "subtypes": [],
+   "supertypes": []
+  },
+  "color_identity": [
+   "Green"
+  ],
+  "color_override": null,
+  "defense": null,
+  "face_index": null,
+  "flavor_name": null,
+  "keywords": [],
+  "layout": null,
+  "legalities": {},
+  "loyalty": null,
+  "mana_cost": {
+   "generic": 1,
+   "shards": [
+    "Green"
+   ],
+   "type": "Cost"
+  },
+  "name": "Rampant Growth",
+  "non_ability_text": null,
+  "oracle_text": "Search your library for a basic land card and put that card onto the battlefield tapped. Then shuffle your library.",
+  "power": null,
+  "printings": [],
+  "replacements": [],
+  "rulings": [],
+  "scryfall_oracle_id": null,
+  "static_abilities": [],
+  "toughness": null,
+  "triggers": []
+ },
+ "serra angel": {
+  "abilities": [
+   {
+    "condition": null,
+    "cost": null,
+    "description": "Flying",
+    "duration": null,
+    "effect": {
+     "description": "Flying",
+     "name": "unknown",
+     "type": "Unimplemented"
+    },
+    "forward_result": false,
+    "kind": "Spell",
+    "optional": false,
+    "optional_targeting": false,
+    "sub_ability": null,
+    "target_prompt": null
+   },
+   {
+    "condition": null,
+    "cost": null,
+    "description": "Vigilance",
+    "duration": null,
+    "effect": {
+     "description": "Vigilance",
+     "name": "unknown",
+     "type": "Unimplemented"
+    },
+    "forward_result": false,
+    "kind": "Spell",
+    "optional": false,
+    "optional_targeting": false,
+    "sub_ability": null,
+    "target_prompt": null
+   }
+  ],
+  "bracket_signals": {
+   "efficient_tutor": false,
+   "extra_turn": false,
+   "game_changer": false,
+   "mass_land_denial": false
+  },
+  "card_type": {
+   "core_types": [
+    "Creature"
+   ],
+   "subtypes": [
+    "Angel"
+   ],
+   "supertypes": []
+  },
+  "color_identity": [
+   "White"
+  ],
+  "color_override": null,
+  "defense": null,
+  "face_index": null,
+  "flavor_name": null,
+  "keywords": [],
+  "layout": null,
+  "legalities": {},
+  "loyalty": null,
+  "mana_cost": {
+   "generic": 3,
+   "shards": [
+    "White",
+    "White"
+   ],
+   "type": "Cost"
+  },
+  "name": "Serra Angel",
+  "non_ability_text": null,
+  "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)\nVigilance (Attacking doesn't cause this creature to tap.)",
+  "power": {
+   "type": "Fixed",
+   "value": 4
+  },
+  "printings": [],
+  "replacements": [],
+  "rulings": [],
+  "scryfall_oracle_id": null,
+  "static_abilities": [],
+  "toughness": {
+   "type": "Fixed",
+   "value": 4
+  },
+  "triggers": []
+ },
+ "shock": {
+  "abilities": [
+   {
+    "condition": null,
+    "cost": null,
+    "declares_chosen_group": 2147483648,
+    "description": "~ deals 2 damage to target creature or player.",
+    "duration": null,
+    "effect": {
+     "amount": {
+      "type": "Fixed",
+      "value": 2
+     },
+     "target": {
+      "filters": [
+       {
+        "controller": null,
+        "properties": [],
+        "type": "Typed",
+        "type_filters": [
+         "Creature"
+        ]
+       },
+       {
+        "type": "Player"
+       }
+      ],
+      "type": "Or"
+     },
+     "type": "DealDamage"
+    },
+    "forward_result": false,
+    "kind": "Spell",
+    "optional": false,
+    "optional_targeting": false,
+    "sub_ability": null,
+    "target_prompt": null
+   }
+  ],
+  "bracket_signals": {
+   "efficient_tutor": false,
+   "extra_turn": false,
+   "game_changer": false,
+   "mass_land_denial": false
+  },
+  "card_type": {
+   "core_types": [
+    "Instant"
+   ],
+   "subtypes": [],
+   "supertypes": []
+  },
+  "color_identity": [
+   "Red"
+  ],
+  "color_override": null,
+  "defense": null,
+  "face_index": null,
+  "flavor_name": null,
+  "keywords": [],
+  "layout": null,
+  "legalities": {},
+  "loyalty": null,
+  "mana_cost": {
+   "generic": 0,
+   "shards": [
+    "Red"
+   ],
+   "type": "Cost"
+  },
+  "name": "Shock",
+  "non_ability_text": null,
+  "oracle_text": "Shock deals 2 damage to target creature or player.",
+  "power": null,
+  "printings": [],
+  "replacements": [],
+  "rulings": [],
+  "scryfall_oracle_id": null,
+  "static_abilities": [],
+  "toughness": null,
+  "triggers": []
+ },
+ "unsummon": {
+  "abilities": [
+   {
+    "condition": null,
+    "cost": null,
+    "description": "Return target creature to its owner's hand.",
+    "duration": null,
+    "effect": {
+     "destination": null,
+     "target": {
+      "controller": null,
+      "properties": [],
+      "type": "Typed",
+      "type_filters": [
+       "Creature"
+      ]
+     },
+     "type": "Bounce"
+    },
+    "forward_result": false,
+    "kind": "Spell",
+    "optional": false,
+    "optional_targeting": false,
+    "sub_ability": null,
+    "target_prompt": null
+   }
+  ],
+  "bracket_signals": {
+   "efficient_tutor": false,
+   "extra_turn": false,
+   "game_changer": false,
+   "mass_land_denial": false
+  },
+  "card_type": {
+   "core_types": [
+    "Instant"
+   ],
+   "subtypes": [],
+   "supertypes": []
+  },
+  "color_identity": [
+   "Blue"
+  ],
+  "color_override": null,
+  "defense": null,
+  "face_index": null,
+  "flavor_name": null,
+  "keywords": [],
+  "layout": null,
+  "legalities": {},
+  "loyalty": null,
+  "mana_cost": {
+   "generic": 0,
+   "shards": [
+    "Blue"
+   ],
+   "type": "Cost"
+  },
+  "name": "Unsummon",
+  "non_ability_text": null,
+  "oracle_text": "Return target creature to its owner's hand.",
+  "power": null,
+  "printings": [],
+  "replacements": [],
+  "rulings": [],
+  "scryfall_oracle_id": null,
+  "static_abilities": [],
+  "toughness": null,
+  "triggers": []
+ },
+ "wrath of god": {
+  "abilities": [
+   {
+    "condition": null,
+    "cost": null,
+    "description": "Destroy all creatures. They can't be regenerated.",
+    "duration": null,
+    "effect": {
+     "cant_regenerate": true,
+     "target": {
+      "controller": null,
+      "properties": [],
+      "type": "Typed",
+      "type_filters": [
+       "Creature"
+      ]
+     },
+     "type": "DestroyAll"
+    },
+    "forward_result": false,
+    "kind": "Spell",
+    "optional": false,
+    "optional_targeting": false,
+    "sub_ability": null,
+    "target_prompt": null
+   }
+  ],
+  "bracket_signals": {
+   "efficient_tutor": false,
+   "extra_turn": false,
+   "game_changer": false,
+   "mass_land_denial": false
+  },
+  "card_type": {
+   "core_types": [
+    "Sorcery"
+   ],
+   "subtypes": [],
+   "supertypes": []
+  },
+  "color_identity": [
+   "White"
+  ],
+  "color_override": null,
+  "defense": null,
+  "face_index": null,
+  "flavor_name": null,
+  "keywords": [],
+  "layout": null,
+  "legalities": {},
+  "loyalty": null,
+  "mana_cost": {
+   "generic": 2,
+   "shards": [
+    "White",
+    "White"
+   ],
+   "type": "Cost"
+  },
+  "name": "Wrath of God",
+  "non_ability_text": null,
+  "oracle_text": "Destroy all creatures. They can't be regenerated.",
+  "power": null,
+  "printings": [],
+  "replacements": [],
+  "rulings": [],
+  "scryfall_oracle_id": null,
+  "static_abilities": [],
+  "toughness": null,
+  "triggers": []
+ }
+}

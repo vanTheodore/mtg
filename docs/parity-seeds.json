@@ -1,0 +1,132 @@
+{
+  "generated_at": "2026-10-29T21:50:09.376Z",
+  "engine": "static/wasm/mtg_engine_wasm.wasm",
+  "packs": "static/data/catalog/packs/fixture.json,static/data/catalog/packs/10e.json",
+  "decks": "docs/packcheck-10e-decks.json",
+  "max_steps": 4000,
+  "fields_compared": [
+    "steps",
+    "action_kinds",
+    "winner",
+    "resolved per seat",
+    "rejections"
+  ],
+  "equal": true,
+  "seeds": [
+    {
+      "seed": 1,
+      "equal": true,
+      "steps": {
+        "native": 849,
+        "wasm": 849
+      },
+      "winner": {
+        "native": 1,
+        "wasm": 1
+      },
+      "resolved": {
+        "native": {
+          "opponent": 40,
+          "player": 40
+        },
+        "wasm": [
+          40,
+          40
+        ]
+      },
+      "differences": []
+    },
+    {
+      "seed": 3,
+      "equal": true,
+      "steps": {
+        "native": 818,
+        "wasm": 818
+      },
+      "winner": {
+        "native": 1,
+        "wasm": 1
+      },
+      "resolved": {
+        "native": {
+          "opponent": 40,
+          "player": 40
+        },
+        "wasm": [
+          40,
+          40
+        ]
+      },
+      "differences": []
+    },
+    {
+      "seed": 7,
+      "equal": true,
+      "steps": {
+        "native": 1055,
+        "wasm": 1055
+      },
+      "winner": {
+        "native": 1,
+        "wasm": 1
+      },
+      "resolved": {
+        "native": {
+          "opponent": 40,
+          "player": 40
+        },
+        "wasm": [
+          40,
+          40
+        ]
+      },
+      "differences": []
+    },
+    {
+      "seed": 11,
+      "equal": true,
+      "steps": {
+        "native": 1535,
+        "wasm": 1535
+      },
+      "winner": {
+        "native": 0,
+        "wasm": 0
+      },
+      "resolved": {
+        "native": {
+          "opponent": 40,
+          "player": 40
+        },
+        "wasm": [
+          40,
+          40
+        ]
+      },
+      "differences": []
+    },
+    {
+      "seed": 42,
+      "equal": true,
+      "steps": {
+        "native": 855,
+        "wasm": 855
+      },
+      "winner": {
+        "native": 0,
+        "wasm": 0
+      },
+      "resolved": {
+        "native": {
+          "opponent": 40,
+          "player": 40
+        },
+        "wasm": [
+          40,
+          40
+        ]
+      },
+      "differences": []
+    }
+  ]
+}
