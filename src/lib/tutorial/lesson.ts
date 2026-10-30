@@ -274,7 +274,7 @@ export const STEPS: LessonStep[] = [
     title: 'Genera maná',
     teach:
       'Girar una tierra es usarla: queda acostada y no vuelve a estar disponible hasta tu próximo turno. ' +
-      'Una Llanura genera un maná blanco, y el maná se queda en tu reserva hasta que lo gastas.',
+      'Una Llanura genera un maná blanco. Gástalo ahora: el maná que no usas se vacía al terminar cada paso o fase del turno.',
     goal: 'Haz clic en la Llanura resaltada de tu campo para girarla y generar maná.',
     action: 'Girar la tierra',
     words: ['maná', 'girar', 'reserva de maná'],
@@ -311,7 +311,7 @@ export const STEPS: LessonStep[] = [
     title: 'Fuerza y resistencia',
     teach:
       'El 2/1 de tu criatura son su fuerza y su resistencia. La fuerza (2) es el daño que hace al atacar. ' +
-      'La resistencia (1) es el daño que aguanta: con 1 de daño se debilita, con 2 o más muere.',
+      'La resistencia (1) indica cuánto daño necesita para morir: esta criatura 2/1 muere si recibe 1 punto de daño en un turno.',
     goal: 'Cuando lo tengas claro, termina tu turno.',
     action: 'Continuar',
     words: ['fuerza', 'resistencia']
