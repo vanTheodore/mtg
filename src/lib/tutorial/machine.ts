@@ -18,6 +18,7 @@ import {
   MAX_AUTO_PASSES,
   STEPS,
   battleStepIsDone,
+  discardAction,
   dummyAction,
   manaPoolOf,
   mulliganAction,
@@ -143,7 +144,12 @@ export function reduce(
     if (pay) return { state: next, action: pay };
   }
 
-  // 4. The lesson itself.
+  // 4. The cleanup step asks for a discard (seven cards or less). Phase
+  //    publishes the legal selections, so the lesson answers with one.
+  const discard = discardAction(snapshot);
+  if (discard) return { state: next, action: discard };
+
+  // 5. The lesson itself.
   for (let guard = 0; guard < STEPS.length + 2; guard += 1) {
     const step = STEPS[next.step];
     if (!step) return { state: { ...next, completed: true } };

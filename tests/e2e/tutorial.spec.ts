@@ -75,7 +75,10 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await panel(page).getByRole('button', { name: 'Continuar' }).click();
   await expect(stepTitle(page)).toHaveText('Juega tu primera tierra');
   // La mano inicial, ya resuelta el mulligan: es la que la repetición debe
-  // volver a dar.
+  // volver a dar. Al arrancar, el motor todavía puede estar repartiendo.
+  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({
+    timeout: 60_000
+  });
   const openingHand = await handNames(page);
   expect(openingHand.length).toBeGreaterThan(0);
 

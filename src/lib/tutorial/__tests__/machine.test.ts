@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { initialState, reduce, type MachineState } from '../machine.ts';
-import { STEPS } from '../lesson.ts';
+import { STEPS, dummyAction } from '../lesson.ts';
 import { card, makeSnapshot } from './lesson.test.ts';
 import type { EngineSnapshot, GameAction } from '../../engine/types.ts';
 
@@ -311,4 +311,28 @@ test('a cost the engine asks to pay is paid with an action Phase published', () 
   const result = reduce(initialState(), snapshot, CTX);
   expect(result.action).toBeDefined();
   expect(published(snapshot)).toContain(JSON.stringify(result.action));
+});
+
+test('the discard the cleanup step asks for is answered with an action Phase published', () => {
+  const select: GameAction = { type: 'SelectCards', data: { cards: [9] } };
+  const snapshot = makeSnapshot({
+    viewer: 1,
+    active: 1,
+    waiting: 'DiscardToHandSize',
+    actions: [select]
+  });
+  const result = reduce(initialState(), snapshot, CTX);
+  expect(result.action).toEqual(select);
+  expect(published(snapshot)).toContain(JSON.stringify(select));
+});
+
+test('the dummy answers the cleanup discard that Phase asks of it', () => {
+  const select: GameAction = { type: 'SelectCards', data: { cards: [9] } };
+  const snapshot = makeSnapshot({
+    viewer: 1,
+    active: 1,
+    waiting: 'DiscardToHandSize',
+    actions: [select]
+  });
+  expect(dummyAction(snapshot)).toEqual(select);
 });

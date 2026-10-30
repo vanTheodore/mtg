@@ -175,11 +175,23 @@ export function attackAction(
 }
 
 /**
+ * The cleanup step asks the player to discard down to seven cards. The engine
+ * publishes the legal selections; the lesson answers with one of them (the
+ * first the engine offers) instead of inventing a discard.
+ */
+export function discardAction(snapshot: EngineSnapshot): GameAction | undefined {
+  if (snapshot.state.waiting_for.type !== 'DiscardToHandSize') return undefined;
+  return snapshot.legal.actions.find((action) => action.type === 'SelectCards');
+}
+
+/**
  * What the guided dummy does: it only answers what Phase asks, with an action
  * Phase already offers. It never blocks, never attacks and never casts.
  */
 export function dummyAction(snapshot: EngineSnapshot): GameAction | undefined {
   const actions = snapshot.legal.actions;
+  const discard = discardAction(snapshot);
+  if (discard) return discard;
   if (snapshot.state.waiting_for.type === 'DeclareBlockers') {
     const none = actions.find((action) =>
       action.type === 'DeclareBlockers' && ((action.data?.assignments ?? []) as unknown[]).length === 0);

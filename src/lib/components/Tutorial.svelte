@@ -244,6 +244,9 @@
       </p>
 
       {#if player && rival}
+        {#if !handObjects.length}
+          <p class="waiting-board">El motor está repartiendo la mano inicial. En cuanto esté lista verás tus cartas aquí.</p>
+        {/if}
         <PlayerPanel player={rival} />
         <Battlefield objects={battlefieldObjects} {metas} owner={DUMMY} label="Campo de batalla · maniquí" />
         <Battlefield objects={battlefieldObjects} {metas} owner={LEARNER} label="Tu campo de batalla" focusId={focusId} onselect={(id) => tutorial.pick(id)} />
