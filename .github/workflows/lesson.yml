@@ -128,6 +128,6 @@ jobs:
           cp -f docs/screenshots/tutorial-*.png evidencia/ 2>/dev/null || true
           cp -f lesson-report.txt evidencia/ 2>/dev/null || true
           cp -r test-results evidencia/test-results 2>/dev/null || true
-          git add evidencia
+          git add -f evidencia
           git commit -m "evidencia: lección guiada de Mesa 0.6" --allow-empty
           git push --force origin ci/lesson-screenshots

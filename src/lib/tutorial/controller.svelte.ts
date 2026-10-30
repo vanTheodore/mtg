@@ -202,6 +202,16 @@ export class TutorialController {
     // The newest decision replaces the waiting one: both describe the same
     // (latest) snapshot, and only the newest one can still be legal.
     this.slot.propose(result.action ?? null);
+    if (import.meta.env.DEV) {
+      // The trail is what the browser test reads when the lesson does not
+      // move: it says what the engine offered and what the lesson decided.
+      console.debug(
+        `[lección] rev=${snapshot.revision} paso=${this.machine.step + 1}/${STEPS.length} ` +
+          `fase=${snapshot.state.phase} espera=${snapshot.state.waiting_for.type} ` +
+          `turno=${snapshot.state.turn_number} activo=${snapshot.state.active_player} ` +
+          `visor=${snapshot.viewer} → ${result.action?.type ?? 'espera'}`
+      );
+    }
     this.publish();
     this.flush();
   }

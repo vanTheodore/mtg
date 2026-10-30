@@ -10,6 +10,39 @@ import { fileURLToPath } from 'node:url';
  * always Phase's answer; this file only picks among the controls Mesa shows.
  */
 
+/**
+ * Every lesson decision is written to the console while the app runs in
+ * development mode. The test keeps that trail: when the lesson does not move,
+ * the trail says what the engine offered and what the lesson decided.
+ */
+const trail: string[] = [];
+
+test.beforeEach(async ({ page }) => {
+  trail.length = 0;
+  page.on('console', (message) => {
+    if (message.text().startsWith('[lección]')) trail.push(message.text());
+  });
+});
+
+test.afterEach(async ({ page }) => {
+  const state = await page
+    .evaluate(() => {
+      const app = document.querySelector('[data-tutorial-step]') as HTMLElement | null;
+      return {
+        paso: app?.dataset.tutorialStep,
+        fase: app?.dataset.phase,
+        turno: app?.dataset.turn,
+        espera: app?.dataset.waiting,
+        activo: app?.dataset.active,
+        visor: app?.dataset.viewer,
+        titulo: document.querySelector('aside[aria-label="Lección"] h2')?.textContent ?? ''
+      };
+    })
+    .catch(() => null);
+  console.log(`estado: ${JSON.stringify(state)}`);
+  console.log(`rastro de la lección:\n${trail.join('\n')}`);
+});
+
 const panel = (page: Page): Locator => page.locator('aside[aria-label="Lección"]');
 const stepTitle = (page: Page): Locator => panel(page).locator('h2');
 const focusedCard = (page: Page): Locator => page.locator('[data-tutorial-focus="true"]');

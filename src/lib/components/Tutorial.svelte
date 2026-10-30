@@ -71,7 +71,16 @@
   <meta name="description" content="Lección jugable de Magic: The Gathering para principiantes, con el motor Phase." />
 </svelte:head>
 
-<div class="app" data-tutorial-step={view.stepIndex} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={snapshot?.viewer ?? 0}>
+<div
+  class="app"
+  data-tutorial-step={view.stepIndex}
+  data-actions-applied={snapshot?.actions_applied ?? 0}
+  data-viewer={snapshot?.viewer ?? 0}
+  data-phase={snapshot?.state.phase ?? ''}
+  data-turn={snapshot?.state.turn_number ?? 0}
+  data-waiting={snapshot?.state.waiting_for?.type ?? ''}
+  data-active={snapshot?.state.active_player ?? ''}
+>
   <header class="topbar">
     <div class="brand">
       <span class="mark" aria-hidden="true">M</span>
