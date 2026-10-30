@@ -181,14 +181,21 @@ El contrato ABI/worker vigente se documenta en
 protocolo, revisión de acciones obsoletas, resultado de partida, resumen de
 maná, eventos filtrados, entropía de host y lista explícita de imports WASM.
 
-La evidencia vigente —interacción por carta, combate marcado y aceptado por el
-motor, presupuesto de trabajo por pulsación y el estado real del navegador— está
-en [`docs/VERIFICATION-0.5.md`](docs/VERIFICATION-0.5.md). Cómo ejecutar la
-verificación visual en una máquina con Edge o Chrome, y cómo generar el artefacto
-WASM que no se versiona, en
-[`docs/BROWSER-RUNBOOK.md`](docs/BROWSER-RUNBOOK.md). La evidencia de la ronda
-anterior —mazo pegado de 10E, estados por carta, descarga selectiva e integridad
-de packs— sigue en
+La evidencia vigente está en
+[`docs/VERIFICATION-0.5.1.md`](docs/VERIFICATION-0.5.1.md): **el navegador ya no
+es un bloqueo**. Chromium 153 se obtiene del registro de npm
+(`bun run chromium:fetch`), la suite de interfaz se ejecutó completa (14
+pasan; las 10 restantes fallan solo por el artefacto WASM) y las capturas reales
+de `docs/screenshots/` destaparon siete defectos de presentación, ya corregidos
+con prueba de regresión.
+
+Cómo ejecutar todo esto —Chromium sin CDN, Edge en Windows, `vendor/` de las
+crates sin crates.io y el límite de memoria medido al compilar el motor— está en
+[`docs/BROWSER-RUNBOOK.md`](docs/BROWSER-RUNBOOK.md). La ronda anterior
+—interacción por carta, combate marcado por el motor y presupuesto por
+pulsación— sigue en
+[`docs/VERIFICATION-0.5.md`](docs/VERIFICATION-0.5.md), y la de mazo pegado de
+10E, estados por carta, descarga selectiva e integridad de packs en
 [`docs/VERIFICATION-0.4.3.md`](docs/VERIFICATION-0.4.3.md); la anterior, con el
 índice canónico, la certificación por carta y la paridad paso a paso, en
 [`docs/VERIFICATION-0.4.2.md`](docs/VERIFICATION-0.4.2.md). Las rondas anteriores

@@ -1,6 +1,6 @@
 {
   "name": "mesa-mtg",
-  "version": "0.4.1",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.4",
@@ -28,7 +28,11 @@
     "parity:seeds": "bun scripts/parity-seeds.ts",
     "coverage:build": "bun scripts/build-coverage.ts",
     "engine:verify": "bun scripts/verify-engine.ts",
-    "deps:audit": "bun scripts/deps-audit.ts"
+    "deps:audit": "bun scripts/deps-audit.ts",
+    "screenshots": "bun scripts/screenshots.ts",
+    "chromium:fetch": "bun scripts/fetch-chromium.ts",
+    "crates:vendor": "bun scripts/vendor-crates.ts",
+    "preflight": "bun scripts/preflight.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",

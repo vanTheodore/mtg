@@ -80,11 +80,16 @@ Linux sin Edge ni Chrome instalados, y sin egress a `cdn.playwright.dev`, esto
 funciona y es lo que se usó para verificar Mesa:
 
 ```sh
-bun scripts/fetch-chromium.ts                     # ~/.cache/mesa-chromium
+bun run chromium:fetch                            # ~/.cache/mesa-chromium
 export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=~/.cache/mesa-chromium/chromium
 export LD_LIBRARY_PATH=~/.cache/mesa-chromium/al2023/lib:~/.cache/mesa-chromium
-bun x playwright test --reporter=line
+bun x playwright test --reporter=line             # 27 pruebas
+bun run screenshots                               # docs/screenshots/, se niega a guardar imágenes vacías
 ```
+
+**Estado real: funciona.** Chromium 153.0.8010.0, 25 pruebas ejecutadas en 20
+minutos, 14 pasan y 10 fallan solo por falta del `.wasm`
+(`docs/VERIFICATION-0.5.1.md`).
 
 Qué hace el script: descarga `@sparticuz/chromium` (153.0.8010.0, 199 MiB
 descomprimido) desde el registro de npm —el mismo HTTPS que usa `bun install`—
