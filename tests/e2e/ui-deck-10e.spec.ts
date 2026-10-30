@@ -269,11 +269,18 @@ test('estado de bloqueo: el tablero queda inerte, cubierto y sin fuga de mano', 
   expect(geometry.height).toBeGreaterThanOrEqual(geometry.viewportHeight);
   expect(geometry.opacity).toBeGreaterThan(0.9);
   expect(geometry.background).not.toBe('rgba(0, 0, 0, 0)');
+
+  // The seat handing the device over must not be able to read the incoming
+  // seat's cards: the overlay only dims the board, so a hand painted under it
+  // would still be legible (the cards were readable in a browser check).
+  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]')).toHaveCount(0);
   await expect(page.locator('.mini-back')).toHaveCount(0);
 
   await dialog.getByRole('button', { name: 'Estoy listo' }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
   await expect(board).not.toHaveAttribute('inert', '');
+  // The incoming seat does see its own hand once it takes the device.
+  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({ timeout: 10_000 });
 });
 
 test('la partida se juega hasta el final con acciones, combate y resultado', async ({ page }) => {

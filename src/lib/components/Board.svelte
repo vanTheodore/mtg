@@ -365,7 +365,12 @@
         </section>
       {/if}
 
-      <Hand objects={handObjects} {metas} title={`Tu mano · Jugador ${viewer + 1}`} />
+      <!-- While the device changes hands, the seat that is being handed the
+           device must not see the incoming seat's cards: the overlay only
+           dims the board, so anything painted under it is still readable. -->
+      {#if !needsHandoff}
+        <Hand objects={handObjects} {metas} title={`Tu mano · Jugador ${viewer + 1}`} />
+      {/if}
     </main>
     {#snippet failed(error, reset)}
       <div class="notice error" role="alert">

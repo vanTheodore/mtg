@@ -16,7 +16,7 @@ sobre las reglas, y ninguna prueba se rebajó, se omitió ni se borró.
 | A. «bloqueo real» se pasa de 600 s | el conductor de la prueba no sabía responder el descarte de limpieza ni jugar cartas | arnés | `tests/e2e/support/board-driver.ts` |
 | B. «estado de bloqueo»: no aparece el diálogo «Paso de asiento» | la prueba nunca respondió el mulligan del primer asiento, así que el tablero nunca cambió de manos | arnés | la prueba responde el mulligan antes de esperar el diálogo |
 | C. «la partida se juega hasta el final»: `waiting=DiscardToHandSize, viewer=1` | el conductor no sabía responder el descarte de limpieza: la partida se quedaba esperando una decisión que nadie tomaba | arnés | el conductor responde el descarte con el número que publica Phase |
-| Extra: el tablero enseña la mano del rival durante el paso de asiento | producto | producto | mientras el diálogo está abierto, Mesa no dibuja los dorsos de la otra mano |
+| Extra: durante el paso de asiento se puede leer la mano del asiento entrante | producto | producto | mientras el diálogo está abierto, Mesa no dibuja ninguna mano |
 
 Con estas correcciones la suite completa pasa: **26 aprobadas y 1 omitida**
 (la omitida es `images-live.spec.ts`, que necesita salida real a Scryfall).
@@ -101,7 +101,7 @@ quedaba esperando ese descarte para siempre.
 
 | Archivo | Cambio | Por qué |
 |---|---|---|
-| `src/lib/components/Board.svelte` | Mientras el diálogo de paso de asiento está abierto, Mesa no dibuja los dorsos de la mano del otro asiento | El diálogo promete que «la mano del jugador anterior queda oculta», pero los dorsos delatan cuántas cartas tiene. El tablero ya está cubierto e inerte: no hace falta enseñar nada del otro asiento |
+| `src/lib/components/Board.svelte` | Mientras el diálogo de paso de asiento está abierto, Mesa no dibuja la mano del asiento entrante ni los dorsos de la mano rival | **Fuga real**: el velo del diálogo solo atenúa el tablero (65 % de negro), así que la mano que se estaba entregando se leía entera en la pantalla de quien entregaba el dispositivo. Es justo lo contrario de lo que promete el diálogo |
 | `src/lib/game/interaction.ts` + `src/lib/game/session.svelte.ts` | El aviso de descarte pasa a ser una función pura (`discardPrompt`) y su respuesta un constructor puro (`discardSelection`) | El comportamiento no cambia: ahora el mismo dato se puede comprobar sin navegador (prueba nueva) |
 
 Ningún cambio toca las reglas de Phase, ni el `Cargo.lock`, ni el toolchain.
@@ -120,6 +120,32 @@ descarte sin necesitar motor: el aviso repite **carta por carta** lo que
 Phase publicó, el aviso sin jugador pertenece al asiento que se está
 mostrando, no hay descarte cuando el motor no lo pide y la respuesta es un
 `SelectCards` con exactamente las cartas elegidas.
+
+### La fuga que encontró la prueba del paso de asiento
+
+La prueba del diálogo «Paso de asiento» comprueba que el tablero queda
+inerte, cubierto y sin fuga de mano. Al ejecutarla en un navegador con el
+motor real apareció algo que no estaba en el plan: **la mano del asiento
+entrante estaba dibujada debajo del velo**. El velo es `rgb(0 0 0 / 65 %)`, o
+sea que atenúa, no tapa: en la captura se leen las siete cartas del Jugador 2
+(«Plains», «Savannah Lions»…) mientras el Jugador 1 todavía tiene el
+dispositivo en la mano.
+
+El diálogo dice «La mano del jugador anterior queda oculta» y lo que hacía
+Mesa era exactamente lo contrario: escondía la mano del jugador anterior (que
+ya no se está mostrando, porque el tablero ahora es del otro asiento) y
+dejaba ver la del siguiente.
+
+La corrección es que, mientras el diálogo está abierto, no se dibuja ninguna
+mano: ni la del asiento entrante (que es privada) ni los dorsos de la otra
+(el número de cartas en la mano es información pública, pero un tablero
+«cubierto» no debería enseñar nada). El resto del tablero —campo de batalla,
+registro, paneles— es información pública y puede seguir viéndose atenuado
+detrás del velo.
+
+La aserción que lo fija es discriminante: sin la corrección la prueba falla
+con «Expected: 0, Received: 7» (las siete cartas del asiento entrante), y
+con ella pasa.
 
 ## 4. Cómo se comprobó
 
@@ -144,6 +170,10 @@ Pendiente de la última ejecución de esta rama (se completa en el PR).
 
 ## 6. Riesgos y límites pendientes
 
+- **El velo del paso de asiento atenúa, no tapa.** Con la corrección, lo que
+  queda debajo es solo información pública, pero conviene saberlo: si mañana
+  se dibuja algo privado bajo el velo, se verá. La prueba lo vigila contando
+  las cartas de la mano.
 - **El tablero cambia de manos durante el combate.** Las aserciones que miran
   una carta concreta tienen que buscarla en todo el tablero, no en «tu campo
   de batalla»: el asiento que se está mostrando cambia en mitad del combate.
