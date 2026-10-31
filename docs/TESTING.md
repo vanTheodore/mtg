@@ -22,7 +22,7 @@
 | Presupuesto de trabajo por pulsación (`interaction-budget.test.ts`, `scripts/measure-interaction.ts`) | Un clic sobre 80 permanentes cuesta < 800 µs y el coste crece lineal con el tablero | Fotograma ni pintado; mide el trabajo del cliente |
 | Preflight (`scripts/preflight.ts`) | Motor, catálogo, cobertura, navegadores y CDN se comprueban antes del E2E; sale con 1 si falta algo | Que el E2E pase si dice ✔ |
 | Navegador disponible (`scripts/fetch-chromium.ts`, `scripts/preflight.ts`) | Que hay un Chromium que Playwright puede lanzar en este entorno, y de dónde salió | Que sea el mismo binario que use una persona en Windows |
-| Interacción visual (`ui-deck-10e.spec.ts`, `ui-game.spec.ts`) | Una partida se inicia, conserva manos, juega tierras, lanza criaturas, ataca, **bloquea con una criatura concreta y el motor lo acepta** y gana pulsando controles Svelte; sin importar `EngineClient` ni fabricar acciones | IA, red, formatos completos o todas las cartas. **Ejecutadas en 0.5.1 y fallidas por falta del artefacto WASM**, no por la interfaz: el navegador existe, el motor no (ver `docs/VERIFICATION-0.5.1.md`) |
+| Interacción visual (`ui-deck-10e.spec.ts`, `ui-game.spec.ts`) | Una partida se inicia, conserva manos, juega tierras, lanza criaturas, ataca, **bloquea con una criatura concreta y el motor lo acepta** y gana pulsando controles Svelte; sin importar `EngineClient` ni fabricar acciones | IA, red, formatos completos o todas las cartas. **Ejecutadas con Chromium y el WASM real en 0.5.2**: las tres pruebas que fallaron en la primera corrida (`41007263956`) ya pasan; ver `docs/VERIFICATION-0.5.2.md` |
 | Cara de la carta (`visibility.spec.ts`) | Alturas iguales en la fila, sin desborde ni coste recortado a 320 y 1440 px, y nombre accesible en el orden visible | Que se vea bien: eso lo dicen las capturas de `docs/screenshots/` |
 | Capturas (`scripts/screenshots.ts`) | Que la aplicación pinta texto en un navegador real, a cinco anchos, con mano de 30, 60 fichas y tema oscuro | Comportamiento: una captura no prueba una regla |
 | Imágenes (contrato/mock) | Fallback identificable, oracle/nombre/cara/ficha, 429, caché y hidden | Arte real descargado de Scryfall |
@@ -66,10 +66,14 @@ herramientas fijadas y a los hashes publicados.
 ## CI
 
 `.github/workflows/ci.yml` crea cuatro trabajos (estático, WASM, integración
-nativa y navegador). **Ninguno se ejecuta**: en las corridas `40984036044`,
-`40965975724` y `4096396118` los tres primeros terminan en 2 s con
-`runner_name` vacío y `steps: []`, es decir, sin que se asigne una máquina. Eso
-convierte a CI en una vía muerta también para obtener el `.wasm`: no hay runners
-en esta cuenta, y `gh workflow run` responde 403 porque la integración no puede
-despachar. Los trabajos están escritos para ejecutar los comandos de verdad, pero
-**no se afirma cobertura CI** ni se usa CI como fuente de artefactos.
+nativa y navegador). **Ahora sí se ejecutan**: con el toolchain fijado y el
+`Cargo.lock` versionado (PR #2) y las correcciones de las pruebas de interfaz
+(PR #4), la corrida `41135151173` terminó con los cuatro trabajos en verde,
+incluida la suite de Chromium con el WASM real (26 aprobadas y 1 omitida).
+
+Antes de eso, en las corridas `40984036044`, `40965975724` y `4096396118` los
+tres primeros trabajos terminaban en 2 s con `runner_name` vacío y `steps: []`,
+sin que se asignara una máquina: CI era una vía muerta también para obtener
+el `.wasm`. Para poder correr la suite de navegador fuera de Actions, el
+trabajo de WASM publica además el binario en la rama `ci/wasm-mirror` (48 MiB,
+solo se republica si cambia su `sha256`).

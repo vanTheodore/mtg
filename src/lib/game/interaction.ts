@@ -78,6 +78,27 @@ export function canSelectObject(s: EngineSnapshot | null, id: ObjectId): boolean
   return !!targetAction(s, objectTarget(id)) || manaActions(s, id).length > 0 || attackTargets(s, id).length > 0 || blockTargets(s, id).length > 0;
 }
 export function isHiddenObject(o?: GameObject) { return !!o && (o.face_down === true || o.display_visible_to_viewer === false); }
+
+/**
+ * The cleanup step (CR 514.1) asks the active player to discard down to the
+ * maximum hand size. Phase publishes how many cards to discard and which ones
+ * it accepts, so the interface only ever offers those: it never counts the
+ * hand itself and never decides what may be discarded.
+ */
+export type DiscardPrompt = { count: number; cards: ObjectId[]; player: PlayerId };
+export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || (waiting.type !== 'DiscardToHandSize' && waiting.type !== 'ConniveDiscard')) return null;
+  const data = waiting.data ?? {};
+  const cards = (data.cards ?? []) as ObjectId[];
+  const count = typeof data.count === 'number' ? data.count : 0;
+  return { count, cards, player: typeof data.player === 'number' ? data.player : snapshot!.viewer };
+}
+/** The answer to a discard prompt: exactly the cards the interface collected. */
+export function discardSelection(cards: ObjectId[]): GameAction {
+  return { type: 'SelectCards', data: { cards } };
+}
+
 export function targetLabel(target: unknown, objects: Record<string, GameObject>): string {
   const t = parseTarget(target);
   if (!t) return 'Sin objetivo';

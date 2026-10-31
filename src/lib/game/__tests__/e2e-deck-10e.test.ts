@@ -19,6 +19,10 @@ import type { CoverageDocument } from '../coverage.ts';
 
 const root = new URL('../../../../', import.meta.url).pathname;
 const spec = readFileSync(join(root, 'tests/e2e/ui-deck-10e.spec.ts'), 'utf8');
+/** The shared driver the spec plays the board with: it holds part of the selectors. */
+const driver = readFileSync(join(root, 'tests/e2e/support/board-driver.ts'), 'utf8');
+/** The files that drive the interface: what the browser is told to click. */
+const driven = [spec, driver];
 const index = JSON.parse(readFileSync(join(root, 'static/data/catalog/index.json'), 'utf8')) as CatalogIndex;
 
 /** `const DECK = [ '17 Plains', … ].join('\n')` */
@@ -94,8 +98,9 @@ describe('the 10E end-to-end deck', () => {
   test('every selector the spec uses exists in the components it drives', () => {
     // The spec cannot run here, so this is the closest guard against silent
     // drift: rename an attribute in a component and the E2E would fail in a
-    // browser an hour later. [what the spec asks for, what the component renders,
-    // which file must render it].
+    // browser an hour later. [what the test asks for, what the component renders,
+    // which file must render it]. The selectors live in the spec or in the
+    // shared driver, depending on the step; both drive the same interface.
     const contracts: [string, string, string][] = [
       ["getByTestId('deck-builder')", 'data-testid="deck-builder"', 'src/lib/components/DeckBuilder.svelte'],
       ["getByTestId('deck-total')", 'data-testid="deck-total"', 'src/lib/components/DeckBuilder.svelte'],
@@ -119,7 +124,8 @@ describe('the 10E end-to-end deck', () => {
       ['.handoff', 'class="handoff"', 'src/lib/components/Board.svelte']
     ];
     for (const [specNeedle, componentNeedle, file] of contracts) {
-      expect({ needle: specNeedle, inSpec: spec.includes(specNeedle) }).toEqual({ needle: specNeedle, inSpec: true });
+      expect({ needle: specNeedle, used: driven.some((source) => source.includes(specNeedle)) })
+        .toEqual({ needle: specNeedle, used: true });
       const source = readFileSync(join(root, file), 'utf8');
       expect({ needle: componentNeedle, file, rendered: source.includes(componentNeedle) })
         .toEqual({ needle: componentNeedle, file, rendered: true });
