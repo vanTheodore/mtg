@@ -1,0 +1,119 @@
+name: Mesa lesson evidence
+
+# The guided lesson is only real with the real engine: Phase compiled to WASM,
+# a real Chromium and a person clicking the cards. This workflow builds the
+# engine, plays the whole lesson in the browser and publishes the evidence
+# (screenshots and the test report) as read-only workflow artifacts so reviewers
+# can inspect what a beginner actually sees.
+#
+# It is a separate workflow on purpose. The main CI workflow is being fixed in
+# another pull request (the Cargo.lock diagnosis) and this one must not touch
+# it: a lesson that needs its own evidence does not get to rewrite the rules of
+# the pipeline it runs in.
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/tutorial/**'
+      - 'src/lib/components/Tutorial.svelte'
+      - 'src/lib/components/CardView.svelte'
+      - 'src/lib/components/BoardCard.svelte'
+      - 'src/lib/components/Hand.svelte'
+      - 'src/lib/components/Battlefield.svelte'
+      - 'src/lib/components/ManaCost.svelte'
+      - 'src/lib/components/Board.svelte'
+      - 'src/lib/game/cards.ts'
+      - 'src/lib/game/session.svelte.ts'
+      - 'src/routes/aprender/**'
+      - 'tests/e2e/tutorial.spec.ts'
+      - '.github/workflows/lesson.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUN_VERSION: 1.4.4
+  RUST_TOOLCHAIN: nightly-2025-03-02
+
+jobs:
+  wasm:
+    name: Build the Phase engine for the lesson
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target-wasm"
+          shared-key: mesa-wasm-lesson
+      # No lockfile gate here: this workflow only proves the lesson, and the
+      # lockfile diagnosis belongs to the pull request that owns it.
+      - name: Build the Phase engine
+        env:
+          CARGO_TARGET_DIR: target-wasm
+        run: bun run engine:build
+      - name: Record the engine identity
+        run: |
+          set -euo pipefail
+          WASM=static/wasm/mtg_engine_wasm.wasm
+          test -s "$WASM"
+          sha256sum "$WASM" | tee static/wasm/mtg_engine_wasm.wasm.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lesson-engine-wasm
+          path: static/wasm
+          retention-days: 7
+
+  lesson:
+    name: Guided lesson in Chromium with the real engine
+    needs: wasm
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: lesson-engine-wasm
+          path: static/wasm
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun --bun playwright install --with-deps chromium
+      - name: Play the whole lesson in Chromium
+        run: |
+          set -euo pipefail
+          PLAYWRIGHT_JSON_OUTPUT_FILE=results.json \
+            bun --bun playwright test tests/e2e/tutorial.spec.ts --reporter=list,json 2>&1 | tee lesson-report.txt
+          bun scripts/lesson-verdict.ts results.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lesson-screenshots
+          path: |
+            docs/screenshots/tutorial-*.png
+            lesson-report.txt
+            results.json
+            test-results
+          if-no-files-found: warn
+          retention-days: 7

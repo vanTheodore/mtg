@@ -18,7 +18,8 @@
     targetable = false,
     selectLabel,
     attackOptions = 0,
-    blockOptions = 0
+    blockOptions = 0,
+    highlight = false
   }: {
     object: GameObject;
     meta?: CardMeta;
@@ -33,6 +34,8 @@
     selectLabel?: string;
     attackOptions?: number;
     blockOptions?: number;
+    /** The tutorial points at this card: it gets a ring and a written cue. */
+    highlight?: boolean;
   } = $props();
   const hidden = $derived(isHidden(object));
   // Published Spanish rules text when one exists for this exact card name; the
@@ -115,11 +118,13 @@
     data-zone={object.zone}
     data-card-id={object.id}
     data-hidden={String(hidden)}
+    data-tutorial-focus={String(highlight)}
     role="button"
     tabindex="0"
     data-image-state={imageState}
     aria-label={accessibleName}
     aria-pressed={selected}
+    aria-current={highlight ? 'step' : undefined}
     onclick={() => onselect?.(object.id)}
     ondblclick={() => oninspect?.(object.id)}
     onkeydown={handleKey}
@@ -200,6 +205,19 @@
     cursor: pointer;
   }
   .card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+  /* The tutorial's pointer: a ring plus a written cue, never colour alone. */
+  .card[data-tutorial-focus="true"] {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 6px var(--accent);
+    animation: tutorial-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes tutorial-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 6px var(--accent); }
+    50% { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 9px color-mix(in srgb, var(--accent) 45%, transparent); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card[data-tutorial-focus="true"] { animation: none; }
+  }
   .card.targetable { border-color: var(--ok); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 25%, transparent); }
   .card.targetable::after { content: "◎"; position: absolute; right: .25rem; top: .25rem; z-index: 3; background: var(--surface); color: var(--ok); border-radius: 50%; padding: .1rem .25rem; font-weight: 800; }
   .card img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; border-radius: calc(var(--card-radius) - 2px); display: block; opacity: 0; }
