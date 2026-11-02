@@ -8,7 +8,7 @@ test('la mano con 7 cartas se abre como abanico sin perder foco ni cartas', asyn
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/stress?hand=7&tokens=0');
   const region = page.getByRole('region', { name: /Mano de prueba, 7 cartas/ });
-  const fan = region.locator('.hand-scroll');
+  const fan = region; // role=region is the scroll container itself
   const cards = fan.locator('[data-card-id]');
   await expect(fan).toHaveClass(/fan/);
   await expect(cards).toHaveCount(7);
@@ -28,14 +28,14 @@ test('el modo clásico y la mano de 30 mantienen desplazamiento sin abanico', as
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/stress?hand=30&tokens=0');
   const region = page.getByRole('region', { name: /Mano de prueba, 30 cartas/ });
-  const scroller = region.locator('.hand-scroll');
+  const scroller = region; // role=region is the scroll container itself
   await expect(scroller).not.toHaveClass(/fan/);
   await expect(scroller.locator('[data-card-id]')).toHaveCount(30);
 
   await page.goto('/stress?hand=7&tokens=0');
   await page.getByRole('button', { name: 'Ajustes' }).click();
   await page.getByRole('combobox', { name: 'Estilo del tablero' }).selectOption('classic');
-  const plain = page.getByRole('region', { name: /Mano de prueba, 7 cartas/ }).locator('.hand-scroll');
+  const plain = page.getByRole('region', { name: /Mano de prueba, 7 cartas/ });
   await expect(plain).not.toHaveClass(/fan/);
   await expect(plain.locator('[data-card-id]')).toHaveCount(7);
 });
