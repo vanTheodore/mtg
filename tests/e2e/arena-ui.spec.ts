@@ -64,3 +64,23 @@ test('las cinco pinturas de Phase están en el build y son WebP reales', async (
     expect((await response.body()).length, painting).toBeGreaterThan(100_000);
   }
 });
+
+
+test('Phase Arena enfrenta las filas de criaturas y conserva los asientos', async ({ page }) => {
+  await page.goto('/aprender');
+  const rival = page.locator('.battlefield[data-side="opponent"]');
+  const own = page.locator('.battlefield[data-side="player"]');
+  await expect(rival).toBeVisible({ timeout: 180_000 });
+  await expect(own).toBeVisible();
+  // Only presentation order changes. The engine's object IDs and zone membership
+  // remain attached to their original seat; CSS order expresses facing geometry.
+  const original = await own.locator('[data-zone="creatures"]').first().evaluate((e) => getComputedStyle(e).order);
+  const mirrored = await rival.locator('[data-zone="creatures"]').first().evaluate((e) => getComputedStyle(e).order);
+  expect(original).toBe('1');
+  expect(mirrored).toBe('3');
+  await page.getByRole('button', { name: 'Ajustes' }).click();
+  await page.getByRole('combobox', { name: 'Estilo del tablero' }).selectOption('classic');
+  await expect(own).toHaveAttribute('data-side', 'player');
+  await expect(rival).toHaveAttribute('data-side', 'opponent');
+  await expect.poll(() => own.locator('[data-zone="creatures"]').first().evaluate((e) => getComputedStyle(e).order)).toBe('0');
+});

@@ -360,7 +360,7 @@
           {#each rivalHand as obj (obj.id)}<div class="mini-back" aria-hidden="true"></div>{/each}
         </div>
       {/if}
-      <Battlefield objects={battlefieldObjects} {metas} owner={opponent} label={`Campo de batalla · Jugador ${opponent + 1}`} />
+      <Battlefield objects={battlefieldObjects} {metas} owner={opponent} side="opponent" label={`Campo de batalla · Jugador ${opponent + 1}`} />
       <div class="middle">
         {#if session.boardStyle === 'arena'}
           <TurnTrack phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
@@ -372,7 +372,7 @@
         <DecisionPanel />
       </div>
 
-      <Battlefield objects={battlefieldObjects} {metas} owner={viewer} label={`Tu campo de batalla · Jugador ${viewer + 1}`} />
+      <Battlefield objects={battlefieldObjects} {metas} owner={viewer} side="player" label={`Tu campo de batalla · Jugador ${viewer + 1}`} />
 
       <PlayerPanel player={player!} />
 

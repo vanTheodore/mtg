@@ -102,3 +102,40 @@
   .app[data-board-style="arena"] .layout .battlefield,
   .app[data-board-style="arena"] .layout .hand-zone { background: var(--surface); }
 }
+
+/*
+ * Phase GameBoard mirrors the opponent's row stack: their creatures sit
+ * nearest the center line, and ours also face center. The classic layout
+ * deliberately keeps its original DOM/visual ordering.
+ */
+.app[data-board-style="arena"] .battlefield[data-side] {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: .25rem;
+}
+.app[data-board-style="arena"] .battlefield[data-side] > h2 { order: 0; }
+.app[data-board-style="arena"] .battlefield[data-side="opponent"] .row[data-zone="lands"] { order: 1; }
+.app[data-board-style="arena"] .battlefield[data-side="opponent"] .row[data-zone="support"],
+.app[data-board-style="arena"] .battlefield[data-side="opponent"] .token-group[data-zone="support"] { order: 2; }
+.app[data-board-style="arena"] .battlefield[data-side="opponent"] .row[data-zone="creatures"],
+.app[data-board-style="arena"] .battlefield[data-side="opponent"] .token-group[data-zone="creatures"] { order: 3; }
+
+.app[data-board-style="arena"] .battlefield[data-side="player"] .row[data-zone="creatures"],
+.app[data-board-style="arena"] .battlefield[data-side="player"] .token-group[data-zone="creatures"] { order: 1; }
+.app[data-board-style="arena"] .battlefield[data-side="player"] .row[data-zone="lands"] { order: 2; }
+.app[data-board-style="arena"] .battlefield[data-side="player"] .row[data-zone="support"],
+.app[data-board-style="arena"] .battlefield[data-side="player"] .token-group[data-zone="support"] { order: 3; }
+
+.app[data-board-style="arena"] .battlefield[data-side] > .row,
+.app[data-board-style="arena"] .battlefield[data-side] > .token-group {
+  min-width: 0;
+}
+.app[data-board-style="arena"] .battlefield[data-side] .row[data-zone="creatures"] {
+  min-height: calc(var(--card-w) * .36);
+}
+@media (max-width: 650px) {
+  .app[data-board-style="arena"] .battlefield[data-side] .row[data-zone="creatures"] {
+    min-height: 0;
+  }
+}
