@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import ArenaSurface from './ArenaSurface.svelte';
   import Hand from './Hand.svelte';
   import Battlefield from './Battlefield.svelte';
   import DecisionPanel from './DecisionPanel.svelte';
@@ -231,6 +232,7 @@
   }
 
   const cardWidth = $derived(Math.round(148 * session.cardScale));
+  const arenaColor = $derived(mode === 'sparks' ? 'red' : mode === 'practice' ? 'white' : 'blue');
 </script>
 
 <svelte:head><title>Mesa · Cliente MTG</title></svelte:head>
@@ -240,7 +242,10 @@
      battlefield into a 70-card vertical marathon (docs/screenshots/cartas-320.png
      in 0.5.1). The cap only bites on narrow screens; the density control still
      wins everywhere else. -->
-<div class="app" style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2))" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
+<div class="app" data-board-style={session.boardStyle} style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2))" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
+  {#if session.boardStyle === 'arena'}
+    <ArenaSurface color={arenaColor} />
+  {/if}
   <header class="topbar">
     <div class="brand">
       <span class="mark" aria-hidden="true">M</span>

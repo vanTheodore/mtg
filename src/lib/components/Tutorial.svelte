@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import ArenaSurface from './ArenaSurface.svelte';
   import Hand from './Hand.svelte';
   import Battlefield from './Battlefield.svelte';
   import PlayerPanel from './PlayerPanel.svelte';
@@ -84,6 +85,7 @@
 
 <div
   class="app"
+  data-board-style={session.boardStyle}
   data-tutorial-step={view.stepIndex}
   data-actions-applied={snapshot?.actions_applied ?? 0}
   data-viewer={snapshot?.viewer ?? 0}
@@ -92,6 +94,9 @@
   data-waiting={snapshot?.state.waiting_for?.type ?? ''}
   data-active={snapshot?.state.active_player ?? ''}
 >
+  {#if session.boardStyle === 'arena'}
+    <ArenaSurface color="white" />
+  {/if}
   <header class="topbar">
     <div class="brand">
       <span class="mark" aria-hidden="true">M</span>
