@@ -11,7 +11,7 @@
   const index = $derived(phases.findIndex((item) => item.values.some((value) => value === phase)));
 </script>
 
-<div class="turn-track" data-current-phase={phase} aria-label="Fases del turno">
+<section class="turn-track" data-current-phase={phase} aria-label="Fases del turno">
   <p class="turn-caption">Turno {turn} · Jugador {activePlayer + 1}</p>
   <ol class="segments">
     {#each phases as item, i (item.label)}
@@ -20,7 +20,7 @@
       </li>
     {/each}
   </ol>
-</div>
+</section>
 
 <style>
   .turn-track {
