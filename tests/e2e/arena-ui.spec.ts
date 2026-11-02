@@ -6,6 +6,10 @@ test('Arena es nativo de Svelte, reversible y persistente', async ({ page }) => 
   await expect(app).toHaveAttribute('data-board-style', 'arena');
   await expect(page.locator('.arena-surface')).toHaveCount(1);
   await expect(page.locator('.arena-surface')).toHaveAttribute('data-mana', 'white');
+  // The original Phase painting must be bundled, not a broken remote image.
+  const painting = page.locator('.arena-surface .arena-art');
+  await expect(painting).toHaveAttribute('src', '/phase/arenas/angelic-sky-topdown.webp');
+  await expect.poll(() => painting.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 
   await page.getByRole('button', { name: 'Ajustes' }).click();
   const style = page.getByRole('combobox', { name: 'Estilo del tablero' });
@@ -43,4 +47,20 @@ test('la banda de fases refleja el snapshot de Phase durante una partida', async
   await expect(phases.locator('li')).toHaveCount(5);
   await expect(phases.locator('li.current')).toHaveCount(1);
   await expect(phases).toContainText('Turno');
+});
+
+
+test('las cinco pinturas de Phase están en el build y son WebP reales', async ({ request }) => {
+  for (const painting of [
+    'angelic-sky-topdown.webp',
+    'ocean-temple-topdown.webp',
+    'moon-coven-topdown.webp',
+    'molten-topdown.webp',
+    'elderwood-topdown.webp'
+  ]) {
+    const response = await request.get('/phase/arenas/' + painting);
+    expect(response.ok(), painting).toBe(true);
+    expect(response.headers()['content-type'], painting).toContain('image/webp');
+    expect((await response.body()).length, painting).toBeGreaterThan(100_000);
+  }
 });

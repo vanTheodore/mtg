@@ -3,7 +3,7 @@
 Referencias estudiadas: https://github.com/phase-rs/phase (licencias MIT / Apache-2.0).
 Componentes upstream: ArenaBackground.tsx, GameBoard.tsx, PlayerArea.tsx, OpponentSeatPane.tsx.
 
-- ArenaSurface.svelte: cinco ambientes por color de maná, superficies y anillos CSS sin texturas ni shaders.
+- ArenaSurface.svelte: cinco pinturas originales de Phase para cada color, con fallback CSS y sin shaders.
 - Board.svelte y Tutorial.svelte: la misma escena detrás de los controles ya existentes.
 - Battlefield.svelte, PlayerPanel.svelte, Hand.svelte: se mantienen como componentes Svelte reales conectados a Phase; arena.css cambia la presentación sin duplicar reglas.
 - Ajustes: el usuario puede regresar a Clásico y se conserva la preferencia en localStorage.
