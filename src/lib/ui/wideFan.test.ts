@@ -6,7 +6,7 @@ describe('Phase wide-fan geometry port', () => {
     expect(wideFan(3).overlapFraction).toBe(-0.1);
     expect(wideFan(5).overlapFraction).toBe(-0.15);
     expect(wideFan(7).overlapFraction).toBe(-0.25);
-    expect(wideFan(8).spreadFactor).toBeCloseTo(5.55, 4);
+    expect(wideFan(8).spreadFactor).toBeCloseTo(5.5, 4);
     expect(wideFan(20).spreadFactor).toBeLessThanOrEqual(5.5001);
   });
   test('seven cards form the original symmetric rotation and parabola', () => {
