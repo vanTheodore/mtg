@@ -74,13 +74,27 @@ test('Phase Arena enfrenta las filas de criaturas y conserva los asientos', asyn
   await expect(own).toBeVisible();
   // Only presentation order changes. The engine's object IDs and zone membership
   // remain attached to their original seat; CSS order expresses facing geometry.
-  const original = await own.locator('[data-zone="creatures"]').first().evaluate((e) => getComputedStyle(e).order);
-  const mirrored = await rival.locator('[data-zone="creatures"]').first().evaluate((e) => getComputedStyle(e).order);
-  expect(original).toBe('1');
-  expect(mirrored).toBe('3');
+  // The lesson intentionally starts before any creatures exist. Insert one
+  // *presentation-only* row per seat to test the cascade; never modify a
+  // Phase snapshot or fabricate a legal game action.
+  const orders = await page.evaluate(() => {
+    const selectors = ['.battlefield[data-side="player"]', '.battlefield[data-side="opponent"]'];
+    const rows = selectors.map((selector) => {
+      const seat = document.querySelector(selector);
+      if (!seat) throw new Error('Missing seat ' + selector);
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.dataset.zone = 'creatures';
+      seat.append(row);
+      return row;
+    });
+    return rows.map((row) => getComputedStyle(row).order);
+  });
+  expect(orders).toEqual(['1', '3']);
   await page.getByRole('button', { name: 'Ajustes' }).click();
   await page.getByRole('combobox', { name: 'Estilo del tablero' }).selectOption('classic');
   await expect(own).toHaveAttribute('data-side', 'player');
   await expect(rival).toHaveAttribute('data-side', 'opponent');
-  await expect.poll(() => own.locator('[data-zone="creatures"]').first().evaluate((e) => getComputedStyle(e).order)).toBe('0');
+  const classicOrder = await own.locator('.row[data-zone="creatures"]').first().evaluate((e) => getComputedStyle(e).order);
+  expect(classicOrder).toBe('0');
 });
