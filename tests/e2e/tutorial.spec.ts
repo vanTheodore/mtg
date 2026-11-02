@@ -157,7 +157,10 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({
     timeout: 60_000
   });
-  expect(await handNames(page)).toEqual(openingHand);
+  // Restart swaps the engine snapshot asynchronously. A card can be visible
+  // for one frame before the next snapshot replaces the hand. Assert the
+  // eventual, complete deterministic hand rather than sampling that transition.
+  await expect.poll(() => handNames(page), { timeout: 60_000 }).toEqual(openingHand);
 });
 
 test('la lección se puede usar con teclado y sinaxe grave', async ({ page }) => {

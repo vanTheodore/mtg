@@ -1,5 +1,14 @@
 # Mesa · cliente MTG independiente con motor Phase
 
+> **Estado integrado (2 de noviembre de 2026):** Mesa 0.6 «Mi primera partida»,
+> las correcciones del motor WASM y las pruebas de Chromium están fusionadas en
+> `main`. Ver [Mesa CI](https://github.com/vanTheodore/mtg/actions/workflows/ci.yml)
+> para el estado actual; los informes antiguos de 0.5 describen etapas previas.
+> El motor Phase está fijado a un commit para permitir builds reproducibles;
+> una actualización mayor de upstream requiere validar de nuevo su ABI, paridad
+> y partidas reales antes de fusionarla.
+
+
 Cliente web ligero y accesible para Magic: The Gathering construido con
 **SvelteKit 3 / Svelte 5 runes / TypeScript 6 / Vite 8 / Bun 1.4.4** y el motor
 de reglas **Phase (Rust → WASM)**. No es un clon visual de Phase ni de MTG Arena,
