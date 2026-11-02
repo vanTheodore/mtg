@@ -6,27 +6,11 @@ name: Mesa lesson evidence
 # (screenshots and the test report) as read-only workflow artifacts so reviewers
 # can inspect what a beginner actually sees.
 #
-# It is a separate workflow on purpose. The main CI workflow is being fixed in
-# another pull request (the Cargo.lock diagnosis) and this one must not touch
-# it: a lesson that needs its own evidence does not get to rewrite the rules of
-# the pipeline it runs in.
+# Trigger manually only when fresh screenshots or an isolated tutorial report
+# are needed. The main CI already compiles Phase and runs this entire E2E suite
+# on every PR, so triggering both workflows duplicates the heavy Rust build.
 
 on:
-  pull_request:
-    paths:
-      - 'src/lib/tutorial/**'
-      - 'src/lib/components/Tutorial.svelte'
-      - 'src/lib/components/CardView.svelte'
-      - 'src/lib/components/BoardCard.svelte'
-      - 'src/lib/components/Hand.svelte'
-      - 'src/lib/components/Battlefield.svelte'
-      - 'src/lib/components/ManaCost.svelte'
-      - 'src/lib/components/Board.svelte'
-      - 'src/lib/game/cards.ts'
-      - 'src/lib/game/session.svelte.ts'
-      - 'src/routes/aprender/**'
-      - 'tests/e2e/tutorial.spec.ts'
-      - '.github/workflows/lesson.yml'
   workflow_dispatch:
 
 permissions:
@@ -59,11 +43,12 @@ jobs:
         with:
           workspaces: ". -> target-wasm"
           shared-key: mesa-wasm-lesson
-      # No lockfile gate here: this workflow only proves the lesson, and the
-      # lockfile diagnosis belongs to the pull request that owns it.
+      - name: Validate Cargo.lock with pinned Rust
+        run: cargo metadata --locked --format-version 1 > /dev/null
       - name: Build the Phase engine
         env:
           CARGO_TARGET_DIR: target-wasm
+          CARGO_LOCKED: "1"
         run: bun run engine:build
       - name: Record the engine identity
         run: |
