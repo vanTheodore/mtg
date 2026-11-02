@@ -1,0 +1,123 @@
+//! Regression: "remove all of them and transform it" (level-up / incubate class).
+//!
+//! CR 122.1 + CR 608.2k + CR 603.4 + CR 701.27: the trigger
+//! "When ~ has N or more <type> counters on it, [if ...,] remove all of them
+//! and transform it" must parse the anaphoric "remove all of them" / "remove
+//! them" clause into `Effect::RemoveCounter` (remove-all sentinel) chained to
+//! `Effect::Transform`. Previously the imperative dispatch gate required the
+//! literal word "counter" in the clause, so the bare-pronoun anaphor dropped to
+//! `Effect::Unimplemented`. Covers Ludevic's Test Subject, Smoldering Egg, and
+//! the level-up/incubate class generally.
+
+use engine::parser::oracle::{parse_oracle_text, ParsedAbilities};
+use engine::types::ability::{AbilityDefinition, Effect, QuantityExpr};
+
+fn parse(name: &str, text: &str) -> ParsedAbilities {
+    parse_oracle_text(
+        text,
+        name,
+        &[],
+        &["Creature".to_string()],
+        &["Homunculus".to_string()],
+    )
+}
+
+/// Walk an ability + its sub_ability chain collecting every effect.
+fn collect_effects(def: &AbilityDefinition, out: &mut Vec<Effect>) {
+    out.push((*def.effect).clone());
+    if let Some(sub) = &def.sub_ability {
+        collect_effects(sub, out);
+    }
+}
+
+/// Returns the flattened list of every effect across all triggers' execute
+/// chains, so callers need not assume which trigger carries the remove/transform
+/// (Smoldering Egg has a put-counter primary plus a "Then if ..." continuation).
+fn trigger_effects(parsed: &ParsedAbilities) -> Vec<Effect> {
+    let mut effects = Vec::new();
+    for trigger in &parsed.triggers {
+        if let Some(execute) = &trigger.execute {
+            collect_effects(execute, &mut effects);
+        }
+    }
+    effects
+}
+
+/// Asserts the in-scope clause for this fix: the anaphoric counter removal
+/// (CR 122.1 + CR 608.2k, remove-all sentinel `count = -1`) chained to a
+/// transform (CR 701.27), and that neither of those two effects degraded to
+/// `Unimplemented`. Unrelated clauses in the same card (e.g. a dynamic
+/// put-counter quantity) are intentionally not asserted here.
+///
+/// `remove_clause` is the card's OWN anaphoric removal clause, lowercased — the two
+/// phrasings in this file ("remove all of them" / "remove them") are different
+/// clauses, so the caller supplies the one its card prints rather than this helper
+/// keying on a bare verb that both happen to start with.
+fn assert_remove_all_then_transform(effects: &[Effect], remove_clause: &str) {
+    assert!(
+        effects.iter().any(|e| matches!(
+            e,
+            Effect::RemoveCounter {
+                counter_type: None,
+                count: QuantityExpr::Fixed { value: -1 },
+                ..
+            }
+        )),
+        "expected RemoveCounter remove-all sentinel; got {effects:#?}"
+    );
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::Transform { .. })),
+        "expected Transform; got {effects:#?}"
+    );
+    // The anaphoric remove clause must no longer surface as a gap. Paired positive
+    // reach-guard: the `RemoveCounter` remove-all sentinel and the `Transform`
+    // assertions immediately above prove the clause produced its real typed effects.
+    // Keyed on the CLAUSE a gap would record, not on the gap's name — a name compare
+    // against the clause's old first word can never be true once gaps are named by
+    // verdict, and the guard would stop guarding silently. The key is the verb WITH
+    // its anaphoric object, so it cannot be satisfied by any other clause on the card
+    // that merely happens to contain "remove".
+    assert!(
+        !effects.iter().any(|e| e
+            .unimplemented_description()
+            .is_some_and(|d| d.to_lowercase().contains(remove_clause))),
+        "the `{remove_clause}` clause should not be a gap node; got {effects:#?}"
+    );
+}
+
+#[test]
+fn ludevic_test_subject_remove_all_and_transform() {
+    // Ludevic's Test Subject parses cleanly end to end — no Unimplemented at all.
+    // The "isn't a copy of another creature" guard is not modelled (it fails the trigger
+    // closed per CR 603.4); it is irrelevant to remove-all-and-transform, so it is omitted.
+    let parsed = parse(
+        "Ludevic's Test Subject",
+        "When ~ has six or more level counters on it, remove all of them and transform it.",
+    );
+    let effects = trigger_effects(&parsed);
+    assert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::Unimplemented { .. })),
+        "Ludevic: clause should not contain Unimplemented; got {effects:#?}"
+    );
+    assert_remove_all_then_transform(&effects, "remove all of them");
+}
+
+#[test]
+fn smoldering_egg_remove_them_and_transform() {
+    // Smoldering Egg's "Then if it has seven or more ember counters on it,
+    // remove them and transform it" continuation parses; the unrelated dynamic
+    // put-counter ("equal to the amount of mana spent") is a separate gap and
+    // is not asserted here.
+    let parsed = parse(
+        "Smoldering Egg",
+        "Whenever you cast an instant or sorcery spell, put a number of ember \
+counters on ~ equal to the amount of mana spent to cast that spell. Then if it \
+has seven or more ember counters on it, remove them and transform it.",
+    );
+    let effects = trigger_effects(&parsed);
+    assert_remove_all_then_transform(&effects, "remove them");
+}
