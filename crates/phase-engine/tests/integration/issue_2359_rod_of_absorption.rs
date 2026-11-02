@@ -1,0 +1,605 @@
+//! Regression: GitHub issue #2359 — Rod of Absorption.
+//!
+//! Oracle:
+//!   "Whenever a player casts an instant or sorcery spell, exile it instead of
+//!    putting it into a graveyard as it resolves.
+//!    {X}, {T}, Sacrifice this artifact: You may cast any number of spells from
+//!    among cards exiled with this artifact with total mana value X or less
+//!    without paying their mana costs."
+//!
+//! Three reported defects:
+//!   1. The exile-on-resolve trigger only tracked the controller's spells —
+//!      opponents' instants/sorceries were not exiled with Rod.
+//!   2. Only one spell was recorded, not all accumulated exiled spells.
+//!   3. Activating {X},{T},Sacrifice ignored the exiled cards (no free-cast
+//!      offer) yet still sacrificed Rod.
+//!
+//! CR 614.1a / CR 608.2n: "exile it instead of putting it into a graveyard as it
+//! resolves" is a self-replacement rider applied to the resolving spell.
+//! CR 607.2b / CR 406.6: cards exiled this way are "exiled with" Rod (a linked-
+//! exile pool that ACCUMULATES across resolutions).
+//! CR 601.2b / CR 118.9: the activated ability lets the controller cast those
+//! exiled cards without paying their mana costs.
+
+use engine::game::scenario::{GameScenario, P0, P1};
+use engine::types::ability::{CastingPermission, EffectKind};
+use engine::types::actions::GameAction;
+use engine::types::events::GameEvent;
+use engine::types::game_state::{CastPaymentMode, WaitingFor};
+use engine::types::mana::{ManaCost, ManaType, ManaUnit};
+use engine::types::phase::Phase;
+use engine::types::zones::Zone;
+
+const ROD_TEXT: &str = "Whenever a player casts an instant or sorcery spell, exile it instead of \
+     putting it into a graveyard as it resolves.\n{X}, {T}, Sacrifice this artifact: You may cast \
+     any number of spells from among cards exiled with this artifact with total mana value X or \
+     less without paying their mana costs.";
+
+const RELIC_OF_PROGENITUS: &str = "{T}: Target player exiles a card from their graveyard.\n{1}, \
+     Exile this artifact: Exile all graveyards. Draw a card.";
+
+/// Cast a no-target spell from `caster`'s hand and resolve it to completion,
+/// returning once the stack is empty again. Passes priority until `caster`
+/// holds it so an opponent's instant can be cast during the active player's turn.
+fn cast_and_resolve(
+    runner: &mut engine::game::scenario::GameRunner,
+    caster: P,
+    spell: engine::types::identifiers::ObjectId,
+) {
+    // CR 117.1: give `caster` priority before casting.
+    for _ in 0..4 {
+        if runner.state().priority_player == caster {
+            break;
+        }
+        runner
+            .act(GameAction::PassPriority)
+            .expect("pass to caster");
+    }
+    let card_id = runner.state().objects[&spell].card_id;
+    runner
+        .act(GameAction::CastSpell {
+            object_id: spell,
+            card_id,
+            targets: vec![],
+            payment_mode: CastPaymentMode::Auto,
+        })
+        .expect("casting the spell must succeed");
+    // Drain the stack: both players pass priority repeatedly.
+    for _ in 0..20 {
+        if runner.state().stack.is_empty() {
+            break;
+        }
+        if runner.act(GameAction::PassPriority).is_err() {
+            break;
+        }
+    }
+}
+
+use engine::types::player::PlayerId as P;
+
+/// DEFECT 1 + 2: both players' instant/sorcery spells are exiled instead of
+/// going to the graveyard when they resolve, AND every such spell accumulates
+/// in Rod's exiled-with pool.
+#[test]
+fn rod_exiles_both_players_spells_and_accumulates() {
+    let mut scenario = GameScenario::new();
+    scenario.at_phase(Phase::PreCombatMain);
+    // Libraries so "Draw a card" never decks a player (avoids a loss SBA).
+    scenario.with_library_top(P0, &["Filler A", "Filler B", "Filler C", "Filler D"]);
+    scenario.with_library_top(P1, &["Filler E", "Filler F", "Filler G", "Filler H"]);
+
+    // Rod of Absorption on P0's battlefield.
+    let _rod = scenario
+        .add_creature(P0, "Rod of Absorption", 0, 0)
+        .as_artifact()
+        .with_mana_cost(ManaCost::generic(2))
+        .from_oracle_text(ROD_TEXT)
+        .id();
+
+    // P0's instant and sorcery (in hand) — bare, no targets, so they resolve
+    // cleanly straight to the graveyard (modulo the Rod replacement).
+    let p0_instant = scenario
+        .add_spell_to_hand(P0, "P0 Instant", true)
+        .with_mana_cost(ManaCost::zero())
+        .id();
+    let p0_sorcery = scenario
+        .add_spell_to_hand(P0, "P0 Sorcery", false)
+        .with_mana_cost(ManaCost::zero())
+        .id();
+
+    // P1's instant — cast by the OPPONENT (defect 1).
+    let p1_instant = scenario
+        .add_spell_to_hand(P1, "P1 Instant", true)
+        .with_mana_cost(ManaCost::zero())
+        .id();
+
+    let mut runner = scenario.build();
+
+    cast_and_resolve(&mut runner, P0, p0_instant);
+    cast_and_resolve(&mut runner, P0, p0_sorcery);
+    cast_and_resolve(&mut runner, P1, p1_instant);
+
+    // DEFECT 1: the opponent's instant must be exiled (not in graveyard).
+    assert_eq!(
+        runner.state().objects[&p1_instant].zone,
+        Zone::Exile,
+        "opponent's instant must be exiled instead of going to the graveyard (CR 614.1a)"
+    );
+    // All three resolved spells must be in exile, not the graveyard.
+    for (id, label) in [
+        (p0_instant, "P0 instant"),
+        (p0_sorcery, "P0 sorcery"),
+        (p1_instant, "P1 instant"),
+    ] {
+        let obj = &runner.state().objects[&id];
+        assert_eq!(
+            obj.zone,
+            Zone::Exile,
+            "{label} must be exiled instead of going to the graveyard"
+        );
+        assert_eq!(
+            obj.exile_from_stack_linked_source, None,
+            "{label}'s stack-exile marker must be transient and cleared after the zone change"
+        );
+    }
+
+    // DEFECT 2: all three spells must be linked to Rod (accumulated), not just
+    // the most recent one.
+    let rod_id = _rod;
+    let linked: Vec<_> =
+        engine::game::players::linked_exile_cards_for_source(runner.state(), rod_id)
+            .iter()
+            .map(|s| s.exiled_id)
+            .collect();
+    assert!(
+        linked.contains(&p0_instant),
+        "P0 instant must be exiled-with Rod; linked = {linked:?}"
+    );
+    assert!(
+        linked.contains(&p0_sorcery),
+        "P0 sorcery must be exiled-with Rod (accumulated); linked = {linked:?}"
+    );
+    assert!(
+        linked.contains(&p1_instant),
+        "opponent's instant must be exiled-with Rod; linked = {linked:?}"
+    );
+    assert_eq!(
+        linked.len(),
+        3,
+        "all three resolved instant/sorcery spells must accumulate in Rod's exiled-with pool"
+    );
+}
+
+/// Index of Rod's `{X},{T},Sacrifice` activated ability — the only one whose
+/// top-level effect casts from a zone.
+fn rod_activated_index(
+    state: &engine::types::game_state::GameState,
+    rod: engine::types::identifiers::ObjectId,
+) -> usize {
+    use engine::types::ability::Effect;
+    state.objects[&rod]
+        .abilities
+        .iter()
+        .position(|def| matches!(&*def.effect, Effect::CastFromZone { .. }))
+        .expect("Rod must have a cast-from-exile activated ability")
+}
+
+/// DEFECT 3: activating `{X},{T},Sacrifice` with exiled spells underneath must
+/// offer those cards for free-casting (CR 601.2b / CR 118.9) — not silently
+/// sacrifice Rod and do nothing.
+#[test]
+fn rod_activation_free_casts_exiled_spells_and_sacrifices_rod() {
+    let mut scenario = GameScenario::new();
+    scenario.at_phase(Phase::PreCombatMain);
+
+    let rod = scenario
+        .add_creature(P0, "Rod of Absorption", 0, 0)
+        .as_artifact()
+        .with_mana_cost(ManaCost::generic(2))
+        .from_oracle_text(ROD_TEXT)
+        .id();
+
+    // Two of P0's instants accumulate under Rod via the exile-on-resolve trigger.
+    let bolt_a = scenario
+        .add_spell_to_hand(P0, "Bolt A", true)
+        .with_mana_cost(ManaCost::zero())
+        .id();
+    let bolt_b = scenario
+        .add_spell_to_hand(P0, "Bolt B", true)
+        .with_mana_cost(ManaCost::zero())
+        .id();
+
+    // {X} mana for the activation (X = 2 → pay {2}); the free casts cost nothing.
+    scenario.with_mana_pool(
+        P0,
+        vec![
+            ManaUnit::new(
+                ManaType::Colorless,
+                engine::types::identifiers::ObjectId(0),
+                false,
+                vec![],
+            ),
+            ManaUnit::new(
+                ManaType::Colorless,
+                engine::types::identifiers::ObjectId(0),
+                false,
+                vec![],
+            ),
+        ],
+    );
+
+    let mut runner = scenario.build();
+
+    // Resolve both bolts so they exile under Rod (the accumulated set).
+    cast_and_resolve(&mut runner, P0, bolt_a);
+    cast_and_resolve(&mut runner, P0, bolt_b);
+
+    assert_eq!(runner.state().objects[&bolt_a].zone, Zone::Exile);
+    assert_eq!(runner.state().objects[&bolt_b].zone, Zone::Exile);
+
+    // Pass priority back to P0 so the active player can activate the ability.
+    for _ in 0..4 {
+        if runner.state().priority_player == P0 && runner.state().stack.is_empty() {
+            break;
+        }
+        if runner.act(GameAction::PassPriority).is_err() {
+            break;
+        }
+    }
+
+    let idx = rod_activated_index(runner.state(), rod);
+    // CR 601.2b: a free cast forces X = 0; the activation's own {X} is announced
+    // here as 2 (paid from the pool), capping the exiled cards' total MV ≤ 2.
+    // CR 608.2d: accept the "you may cast …" optional so the grant resolves.
+    runner.activate(rod, idx).x(2).accept_optional().resolve();
+
+    // CR 701.21 / CR 118.9: Rod was sacrificed as part of the cost — it must be
+    // gone from the battlefield.
+    assert_ne!(
+        runner.state().objects[&rod].zone,
+        Zone::Battlefield,
+        "Rod must be sacrificed as part of the activation cost"
+    );
+
+    // CR 601.2b / CR 118.9: BOTH exiled bolts must now carry a zero-cost casting
+    // permission so the controller can cast them for free. On the bug the
+    // activation sacrificed Rod and granted nothing.
+    for (id, label) in [(bolt_a, "Bolt A"), (bolt_b, "Bolt B")] {
+        let obj = &runner.state().objects[&id];
+        assert!(
+            obj.casting_permissions.iter().any(|p| matches!(
+                p,
+                CastingPermission::ExileWithAltCost { cost, .. }
+                    if cost.is_without_paying_mana()
+            )),
+            "{label} (exiled with Rod) must be free-castable after activation; \
+             permissions = {:?}",
+            obj.casting_permissions
+        );
+    }
+}
+
+/// Rod ruling: "Each Rod of Absorption tracks the cards it has exiled
+/// separately. If Rod of Absorption is destroyed and then later brought back to
+/// the battlefield, it will not be able to access any of the cards that it had
+/// exiled before."
+///
+/// CR 400.7 + CR 607.2b: the Rod that returns is a new object, and none of the
+/// cards its predecessor exiled are exiled with it, even within the same step.
+#[test]
+fn rod_returned_to_the_battlefield_cannot_cast_its_predecessors_exiles() {
+    let mut scenario = GameScenario::new();
+    scenario.at_phase(Phase::PreCombatMain);
+
+    let rod = scenario
+        .add_creature(P0, "Rod of Absorption", 0, 0)
+        .as_artifact()
+        .with_mana_cost(ManaCost::generic(2))
+        .from_oracle_text(ROD_TEXT)
+        .id();
+    let bolt_a = scenario
+        .add_spell_to_hand(P0, "Bolt A", true)
+        .with_mana_cost(ManaCost::zero())
+        .id();
+    let bolt_b = scenario
+        .add_spell_to_hand(P0, "Bolt B", true)
+        .with_mana_cost(ManaCost::zero())
+        .id();
+    let colorless = || {
+        ManaUnit::new(
+            ManaType::Colorless,
+            engine::types::identifiers::ObjectId(0),
+            false,
+            vec![],
+        )
+    };
+    scenario.with_mana_pool(P0, vec![colorless(), colorless()]);
+
+    let mut runner = scenario.build();
+    cast_and_resolve(&mut runner, P0, bolt_a);
+    cast_and_resolve(&mut runner, P0, bolt_b);
+    assert_eq!(runner.state().objects[&bolt_a].zone, Zone::Exile);
+    assert_eq!(runner.state().objects[&bolt_b].zone, Zone::Exile);
+
+    // The ruling's "destroyed and then later brought back", within one step.
+    let mut events = Vec::new();
+    engine::game::zones::move_to_zone(runner.state_mut(), rod, Zone::Graveyard, &mut events);
+    engine::game::zones::move_to_zone(runner.state_mut(), rod, Zone::Battlefield, &mut events);
+    assert!(
+        runner.state().linked_exile_lki.contains_key(&rod),
+        "the departure recorded the first Rod's linked exiles"
+    );
+    assert_eq!(runner.state().phase, Phase::PreCombatMain);
+
+    for _ in 0..4 {
+        if runner.state().priority_player == P0 && runner.state().stack.is_empty() {
+            break;
+        }
+        if runner.act(GameAction::PassPriority).is_err() {
+            break;
+        }
+    }
+    let idx = rod_activated_index(runner.state(), rod);
+    runner.activate(rod, idx).x(2).accept_optional().resolve();
+
+    assert_ne!(
+        runner.state().objects[&rod].zone,
+        Zone::Battlefield,
+        "the returned Rod was sacrificed as the activation's cost"
+    );
+    for (id, label) in [(bolt_a, "Bolt A"), (bolt_b, "Bolt B")] {
+        let obj = &runner.state().objects[&id];
+        assert_eq!(obj.zone, Zone::Exile, "{label} stays in exile");
+        assert!(
+            !obj.casting_permissions.iter().any(|p| matches!(
+                p,
+                CastingPermission::ExileWithAltCost { cost, .. }
+                    if cost.is_without_paying_mana()
+            )),
+            "{label} was exiled with the first Rod, not the returned one; \
+             permissions = {:?}",
+            obj.casting_permissions
+        );
+    }
+}
+
+const GHOSTLY_FLICKER: &str = "Exile two target artifacts, creatures, and/or lands you control, \
+     then return those cards to the battlefield under your control.";
+
+/// Rod ruling: "Each Rod of Absorption tracks the cards it has exiled
+/// separately."
+///
+/// CR 607.2b + CR 113.7a + CR 400.7: Ghostly Flicker returns Rod while it
+/// resolves. Rod's trigger made Flicker exile itself, so Flicker is exiled
+/// with the Rod whose trigger did that, not with the Rod that came back.
+#[test]
+fn rod_returned_by_its_own_flicker_cannot_cast_that_flicker() {
+    let mut scenario = GameScenario::new();
+    scenario.at_phase(Phase::PreCombatMain);
+    let rod = scenario
+        .add_creature(P0, "Rod of Absorption", 0, 0)
+        .as_artifact()
+        .with_mana_cost(ManaCost::generic(2))
+        .from_oracle_text(ROD_TEXT)
+        .id();
+    let land = scenario.add_land_from_oracle(P0, "Blank Land", "").id();
+    let flicker = scenario
+        .add_spell_to_hand_from_oracle(P0, "Ghostly Flicker", true, GHOSTLY_FLICKER)
+        .with_mana_cost(ManaCost::zero())
+        .id();
+    let mut runner = scenario.build();
+    let incarnation_before = runner.state().objects[&rod].incarnation;
+
+    runner.cast(flicker).target_objects(&[rod, land]).resolve();
+    assert_eq!(
+        runner.state().objects[&flicker].zone,
+        Zone::Exile,
+        "reach-guard: Rod's rider exiled Flicker as it resolved"
+    );
+    assert_eq!(runner.state().objects[&rod].zone, Zone::Battlefield);
+    assert_ne!(
+        runner.state().objects[&rod].incarnation,
+        incarnation_before,
+        "reach-guard: Rod came back as a new object"
+    );
+
+    let idx = rod_activated_index(runner.state(), rod);
+    runner.activate(rod, idx).x(0).accept_optional().resolve();
+
+    assert_ne!(
+        runner.state().objects[&rod].zone,
+        Zone::Battlefield,
+        "the returned Rod was sacrificed as the activation's cost"
+    );
+    let obj = &runner.state().objects[&flicker];
+    assert_eq!(obj.zone, Zone::Exile, "Flicker stays in exile");
+    assert!(
+        !obj.casting_permissions.iter().any(|p| matches!(
+            p,
+            CastingPermission::ExileWithAltCost { cost, .. }
+                if cost.is_without_paying_mana()
+        )),
+        "Flicker was exiled with the Rod that was flickered, not the returned one; \
+         permissions = {:?}",
+        obj.casting_permissions
+    );
+}
+
+/// Whether `card` carries the free-cast permission Rod's ability grants.
+fn has_free_cast_permission(
+    state: &engine::types::game_state::GameState,
+    card: engine::types::identifiers::ObjectId,
+) -> bool {
+    state.objects[&card].casting_permissions.iter().any(|p| {
+        matches!(
+            p,
+            CastingPermission::ExileWithAltCost { cost, .. } if cost.is_without_paying_mana()
+        )
+    })
+}
+
+/// R-L. Relic of Progenitus: "{T}: Target player exiles a card from their
+/// graveyard. {1}, Exile this artifact: Exile all graveyards. Draw a card."
+/// Rod's ability refers to "cards exiled with this artifact", the cards its
+/// first ability exiled (CR 607.2a / CR 607.2b), and it resolves after Rod is
+/// sacrificed (CR 113.7a).
+///
+/// CR 400.7: with Rod's ability on the stack, Bolt B leaves exile and Relic
+/// exiles it again (and exiles Rod from the graveyard). The Bolt B in exile is
+/// a new object that Rod did not exile, so only Bolt A is offered.
+#[test]
+fn rod_cannot_cast_a_card_that_left_exile_and_was_exiled_again() {
+    let mut scenario = GameScenario::new();
+    scenario.at_phase(Phase::PreCombatMain);
+    // A library card for Relic's "Draw a card."
+    scenario.with_library_top(P0, &["Filler A"]);
+
+    // As in the rows above, Rod is built from its Oracle text with a {2} test
+    // mana cost (printed {2}{U}), and the bolts are cost-free test instants with
+    // no text.
+    let rod = scenario
+        .add_creature(P0, "Rod of Absorption", 0, 0)
+        .as_artifact()
+        .with_mana_cost(ManaCost::generic(2))
+        .from_oracle_text(ROD_TEXT)
+        .id();
+    let bolt_a = scenario
+        .add_spell_to_hand(P0, "Bolt A", true)
+        .with_mana_cost(ManaCost::zero())
+        .id();
+    let bolt_b = scenario
+        .add_spell_to_hand(P0, "Bolt B", true)
+        .with_mana_cost(ManaCost::zero())
+        .id();
+    let relic = scenario
+        .add_artifact_from_oracle(P0, "Relic of Progenitus", RELIC_OF_PROGENITUS)
+        .id();
+    let mut runner = scenario.build();
+
+    cast_and_resolve(&mut runner, P0, bolt_a);
+    cast_and_resolve(&mut runner, P0, bolt_b);
+    assert_eq!(runner.state().objects[&bolt_a].zone, Zone::Exile);
+    assert_eq!(runner.state().objects[&bolt_b].zone, Zone::Exile);
+    let mut linked: Vec<_> =
+        engine::game::players::linked_exile_cards_for_source(runner.state(), rod)
+            .iter()
+            .map(|s| s.exiled_id)
+            .collect();
+    linked.sort();
+    let mut both = vec![bolt_a, bolt_b];
+    both.sort();
+    assert_eq!(linked, both, "setup: both bolts are exiled with Rod");
+    let bolt_b_exiled_by_rod = runner.state().objects[&bolt_b].incarnation;
+
+    for _ in 0..4 {
+        if runner.state().priority_player == P0 && runner.state().stack.is_empty() {
+            break;
+        }
+        if runner.act(GameAction::PassPriority).is_err() {
+            break;
+        }
+    }
+
+    // Put Rod's ability on the stack (X = 0, so each bolt's mana value 0 fits)
+    // and leave it there.
+    let idx = rod_activated_index(runner.state(), rod);
+    runner
+        .act(GameAction::ActivateAbility {
+            source_id: rod,
+            ability_index: idx,
+            payment_mode: CastPaymentMode::Auto,
+        })
+        .expect("activating Rod is accepted");
+    for _ in 0..8 {
+        let action = match &runner.state().waiting_for {
+            WaitingFor::Priority { .. } => break,
+            WaitingFor::ChooseXValue { .. } => GameAction::ChooseX { value: 0 },
+            WaitingFor::ManaPayment { .. } => GameAction::PassPriority,
+            other => panic!("unexpected prompt while activating Rod: {other:?}"),
+        };
+        runner.act(action).expect("activation step accepted");
+    }
+    assert!(matches!(
+        runner.state().waiting_for,
+        WaitingFor::Priority { .. }
+    ));
+    assert_eq!(
+        runner.state().stack.len(),
+        1,
+        "setup: Rod's ability is on the stack"
+    );
+    assert_eq!(
+        runner.state().objects[&rod].zone,
+        Zone::Graveyard,
+        "setup: Rod was sacrificed as the cost"
+    );
+    assert!(
+        runner.state().linked_exile_lki.contains_key(&rod),
+        "setup: Rod's departure recorded its linked exiles"
+    );
+
+    // Stand-in for Pull from Eternity's resolution (P1): the parser does not
+    // yet produce Pull's exiled-card target, so the production zone mover
+    // moves the card. This step is not Oracle text.
+    let mut events = Vec::new();
+    engine::game::zones::move_to_zone(runner.state_mut(), bolt_b, Zone::Graveyard, &mut events);
+    assert_eq!(runner.state().objects[&bolt_b].zone, Zone::Graveyard);
+
+    // One colorless mana in P0's pool pays Relic's {1} (a test setting in place
+    // of tapping a land). Relic's ability resolves first (exiling Bolt B and
+    // Rod), then Rod's.
+    runner
+        .state_mut()
+        .add_mana_to_pool(
+            P0,
+            ManaUnit::new(
+                ManaType::Colorless,
+                engine::types::identifiers::ObjectId(0),
+                false,
+                vec![],
+            ),
+        )
+        .expect("P0's pool takes the mana");
+    let outcome = runner.activate(relic, 1).accept_optional().resolve();
+    assert!(
+        runner.state().stack.is_empty()
+            && matches!(runner.state().waiting_for, WaitingFor::Priority { .. }),
+        "setup: both abilities resolved"
+    );
+    assert_eq!(
+        runner.state().objects[&relic].zone,
+        Zone::Exile,
+        "setup: Relic was exiled to pay its cost"
+    );
+    assert_eq!(
+        runner.state().objects[&rod].zone,
+        Zone::Exile,
+        "setup: Relic exiled Rod from the graveyard"
+    );
+    let bolt_b_now = &runner.state().objects[&bolt_b];
+    assert_eq!(bolt_b_now.zone, Zone::Exile, "setup: Relic exiled Bolt B");
+    assert_ne!(
+        bolt_b_now.incarnation, bolt_b_exiled_by_rod,
+        "setup: CR 400.7 — the Bolt B Relic exiled is a new object"
+    );
+    assert!(
+        outcome.events().iter().any(|event| matches!(
+            event,
+            GameEvent::EffectResolved { kind: EffectKind::CastFromZone, source_id, .. }
+                if *source_id == rod
+        )),
+        "reach: Rod's ability resolved"
+    );
+
+    assert!(
+        has_free_cast_permission(runner.state(), bolt_a),
+        "positive: Bolt A never left exile, so it is offered; permissions = {:?}",
+        runner.state().objects[&bolt_a].casting_permissions
+    );
+    assert!(
+        !has_free_cast_permission(runner.state(), bolt_b),
+        "CR 607.2a + CR 400.7: the Bolt B Relic exiled is not a card exiled with \
+         Rod; permissions = {:?}",
+        runner.state().objects[&bolt_b].casting_permissions
+    );
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /** Verify the vendored Phase engine source tree matches the pinned upstream hash. */
-const EXPECTED = '7ca901b32a2ae92ab8d760b32ff65c9ea174f35c374260874968148397cc8aa5';
+const EXPECTED = '5c4facfdf23732c91dd07cee3555c4c1de144f1ea7e2c613bbab3d142d905f38';
 const root = process.argv[2] ?? 'crates/phase-engine/src';
 const enc = new TextEncoder();
 

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/phase-engine", "crates/mtg-engine-wasm"]
+members = ["crates/phase-engine", "crates/phase-ast", "crates/phase-parser", "crates/mtg-engine-wasm"]
 
 [workspace.package]
 version = "0.1.0"
@@ -18,3 +18,7 @@ strip = true
 opt-level = 0
 debug = 0
 incremental = false
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive", "rc"] }
+tracing = "0.1"

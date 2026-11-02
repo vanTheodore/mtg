@@ -1,0 +1,11 @@
+{
+  "origin": "https://github.com/phase-rs/phase",
+  "commit": "0dd35e4a9dfe1dfba697224775d2205d56f7f20d",
+  "version": "0.119.0",
+  "sourceSha256": "5c4facfdf23732c91dd07cee3555c4c1de144f1ea7e2c613bbab3d142d905f38",
+  "crates": [
+    "phase-engine",
+    "phase-ast",
+    "phase-parser"
+  ]
+}

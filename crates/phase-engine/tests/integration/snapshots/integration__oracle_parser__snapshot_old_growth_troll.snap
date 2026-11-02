@@ -1,0 +1,214 @@
+---
+source: crates/engine/tests/integration/oracle_parser.rs
+assertion_line: 763
+expression: result
+---
+{
+  "abilities": [],
+  "triggers": [
+    {
+      "mode": "ChangesZone",
+      "execute": {
+        "kind": "Spell",
+        "effect": {
+          "type": "ChangeZone",
+          "origin": null,
+          "destination": "Battlefield",
+          "target": {
+            "type": "TriggeringSource"
+          },
+          "owner_library": false,
+          "enter_transformed": false,
+          "enter_tapped": false,
+          "enters_attacking": false
+        },
+        "cost": null,
+        "sub_ability": {
+          "kind": "Spell",
+          "effect": {
+            "type": "ReturnAsAura",
+            "enchant_filter": {
+              "type": "Typed",
+              "type_filters": [
+                {
+                  "Subtype": "Forest"
+                }
+              ],
+              "controller": "You",
+              "properties": []
+            },
+            "grants": [
+              {
+                "type": "GrantStaticAbility",
+                "definition": {
+                  "mode": "Continuous",
+                  "affected": {
+                    "type": "Typed",
+                    "type_filters": [
+                      {
+                        "Subtype": "Forest"
+                      }
+                    ],
+                    "controller": null,
+                    "properties": [
+                      {
+                        "type": "EnchantedBy"
+                      }
+                    ]
+                  },
+                  "modifications": [
+                    {
+                      "type": "GrantAbility",
+                      "definition": {
+                        "kind": "Activated",
+                        "effect": {
+                          "type": "Mana",
+                          "produced": {
+                            "type": "Fixed",
+                            "colors": [
+                              "Green",
+                              "Green"
+                            ]
+                          }
+                        },
+                        "cost": {
+                          "type": "Tap"
+                        },
+                        "sub_ability": null,
+                        "duration": null,
+                        "description": "{T}: Add {G}{G}",
+                        "target_prompt": null,
+                        "condition": null,
+                        "optional_targeting": false,
+                        "optional": false,
+                        "forward_result": false,
+                        "is_mana_ability": true
+                      }
+                    },
+                    {
+                      "type": "GrantAbility",
+                      "definition": {
+                        "kind": "Activated",
+                        "effect": {
+                          "type": "Token",
+                          "name": "Troll Warrior",
+                          "power": {
+                            "type": "Fixed",
+                            "value": 4
+                          },
+                          "toughness": {
+                            "type": "Fixed",
+                            "value": 4
+                          },
+                          "types": [
+                            "Creature",
+                            "Troll",
+                            "Warrior"
+                          ],
+                          "colors": [
+                            "Green"
+                          ],
+                          "keywords": [
+                            "Trample"
+                          ],
+                          "tapped": true,
+                          "count": {
+                            "type": "Fixed",
+                            "value": 1
+                          },
+                          "owner": {
+                            "type": "Controller"
+                          },
+                          "enters_attacking": false
+                        },
+                        "cost": {
+                          "type": "Composite",
+                          "costs": [
+                            {
+                              "type": "Mana",
+                              "cost": {
+                                "type": "Cost",
+                                "shards": [],
+                                "generic": 1
+                              }
+                            },
+                            {
+                              "type": "Tap"
+                            },
+                            {
+                              "type": "Sacrifice",
+                              "target": {
+                                "type": "SelfRef"
+                              },
+                              "count": 1
+                            }
+                          ]
+                        },
+                        "sub_ability": null,
+                        "duration": null,
+                        "description": "{1}, {T}, Sacrifice ~: Create a tapped 4/4 green Troll Warrior creature token with trample.",
+                        "target_prompt": null,
+                        "condition": null,
+                        "optional_targeting": false,
+                        "optional": false,
+                        "forward_result": false
+                      }
+                    }
+                  ],
+                  "condition": null,
+                  "affected_zone": null,
+                  "effect_zone": null,
+                  "active_zones": [],
+                  "characteristic_defining": false,
+                  "description": "Enchanted Forest has \"{T}: Add {G}{G}\" and \"{1}, {T}, Sacrifice ~: Create a tapped 4/4 green Troll Warrior creature token with trample.\""
+                }
+              }
+            ]
+          },
+          "cost": null,
+          "sub_ability": null,
+          "duration": null,
+          "description": null,
+          "target_prompt": null,
+          "condition": null,
+          "optional_targeting": false,
+          "optional": false,
+          "forward_result": false,
+          "sub_link": "SequentialSibling",
+          "entry_onset": "WithEntry"
+        },
+        "duration": null,
+        "description": null,
+        "target_prompt": null,
+        "condition": null,
+        "optional_targeting": false,
+        "optional": false,
+        "forward_result": false
+      },
+      "valid_card": {
+        "type": "SelfRef"
+      },
+      "origin": "Battlefield",
+      "destination": "Graveyard",
+      "trigger_zones": [
+        "Graveyard"
+      ],
+      "phase": null,
+      "optional": false,
+      "damage_kind": "Any",
+      "secondary": false,
+      "valid_target": null,
+      "valid_source": null,
+      "description": "When ~ dies, if it was a creature, return it to the battlefield. It's an Aura enchantment with enchant Forest you control and \"Enchanted Forest has '{T}: Add {G}{G}' and '{1}, {T}, Sacrifice ~: Create a tapped 4/4 green Troll Warrior creature token with trample.'\"",
+      "constraint": null,
+      "condition": {
+        "type": "WasType",
+        "card_type": "Creature"
+      },
+      "batched": false
+    }
+  ],
+  "statics": [],
+  "replacements": [],
+  "extractedKeywords": []
+}
