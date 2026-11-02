@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import ArenaSurface from './ArenaSurface.svelte';
+  import TurnTrack from './TurnTrack.svelte';
   import Hand from './Hand.svelte';
   import Battlefield from './Battlefield.svelte';
   import DecisionPanel from './DecisionPanel.svelte';
@@ -361,6 +362,9 @@
       {/if}
       <Battlefield objects={battlefieldObjects} {metas} owner={opponent} label={`Campo de batalla · Jugador ${opponent + 1}`} />
       <div class="middle">
+        {#if session.boardStyle === 'arena'}
+          <TurnTrack phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
+        {/if}
         <div class="center">
           <StackPanel />
           <HistoryPanel />

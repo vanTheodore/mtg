@@ -32,3 +32,15 @@ test('el tutorial comparte la escena Arena sin desbordar cinco anchos', async ({
     expect(overflow).toBeLessThanOrEqual(1);
   }
 });
+
+test('la banda de fases refleja el snapshot de Phase durante una partida', async ({ page }) => {
+  await page.goto('/');
+  const play = page.getByRole('button', { name: 'Iniciar partida' });
+  await expect(play).toBeEnabled({ timeout: 30_000 });
+  await play.click();
+  const phases = page.locator('.turn-track');
+  await expect(phases).toBeVisible({ timeout: 180_000 });
+  await expect(phases.locator('li')).toHaveCount(5);
+  await expect(phases.locator('li.current')).toHaveCount(1);
+  await expect(phases).toContainText('Turno');
+});
