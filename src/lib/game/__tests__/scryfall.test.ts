@@ -114,3 +114,66 @@ test('mana fallback includes colored shards', () => {
   expect(manaText({ type: 'Cost', generic: 1, shards: ['Green'] })).toBe('{1}{G}');
   expect(manaText({ type: 'NoCost' })).toBe('');
 });
+
+
+describe('Spanish card-image selection', () => {
+  test('prefers scanned Spanish printing with matching Oracle identity', async () => {
+    const calls: string[] = [];
+    const esCard = { ...card('Forest','bosque'), oracle_id: 'oracle-forest', lang: 'es' };
+    const resolver = new CardImageResolver({
+      storage: null, requestGapMs: 0,
+      fetcher: (async (input: string) => { calls.push(input); return response({ data: [esCard] }); }) as unknown as typeof fetch
+    });
+    const result = await resolver.resolve(lookup({ oracleId: 'oracle-forest', language: 'es' }));
+    expect(result).toMatchObject({ status: 'ready', url: url('bosque'), source: 'spanish-print', language: 'es' });
+    expect(calls).toHaveLength(1);
+    expect(new URL(calls[0]!).searchParams.get('q')).toBe('!"Forest" lang:es');
+  });
+
+  test('rejects Spanish results with the wrong Oracle ID and falls back', async () => {
+    let calls = 0;
+    const wrong = { ...card('Forest','wrong'), oracle_id: 'wrong-oracle', lang: 'es' };
+    const right = { ...card('Forest','right'), oracle_id: 'oracle-forest' };
+    const resolver = new CardImageResolver({
+      storage: null, requestGapMs: 0,
+      fetcher: (async () => { calls++; return calls === 1 ? response({ data: [wrong] }) : response(right); }) as unknown as typeof fetch
+    });
+    expect(await resolver.resolve(lookup({ oracleId: 'oracle-forest', language: 'es' })))
+      .toMatchObject({ status: 'ready', url: url('right'), source: 'oracle', language: 'en' });
+    expect(calls).toBe(2);
+  });
+
+  test('unavailable Spanish printing falls back to English image', async () => {
+    let calls = 0;
+    const resolver = new CardImageResolver({
+      storage: null, requestGapMs: 0,
+      fetcher: (async () => { calls++; return calls === 1 ? response({},404) : response(card('Forest')); }) as unknown as typeof fetch
+    });
+    expect(await resolver.resolve(lookup({ language: 'es' })))
+      .toMatchObject({ status: 'ready', source: 'name', language: 'en' });
+    expect(calls).toBe(2);
+  });
+
+  test('English and Spanish use independent caches', async () => {
+    let calls = 0;
+    const resolver = new CardImageResolver({
+      storage: null, requestGapMs: 0,
+      fetcher: (async () => { calls++; return response({ data: [card('Forest')] }); }) as unknown as typeof fetch
+    });
+    expect(CardImageResolver.key(lookup({ language: 'es' }))).not.toBe(CardImageResolver.key(lookup({ language: 'en' })));
+    await resolver.resolve(lookup());
+    await resolver.resolve(lookup({ language: 'es' }));
+    expect(calls).toBeGreaterThanOrEqual(2);
+  });
+
+  test('hidden card requests no image even when Spanish is chosen', async () => {
+    let calls = 0;
+    const resolver = new CardImageResolver({
+      storage: null,
+      fetcher: (async () => { calls++; return response(card('Forest')); }) as unknown as typeof fetch
+    });
+    const hidden = { ...cardImageLookup({ ...base, display_visible_to_viewer: false }), language: 'es' as const };
+    expect(await resolver.resolve(hidden)).toEqual({ status: 'unavailable', reason: 'no-identity' });
+    expect(calls).toBe(0);
+  });
+});

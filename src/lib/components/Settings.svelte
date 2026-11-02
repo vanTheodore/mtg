@@ -26,9 +26,16 @@
           <option value="compact">Compacta</option>
         </select>
       </label>
+      <label>
+        Idioma de la imagen de la carta
+        <select value={session.cardImageLanguage} onchange={(e) => session.setCardImageLanguage(e.currentTarget.value as 'en' | 'es')}>
+          <option value="en">Inglés</option>
+          <option value="es">Español (cuando exista impresión)</option>
+        </select>
+      </label>
       <div class="locale" role="note">
         <strong>Idioma</strong>
-        <span>Español (Latinoamérica). Los nombres y textos de las cartas llegan en inglés desde el motor Phase.</span>
+        <span>Interfaz en español. Phase conserva los nombres y reglas canónicos; la imagen se puede mostrar en español si Scryfall tiene la impresión, con respaldo inglés.</span>
       </div>
       <button type="button" onclick={() => open = false}>Cerrar</button>
     </div>

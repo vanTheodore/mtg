@@ -3,17 +3,17 @@ import type { TokenArtDescriptor } from '#lib/engine/types.ts';
 
 interface ScryfallFace { name?: string; oracle_id?: string; image_uris?: Record<string, unknown>; power?: string; toughness?: string }
 export interface ScryfallCard {
-  id?: string; oracle_id?: string; name?: string; layout?: string;
+  id?: string; oracle_id?: string; name?: string; layout?: string; lang?: string;
   image_uris?: Record<string, unknown>; card_faces?: ScryfallFace[];
   power?: string; toughness?: string; colors?: string[]; type_line?: string;
   keywords?: string[]; oracle_text?: string;
 }
 export type ImageFailureReason = 'no-identity' | 'not-found' | 'network' | 'rate-limit' | 'server' | 'invalid-response' | 'image-download';
 export type ImageResult =
-  | { status: 'ready'; url: string; faceName?: string; source: 'oracle' | 'name' | 'token-id' | 'token-search' }
+  | { status: 'ready'; url: string; faceName?: string; language?: 'en' | 'es'; source: 'oracle' | 'name' | 'token-id' | 'token-search' | 'spanish-print' }
   | { status: 'unavailable'; reason: ImageFailureReason; retryAfterMs?: number };
 
-const CACHE_KEY = 'mesa:scryfall:v2';
+const CACHE_KEY = 'mesa:scryfall:v3';
 const TTL = 7 * 24 * 60 * 60 * 1000;
 const NEGATIVE_TTL = 60_000;
 const REQUEST_GAP_MS = 110;
@@ -114,7 +114,7 @@ export class CardImageResolver {
 
   static key(lookup: CardImageLookup): string {
     const identity = lookup.tokenRef?.scryfall_id ?? lookup.oracleId ?? normalize(lookup.name);
-    return JSON.stringify([lookup.kind, identity, normalize(lookup.faceName ?? ''), lookup.faceIndex, lookup.tokenArt ?? null]);
+    return JSON.stringify([lookup.kind, identity, normalize(lookup.faceName ?? ''), lookup.faceIndex, lookup.tokenArt ?? null, lookup.language ?? 'en']);
   }
 
   resolve(lookup: CardImageLookup, fresh = false): Promise<ImageResult> {
@@ -147,6 +147,13 @@ export class CardImageResolver {
         if (lookup.oracleId) attempts.push({ url: `${API}/cards/oracle/${encodeURIComponent(lookup.oracleId)}`, source: 'oracle' });
         attempts.push({ url: `${API}/cards/search?q=${encodeURIComponent(tokenQuery(lookup.name, lookup.tokenArt))}&unique=art&order=released&dir=desc`, source: 'token-search', search: true });
       } else {
+        if (lookup.language === 'es' && lookup.name.trim()) {
+          // Search localized physical printings, then check the actual Oracle
+          // identity. Never substitute a similarly named but unrelated card.
+          const exactName = lookup.name.trim().replace(/"/g, '');
+          const query = `!"${exactName}" lang:es`;
+          attempts.push({ url: `${API}/cards/search?q=${encodeURIComponent(query)}&unique=prints&include_multilingual=true&order=released&dir=desc`, source: 'spanish-print', search: true });
+        }
         if (lookup.oracleId) attempts.push({ url: `${API}/cards/oracle/${encodeURIComponent(lookup.oracleId)}`, source: 'oracle' });
         if (lookup.name.trim()) {
           attempts.push({ url: `${API}/cards/named?exact=${encodeURIComponent(lookup.name)}`, source: 'name' });
@@ -158,11 +165,12 @@ export class CardImageResolver {
         const payload = await this.request(attempt.url);
         const cards: ScryfallCard[] = attempt.search ? ((payload as { data?: ScryfallCard[] } | null)?.data ?? []) : (payload ? [payload as ScryfallCard] : []);
         for (const card of cards) {
-          if (attempt.source === 'oracle' && lookup.oracleId && card.oracle_id && card.oracle_id !== lookup.oracleId && !card.card_faces?.some((f) => f.oracle_id === lookup.oracleId)) continue;
+          if ((attempt.source === 'oracle' || attempt.source === 'spanish-print') && lookup.oracleId && card.oracle_id !== lookup.oracleId && !card.card_faces?.some((f) => f.oracle_id === lookup.oracleId)) continue;
+          if (attempt.source === 'spanish-print' && card.lang !== 'es') continue;
           if (attempt.source === 'token-id' && card.id !== lookup.tokenRef?.scryfall_id) continue;
           if (attempt.search && !matchesTokenShape(card, lookup.tokenArt)) continue;
           const image = selectCardImage(card, lookup);
-          if (image) return { status: 'ready', ...image, source: attempt.source };
+          if (image) return { status: 'ready', ...image, source: attempt.source, language: attempt.source === 'spanish-print' ? 'es' : 'en' };
         }
       }
       return { status: 'unavailable', reason: 'not-found' };

@@ -9,6 +9,7 @@ import {
 import { summarizeEvents, type HistoryEntry } from './events.ts';
 
 export type Theme = 'light' | 'dark' | 'system';
+export type CardImageLanguage = 'en' | 'es';
 
 class GameSession {
   snapshot = $state.raw<EngineSnapshot | null>(null);
@@ -23,6 +24,7 @@ class GameSession {
   revealedTurn = $state<number | null>(null);
   handoffMode = $state<'turn' | 'every'>('turn');
   theme = $state<Theme>('system');
+  cardImageLanguage = $state<CardImageLanguage>('en');
   cardScale = $state(1);
   density = $state<'comfortable' | 'compact'>('comfortable');
   lastMetrics = $state<EngineSnapshot['metrics'] | null>(null);
@@ -42,6 +44,8 @@ class GameSession {
     if (typeof localStorage !== 'undefined') {
       const saved = localStorage.getItem('mesa:theme') as Theme | null;
       if (saved) this.theme = saved;
+      const savedImageLanguage = localStorage.getItem('mesa:cardImageLanguage');
+      if (savedImageLanguage === 'es' || savedImageLanguage === 'en') this.cardImageLanguage = savedImageLanguage;
       const scale = Number(localStorage.getItem('mesa:cardScale'));
       if (scale >= 0.7 && scale <= 1.6) this.cardScale = scale;
       const density = localStorage.getItem('mesa:density');
@@ -55,6 +59,7 @@ class GameSession {
     const dark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   }
+  setCardImageLanguage(lang: CardImageLanguage) { this.cardImageLanguage = lang; localStorage.setItem('mesa:cardImageLanguage', lang); }
   setCardScale(scale: number) { this.cardScale = scale; localStorage.setItem('mesa:cardScale', String(scale)); }
   setDensity(density: 'comfortable' | 'compact') { this.density = density; localStorage.setItem('mesa:density', density); }
   setHandoffMode(mode: 'turn' | 'every') {
