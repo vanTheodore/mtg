@@ -10,6 +10,7 @@
     metas,
     owner,
     label,
+    side = 'player',
     focusId = null,
     onselect
   }: {
@@ -17,6 +18,8 @@
     metas: Record<string, CardMeta>;
     owner: number;
     label: string;
+    /** Visual seat position, not a game rule; the caller knows which seat is opposite. */
+    side?: 'player' | 'opponent';
     /** The tutorial points at this card. */
     focusId?: number | null;
     /** Overrides the default selection (the tutorial performs the step). */
@@ -36,20 +39,20 @@
   function toggle(key: string) { expanded[key] = !expanded[key]; }
 </script>
 
-<section class="battlefield" aria-label={label}>
+<section class="battlefield" aria-label={label} data-side={side}>
   <h2>{label} <span class="count">{mine.length}</span></h2>
   {#if mine.length === 0}<p class="empty">Campo de batalla vacío.</p>{:else}
     {#if lands.length}
-      <div class="row" aria-label="Tierras">{#each lands as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} highlight={focusId === obj.id} {onselect} />{/each}</div>
+      <div class="row" aria-label="Tierras" data-zone="lands">{#each lands as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} highlight={focusId === obj.id} {onselect} />{/each}</div>
     {/if}
     {#if creatures.length}
-      <div class="row" aria-label="Criaturas">{#each creatures as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} highlight={focusId === obj.id} {onselect} />{/each}</div>
+      <div class="row" aria-label="Criaturas" data-zone="creatures">{#each creatures as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} highlight={focusId === obj.id} {onselect} />{/each}</div>
     {/if}
     {#if other.length}
-      <div class="row" aria-label="Otros permanentes">{#each other as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} highlight={focusId === obj.id} {onselect} />{/each}</div>
+      <div class="row" aria-label="Otros permanentes" data-zone="support">{#each other as obj (obj.id)}<BoardCard object={obj} meta={metaFor(obj)} compact={session.density === 'compact'} highlight={focusId === obj.id} {onselect} />{/each}</div>
     {/if}
     {#each tokenGroups as group (group.key)}
-      <div class="token-group">
+      <div class="token-group" data-zone={group.items[0].card_types?.core_types?.includes('Creature') ? 'creatures' : 'support'}>
         {#if group.items.length > 3}
           <button type="button" class="group-toggle" aria-expanded={!!expanded[group.key]} onclick={() => toggle(group.key)}>
             {group.name} × {group.items.length} · {[group.items[0].power != null ? `${group.items[0].power}/${group.items[0].toughness}` : '', ...permanentStates(group.items[0], combatRole(session.snapshot, group.items[0].id))].filter(Boolean).join(' · ')} {expanded[group.key] ? '▾' : '▸'}

@@ -78,11 +78,14 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   // volver a dar. Al arrancar, el motor todavía puede estar repartiendo.
   // The first visible card may belong to an interim render while Phase
   // publishes the final seven-card opening hand. Wait for *all seven* names.
-  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id] .fallback-name')).toHaveCount(7, {
-    timeout: 60_000
-  });
-  const openingHand = await handNames(page);
-  expect(openingHand).toHaveLength(7);
+  // Phase may briefly publish an interim hand during mulligan resolution.
+  // Keep the same exact seven-card requirement, but capture the names from
+  // the successful poll instead of making a second race-prone DOM query.
+  let openingHand: string[] = [];
+  await expect.poll(async () => {
+    openingHand = await handNames(page);
+    return openingHand.length;
+  }, { timeout: 60_000 }).toBe(7);
 
   // ── Una acción inesperada no rompe la lección ─────────────────────────────
   const lions = page.locator('section[aria-label^="Tu mano"] [data-card-id]', { hasText: 'Savannah Lions' }).first();
