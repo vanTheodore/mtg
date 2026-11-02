@@ -1,0 +1,104 @@
+/*
+ * Arena-like Svelte view, designed after the composition of phase-rs/phase:
+ * ArenaBackground, GameBoard, PlayerArea, OpponentSeatPane.
+ * New CSS treatments; no React, textures, WebGL or additional runtime cost.
+ */
+.app[data-board-style="arena"] {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  max-width: 1800px;
+}
+.app[data-board-style="arena"] .topbar {
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+  border-radius: 14px; padding: .55rem .8rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 13%);
+}
+.app[data-board-style="arena"] .brand .mark {
+  border: 1px solid color-mix(in srgb, var(--accent) 52%, transparent);
+  border-radius: 50%; box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.app[data-board-style="arena"] .layout {
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 22px;
+  padding: clamp(.4rem, 1vw, .9rem);
+  background: color-mix(in srgb, var(--surface) 10%, transparent);
+  gap: clamp(.45rem, 1.1vw, .8rem);
+}
+.app[data-board-style="arena"] .layout .battlefield {
+  background: color-mix(in srgb, var(--surface) 83%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: 18px;
+  min-height: 116px;
+  padding: .65rem .8rem;
+  box-shadow: inset 0 2px 18px rgb(0 0 0 / 7%);
+}
+.app[data-board-style="arena"] .layout .battlefield .row {
+  justify-content: center;
+  align-items: flex-start;
+  gap: clamp(.4rem, 1vw, .9rem);
+}
+.app[data-board-style="arena"] .layout .battlefield h2 {
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .045em;
+  color: var(--ink-muted);
+}
+.app[data-board-style="arena"] .layout > .player-bar,
+.app[data-board-style="arena"] .board > .player-bar {
+  width: min(100%, 760px);
+  justify-self: center;
+  margin-inline: auto;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 10%);
+  padding: .45rem 1rem;
+}
+.app[data-board-style="arena"] .layout .player-bar .life-value,
+.app[data-board-style="arena"] .board .player-bar .life-value {
+  font-variant-numeric: tabular-nums; font-size: 1.65rem;
+}
+.app[data-board-style="arena"] .layout .middle {
+  border-top: 1px solid color-mix(in srgb, var(--accent) 43%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 43%, transparent);
+  padding-block: .55rem; align-items: center;
+}
+.app[data-board-style="arena"] .layout .rival-hand { justify-content: center; gap: .15rem; }
+.app[data-board-style="arena"] .layout .mini-back {
+  border-radius: 7px; box-shadow: 0 2px 7px rgb(0 0 0 / 25%);
+}
+.app[data-board-style="arena"] .layout .hand-zone,
+.app[data-board-style="arena"] .board .hand-zone {
+  background: color-mix(in srgb, var(--surface) 91%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+  border-radius: 18px;
+  box-shadow: 0 9px 22px rgb(0 0 0 / 13%);
+}
+.app[data-board-style="arena"] .layout .hand-zone .hand-scroll,
+.app[data-board-style="arena"] .board .hand-zone .hand-scroll {
+  justify-content: safe center;
+}
+.app[data-board-style="arena"] .layout .graveyard {
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+}
+.app[data-board-style="arena"] .start-panel,
+.app[data-board-style="arena"] .lesson { box-shadow: 0 14px 36px rgb(0 0 0 / 18%); }
+@media (max-width: 650px) {
+  .app[data-board-style="arena"] .topbar { padding: .45rem .6rem; }
+  .app[data-board-style="arena"] .layout { border-radius: 15px; padding: .4rem; }
+  .app[data-board-style="arena"] .layout > .player-bar,
+  .app[data-board-style="arena"] .board > .player-bar {
+    border-radius: 13px; padding: .4rem .6rem;
+  }
+  .app[data-board-style="arena"] .layout .battlefield { padding: .55rem .55rem; }
+  .app[data-board-style="arena"] .layout .battlefield .row { justify-content: flex-start; }
+  .app[data-board-style="arena"] .layout .hand-zone .hand-scroll,
+  .app[data-board-style="arena"] .board .hand-zone .hand-scroll { justify-content: flex-start; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .app[data-board-style="arena"] .topbar,
+  .app[data-board-style="arena"] .layout .battlefield,
+  .app[data-board-style="arena"] .layout .hand-zone { background: var(--surface); }
+}
