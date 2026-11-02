@@ -52,9 +52,20 @@
     {/if}
   </header>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <div class="hand-scroll" bind:this={scroller} onscroll={updateOverflow} role="region" tabindex="0" aria-label={`${title}, ${objects.length} cartas. Desplázate para ver todas.`}>
-    {#each objects as obj (obj.id)}
-      <div class="hand-card">
+  <div
+    class="hand-scroll"
+    class:fan={session.boardStyle === 'arena' && objects.length >= 2 && objects.length <= 7}
+    bind:this={scroller}
+    onscroll={updateOverflow}
+    role="region"
+    tabindex="0"
+    aria-label={`${title}, ${objects.length} cartas. Desplázate para ver todas.`}
+  >
+    {#each objects as obj, index (obj.id)}
+      <div
+        class="hand-card"
+        style={`--fan-angle: ${(index - (objects.length - 1) / 2) * 2.4}deg; --fan-drop: ${Math.abs(index - (objects.length - 1) / 2) * 3}px`}
+      >
         <BoardCard object={obj} meta={metaFor(obj)} highlight={focusId === obj.id} {onselect} />
         {#if focusId === obj.id}
           <span class="playable focus">Toca esta carta</span>
@@ -80,6 +91,33 @@
   .scroll-controls button { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 7px; width: 2rem; height: 1.8rem; }
   .hand-scroll { min-width: 0; max-width: 100%; display: flex; gap: .65rem; overflow-x: auto; overflow-y: visible; padding: .6rem .2rem .8rem; scroll-snap-type: x proximity; }
   .hand-card { position: relative; scroll-snap-align: start; display: flex; flex-direction: column; gap: .2rem; }
+  /*
+   * Compact visual fan only when enough horizontal space exists.
+   * Scrollable real DOM order remains the source of truth, and no card is
+   * removed or hidden. Large hands use the original unmodified scroller.
+   */
+  @media (min-width: 1220px) {
+    .hand-scroll.fan { gap: 0; padding: 1.4rem .5rem 1.7rem; scroll-snap-type: none; }
+    .hand-scroll.fan .hand-card {
+      flex: 0 0 auto;
+      z-index: 0;
+      transform-origin: center 82%;
+      transform: translateY(var(--fan-drop)) rotate(var(--fan-angle));
+      transition: transform 160ms ease, filter 160ms ease;
+    }
+    .hand-scroll.fan .hand-card + .hand-card { margin-left: calc(var(--card-w) * -.3); }
+    .hand-scroll.fan .hand-card:is(:hover, :focus-within) {
+      transform: translateY(-12px) rotate(0deg) scale(1.04);
+      z-index: 2;
+      filter: drop-shadow(0 8px 9px rgb(0 0 0 / 17%));
+    }
+    .hand-scroll.fan .hand-card:has([data-tutorial-focus="true"]) {
+      z-index: 3;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hand-scroll.fan .hand-card { transition: none; }
+  }
   .playable { color: var(--ok); font-size: .68rem; text-align: center; max-width: var(--card-w); }
   /* The tutorial's cue: written, not only coloured. */
   .playable.focus { color: var(--accent); font-weight: 700; }
