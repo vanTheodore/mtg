@@ -241,7 +241,7 @@ test('objetivo elegido con clic en el jugador y daño visible', async ({ page })
       // Phase genuinely asks the other seat to discard at cleanup. The
       // regression test must answer that *legal UI decision*, not loop forever
       // searching for a Pass Priority control that cannot exist here.
-      const discard = decision.getByRole('group', { name: 'Descartar hasta siete cartas' });
+      const discard = decision.locator('[aria-label="Descartar hasta siete cartas"]');
       const label = await discard.locator('strong').innerText();
       const needed = Number(label.match(/Descartar (\d+)/)?.[1] ?? 0);
       expect(needed).toBeGreaterThan(0);
