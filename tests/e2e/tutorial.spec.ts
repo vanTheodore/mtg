@@ -159,10 +159,10 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await expect(stepTitle(page)).toHaveText('Juega tu primera tierra', { timeout: 30_000 });
   // La mano se ve cuando el motor ya repartió: antes, el rival tiene el
   // asiento y la mano del aprendiz no se muestra.
-  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({
-    timeout: 60_000
-  });
-  expect(await handNames(page)).toEqual(openingHand);
+  // A visible card alone does not mean the newly restarted engine has
+  // published all seven face names. Compare the complete deterministic hand
+  // across eventual snapshots rather than sampling an intermediate render.
+  await expect.poll(() => handNames(page), { timeout: 60_000 }).toEqual(openingHand);
 });
 
 test('la lección se puede usar con teclado y sinaxe grave', async ({ page }) => {
