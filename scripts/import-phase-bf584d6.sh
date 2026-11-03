@@ -7,7 +7,6 @@ if [[ "${GITHUB_REF_NAME:-}" != "$BRANCH" || "${GITHUB_REPOSITORY:-}" != "vanThe
   echo "Refusing to import outside the dedicated Phase branch" >&2
   exit 2
 fi
-test "$(git rev-parse --abbrev-ref HEAD)" = "$BRANCH"
 test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 test "$(python3 -c 'import json;print(json.load(open("docs/PHASE-UPSTREAM-PIN.json"))["commit"])')" = "$OLD"
 bun scripts/verify-engine.ts >/dev/null
@@ -74,7 +73,7 @@ git rm --quiet .github/workflows/import-phase-bf584d6.yml scripts/import-phase-b
 git add docs/PHASE-UPSTREAM-PIN.json
 for suffix in "${files[@]}"; do git add "crates/phase-engine/$suffix"; done
 count="$(git diff --cached --name-only | wc -l)"
-test "$count" -eq 6 || { echo "Unexpected staged file count $count" >&2; exit 6; }
+test "$count" -eq 8 || { echo "Unexpected staged file count $count" >&2; exit 6; }
 git config user.name "mesa-upstream-sync"
 git config user.email "mesa-upstream-sync@users.noreply.github.com"
 git commit --quiet -m "chore(phase): import five pinned Rust paths from bf584d6"
