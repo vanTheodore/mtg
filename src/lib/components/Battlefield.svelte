@@ -101,8 +101,8 @@
 
   {#snippet renderMiddle()}
     <div class="middle-permanents" data-zone="middle">
-      <div class="middle-lane" aria-label="Zona de tierras">{@render renderLands()}</div>
-      <div class="middle-lane" aria-label="Zona de apoyo">{@render renderSupport()}</div>
+      <div class="middle-lane" role="group" aria-label="Zona de tierras">{@render renderLands()}</div>
+      <div class="middle-lane" role="group" aria-label="Zona de apoyo">{@render renderSupport()}</div>
     </div>
   {/snippet}
 
