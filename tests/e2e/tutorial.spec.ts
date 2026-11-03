@@ -76,11 +76,13 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await expect(stepTitle(page)).toHaveText('Juega tu primera tierra');
   // La mano inicial, ya resuelta el mulligan: es la que la repetición debe
   // volver a dar. Al arrancar, el motor todavía puede estar repartiendo.
-  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({
-    timeout: 60_000
-  });
-  const openingHand = await handNames(page);
-  expect(openingHand.length).toBeGreaterThan(0);
+  // A card can appear while Phase is still resolving the opening mulligan.
+  // Capture a complete seven-card hand instead of an intermediate render.
+  let openingHand: string[] = [];
+  await expect.poll(async () => {
+    openingHand = await handNames(page);
+    return openingHand.length;
+  }, { timeout: 60_000 }).toBe(7);
 
   // ── Una acción inesperada no rompe la lección ─────────────────────────────
   const lions = page.locator('section[aria-label^="Tu mano"] [data-card-id]', { hasText: 'Savannah Lions' }).first();
