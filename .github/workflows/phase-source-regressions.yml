@@ -1,0 +1,67 @@
+# Run genuine Phase source regressions only when the pinned engine changes.
+# Mesa's usual CI covers WASM, bridge parity and Chromium, but intentionally
+# does not compile the thousands of upstream integration tests on every UI PR.
+name: Phase source regressions
+on:
+  pull_request:
+    paths:
+      - 'crates/phase-engine/src/**'
+      - 'crates/phase-engine/tests/integration/**'
+      - 'docs/PHASE-UPSTREAM-PIN.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  targeted-rust:
+    name: Ripple visibility and attacked-recipient Rust tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CARGO_TARGET_DIR: target-phase-regressions
+      CARGO_BUILD_JOBS: '1'
+      CARGO_INCREMENTAL: '0'
+      RUSTFLAGS: '-Zcrate-attr=feature(if_let_guard) -Zcrate-attr=feature(let_chains) -Zthreads=1 -Zshare-generics -Zmir-opt-level=0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-03-02
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target-phase-regressions'
+          shared-key: mesa-phase-regressions
+      - name: Assemble an isolated target from upstream's original tests
+        run: |
+          cat > crates/phase-engine/tests/mesa_phase_regressions.rs <<'RUST'
+          // Do not run or copy every upstream integration shard for UI PRs.
+          // Reuse real pinned upstream test code and fixtures with no duplicate rules.
+          #[path = "integration/support.rs"]
+          mod support;
+          #[path = "integration/attacked_player_referent.rs"]
+          mod attacked_player_referent;
+          #[path = "integration/cast_during_resolution_pipeline.rs"]
+          mod cast_during_resolution_pipeline;
+          RUST
+      - name: Assert the specific upstream regression tests are registered
+        run: |
+          cargo test --locked -p phase-engine --test mesa_phase_regressions -- --list > /tmp/mesa-phase-tests.txt
+          for name in \
+            nested_ripple_bottom_order_cards_are_visible_to_controller \
+            ripple_cast_with_target_pause_keeps_bottom_pile_revealed \
+            finished_ripple_with_stacked_hit_does_not_retain_later_reveal \
+            ripple_free_cast_keeps_reveal_through_mana_ability_color_choice \
+            hellrider_trigger_follows_the_triggering_attacker_not_the_attacking_source \
+            animated_cavalcade_attacking_damages_what_the_triggering_creature_attacks; do
+            grep -Fq "$name: test" /tmp/mesa-phase-tests.txt || {
+              echo "Missing required test: $name" >&2
+              exit 1
+            }
+          done
+      - name: Execute Ripple visibility, pause and cancellation regressions
+        run: cargo test --locked -p phase-engine --test mesa_phase_regressions ripple -- --test-threads=1
+      - name: Execute Hellrider trigger-recipient regressions
+        run: cargo test --locked -p phase-engine --test mesa_phase_regressions hellrider -- --test-threads=1
+      - name: Execute Cavalcade attack-recipient regressions
+        run: cargo test --locked -p phase-engine --test mesa_phase_regressions cavalcade -- --test-threads=1
