@@ -64,7 +64,7 @@
     card_id: obj.card_id + 5000,
     owner: 1,
     controller: 1,
-    attached_to: obj.attached_to == null ? undefined : obj.attached_to + 5000,
+    attached_to: typeof obj.attached_to === 'number' ? obj.attached_to + 5000 : undefined,
     attachments: obj.attachments?.map((id) => id + 5000) ?? []
   })));
   const allObjects = $derived(Object.fromEntries([...hand, ...battlefield, ...(mirrorEnabled ? rivalBattlefield : [])].map((o) => [String(o.id), o])));
