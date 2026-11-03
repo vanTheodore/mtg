@@ -114,19 +114,8 @@
   min-width: 0;
   gap: .25rem;
 }
-.app[data-board-style="arena"] .battlefield[data-side] > h2 { order: 0; }
-.app[data-board-style="arena"] .battlefield[data-side="opponent"] .row[data-zone="lands"] { order: 1; }
-.app[data-board-style="arena"] .battlefield[data-side="opponent"] .row[data-zone="support"],
-.app[data-board-style="arena"] .battlefield[data-side="opponent"] .token-group[data-zone="support"] { order: 2; }
-.app[data-board-style="arena"] .battlefield[data-side="opponent"] .row[data-zone="creatures"],
-.app[data-board-style="arena"] .battlefield[data-side="opponent"] .token-group[data-zone="creatures"] { order: 3; }
-
-.app[data-board-style="arena"] .battlefield[data-side="player"] .row[data-zone="creatures"],
-.app[data-board-style="arena"] .battlefield[data-side="player"] .token-group[data-zone="creatures"] { order: 1; }
-.app[data-board-style="arena"] .battlefield[data-side="player"] .row[data-zone="lands"] { order: 2; }
-.app[data-board-style="arena"] .battlefield[data-side="player"] .row[data-zone="support"],
-.app[data-board-style="arena"] .battlefield[data-side="player"] .token-group[data-zone="support"] { order: 3; }
-
+/* DOM order in Battlefield.svelte now mirrors both seats. Avoid CSS order:
+ * overriding DOM order would put our creatures behind lands again. */
 .app[data-board-style="arena"] .battlefield[data-side] > .row,
 .app[data-board-style="arena"] .battlefield[data-side] > .token-group {
   min-width: 0;
