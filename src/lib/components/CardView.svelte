@@ -46,21 +46,9 @@
   );
   const rulesLang = $derived(impressions.lookup.text(object.name) ? 'es' : 'en');
   const states = $derived([...permanentStates(object, combat), ...(copy ? ['Copia'] : []), ...keywords.map(keywordLabel)]);
-  // The accessible name mirrors the visible face in DOM order: axe's
-  // label-content-name-mismatch (WCAG 2.5.3) requires visible text to be part
-  // of the name, and a card face has several visible fields.
-  const visibleName = $derived.by(() => {
-    const cost = manaText(object.mana_cost ?? meta?.mana_cost);
-    const type = typeLine(object, meta);
-    const rules = rulesText;
-    const pt = object.power != null && object.toughness != null ? `${object.power}/${object.toughness}` : '';
-    const art = imageState === 'error' && failureReason ? failureLabels[failureReason] : imageState === 'resolving' || imageState === 'loading-art' ? 'Buscando ilustración…' : '';
-    // Keep the rendered text sequence intact. Adding commas between fields
-    // breaks the "label in name" rule when the face has visible mana, type,
-    // failure status and rules text (WCAG 2.5.3).
-    return [object.name || meta?.name || 'Carta', cost, type, art, rules, pt, ...states, selectLabel].filter(Boolean).join(' ');
-  });
-  const accessibleName = $derived(hidden ? 'Carta oculta' : visibleName);
+  // The printed face itself supplies the accessible name. It stays in sync
+  // as illustrations and statuses change; hidden cards retain their own safe
+  // explicit label without exposing unknown faces.
   const lookup = $derived.by(() => {
     const base = cardImageLookup(object);
     if (hidden || base.kind === 'token') return base;
@@ -123,7 +111,7 @@
     role="button"
     tabindex="0"
     data-image-state={imageState}
-    aria-label={accessibleName}
+    aria-label={hidden ? 'Carta oculta' : undefined}
     aria-pressed={selected}
     aria-current={highlight ? 'step' : undefined}
     onclick={() => onselect?.(object.id)}
@@ -151,10 +139,10 @@
       <div class="fallback" aria-hidden={imageState === 'ready'}>
         <div class="fallback-head">
           <span class="fallback-name">{object.name || meta?.name || 'Carta'}</span>
-          <span class="fallback-cost" aria-hidden="true">{manaText(object.mana_cost ?? meta?.mana_cost)}</span>
+          <span class="fallback-cost">{manaText(object.mana_cost ?? meta?.mana_cost)}</span>
         </div>
-        <div class="fallback-type" aria-hidden="true">{typeLine(object, meta)}</div>
-        <div class="fallback-art" aria-hidden="true">
+        <div class="fallback-type">{typeLine(object, meta)}</div>
+        <div class="fallback-art">
           {#if imageState === 'error' && failureReason}
             <!-- The note lives in the empty art box: on the card face it was one
                  more cramped line pushing the rules text out (see
@@ -164,14 +152,14 @@
             <span class="spinner"></span><span class="art-status">Buscando ilustración…</span>
           {/if}
         </div>
-        <p class="fallback-text" aria-hidden="true" lang={rulesLang}>{rulesText}</p>
+        <p class="fallback-text" lang={rulesLang}>{rulesText}</p>
         {#if object.power != null && object.toughness != null}
-          <span class="fallback-pt" aria-hidden="true">{object.power}/{object.toughness}</span>
+          <span class="fallback-pt">{object.power}/{object.toughness}</span>
         {/if}
       </div>
     {/if}
     {#if !hidden && states.length}
-      <div class="status-strip" aria-hidden="true">
+      <div class="status-strip">
         {#each states as state (state)}<span class="badge" class:combat-badge={state === 'Atacando' || state === 'Bloqueando'}>{state}</span>{/each}
       </div>
     {/if}
