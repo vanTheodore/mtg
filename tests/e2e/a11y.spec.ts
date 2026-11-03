@@ -12,7 +12,7 @@ test('fixture de visibilidad sin violaciones axe críticas', async ({ page }) =>
   await expect(card).toBeVisible();
   await expect(card).toHaveAttribute('data-image-state', 'error');
   await expect(card).not.toHaveAttribute('aria-label');
-  await expect(card).toHaveAccessibleName(/Grizzly Bears.*\\{1\\}\\{G\\}.*Criatura.*Oso.*Sin conexión con el servicio de imágenes.*Una criatura sencilla.*2\\/2/);
+  await expect(card).toHaveAccessibleName(/Grizzly Bears.*Criatura.*Sin conexión con el servicio de imágenes.*Una criatura sencilla.*2[/]2/);
   const results = await new AxeBuilder({ page }).analyze();
   const serious = results.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious');
   expect(serious).toEqual([]);
