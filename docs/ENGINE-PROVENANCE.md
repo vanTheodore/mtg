@@ -4,9 +4,9 @@ El pin **autoritativo** está en [`docs/PHASE-UPSTREAM-PIN.json`](PHASE-UPSTREAM
 No se debe mantener un SHA histórico duplicado en el verificador ni en otros documentos.
 
 - Upstream: https://github.com/phase-rs/phase
-- Commit incorporado: `0dd35e4a9dfe1dfba697224775d2205d56f7f20d`
+- Commit incorporado: el valor `commit` de [`PHASE-UPSTREAM-PIN.json`](PHASE-UPSTREAM-PIN.json), sin duplicar el SHA aquí.
 - Workspace: `0.119.0`
-- Actualizado mediante PR [#6](https://github.com/vanTheodore/mtg/pull/6) (2 de noviembre de 2026), desde el pin anterior `c2fbb7a`.
+- Actualizaciones importadas: [#6](https://github.com/vanTheodore/mtg/pull/6) (2 de noviembre de 2026) y [#16](https://github.com/vanTheodore/mtg/pull/16) (3 de noviembre de 2026). Véase el historial de importación en esos PR.
 - Crates de reglas importados: `crates/phase-engine`, `crates/phase-ast` y `crates/phase-parser`.
 - Licencias: MIT OR Apache-2.0; `licenses/PHASE-MIT` y `licenses/PHASE-APACHE`.
 
@@ -14,11 +14,7 @@ No se debe mantener un SHA histórico duplicado en el verificador ni en otros do
 
 `bun run engine:verify` recorre `crates/phase-engine/src` y calcula
 SHA-256 de cada ruta/contenido, ordenadas por nombre; compara el digest
-agregado con `sourceSha256` del JSON de procedencia:
-
-```text
-5c4facfdf23732c91dd07cee3555c4c1de144f1ea7e2c613bbab3d142d905f38
-```
+agregado con `sourceSha256` del JSON de procedencia. El digest solo se declara una vez en [`PHASE-UPSTREAM-PIN.json`](PHASE-UPSTREAM-PIN.json); el verificador lo lee directamente y devuelve el valor calculado en su informe.
 
 **Alcance explícito:** esta huella corresponde al código fuente de
 `phase-engine/src`; **no** acredita por sí sola que `phase-ast` o
