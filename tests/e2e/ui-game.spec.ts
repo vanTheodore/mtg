@@ -172,14 +172,19 @@ test('partida completa y victoria desde controles Svelte', async ({ page }) => {
   const history = page.locator('section[aria-label="Registro de la partida"]');
   await expect(history).toContainText(/daño|vidas/);
   await expect(history).toHaveAttribute('data-compact', 'true');
-  // Arena shows the last three events without wasting a board-height on the
-  // full log; nine earlier entries remain accessible through native details.
-  await expect(history.locator(':scope > ol > li')).toHaveCount(3);
-  const more = history.locator('details.older');
+  // Latest event remains announced; all twelve remain on-demand in Arena.
+  const latest = history.locator('.latest[aria-live="polite"]');
+  await expect(latest).toBeVisible();
+  await expect(latest).not.toBeEmpty();
+  const more = history.locator('details.history-entries');
   await expect(more).toBeVisible();
+  await expect(more).not.toHaveAttribute('open', '');
   await more.locator('summary').click();
   await expect(more).toHaveAttribute('open', '');
-  await expect(more.locator('ol > li')).toHaveCount(9);
+  await expect(more.locator('ol > li')).toHaveCount(12);
+  await expect(more.locator('ol')).toContainText(/daño|vidas/);
+  await more.locator('summary').click();
+  await expect(more).not.toHaveAttribute('open', '');
   expect(errors).toEqual([]);
   await page.screenshot({ path: 'test-results/ui-game-victory.png', fullPage: true });
   test.info().annotations.push({ type: 'interacciones', description: `${interactions} acciones, ${handoffs} pasos de asiento, ${discards} descartes` });
