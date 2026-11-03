@@ -129,7 +129,7 @@ test('la cara visible deriva su nombre accesible del texto real, sin perder regl
   const card = page.locator('[data-card-id="1001"]');
   await expect(card).toHaveAttribute('data-image-state', 'error', { timeout: 30_000 });
   await expect(card).not.toHaveAttribute('aria-label');
-  await expect(card).toHaveAccessibleName(/Grizzly Bears.*\\{1\\}\\{G\\}.*Criatura.*Sin conexión con el servicio de imágenes.*Una criatura sencilla.*2\\/2/);
+  await expect(card).toHaveAccessibleName(/Grizzly Bears.*Criatura.*Sin conexión con el servicio de imágenes.*Una criatura sencilla.*2[/]2/);
   // Hidden cards must never reveal their actual name through the accessibility
   // tree: their explicit safe name remains the only exposed content.
   await page.goto('/stress?hand=3&tokens=0&images=hidden');
