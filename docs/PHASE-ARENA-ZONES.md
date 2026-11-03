@@ -16,3 +16,16 @@ at `0dd35e4a9dfe1dfba697224775d2205d56f7f20d`.
 This is still a partial UI port: Phase's editable pane splitter, dynamic
 per-zone scaling and animated target lines are not yet integrated. The
 screen-reader and focus-order invariant must be tested before merge.
+
+## Regresión del CSS anterior
+
+El CSS de la primera adaptación aplicaba `order: 1` a las criaturas propias
+cuando estaban directamente en el flex del campo de batalla. Tras introducir
+la nueva banda `middle-permanents`, esa regla invertía visualmente el orden
+del DOM y volvía a separar las criaturas del centro de combate. Se retiró el
+reordenamiento CSS en Arena: ahora manda el DOM, sin una segunda autoridad.
+
+La fixture `/stress?mirror=1` añade un asiento rival **solo para probar la
+presentación**, sin fabricar acciones ni estados de Phase. El E2E monta la
+misma clase CSS que la partida real y comprueba coordenadas de ambas filas,
+además de su orden en el DOM y de conservar las cartas de cada asiento.

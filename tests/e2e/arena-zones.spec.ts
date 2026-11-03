@@ -31,3 +31,38 @@ test('la agrupación de fichas sigue permitiendo elegir todas las unidades', asy
   await expect(field.locator('[data-card-id]')).toHaveCount(22); // 6 lands, 4 bears, 12 tokens
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 });
+
+test('el orden visual CSS y el DOM espejan ambos asientos en Arena', async ({ page }) => {
+  // Stress supplies two populated presentation-only seats. Apply the real
+  // Arena CSS scope to the fixture; this would expose the obsolete order rules.
+  await page.goto('/stress?hand=3&tokens=0&mirror=1');
+  await page.locator('.stress').evaluate((element) => {
+    element.classList.add('app');
+    element.setAttribute('data-board-style', 'arena');
+  });
+  for (const [side, expectedFirst, expectedLast] of [
+    ['player', 'creatures', 'middle'],
+    ['opponent', 'middle', 'creatures']
+  ] as const) {
+    const field = page.locator(`section.battlefield[data-side="${side}"]`);
+    await expect(field).toBeVisible();
+    const zones = field.locator(':scope > [data-zone]');
+    await expect(zones.first()).toHaveAttribute('data-zone', expectedFirst);
+    await expect(zones.last()).toHaveAttribute('data-zone', expectedLast);
+    await expect(field.locator('.row[data-zone="creatures"] [data-card-id]')).toHaveCount(4);
+    await expect(field.locator('.row[data-zone="lands"] [data-card-id]')).toHaveCount(6);
+    const locations = await field.evaluate((element) => {
+      const creatures = element.querySelector<HTMLElement>(':scope > .row[data-zone="creatures"]');
+      const middle = element.querySelector<HTMLElement>(':scope > .middle-permanents');
+      if (!creatures || !middle) throw new Error('Missing populated mirrored zones');
+      return {
+        creaturesTop: creatures.getBoundingClientRect().top,
+        middleTop: middle.getBoundingClientRect().top,
+        creaturesOrder: getComputedStyle(creatures).order
+      };
+    });
+    expect(locations.creaturesOrder).toBe('0');
+    if (side === 'player') expect(locations.creaturesTop).toBeLessThan(locations.middleTop);
+    else expect(locations.middleTop).toBeLessThan(locations.creaturesTop);
+  }
+});
