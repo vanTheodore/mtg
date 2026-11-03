@@ -45,21 +45,11 @@
       ?? object.oracle_text ?? object.token_rules_text ?? meta?.oracle_text ?? ''
   );
   const rulesLang = $derived(impressions.lookup.text(object.name) ? 'es' : 'en');
+  const rulesDescriptionId = $props.id();
   const states = $derived([...permanentStates(object, combat), ...(copy ? ['Copia'] : []), ...keywords.map(keywordLabel)]);
-  // The accessible name mirrors the visible face in DOM order: axe's
-  // label-content-name-mismatch (WCAG 2.5.3) requires visible text to be part
-  // of the name, and a card face has several visible fields.
-  const visibleName = $derived.by(() => {
-    const cost = manaText(object.mana_cost ?? meta?.mana_cost);
-    const type = typeLine(object, meta);
-    const rules = rulesText;
-    const pt = object.power != null && object.toughness != null ? `${object.power}/${object.toughness}` : '';
-    const art = imageState === 'error' && failureReason ? failureLabels[failureReason] : imageState === 'resolving' || imageState === 'loading-art' ? 'Buscando ilustración' : '';
-    // Same order as the DOM: the note inside the art box comes before the rules
-    // text. axe compares sequences, so the label's order is the assertion.
-    return [object.name || meta?.name || 'Carta', cost, type, art, rules, pt, ...states, selectLabel].filter(Boolean).join(', ');
-  });
-  const accessibleName = $derived(hidden ? 'Carta oculta' : visibleName);
+  // The printed face itself supplies the accessible name. It stays in sync
+  // as illustrations and statuses change; hidden cards retain their own safe
+  // explicit label without exposing unknown faces.
   const lookup = $derived.by(() => {
     const base = cardImageLookup(object);
     if (hidden || base.kind === 'token') return base;
@@ -122,7 +112,8 @@
     role="button"
     tabindex="0"
     data-image-state={imageState}
-    aria-label={accessibleName}
+    aria-label={hidden ? 'Carta oculta' : undefined}
+    aria-describedby={!hidden && rulesText ? rulesDescriptionId : undefined}
     aria-pressed={selected}
     aria-current={highlight ? 'step' : undefined}
     onclick={() => onselect?.(object.id)}
@@ -150,10 +141,10 @@
       <div class="fallback" aria-hidden={imageState === 'ready'}>
         <div class="fallback-head">
           <span class="fallback-name">{object.name || meta?.name || 'Carta'}</span>
-          <span class="fallback-cost" aria-hidden="true">{manaText(object.mana_cost ?? meta?.mana_cost)}</span>
+          <span class="fallback-cost">{manaText(object.mana_cost ?? meta?.mana_cost)}</span>
         </div>
-        <div class="fallback-type" aria-hidden="true">{typeLine(object, meta)}</div>
-        <div class="fallback-art" aria-hidden="true">
+        <div class="fallback-type">{typeLine(object, meta)}</div>
+        <div class="fallback-art">
           {#if imageState === 'error' && failureReason}
             <!-- The note lives in the empty art box: on the card face it was one
                  more cramped line pushing the rules text out (see
@@ -163,18 +154,23 @@
             <span class="spinner"></span><span class="art-status">Buscando ilustración…</span>
           {/if}
         </div>
-        <p class="fallback-text" aria-hidden="true" lang={rulesLang}>{rulesText}</p>
+        <p class="fallback-text" lang={rulesLang}>{rulesText}</p>
         {#if object.power != null && object.toughness != null}
-          <span class="fallback-pt" aria-hidden="true">{object.power}/{object.toughness}</span>
+          <span class="fallback-pt">{object.power}/{object.toughness}</span>
         {/if}
       </div>
     {/if}
     {#if !hidden && states.length}
-      <div class="status-strip" aria-hidden="true">
+      <div class="status-strip">
         {#each states as state (state)}<span class="badge" class:combat-badge={state === 'Atacando' || state === 'Bloqueando'}>{state}</span>{/each}
       </div>
     {/if}
   </div>
+  {#if !hidden && rulesText}
+    <!-- Outside the button: the name follows visible compact fields while
+         the complete rules stay available as an accessible description. -->
+    <span id={rulesDescriptionId} class="rules-description">{rulesText}</span>
+  {/if}
   {#if !hidden}
     <div class="card-tools">
       <button class="inspect" type="button" aria-label={`Ampliar ${object.name}`} onclick={() => oninspect?.(object.id)}>Ampliar</button>
@@ -185,6 +181,7 @@
 
 <style>
   .card-shell { position: relative; width: var(--card-w); flex: 0 0 auto; }
+  .rules-description { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .card-shell.compact { width: calc(var(--card-w) * .78); }
   .card {
     position: relative;
@@ -246,7 +243,7 @@
   /* Below ~132 px of face there is no room for name + cost + type + art +
      rules + P/T at 1.25 card ratio (measured: content 150 px inside a 150 px
      box, art squeezed to 3 px). The rules text is what gets dropped, and it is
-     still readable in "Ampliar" and in the button's accessible name. */
+     still readable in "Ampliar" and the button's accessible description. */
   @container (max-width: 132px) {
     .fallback { padding: .3rem; gap: .15rem; }
     .fallback-name { font-size: .7rem; }

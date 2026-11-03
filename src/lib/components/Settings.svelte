@@ -16,6 +16,13 @@
         </select>
       </label>
       <label>
+        Estilo del tablero
+        <select value={session.boardStyle} onchange={(e) => session.setBoardStyle(e.currentTarget.value as 'arena' | 'classic')}>
+          <option value="arena">Arena (Svelte)</option>
+          <option value="classic">Clásico</option>
+        </select>
+      </label>
+      <label>
         Tamaño de carta
         <input type="range" min="0.7" max="1.6" step="0.1" value={session.cardScale} oninput={(e) => session.setCardScale(Number((e.currentTarget as HTMLInputElement).value))} />
       </label>
