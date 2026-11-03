@@ -123,21 +123,17 @@ test('la cara de la carta no se desborda ni tapa texto, a 320 y 1440', async ({ 
   }
 });
 
-test('el nombre accesible de la carta sigue el orden visible', async ({ page }) => {
-  // Wait for the deliberately unavailable artwork to settle before checking
-  // that both the visible fallback and accessible name describe the same state.
+test('la cara visible deriva su nombre accesible del texto real, sin perder reglas', async ({ page }) => {
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/stress?hand=3&tokens=0');
   const card = page.locator('[data-card-id="1001"]');
   await expect(card).toHaveAttribute('data-image-state', 'error', { timeout: 30_000 });
-  const { visible, label } = await card.evaluate((element) => ({
-    visible: (element as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
-    label: element.getAttribute('aria-label') ?? ''
-  }));
-  // axe's label-content-name-mismatch compares sequences, not sets: the note
-  // lives in the art box, so it must come before the rules text in the name.
-  const words = visible.split(' ').filter((word) => word.length > 2);
-  for (const word of words) expect(label, `«${word}» falta en «${label}»`).toContain(word);
-  expect(label.indexOf('Criatura')).toBeLessThan(label.indexOf('Una criatura sencilla'));
-  expect(label.indexOf('Sin conexión')).toBeLessThan(label.indexOf('Una criatura sencilla'));
+  await expect(card).not.toHaveAttribute('aria-label');
+  await expect(card).toHaveAccessibleName(/Grizzly Bears.*\\{1\\}\\{G\\}.*Criatura.*Sin conexión con el servicio de imágenes.*Una criatura sencilla.*2\\/2/);
+  // Hidden cards must never reveal their actual name through the accessibility
+  // tree: their explicit safe name remains the only exposed content.
+  await page.goto('/stress?hand=3&tokens=0&images=hidden');
+  const hidden = page.locator('[data-card-id="1001"]');
+  await expect(hidden).toHaveAccessibleName('Carta oculta');
+  await expect(hidden).not.toContainText('Grizzly Bears');
 });
