@@ -25,6 +25,12 @@ jobs:
           bun run check
           bun test src/lib
           bun run build
+      # Read-only transport back to the GitHub connector. Package manifest and
+      # lockfile contain public dependency metadata only; no tokens/secrets.
+      - name: Emit exact generated files for import
+        run: |
+          echo "BUN_PACKAGE_JSON_B64:$(base64 -w0 package.json)"
+          echo "BUN_LOCK_B64:$(base64 -w0 bun.lock)"
       - name: Upload generated manifest and lockfile
         uses: actions/upload-artifact@v4
         with:
