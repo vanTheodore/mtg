@@ -59,7 +59,7 @@
   <div
     class="hand-scroll"
     class:fan={useFan}
-    style={useFan ? `--hand-card-w: min(${fanWidth}px, ${(92 / geometry.spreadFactor).toFixed(3)}vw, var(--arena-hand-cap, 100vw)); --fan-overlap: calc(var(--hand-card-w) * ${geometry.overlapFraction})` : undefined}
+    style={useFan ? `--hand-natural-w: min(${fanWidth}px, ${(92 / geometry.spreadFactor).toFixed(3)}vw); --fan-overlap-factor: ${geometry.overlapFraction}` : undefined}
     bind:this={scroller}
     onscroll={updateOverflow}
     role="region"
@@ -103,6 +103,10 @@
    */
   @media (min-width: 1100px) {
     .hand-scroll.fan {
+      /* Hand computes the natural spread; CSS then owns the viewport cap.
+       * No inline custom property can override the short-viewport rule. */
+      --hand-card-w: var(--hand-natural-w);
+      --fan-overlap: calc(var(--hand-card-w) * var(--fan-overlap-factor));
       gap: 0;
       padding: 2rem .5rem 2.4rem;
       scroll-snap-type: none;
@@ -123,6 +127,13 @@
       filter: drop-shadow(0 8px 9px rgb(0 0 0 / 17%));
     }
     .hand-scroll.fan .hand-card:has([data-tutorial-focus="true"]) { z-index: 4; }
+  }
+  @media (min-width: 1100px) and (max-height: 1000px) {
+    .hand-scroll.fan {
+      /* min() is computed here, not from an inline style containing an
+       * inherited cap. This also scales the overlap with the visible cards. */
+      --hand-card-w: min(var(--hand-natural-w), var(--arena-base-card-w, 124px), 15dvh);
+    }
   }
   @media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
     .hand-scroll.fan .hand-card:hover {
