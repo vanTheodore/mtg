@@ -15,6 +15,7 @@
   let handCount = $state(initialHand >= 0 && initialHand <= 60 ? initialHand : 15);
   let tokenCount = $state(initialTokens >= 0 && initialTokens <= 60 ? initialTokens : 12);
   let imageMode = $state<'fallback' | 'hidden'>(initialParams.get('images') === 'hidden' ? 'hidden' : 'fallback');
+  let mirrorEnabled = $state(initialParams.get('mirror') === '1');
 
   onMount(() => {
     const params = new URLSearchParams(location.search);
@@ -23,6 +24,7 @@
     if (h >= 0 && h <= 60) handCount = h;
     if (t >= 0 && t <= 60) tokenCount = t;
     if (params.get('images') === 'hidden') imageMode = 'hidden';
+    mirrorEnabled = params.get('mirror') === '1';
   });
 
   const metas: Record<string, CardMeta> = {
@@ -55,7 +57,17 @@
     ...Array.from({ length: tokenCount }, (_, i) => card(3000 + i, { name: 'Soldier Token', zone: 'Battlefield', display_source: 'Token', card_types: { core_types: ['Creature'], subtypes: ['Soldier'] }, power: 1, toughness: 1, token_art: { power: 1, toughness: 1, colors: ['White'], subtypes: ['Soldier'], keywords: [], has_abilities: false } }))
   ]);
 
-  const allObjects = $derived(Object.fromEntries([...hand, ...battlefield].map((o) => [String(o.id), o])));
+  // Optional second seat for deterministic *presentation* tests; no Phase rules or actions.
+  const rivalBattlefield = $derived(battlefield.map((obj) => ({
+    ...obj,
+    id: obj.id + 5000,
+    card_id: obj.card_id + 5000,
+    owner: 1,
+    controller: 1,
+    attached_to: typeof obj.attached_to === 'number' ? obj.attached_to + 5000 : undefined,
+    attachments: obj.attachments?.map((id) => id + 5000) ?? []
+  })));
+  const allObjects = $derived(Object.fromEntries([...hand, ...battlefield, ...(mirrorEnabled ? rivalBattlefield : [])].map((o) => [String(o.id), o])));
   const cardWidth = $derived(Math.round(148 * session.cardScale));
 </script>
 
@@ -77,6 +89,9 @@
       </select>
     </label>
   </div>
+  {#if mirrorEnabled}
+    <Battlefield objects={rivalBattlefield} {metas} owner={1} side="opponent" label="Campo rival de prueba" />
+  {/if}
   <Battlefield objects={battlefield} {metas} owner={0} label="Campo de prueba" />
   <Hand objects={hand} {metas} title="Mano de prueba" />
   <InspectDialog {metas} objects={allObjects} byObject={{}} />

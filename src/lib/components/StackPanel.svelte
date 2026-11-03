@@ -23,7 +23,7 @@
   }));
 </script>
 
-<section class="stack" aria-label="Pila">
+<section class="stack" aria-label="Pila" data-empty={stack.length === 0}>
   <h2>Pila <span class="count">{stack.length}</span></h2>
   {#if stack.length === 0}
     <p class="muted">La pila está vacía.</p>
