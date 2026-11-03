@@ -169,7 +169,17 @@ test('partida completa y victoria desde controles Svelte', async ({ page }) => {
   expect(interactions).toBeGreaterThan(20);
   expect(handoffs).toBeGreaterThan(0);
   expect(discards).toBeGreaterThanOrEqual(0);
-  await expect(page.locator('section[aria-label="Registro de la partida"]')).toContainText(/daño|vidas/);
+  const history = page.locator('section[aria-label="Registro de la partida"]');
+  await expect(history).toContainText(/daño|vidas/);
+  await expect(history).toHaveAttribute('data-compact', 'true');
+  // Arena shows the last three events without wasting a board-height on the
+  // full log; nine earlier entries remain accessible through native details.
+  await expect(history.locator(':scope > ol > li')).toHaveCount(3);
+  const more = history.locator('details.older');
+  await expect(more).toBeVisible();
+  await more.locator('summary').click();
+  await expect(more).toHaveAttribute('open', '');
+  await expect(more.locator('ol > li')).toHaveCount(9);
   expect(errors).toEqual([]);
   await page.screenshot({ path: 'test-results/ui-game-victory.png', fullPage: true });
   test.info().annotations.push({ type: 'interacciones', description: `${interactions} acciones, ${handoffs} pasos de asiento, ${discards} descartes` });

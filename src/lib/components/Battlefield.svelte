@@ -37,6 +37,10 @@
   }));
   const creatureTokens = $derived(tokenGroups.filter((group) => group.items[0]?.card_types?.core_types?.includes('Creature')));
   const supportTokens = $derived(tokenGroups.filter((group) => !group.items[0]?.card_types?.core_types?.includes('Creature')));
+  // Do not reserve half of the lane for absent permanents: a six-land board
+  // should remain one row when nothing else occupies the back of the table.
+  const hasLands = $derived(lands.length > 0);
+  const hasSupport = $derived(other.length > 0 || supportTokens.length > 0);
   function metaFor(obj: GameObject): CardMeta | undefined { return metas[obj.printed_ref?.oracle_id ?? ''] ?? metas[obj.name.toLowerCase()]; }
   function toggle(key: string) { expanded[key] = !expanded[key]; }
 </script>
@@ -100,10 +104,16 @@
   {/snippet}
 
   {#snippet renderMiddle()}
-    <div class="middle-permanents" data-zone="middle">
-      <div class="middle-lane" role="group" aria-label="Zona de tierras">{@render renderLands()}</div>
-      <div class="middle-lane" role="group" aria-label="Zona de apoyo">{@render renderSupport()}</div>
-    </div>
+    {#if hasLands || hasSupport}
+      <div class="middle-permanents" class:single-lane={!(hasLands && hasSupport)} data-zone="middle">
+        {#if hasLands}
+          <div class="middle-lane" role="group" aria-label="Zona de tierras">{@render renderLands()}</div>
+        {/if}
+        {#if hasSupport}
+          <div class="middle-lane" role="group" aria-label="Zona de apoyo">{@render renderSupport()}</div>
+        {/if}
+      </div>
+    {/if}
   {/snippet}
 
   {#if mine.length === 0}
@@ -130,6 +140,7 @@
   .row { display: flex; flex-wrap: wrap; gap: .8rem; padding: .5rem .2rem; overflow: visible; }
   /* Phase: creatures nearest combat, lands and support share the back row. */
   .middle-permanents { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .55rem; align-items: start; }
+  .middle-permanents.single-lane { grid-template-columns: minmax(0, 1fr); }
   .middle-lane { min-width: 0; }
   .middle-lane .row { justify-content: flex-start; }
   @media (max-width: 620px) {

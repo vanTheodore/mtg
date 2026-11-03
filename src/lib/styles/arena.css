@@ -128,3 +128,25 @@
     min-height: 0;
   }
 }
+
+/* Arena HUD: retain all legal decisions and stack data, but let a long event
+ * history occupy only three recent rows until the player explicitly expands it.
+ * Empty stack remains announced as "Pila 0" (the muted explanatory copy is
+ * still in the accessibility tree) without consuming a full card-height. */
+.app[data-board-style="arena"] .layout .center { gap: .4rem; align-content: start; }
+.app[data-board-style="arena"] .layout .history { padding: .5rem .65rem; }
+.app[data-board-style="arena"] .layout .stack[data-empty="true"] {
+  padding: .35rem .65rem;
+  position: relative;
+}
+.app[data-board-style="arena"] .layout .stack[data-empty="true"] h2 { margin: 0; font-size: .84rem; }
+.app[data-board-style="arena"] .layout .stack[data-empty="true"] p.muted {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

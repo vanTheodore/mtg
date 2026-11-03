@@ -66,3 +66,28 @@ test('el orden visual CSS y el DOM espejan ambos asientos en Arena', async ({ pa
     else expect(locations.middleTop).toBeLessThan(locations.creaturesTop);
   }
 });
+
+test('Arena entrega toda la banda trasera a las tierras si el apoyo está vacío', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/stress?hand=3&tokens=0&mirror=1');
+  for (const side of ['player', 'opponent']) {
+    const battlefield = page.locator(`section.battlefield[data-side="${side}"]`);
+    const middle = battlefield.locator('.middle-permanents');
+    await expect(middle).toHaveClass(/single-lane/);
+    await expect(middle.getByRole('group', { name: 'Zona de apoyo' })).toHaveCount(0);
+    const lands = middle.locator('.row[data-zone="lands"] [data-card-id]');
+    await expect(lands).toHaveCount(6);
+    const metrics = await middle.evaluate((element) => {
+      const lane = element.querySelector<HTMLElement>('.middle-lane');
+      const cards = [...element.querySelectorAll<HTMLElement>('.row[data-zone="lands"] [data-card-id]')];
+      if (!lane || cards.length !== 6) throw new Error('Missing six land cards');
+      const tops = cards.map((card) => card.getBoundingClientRect().top);
+      return {
+        fullWidth: lane.getBoundingClientRect().width / element.getBoundingClientRect().width,
+        rowTopSpread: Math.max(...tops) - Math.min(...tops)
+      };
+    });
+    expect(metrics.fullWidth).toBeGreaterThan(0.95);
+    expect(metrics.rowTopSpread).toBeLessThan(3);
+  }
+});

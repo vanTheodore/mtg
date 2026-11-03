@@ -367,7 +367,7 @@
         {/if}
         <div class="center">
           <StackPanel />
-          <HistoryPanel />
+          <HistoryPanel compact={session.boardStyle === 'arena'} />
         </div>
         <DecisionPanel />
       </div>
