@@ -109,14 +109,22 @@ test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni
   expect(compactWidth).toBeGreaterThan(90);
   expect(compactWidth).toBeLessThanOrEqual(130);
 
+  // Compare the same Arena scene at a tall viewport, without changing
+  // gameplay, hands or HUD. Comparing Classic's height would be misleading:
+  // only Arena renders the additional Phase turn track.
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  const tallWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
+  const tallHeight = await page.locator('.layout').evaluate((node) => node.getBoundingClientRect().height);
+  expect(tallWidth - compactWidth).toBeGreaterThan(20);
+  expect(tallHeight - compactHeight).toBeGreaterThan(25);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole('button', { name: 'Ajustes' }).click();
   const style = page.getByRole('combobox', { name: 'Estilo del tablero' });
   await style.selectOption('classic');
   await expect(app).toHaveAttribute('data-board-style', 'classic');
   const classicWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
-  const classicHeight = await page.locator('.layout').evaluate((node) => node.getBoundingClientRect().height);
   expect(classicWidth).toBeGreaterThanOrEqual(145);
-  expect(classicHeight - compactHeight).toBeGreaterThan(25);
 
   // Mobile deliberately keeps its original scrollable card sizes, and switching
   // board style never changes the Phase-reported hand count or objects.
