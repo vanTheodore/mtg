@@ -54,10 +54,11 @@
     const type = typeLine(object, meta);
     const rules = rulesText;
     const pt = object.power != null && object.toughness != null ? `${object.power}/${object.toughness}` : '';
-    const art = imageState === 'error' && failureReason ? failureLabels[failureReason] : imageState === 'resolving' || imageState === 'loading-art' ? 'Buscando ilustración' : '';
-    // Same order as the DOM: the note inside the art box comes before the rules
-    // text. axe compares sequences, so the label's order is the assertion.
-    return [object.name || meta?.name || 'Carta', cost, type, art, rules, pt, ...states, selectLabel].filter(Boolean).join(', ');
+    const art = imageState === 'error' && failureReason ? failureLabels[failureReason] : imageState === 'resolving' || imageState === 'loading-art' ? 'Buscando ilustración…' : '';
+    // Keep the rendered text sequence intact. Adding commas between fields
+    // breaks the "label in name" rule when the face has visible mana, type,
+    // failure status and rules text (WCAG 2.5.3).
+    return [object.name || meta?.name || 'Carta', cost, type, art, rules, pt, ...states, selectLabel].filter(Boolean).join(' ');
   });
   const accessibleName = $derived(hidden ? 'Carta oculta' : visibleName);
   const lookup = $derived.by(() => {
