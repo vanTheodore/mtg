@@ -191,3 +191,31 @@
     padding-block: .3rem;
   }
 }
+
+/* The contextual HUD gives legal decisions priority and keeps stack/history
+ * alongside instead of expanding the battlefield. Only Arena desktop uses
+ * this treatment; Classic and small screens keep their DOM/layout order. */
+@media (min-width: 1100px) {
+  .app[data-board-style="arena"] .layout .middle {
+    grid-template-columns: minmax(235px, .53fr) minmax(0, 1.22fr);
+    gap: .5rem .65rem;
+    align-items: start;
+  }
+  .app[data-board-style="arena"] .layout .middle > .center {
+    gap: .4rem;
+    align-content: start;
+  }
+  .app[data-board-style="arena"] .layout .middle > .decision {
+    padding: .65rem .8rem;
+  }
+  .app[data-board-style="arena"] .layout .middle > .decision .actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+  .app[data-board-style="arena"] .layout .middle > .decision .actions > button {
+    flex: 0 1 auto;
+    min-width: min(100%, 9rem);
+    max-width: 100%;
+  }
+}

@@ -147,3 +147,42 @@ test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni
   await expect(lastCard).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 });
+
+test('Arena compacta decisiones e historial sin perder Clásico ni móvil', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/?autostart');
+  const middle = page.locator('main.layout > .middle');
+  const history = middle.locator('section[aria-label="Registro de la partida"]');
+  const decision = middle.locator('section[aria-label="Decisión pendiente"]');
+  await expect(decision).toBeVisible({ timeout: 180_000 });
+  await expect(history).toHaveAttribute('data-compact', 'true');
+  await expect(history.locator('p.latest[aria-live="polite"]')).toBeVisible();
+
+  const desktop = await middle.evaluate((element) => {
+    const left = element.querySelector<HTMLElement>('.center')!.getBoundingClientRect();
+    const right = element.querySelector<HTMLElement>('.decision')!.getBoundingClientRect();
+    return { leftX: left.x, leftWidth: left.width, rightX: right.x, rightWidth: right.width, yDifference: Math.abs(right.y - left.y) };
+  });
+  expect(desktop.rightX).toBeGreaterThan(desktop.leftX + desktop.leftWidth - 3);
+  expect(desktop.rightWidth).toBeGreaterThan(desktop.leftWidth * 1.45);
+  expect(desktop.yDifference).toBeLessThan(4);
+
+  await page.getByRole('button', { name: 'Ajustes' }).click();
+  const mode = page.getByRole('combobox', { name: 'Estilo del tablero' });
+  await mode.selectOption('classic');
+  await expect(history).toHaveAttribute('data-compact', 'false');
+  await expect(history.locator('.latest')).toHaveCount(0);
+  await mode.selectOption('arena');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(history).toHaveAttribute('data-compact', 'true');
+  await expect(decision).toBeVisible();
+  const mobile = await middle.evaluate((element) => {
+    const left = element.querySelector<HTMLElement>('.center')!.getBoundingClientRect();
+    const right = element.querySelector<HTMLElement>('.decision')!.getBoundingClientRect();
+    return { horizontalDifference: Math.abs(right.x - left.x), below: right.y - left.bottom };
+  });
+  expect(mobile.horizontalDifference).toBeLessThan(4);
+  expect(mobile.below).toBeGreaterThanOrEqual(-2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+});
