@@ -4,6 +4,7 @@ import type { TokenArtDescriptor } from '#lib/engine/types.ts';
 interface ScryfallFace { name?: string; oracle_id?: string; image_uris?: Record<string, unknown>; power?: string; toughness?: string }
 export interface ScryfallCard {
   id?: string; oracle_id?: string; name?: string; layout?: string; lang?: string;
+  image_status?: 'missing' | 'placeholder' | 'lowres' | 'highres_scan';
   image_uris?: Record<string, unknown>; card_faces?: ScryfallFace[];
   power?: string; toughness?: string; colors?: string[]; type_line?: string;
   keywords?: string[]; oracle_text?: string;
@@ -166,7 +167,10 @@ export class CardImageResolver {
         const cards: ScryfallCard[] = attempt.search ? ((payload as { data?: ScryfallCard[] } | null)?.data ?? []) : (payload ? [payload as ScryfallCard] : []);
         for (const card of cards) {
           if ((attempt.source === 'oracle' || attempt.source === 'spanish-print') && lookup.oracleId && card.oracle_id !== lookup.oracleId && !card.card_faces?.some((f) => f.oracle_id === lookup.oracleId)) continue;
-          if (attempt.source === 'spanish-print' && card.lang !== 'es') continue;
+          // A Spanish catalog entry is not proof of a Spanish scan: Scryfall
+          // can report missing/placeholder art for an otherwise real printing.
+          if (attempt.source === 'spanish-print' &&
+              (card.lang !== 'es' || (card.image_status !== 'highres_scan' && card.image_status !== 'lowres'))) continue;
           if (attempt.source === 'token-id' && card.id !== lookup.tokenRef?.scryfall_id) continue;
           if (attempt.search && !matchesTokenShape(card, lookup.tokenArt)) continue;
           const image = selectCardImage(card, lookup);

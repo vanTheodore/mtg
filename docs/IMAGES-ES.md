@@ -9,7 +9,9 @@ Solo se consulta una imagen cuando Phase muestra la identidad de la carta al
 espectador actual. La mano ajena oculta no se consulta ni se revela.
 
 El buscador usa el nombre Oracle exacto con `lang:es` y valida el Oracle ID
-antes de aceptar el resultado. Cuando no se dispone de imagen localizada, usa
+antes de aceptar el resultado. Exige además `image_status` `highres_scan` o
+`lowres`: una impresión con imagen `missing` o `placeholder` no se
+presenta como un escaneo español. Cuando no se dispone de imagen localizada, usa
 la ruta inglesa existente. El cache incluye idioma y respeta intervalos,
 429 y Retry-After. No se copian imágenes al repositorio.
 
