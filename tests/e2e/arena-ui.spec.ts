@@ -91,3 +91,46 @@ test('Phase Arena conserva ambos asientos y permite volver al modo Clásico', as
   await expect(opponent).toBeVisible();
   await expect(player).toBeVisible();
 });
+
+test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni móvil', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  const start = page.getByRole('button', { name: 'Iniciar partida' });
+  await expect(start).toBeEnabled({ timeout: 30_000 });
+  await start.click();
+  const app = page.locator('.app');
+  await expect(app).toHaveAttribute('data-board-style', 'arena');
+  const hand = page.locator('section.hand-zone[aria-label^="Tu mano"]');
+  await expect.poll(() => hand.locator('[data-card-id]').count(), { timeout: 180_000 }).toBe(7);
+
+  const first = hand.locator('.hand-card .card-shell').first();
+  const compactWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
+  const compactHeight = await page.locator('.layout').evaluate((node) => node.getBoundingClientRect().height);
+  expect(compactWidth).toBeGreaterThan(90);
+  expect(compactWidth).toBeLessThanOrEqual(130);
+
+  await page.getByRole('button', { name: 'Ajustes' }).click();
+  const style = page.getByRole('combobox', { name: 'Estilo del tablero' });
+  await style.selectOption('classic');
+  await expect(app).toHaveAttribute('data-board-style', 'classic');
+  const classicWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
+  const classicHeight = await page.locator('.layout').evaluate((node) => node.getBoundingClientRect().height);
+  expect(classicWidth).toBeGreaterThanOrEqual(145);
+  expect(classicHeight - compactHeight).toBeGreaterThan(25);
+
+  // Mobile deliberately keeps its original scrollable card sizes, and switching
+  // board style never changes the Phase-reported hand count or objects.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await style.selectOption('arena');
+  await expect(app).toHaveAttribute('data-board-style', 'arena');
+  await expect(hand.locator('[data-card-id]')).toHaveCount(7);
+  const mobileWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
+  expect(mobileWidth).toBeGreaterThan(125);
+  const region = hand.getByRole('region', { name: /Tu mano/ });
+  await expect(region).toBeVisible();
+  const lastCard = region.locator('[data-card-id]').last();
+  await lastCard.scrollIntoViewIfNeeded();
+  await lastCard.focus();
+  await expect(lastCard).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+});

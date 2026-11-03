@@ -59,7 +59,7 @@
   <div
     class="hand-scroll"
     class:fan={useFan}
-    style={useFan ? `--hand-card-w: min(${fanWidth}px, ${(92 / geometry.spreadFactor).toFixed(3)}vw); --fan-overlap: calc(var(--hand-card-w) * ${geometry.overlapFraction})` : undefined}
+    style={useFan ? `--hand-card-w: min(${fanWidth}px, ${(92 / geometry.spreadFactor).toFixed(3)}vw, var(--arena-hand-cap, 100vw)); --fan-overlap: calc(var(--hand-card-w) * ${geometry.overlapFraction})` : undefined}
     bind:this={scroller}
     onscroll={updateOverflow}
     role="region"

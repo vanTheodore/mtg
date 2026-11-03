@@ -150,3 +150,44 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/*
+ * Arena viewport density: Phase-style battlefield composition on 1100px+
+ * landscape workstations. Card scale remains user-adjustable (the app writes
+ * --arena-base-card-w); the viewport height only CAPS it, never overrides
+ * the user's smaller density preference. Classic and phone remain unchanged.
+ *
+ * The fan uses the same cap via Hand.svelte; its original wide overlap,
+ * rotation, hover, focus, and horizontal-scroll model are preserved.
+ */
+@media (min-width: 1100px) and (max-height: 1000px) {
+  .app[data-board-style="arena"] {
+    --arena-hand-cap: min(var(--arena-base-card-w), 15dvh);
+  }
+  .app[data-board-style="arena"] .layout {
+    --card-w: min(var(--arena-base-card-w), 15dvh, calc((100vw - 6rem) / 2));
+    gap: clamp(.25rem, .6vw, .55rem);
+    padding: .4rem;
+  }
+  .app[data-board-style="arena"] .layout .battlefield {
+    min-height: 0;
+    padding: .4rem .6rem;
+  }
+  .app[data-board-style="arena"] .layout .battlefield .row {
+    gap: clamp(.25rem, .55vw, .6rem);
+    padding-block: .2rem;
+  }
+  .app[data-board-style="arena"] .layout .hand-zone {
+    padding: .4rem .6rem;
+  }
+  .app[data-board-style="arena"] .layout .hand-zone .hand-scroll.fan {
+    padding-block: 1.5rem 1.25rem;
+  }
+  .app[data-board-style="arena"] .layout .middle {
+    padding-block: .35rem;
+    gap: .45rem;
+  }
+  .app[data-board-style="arena"] .layout .player-bar {
+    padding-block: .3rem;
+  }
+}
