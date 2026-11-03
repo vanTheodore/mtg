@@ -112,6 +112,7 @@
     tabindex="0"
     data-image-state={imageState}
     aria-label={hidden ? 'Carta oculta' : undefined}
+    aria-description={!hidden && rulesText ? rulesText : undefined}
     aria-pressed={selected}
     aria-current={highlight ? 'step' : undefined}
     onclick={() => onselect?.(object.id)}
@@ -235,7 +236,7 @@
   /* Below ~132 px of face there is no room for name + cost + type + art +
      rules + P/T at 1.25 card ratio (measured: content 150 px inside a 150 px
      box, art squeezed to 3 px). The rules text is what gets dropped, and it is
-     still readable in "Ampliar" and in the button's accessible name. */
+     still readable in "Ampliar" and the button's accessible description. */
   @container (max-width: 132px) {
     .fallback { padding: .3rem; gap: .15rem; }
     .fallback-name { font-size: .7rem; }
