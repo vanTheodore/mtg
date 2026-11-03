@@ -104,16 +104,21 @@ test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni
   await expect.poll(() => hand.locator('[data-card-id]').count(), { timeout: 180_000 }).toBe(7);
 
   const first = hand.locator('.hand-card .card-shell').first();
-  const compactWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
+  // The first fan card is rotated; its axis-aligned bounding rectangle
+  // includes corners and does not measure the intended card CSS width.
+  const compactWidth = await first.evaluate((node) => parseFloat(getComputedStyle(node).width));
   const compactHeight = await page.locator('.layout').evaluate((node) => node.getBoundingClientRect().height);
   expect(compactWidth).toBeGreaterThan(90);
   expect(compactWidth).toBeLessThanOrEqual(130);
+  const fanBoundsWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
+  expect(fanBoundsWidth).toBeGreaterThan(compactWidth);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 
   // Compare the same Arena scene at a tall viewport, without changing
   // gameplay, hands or HUD. Comparing Classic's height would be misleading:
   // only Arena renders the additional Phase turn track.
   await page.setViewportSize({ width: 1440, height: 1100 });
-  const tallWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
+  const tallWidth = await first.evaluate((node) => parseFloat(getComputedStyle(node).width));
   const tallHeight = await page.locator('.layout').evaluate((node) => node.getBoundingClientRect().height);
   expect(tallWidth - compactWidth).toBeGreaterThan(20);
   expect(tallHeight - compactHeight).toBeGreaterThan(25);
@@ -123,7 +128,7 @@ test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni
   const style = page.getByRole('combobox', { name: 'Estilo del tablero' });
   await style.selectOption('classic');
   await expect(app).toHaveAttribute('data-board-style', 'classic');
-  const classicWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
+  const classicWidth = await first.evaluate((node) => parseFloat(getComputedStyle(node).width));
   expect(classicWidth).toBeGreaterThanOrEqual(145);
 
   // Mobile deliberately keeps its original scrollable card sizes, and switching
@@ -132,7 +137,7 @@ test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni
   await style.selectOption('arena');
   await expect(app).toHaveAttribute('data-board-style', 'arena');
   await expect(hand.locator('[data-card-id]')).toHaveCount(7);
-  const mobileWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
+  const mobileWidth = await first.evaluate((node) => parseFloat(getComputedStyle(node).width));
   expect(mobileWidth).toBeGreaterThan(125);
   const region = hand.getByRole('region', { name: /Tu mano/ });
   await expect(region).toBeVisible();
