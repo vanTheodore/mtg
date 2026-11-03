@@ -45,6 +45,7 @@
       ?? object.oracle_text ?? object.token_rules_text ?? meta?.oracle_text ?? ''
   );
   const rulesLang = $derived(impressions.lookup.text(object.name) ? 'es' : 'en');
+  const rulesDescriptionId = $props.id();
   const states = $derived([...permanentStates(object, combat), ...(copy ? ['Copia'] : []), ...keywords.map(keywordLabel)]);
   // The printed face itself supplies the accessible name. It stays in sync
   // as illustrations and statuses change; hidden cards retain their own safe
@@ -112,7 +113,7 @@
     tabindex="0"
     data-image-state={imageState}
     aria-label={hidden ? 'Carta oculta' : undefined}
-    aria-description={!hidden && rulesText ? rulesText : undefined}
+    aria-describedby={!hidden && rulesText ? rulesDescriptionId : undefined}
     aria-pressed={selected}
     aria-current={highlight ? 'step' : undefined}
     onclick={() => onselect?.(object.id)}
@@ -165,6 +166,11 @@
       </div>
     {/if}
   </div>
+  {#if !hidden && rulesText}
+    <!-- Outside the button: the name follows visible compact fields while
+         the complete rules stay available as an accessible description. -->
+    <span id={rulesDescriptionId} class="rules-description">{rulesText}</span>
+  {/if}
   {#if !hidden}
     <div class="card-tools">
       <button class="inspect" type="button" aria-label={`Ampliar ${object.name}`} onclick={() => oninspect?.(object.id)}>Ampliar</button>
@@ -175,6 +181,7 @@
 
 <style>
   .card-shell { position: relative; width: var(--card-w); flex: 0 0 auto; }
+  .rules-description { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .card-shell.compact { width: calc(var(--card-w) * .78); }
   .card {
     position: relative;
