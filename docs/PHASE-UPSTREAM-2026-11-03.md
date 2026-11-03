@@ -1,12 +1,12 @@
 # Auditoría de Phase upstream — 3 de noviembre de 2026
 
-## Puntero vigente, comprobado contra GitHub
+## Punto de partida de la auditoría, comprobado contra GitHub
 
 - Repositorio: https://github.com/phase-rs/phase
-- Copia importada en Mesa (PR #6): `0dd35e4a9dfe1dfba697224775d2205d56f7f20d`, 2 de noviembre de 2026
+- Copia inicial al comenzar la auditoría (PR #6): `0dd35e4a9dfe1dfba697224775d2205d56f7f20d`, 2 de noviembre de 2026
 - Referencia verificable local: [`PHASE-UPSTREAM-PIN.json`](PHASE-UPSTREAM-PIN.json)
 - Último commit revisado en upstream: [`bf584d6`](https://github.com/phase-rs/phase/commit/bf584d6bd39f254549be49ed9ff2b845e748e32c)
-- Diferencia: **4 commits** y **8 rutas**, sin divergencia de historial respecto al pin.
+- Diferencia al comenzar la revisión: **4 commits** y **8 rutas**, sin divergencia de historial respecto al pin antiguo. El valor **vigente** se consulta en el JSON de procedencia.
 
 Comparación: https://github.com/phase-rs/phase/compare/0dd35e4a9dfe1dfba697224775d2205d56f7f20d...bf584d6bd39f254549be49ed9ff2b845e748e32c
 
@@ -24,21 +24,12 @@ Los cambios Rust afectan `crates/engine/src/game/coverage.rs`,
 y pruebas de integración. El cliente React upstream y `client/pnpm-lock.yaml`
 no forman parte de Mesa.
 
-## Decisión de integración
+## Implementación en Mesa
 
-**Recomendada:** preparar una actualización **separada** del motor desde el
-commit `0dd35e4` hasta `bf584d6`, importando solo los tres crates
-`phase-engine`, `phase-ast`, `phase-parser` y los cambios Rust correspondientes.
-No copiar dependencias de React ni versiones del cliente Phase.
+Los cambios del motor se incorporaron en el [PR #16](https://github.com/vanTheodore/mtg/pull/16), de forma independiente a las actualizaciones de Svelte y a la UI. Se copiaron **solo cinco rutas Rust** (tres fuentes y dos pruebas); las otras tres rutas de upstream pertenecen exclusivamente al cliente React, pnpm y un test del adaptador del cliente.
 
-**No marcar como implementada todavía.** Deben regenerarse y verificarse
-`docs/PHASE-UPSTREAM-PIN.json`, el hash de procedencia del árbol
-`crates/phase-engine/src`, y, si cambia, `Cargo.lock` mediante el
-procedimiento de importación controlado, sin modificar `main` directamente.
+Cada archivo incorporado se contrastó por **Git blob SHA** contra el pin antiguo y contra `bf584d6`; se actualizó `docs/PHASE-UPSTREAM-PIN.json` y se volvió a ejecutar `engine:verify` con la huella de fuente resultante. No cambió `Cargo.lock`. El workflow temporal con permiso de escritura se eliminó antes del commit.
 
-Puertas para el nuevo PR: `engine:verify`, `cargo metadata --locked`,
-WASM con nightly fijada, paridad nativa/bridge, escenarios de mecánicas,
-proyección de visibilidad Ripple y suite Chromium (incluido tutorial y
-partida completa). Una prueba fallida **bloquea** el merge.
+**Importación no equivale a aprobación:** el PR permanece en borrador mientras se comprueban sus controles. El workflow permanente `Phase source regressions` compila y ejecuta el código de pruebas **original** de Ripple, Hellrider y Cavalcade, además del CI general (WASM, paridad, Chromium). El arnés se genera solo dentro del runner, y el script auxiliar requerido por una herramienta de Phase se descarga solo en el runner y se comprueba contra el blob oficial.
 
-Este informe es una revisión del upstream; no modifica las reglas del motor.
+No aplicar `merge` sin confirmar ambas suites verdes, sin errores de privacidad y con `engine:verify` verificando la huella actual. En el futuro la fuente autoritativa del commit de Phase es el manifiesto, no este informe histórico.
