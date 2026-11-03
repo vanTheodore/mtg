@@ -1,0 +1,21 @@
+name: Mesa Phase import (temporary pinned branch)
+on:
+  push:
+    branches:
+      - maintenance/phase-bf584d6-20261103
+permissions:
+  contents: write
+jobs:
+  import:
+    if: github.repository == 'vanTheodore/mtg' && github.ref == 'refs/heads/maintenance/phase-bf584d6-20261103'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Import five byte-identical upstream source/test paths at fixed SHA
+        run: bash scripts/import-phase-bf584d6.sh
