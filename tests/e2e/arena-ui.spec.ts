@@ -66,35 +66,28 @@ test('las cinco pinturas de Phase están en el build y son WebP reales', async (
 });
 
 
-test('Phase Arena enfrenta las filas de criaturas y conserva los asientos', async ({ page }) => {
+test('Phase Arena conserva ambos asientos y permite volver al modo Clásico', async ({ page }) => {
+  // This is a real Phase lesson, not a fabricated action or injected DOM row.
+  // Populated visual ordering is covered separately in arena-zones.spec.ts.
   await page.goto('/aprender');
-  const rival = page.locator('.battlefield[data-side="opponent"]');
-  const own = page.locator('.battlefield[data-side="player"]');
-  await expect(rival).toBeVisible({ timeout: 180_000 });
-  await expect(own).toBeVisible();
-  // Only presentation order changes. The engine's object IDs and zone membership
-  // remain attached to their original seat; CSS order expresses facing geometry.
-  // The lesson intentionally starts before any creatures exist. Insert one
-  // *presentation-only* row per seat to test the cascade; never modify a
-  // Phase snapshot or fabricate a legal game action.
-  const orders = await page.evaluate(() => {
-    const selectors = ['.battlefield[data-side="player"]', '.battlefield[data-side="opponent"]'];
-    const rows = selectors.map((selector) => {
-      const seat = document.querySelector(selector);
-      if (!seat) throw new Error('Missing seat ' + selector);
-      const row = document.createElement('div');
-      row.className = 'row';
-      row.dataset.zone = 'creatures';
-      seat.append(row);
-      return row;
-    });
-    return rows.map((row) => getComputedStyle(row).order);
-  });
-  expect(orders).toEqual(['1', '3']);
+  const app = page.locator('.app');
+  const opponent = page.locator('section.battlefield[data-side="opponent"]');
+  const player = page.locator('section.battlefield[data-side="player"]');
+  await expect(opponent).toBeVisible({ timeout: 180_000 });
+  await expect(player).toBeVisible();
+  await expect(app).toHaveAttribute('data-board-style', 'arena');
+  await expect(opponent).toContainText('Campo de batalla · maniquí');
+  await expect(player).toContainText('Tu campo de batalla');
+
   await page.getByRole('button', { name: 'Ajustes' }).click();
   await page.getByRole('combobox', { name: 'Estilo del tablero' }).selectOption('classic');
-  await expect(own).toHaveAttribute('data-side', 'player');
-  await expect(rival).toHaveAttribute('data-side', 'opponent');
-  const classicOrder = await own.locator('.row[data-zone="creatures"]').first().evaluate((e) => getComputedStyle(e).order);
-  expect(classicOrder).toBe('0');
+  await expect(app).toHaveAttribute('data-board-style', 'classic');
+  await expect(opponent).toHaveAttribute('data-side', 'opponent');
+  await expect(player).toHaveAttribute('data-side', 'player');
+  // Returning to Arena must preserve both seat identities, not recreate a
+  // fake battlefield or remap any game objects.
+  await page.getByRole('combobox', { name: 'Estilo del tablero' }).selectOption('arena');
+  await expect(app).toHaveAttribute('data-board-style', 'arena');
+  await expect(opponent).toBeVisible();
+  await expect(player).toBeVisible();
 });
