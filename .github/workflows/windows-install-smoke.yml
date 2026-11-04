@@ -51,7 +51,7 @@ jobs:
           fi
 
   windows-smoke:
-    name: Hosted Windows runner: CLI and installer contracts
+    name: 'Hosted Windows runner: CLI and installer contracts'
     needs: [scope]
     if: >-
       always() &&
