@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createBoardDriver } from './support/board-driver.ts';
+import { captureViewportEvidence } from './support/viewport-evidence';
 
 /**
  * 0.5 — a pasted 10E deck played through the Svelte controls, including a real
@@ -122,6 +123,7 @@ test('mazo pegado de 10E: estados, descarga selectiva y arranque 40/40', async (
 
 test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta', async ({ page }) => {
   test.setTimeout(600_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
@@ -204,6 +206,28 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   const draft = driver.decision.locator('ul[aria-label="Bloqueos elegidos"]');
   await expect(draft).toContainText(blockerName);
   await expect(draft).toContainText(attackerName);
+
+  // Capture the *real* Phase combat state while the Svelte draft and legal
+  // confirmation button are on screen. This is distinct from the synthetic
+  // 6+4/7 stress fixture and does not pretend both states are pixel-identical.
+  const confirmBlock = driver.decision.locator('button').filter({ hasText: /^Confirmar bloqueos/ }).first();
+  await expect(confirmBlock).toBeEnabled();
+  const viewport = await captureViewportEvidence(page, 'arena-live-block-1440x900', {
+    layout: 'main.layout',
+    opponentField: 'section.battlefield[data-side="opponent"]',
+    playerField: 'section.battlefield[data-side="player"]',
+    attacker: `[data-card-id="${attackerId}"][data-combat-role="Atacando"]`,
+    blocker: `[data-card-id="${blockerId}"]`,
+    decision: 'section[aria-label="Decisión pendiente"]',
+    confirmation: 'section[aria-label="Decisión pendiente"] .confirmations button.primary',
+    stack: 'section[aria-label="Pila"]',
+    hand: 'section[aria-label^="Tu mano"]'
+  });
+  expect(await driver.app.getAttribute('data-board-style')).toBe('arena');
+  expect(viewport.horizontalOverflow).toBeLessThanOrEqual(1);
+  expect(viewport.elements.attacker).not.toBeNull();
+  expect(viewport.elements.blocker).not.toBeNull();
+  expect(viewport.elements.confirmation).not.toBeNull();
 
   // 3) confirm: Phase validates the assignment and answers with a new revision.
   const before = await driver.revision();
