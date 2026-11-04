@@ -279,4 +279,40 @@
     .card { transition: none; }
     .spinner { animation-duration: 1.6s; }
   }
+
+  /*
+   * Arena 0.8.3: on a short desktop with a real hover pointer, these tools
+   * were invisible yet reserved 24–48px under EVERY card. Show the same
+   * native buttons on hover/focus in an out-of-flow toolbar instead.
+   *
+   * The .card (tabindex=0) receives keyboard focus before its tool buttons,
+   * so :focus-within reveals them before Tab reaches a tool. No display:none:
+   * keyboard and assistive-technology navigation stay intact. Touch, mobile,
+   * Classic and the enlarged inspection dialog retain their normal buttons.
+   */
+  @media (min-width: 1280px) and (max-height: 1000px) and (hover: hover) and (pointer: fine) {
+    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell .card-tools {
+      position: absolute;
+      inset-block-start: 100%;
+      inset-inline-start: 0;
+      z-index: 11;
+      width: max-content;
+      max-width: min(13rem, 90vw);
+      padding: .2rem;
+      margin: 0;
+      background: color-mix(in srgb, var(--surface) 97%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      pointer-events: none;
+    }
+    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:hover,
+    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:focus-within {
+      z-index: 12;
+    }
+    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:hover .card-tools,
+    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:focus-within .card-tools {
+      pointer-events: auto;
+    }
+  }
 </style>

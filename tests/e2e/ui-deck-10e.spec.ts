@@ -233,7 +233,9 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   // real-engine blocking prompt. The sidecar must beat that baseline.
   // PR #27: 396px debt at real Phase DeclareBlockers 1440×900.
   // Reduce at least 75px while preserving all clickable Phase targets.
-  expect(viewport.verticalOverflow).toBeLessThan(321);
+  // 0.8.2: 320px. Removing invisible card-toolbar layout debt must
+  // improve real combat, not just a synthetic visual fixture.
+  expect(viewport.verticalOverflow).toBeLessThan(300);
   expect(viewport.elements.hud).not.toBeNull();
   expect(viewport.elements.opponentField).not.toBeNull();
   expect(viewport.elements.playerField).not.toBeNull();
