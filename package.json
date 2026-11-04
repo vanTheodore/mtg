@@ -21,6 +21,8 @@
     "catalog:packs": "bun scripts/catalog-packs.ts",
     "impressions:es": "bun scripts/build-impressions-es.ts",
     "verify": "bun run check && bun test src/lib && bun run engine:verify && bun run build",
+    "quality": "bun run engine:verify && bun run check && bun test src/lib && bun run build && bun --bun playwright test",
+    "quality:engine": "bun run engine:parity && bun run engine:scenarios",
     "engine:parity": "bun scripts/parity.ts",
     "engine:scenarios": "bun scripts/scenarios.ts",
     "engine:packcheck": "cargo run --release -p mtg-engine-wasm --bin packcheck --",
