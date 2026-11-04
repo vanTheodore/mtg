@@ -9,3 +9,7 @@
 - **Pendiente de aprobación**: `bun run engine:verify`, typecheck/tests/build Bun, paridad nativa y escenarios de combate, compilación WASM, Chromium y regresiones Rust seleccionadas. La importación no implica equivalencia ni compatibilidad plena con todas las cartas.
 
 Comparación: https://github.com/phase-rs/phase/compare/d963d0a2379c8396e8ffff28c4df87ab8580559f...b17e4fb146cbad67670a0bada55d16bc5ee9b6d4
+
+## Regresiones originales añadidas al PR
+
+Se incorporan **4 archivos de prueba originales** del mismo pin upstream (blob Git idéntico): `cast_undo_sparse_record.rs`, `captain_america_throw.rs`, `board_wipe_co_departure_scaling.rs` y `issue_8065_nightmare_shepherd.rs`. Dos son actualizaciones de tests existentes y dos son archivos nuevos. El workflow `Phase source regressions` registra las cuatro pruebas discriminantes, luego ejecuta específicamente reversión de habilidades de maná, pago inválido con dos Equipos, observadores simultáneos en *Wrath of God* y copia 1/1 Nightmare. Los tests Rust de Phase, no la UI Svelte, determinan la legalidad. Aprobación pendiente del CI en el HEAD del PR.
