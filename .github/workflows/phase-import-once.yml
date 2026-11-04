@@ -1,0 +1,88 @@
+# Temporary, branch-scoped import. The job deletes this workflow in its own
+# resulting commit and only syncs sources after matching the old pinned trees.
+name: Temporary Phase Rust source import
+on:
+  push:
+    branches: [engine/phase-upstream-b17e4fb-20261104]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase-b17e4fb-import-once
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.repository == 'vanTheodore/mtg' && github.ref_name == 'engine/phase-upstream-b17e4fb-20261104'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Fetch the pinned old and new upstream snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN_OLD=d963d0a2379c8396e8ffff28c4df87ab8580559f
+          PIN_NEW=b17e4fb146cbad67670a0bada55d16bc5ee9b6d4
+          mkdir -p /tmp/mesa-phase-upstream
+          git -C /tmp/mesa-phase-upstream init -q
+          git -C /tmp/mesa-phase-upstream remote add origin https://github.com/phase-rs/phase.git
+          git -C /tmp/mesa-phase-upstream fetch --depth 1 origin "$PIN_OLD"
+          git -C /tmp/mesa-phase-upstream checkout --detach --quiet "$PIN_OLD"
+          test "$(git -C /tmp/mesa-phase-upstream rev-parse HEAD)" = "$PIN_OLD"
+          # No local patches must be overwritten; exact vendored source only.
+          diff -qr crates/phase-engine/src /tmp/mesa-phase-upstream/crates/engine/src
+          diff -qr crates/phase-ast/src /tmp/mesa-phase-upstream/crates/phase-ast/src
+          diff -qr crates/phase-parser/src /tmp/mesa-phase-upstream/crates/phase-parser/src
+          git -C /tmp/mesa-phase-upstream fetch --depth 1 origin "$PIN_NEW"
+          git -C /tmp/mesa-phase-upstream checkout --detach --quiet "$PIN_NEW"
+          test "$(git -C /tmp/mesa-phase-upstream rev-parse HEAD)" = "$PIN_NEW"
+      - name: Copy only the original Phase Rust source directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          rsync -a --delete /tmp/mesa-phase-upstream/crates/engine/src/ crates/phase-engine/src/
+          rsync -a --delete /tmp/mesa-phase-upstream/crates/phase-ast/src/ crates/phase-ast/src/
+          rsync -a --delete /tmp/mesa-phase-upstream/crates/phase-parser/src/ crates/phase-parser/src/
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          path=Path('docs/PHASE-UPSTREAM-PIN.json')
+          pin=json.loads(path.read_text(encoding='utf-8'))
+          assert pin['commit']=='d963d0a2379c8396e8ffff28c4df87ab8580559f'
+          root=Path('crates/phase-engine/src')
+          src=sorted(p for p in root.rglob('*') if p.is_file())
+          assert len(src)>100, 'suspiciously small imported engine'
+          frames=bytearray()
+          for p in src:
+              rel=p.relative_to(root).as_posix().encode('utf-8')
+              frames.extend(rel+b'\x00'+hashlib.sha256(p.read_bytes()).digest())
+          pin['commit']='b17e4fb146cbad67670a0bada55d16bc5ee9b6d4'
+          pin['sourceSha256']=hashlib.sha256(frames).hexdigest()
+          path.write_text(json.dumps(pin,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          report=Path('docs/PHASE-UPSTREAM-2026-11-04-B17E4FB.md')
+          report.write_text('''# Phase: importación aislada de fuentes Rust — 4 nov 2026
+
+          - Pin antiguo: `d963d0a2379c8396e8ffff28c4df87ab8580559f`.
+          - Pin nuevo: `b17e4fb146cbad67670a0bada55d16bc5ee9b6d4` (15 commits posteriores).
+          - Comprobación previa: los tres árboles de fuente vendorizados eran idénticos al pin antiguo. No se sobrescribieron parches locales.
+          - Importados únicamente `crates/engine/src` → `crates/phase-engine/src`, `crates/phase-ast/src` y `crates/phase-parser/src`, byte-idénticos a upstream. No se incorpora el cliente React, servidor, bots de draft, `engine-wasm` upstream ni assets propietarios.
+          - El nuevo SHA-256 agregado para `phase-engine/src` se ha calculado de todos los archivos importados. `Cargo.lock` y el puente WASM propio permanecen intactos.
+          - Cambios relevantes: reversión de pago de maná, coste de desanexar Equipos, disparadores y rendimiento de limpieza de tablero (Wrath of God), además de reglas de copiar fichas y validación de objetos.
+          - **Pendiente de aprobación**: `bun run engine:verify`, typecheck/tests/build Bun, paridad nativa y escenarios de combate, compilación WASM, Chromium y regresiones Rust seleccionadas. La importación no implica equivalencia ni compatibilidad plena con todas las cartas.
+
+          Comparación: https://github.com/phase-rs/phase/compare/d963d0a2379c8396e8ffff28c4df87ab8580559f...b17e4fb146cbad67670a0bada55d16bc5ee9b6d4
+          ''',encoding='utf-8')
+          print(json.dumps({'files':len(src),'sourceSha256':pin['sourceSha256'],'pin':pin['commit']}))
+          PY
+      - name: Commit source and self-remove temporary write-capable workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A crates/phase-engine/src crates/phase-ast/src crates/phase-parser/src docs/PHASE-UPSTREAM-PIN.json docs/PHASE-UPSTREAM-2026-11-04-B17E4FB.md
+          git rm -f .github/workflows/phase-import-once.yml
+          git -c user.name='Mesa CI' -c user.email='ci@users.noreply.github.com' commit -m 'engine: sync byte-identical Phase Rust sources to b17e4fb'
+          git push origin HEAD:refs/heads/engine/phase-upstream-b17e4fb-20261104
