@@ -16,6 +16,10 @@ type HandEvidence = {
  * rotated face might clip without changing the scroll metric as expected.
  * Record both signals before changing Hand.svelte's scroll controls.
  */
+async function scrollerScrollLeft(zone: import('@playwright/test').Locator): Promise<number> {
+  return zone.locator('.hand-scroll').evaluate((el) => el.scrollLeft);
+}
+
 async function measureHand(page: import('@playwright/test').Page): Promise<HandEvidence> {
   return page.evaluate(() => {
     const zone = document.querySelector<HTMLElement>('.hand-zone');
@@ -63,6 +67,19 @@ for (const [width, height] of [[1440, 900], [390, 844]] as const) {
       }).toBe(true);
 
       const initial = await measureHand(page);
+
+      // Thirty cards must remain navigable. Exercise the actual button via
+      // keyboard rather than relying solely on a DOM geometry assertion.
+      if (count === 30) {
+        const right = zone.getByRole('button', { name: 'Desplazar mano a la derecha' });
+        await expect(right).toBeVisible();
+        await right.focus();
+        await expect(right).toBeFocused();
+        await page.keyboard.press('Enter');
+        await expect.poll(async () =>
+          scrollerScrollLeft(zone)
+        ).toBeGreaterThan(0);
+      }
       // The arrows are never intentionally removed from a truly overflowing
       // 30-card hand; sample both the initial and rightmost scroll positions.
       const scroller = zone.locator('.hand-scroll');
