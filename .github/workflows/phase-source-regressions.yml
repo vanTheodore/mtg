@@ -59,6 +59,14 @@ jobs:
           mod off_zone_ability_cost_reduction;
           #[path = "integration/ignite_memories_random_reveal.rs"]
           mod ignite_memories_random_reveal;
+          #[path = "integration/cast_undo_sparse_record.rs"]
+          mod cast_undo_sparse_record;
+          #[path = "integration/captain_america_throw.rs"]
+          mod captain_america_throw;
+          #[path = "integration/board_wipe_co_departure_scaling.rs"]
+          mod board_wipe_co_departure_scaling;
+          #[path = "integration/issue_8065_nightmare_shepherd.rs"]
+          mod issue_8065_nightmare_shepherd;
           RUST
       - name: Assert the specific upstream regression tests are registered
         run: |
@@ -72,7 +80,11 @@ jobs:
             animated_cavalcade_attacking_damages_what_the_triggering_creature_attacks \
             training_grounds_does_not_discount_a_graveyard_unearth \
             training_grounds_does_not_discount_hand_cycling \
-            reveals_one_random_card_and_deals_its_mana_value; do
+            reveals_one_random_card_and_deals_its_mana_value \
+            untapping_a_land_before_any_cost_payment_records_nothing_and_cancel_keeps_it_untapped \
+            unattach_cost_rejects_two_attachments_for_one_slot \
+            wrath_resolves_only_observers_that_left_with_a_trigger \
+            copy_token_is_1_1_nightmare; do
             grep -Fq "$name: test" /tmp/mesa-phase-tests.txt || {
               echo "Missing required test: $name" >&2
               exit 1
@@ -89,3 +101,11 @@ jobs:
         run: cargo test --locked -p phase-engine --test mesa_phase_regressions off_zone_ability_cost_reduction -- --test-threads=1
       - name: Execute original Ignite Memories random reveal regressions
         run: cargo test --locked -p phase-engine --test mesa_phase_regressions ignite_memories_random_reveal -- --test-threads=1
+      - name: Mana ability reversal during sparse cast-undo recording (original upstream test)
+        run: cargo test --locked -p phase-engine --test mesa_phase_regressions cast_undo_sparse_record::untapping_a_land_before_any_cost_payment_records_nothing_and_cancel_keeps_it_untapped -- --exact --test-threads=1
+      - name: Unattach cost rejects paying with two Equipment (original upstream test)
+        run: cargo test --locked -p phase-engine --test mesa_phase_regressions captain_america_throw::unattach_cost_rejects_two_attachments_for_one_slot -- --exact --test-threads=1
+      - name: Wrath of God co-departure triggers (original upstream test)
+        run: cargo test --locked -p phase-engine --test mesa_phase_regressions board_wipe_co_departure_scaling -- --test-threads=1
+      - name: Nightmare Shepherd copy exceptions (original upstream test)
+        run: cargo test --locked -p phase-engine --test mesa_phase_regressions issue_8065_nightmare_shepherd -- --test-threads=1
