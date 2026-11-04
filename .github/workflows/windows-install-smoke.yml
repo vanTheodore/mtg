@@ -76,7 +76,7 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Installer test cases (selection, SHA256 and rejection)
         shell: pwsh
-        run: bun test src/lib/game/ci-wasm-artifact.test.ts
+        run: bun test ./src/lib/game/ci-wasm-artifact.test.ts
       - name: Installer help works without Rust or credentials
         shell: pwsh
         run: bun run engine:download -- --help
