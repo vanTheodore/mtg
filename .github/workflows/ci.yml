@@ -18,11 +18,22 @@ jobs:
     name: Typecheck, unit tests and static build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      heavy: ${{ steps.scope.outputs.heavy }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The PR checkout is a synthetic merge commit. Fetch its base to
+          # compare the entire actual PR diff, including changes from forks.
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      - name: Classify changed paths (main always full; PR fail-closed)
+        id: scope
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun scripts/ci-change-scope.ts
       - uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
@@ -41,6 +52,8 @@ jobs:
 
   wasm:
     name: WASM build (pinned Rust and lockfile)
+    needs: [static]
+    if: needs.static.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -78,6 +91,8 @@ jobs:
           retention-days: 7
   native-integration:
     name: Native parity and explicit mechanics scenarios
+    needs: [static]
+    if: needs.static.outputs.heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
