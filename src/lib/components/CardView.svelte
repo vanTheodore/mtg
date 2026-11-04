@@ -4,6 +4,7 @@
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
   import { combatRole as roleLabel, keywordLabel, permanentStates } from '#lib/game/interaction.ts';
   import { impressions } from '#lib/game/impressions.svelte.ts';
+  import { session } from '#lib/game/session.svelte.ts';
 
   let {
     object,
@@ -53,7 +54,7 @@
   const lookup = $derived.by(() => {
     const base = cardImageLookup(object);
     if (hidden || base.kind === 'token') return base;
-    return { ...base, oracleId: base.oracleId ?? meta?.oracle_id ?? undefined, faceName: base.faceName ?? meta?.name };
+    return { ...base, oracleId: base.oracleId ?? meta?.oracle_id ?? undefined, faceName: base.faceName ?? meta?.name, language: session.cardImageLanguage };
   });
   let imageUrl = $state<string | null>(null);
   let imageState = $state<'resolving' | 'loading-art' | 'ready' | 'error' | 'hidden'>('resolving');

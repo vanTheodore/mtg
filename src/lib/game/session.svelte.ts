@@ -10,6 +10,7 @@ import { summarizeEvents, type HistoryEntry } from './events.ts';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type BoardStyle = 'arena' | 'classic';
+export type CardImageLanguage = 'en' | 'es';
 
 class GameSession {
   snapshot = $state.raw<EngineSnapshot | null>(null);
@@ -25,6 +26,7 @@ class GameSession {
   handoffMode = $state<'turn' | 'every'>('turn');
   theme = $state<Theme>('system');
   boardStyle = $state<BoardStyle>('arena');
+  cardImageLanguage = $state<CardImageLanguage>('en');
   cardScale = $state(1);
   density = $state<'comfortable' | 'compact'>('comfortable');
   lastMetrics = $state<EngineSnapshot['metrics'] | null>(null);
@@ -46,6 +48,8 @@ class GameSession {
       if (saved) this.theme = saved;
       const savedBoard = localStorage.getItem('mesa:boardStyle');
       if (savedBoard === 'arena' || savedBoard === 'classic') this.boardStyle = savedBoard;
+      const imageLanguage = localStorage.getItem('mesa:cardImageLanguage');
+      if (imageLanguage === 'es' || imageLanguage === 'en') this.cardImageLanguage = imageLanguage;
       const scale = Number(localStorage.getItem('mesa:cardScale'));
       if (scale >= 0.7 && scale <= 1.6) this.cardScale = scale;
       const density = localStorage.getItem('mesa:density');
@@ -60,6 +64,7 @@ class GameSession {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   }
   setBoardStyle(style: BoardStyle) { this.boardStyle = style; localStorage.setItem('mesa:boardStyle', style); }
+  setCardImageLanguage(lang: CardImageLanguage) { this.cardImageLanguage = lang; localStorage.setItem('mesa:cardImageLanguage', lang); }
   setCardScale(scale: number) { this.cardScale = scale; localStorage.setItem('mesa:cardScale', String(scale)); }
   setDensity(density: 'comfortable' | 'compact') { this.density = density; localStorage.setItem('mesa:density', density); }
   setHandoffMode(mode: 'turn' | 'every') {

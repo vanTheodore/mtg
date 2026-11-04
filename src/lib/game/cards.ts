@@ -6,6 +6,7 @@ export interface CardImageLookup {
   name: string;
   faceIndex: number;
   kind: 'card' | 'token' | 'emblem';
+  language?: 'en' | 'es'; // Image language only; Phase rules stay canonical.
   tokenRef?: TokenImageRef;
   tokenArt?: TokenArtDescriptor;
 }
