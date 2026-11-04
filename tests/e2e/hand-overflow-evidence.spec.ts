@@ -121,9 +121,18 @@ test('Hand overflow diagnostic: react to viewport resize without remounting', as
   // Let Svelte's post-render rAF finish after each viewport change. This
   // intentionally does not navigate: updateOverflow only tracks objects.length
   // and scroll events; responsive relayout might therefore leave stale arrows.
-  const settleLayout = () => page.evaluate(() => new Promise<void>((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  }));
+  const settleLayout = async () => {
+    // Allow CSS layout, ResizeObserver and the scheduled rAF measurement
+    // to settle. Polling avoids timing-dependent false REDs on loaded CI.
+    await page.evaluate(() => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
+    await expect.poll(async () => {
+      const evidence = await measureHand(page);
+      return evidence.controls === evidence.layoutSaysOverflow
+        && evidence.hint === evidence.layoutSaysOverflow;
+    }).toBe(true);
+  };
   await settleLayout();
   const desktop = await measureHand(page);
   await page.setViewportSize({ width: 390, height: 844 });
