@@ -260,6 +260,12 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   await expect(blockerAfter).toHaveAttribute('data-combat-role', 'Bloqueando');
   await expect(blockerAfter.locator('.status-strip')).toContainText('Bloqueando');
   await expect(page.locator(`[data-card-id="${attackerId}"][data-combat-role="Atacando"]`)).toHaveCount(1);
+
+  // At tablet width the sidecar is not a second scrollport; decisions return
+  // to the normal board sequence without changing Phase's legal outcome.
+  await page.setViewportSize({ width: 768, height: 900 });
+  await expect(page.locator('main.layout > .middle')).toHaveCSS('position', 'static');
+  await expect(driver.decision).toBeVisible();
   expect(errors).toEqual([]);
 });
 
