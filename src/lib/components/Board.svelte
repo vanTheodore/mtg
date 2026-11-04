@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import ArenaSurface from './ArenaSurface.svelte';
   import TurnTrack from './TurnTrack.svelte';
   import Hand from './Hand.svelte';
@@ -85,6 +85,33 @@
     if (needsHandoff) handoffButton?.focus();
   });
 
+  /**
+   * The phone hand sheet is a modal surface: while it is open the board is
+   * inert so a stray tap cannot target a hidden permanent, and focus moves
+   * into the sheet. Closing returns focus to the summary button (Hand.svelte
+   * does that itself). Nothing here reads or changes Phase state.
+   *
+   * The focus call has to wait for the sheet to be laid out (`tick`), and the
+   * hand region itself is a tab stop, so it is a safe target even when the
+   * hand is empty.
+   */
+  $effect(() => {
+    if (!session.handDrawerOpen) return;
+    void tick().then(() => {
+      const target = document.querySelector<HTMLElement>('#mesa-hand-sheet .hand-scroll');
+      target?.focus();
+    });
+  });
+
+  /** Escape closes the phone hand sheet from anywhere (the board is inert). */
+  function onWindowKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && session.handDrawerOpen) {
+      event.preventDefault();
+      session.setHandDrawer(false);
+      document.querySelector<HTMLElement>('.hand-trigger')?.focus();
+    }
+  }
+
   onMount(async () => {
     try {
       lessonDone = localStorage.getItem(TUTORIAL_STORAGE_KEY) === '1';
@@ -103,6 +130,7 @@
       decks = deckData;
       const params = new URLSearchParams(location.search);
       if (params.has('autostart')) await start();
+      window.addEventListener('keydown', onWindowKeydown);
     } catch (e) {
       loadError = e instanceof Error ? e.message : String(e);
     }
@@ -397,7 +425,7 @@
     </section>
   {:else}
     <svelte:boundary>
-    <main class="layout" inert={needsHandoff} aria-hidden={needsHandoff}>
+    <main class="layout" inert={needsHandoff || session.handDrawerOpen} aria-hidden={needsHandoff}>
       <PlayerPanel player={rival!} showHand />
       <!-- While the device changes hands the board is covered and inert, so
            the other seat's hand is not drawn either: the dialog promises that
@@ -436,12 +464,6 @@
         </section>
       {/if}
 
-      <!-- While the device changes hands, the seat that is being handed the
-           device must not see the incoming seat's cards: the overlay only
-           dims the board, so anything painted under it is still readable. -->
-      {#if !needsHandoff}
-        <Hand objects={handObjects} {metas} title={`Tu mano · Jugador ${viewer + 1}`} />
-      {/if}
     </main>
     {#snippet failed(error, reset)}
       <div class="notice error" role="alert">
@@ -451,6 +473,22 @@
       </div>
     {/snippet}
     </svelte:boundary>
+
+    <!--
+      The hand is a sibling of the board, not a row inside it.
+
+      Two reasons, both measured: (1) on a phone it is a fixed drawer, and a
+      drawer that lives inside an `inert` container cannot receive focus —
+      Chrome refuses to focus anything under `inert`, so the sheet opened and
+      trapped the player outside it; (2) a row inside the 1440×900 grid costs
+      182px that the battlefield needs.
+
+      On desktop it is still the same fan, still at the bottom of the table,
+      and every card, count and legality mark comes from Phase.
+    -->
+    {#if !needsHandoff}
+      <Hand objects={handObjects} {metas} title={`Tu mano · Jugador ${viewer + 1}`} />
+    {/if}
 
     <footer class="metrics" aria-label="Métricas del motor" data-collapsible={session.boardStyle === 'arena'}>
       {#if session.boardStyle === 'arena'}

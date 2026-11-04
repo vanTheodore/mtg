@@ -92,6 +92,13 @@ test.describe('móvil con puntero táctil', () => {
     await page.route('**/api.scryfall.com/**', (route) => route.abort());
     await page.goto('/stress?hand=7&tokens=0&mirror=1');
 
+    // The phone hand is a drawer: its cards are on screen (and touchable)
+    // once the sheet is open, never behind a collapsed scrollport.
+    const trigger = page.locator('.hand-trigger');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await trigger.tap();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
     const first = page.locator('.hand-zone .hand-card').first();
     await first.scrollIntoViewIfNeeded();
     const inspect = first.getByRole('button', { name: /^Ampliar / });

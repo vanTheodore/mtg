@@ -1,0 +1,132 @@
+{
+ "320": {
+  "doc": 2038,
+  "horizontalOverflow": 0,
+  "fields": [
+   {
+    "side": "opponent",
+    "height": 804,
+    "landRows": 3
+   },
+   {
+    "side": "player",
+    "height": 804,
+    "landRows": 3
+   }
+  ],
+  "cardWidth": 100,
+  "maxFaceOverflow": 3,
+  "triggerVisible": true,
+  "handZoneHeight": 24,
+  "drawer": {
+   "sheet": {
+    "top": 509,
+    "height": 291,
+    "width": 320
+   },
+   "scrollport": {
+    "clientWidth": 299,
+    "scrollWidth": 3668
+   },
+   "cardWidth": 112,
+   "close": {
+    "w": 36,
+    "x": 9,
+    "y": 516
+   },
+   "activeElement": "hand-trigger",
+   "boardInert": null,
+   "documentOverflow": 0
+  }
+ },
+ "390": {
+  "doc": 1633,
+  "horizontalOverflow": 0,
+  "fields": [
+   {
+    "side": "opponent",
+    "height": 660,
+    "landRows": 2
+   },
+   {
+    "side": "player",
+    "height": 660,
+    "landRows": 2
+   }
+  ],
+  "cardWidth": 100,
+  "maxFaceOverflow": 3,
+  "triggerVisible": true,
+  "handZoneHeight": 24,
+  "drawer": {
+   "sheet": {
+    "top": 521,
+    "height": 323,
+    "width": 390
+   },
+   "scrollport": {
+    "clientWidth": 369,
+    "scrollWidth": 4718
+   },
+   "cardWidth": 147,
+   "close": {
+    "w": 36,
+    "x": 9,
+    "y": 528
+   },
+   "activeElement": "hand-trigger",
+   "boardInert": null,
+   "documentOverflow": 0
+  }
+ },
+ "768": {
+  "doc": 1915,
+  "horizontalOverflow": 0,
+  "fields": [
+   {
+    "side": "opponent",
+    "height": 700,
+    "landRows": 2
+   },
+   {
+    "side": "player",
+    "height": 700,
+    "landRows": 2
+   }
+  ],
+  "cardWidth": 115,
+  "maxFaceOverflow": 0,
+  "triggerVisible": false,
+  "handZoneHeight": 324,
+  "drawer": null
+ },
+ "game390": {
+  "doc": 1149,
+  "horizontalOverflow": 0,
+  "topbar": {
+   "top": 10,
+   "height": 131,
+   "width": 371
+  },
+  "decision": {
+   "top": 384,
+   "height": 290,
+   "width": 356
+  },
+  "handZone": {
+   "top": 1087,
+   "height": 24,
+   "width": 371
+  },
+  "trigger": {
+   "top": 1030,
+   "height": 44,
+   "width": 371
+  },
+  "battlefield": {
+   "top": 854,
+   "height": 69,
+   "width": 356
+  }
+ }
+}

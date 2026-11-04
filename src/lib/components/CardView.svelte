@@ -346,6 +346,39 @@
     .card-tools .inspect::before,
     .card-tools .retry::before { content: none; }
   }
+  /*
+   * Phones: the labelled in-flow strip costs ~40px on *every* card row and a
+   * 390px wide battlefield measured 804px tall with it, which pushed the
+   * opponent's side and the player's own permanents off screen. On a phone the
+   * tools stay always visible and hit-testable (no hover is required — the
+   * buttons take the pointer unconditionally), but they sit on the card's top
+   * edge as 32×32 glyphs, exactly like the desktop toolbar, so a row is only
+   * as tall as its card. The hand is deliberately excluded: its cards live in
+   * the drawer's horizontal strip, where vertical space is free and the wider
+   * labelled target is kept.
+   */
+  @media (max-width: 640px) and (hover: none) {
+    :global(.battlefield) .card-tools {
+      position: absolute;
+      inset-block-start: .1rem;
+      inset-inline-end: .1rem;
+      width: max-content;
+      max-width: calc(100% - .2rem);
+      margin-top: 0;
+      pointer-events: none;
+    }
+    :global(.battlefield) .card-tools button {
+      width: 2rem;
+      height: 2rem;
+      min-width: 2rem;
+      min-height: 2rem;
+      padding: 0;
+      font-size: 0;
+      pointer-events: auto;
+    }
+    :global(.battlefield) .card-tools .inspect::before { content: "⤢"; font-size: .95rem; }
+    :global(.battlefield) .card-tools .retry::before { content: "↻"; font-size: 1.05rem; }
+  }
   .status-strip { position: absolute; z-index: 2; left: .2rem; bottom: .2rem; right: .2rem; display: flex; flex-wrap: wrap; gap: .2rem; align-content: flex-end; pointer-events: none; }
   /* The strip floats over the card, so the fallback has to leave that band
      empty: without this, "Girada" is painted on top of the rules text and the

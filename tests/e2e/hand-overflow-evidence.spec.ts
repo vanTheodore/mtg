@@ -33,6 +33,36 @@ async function scrollerScrollLeft(zone: import('@playwright/test').Locator): Pro
   return zone.locator('.hand-scroll').evaluate((el) => el.scrollLeft);
 }
 
+/**
+ * Phone widths present the hand as a drawer (Hand.svelte). The inline row is
+ * collapsed to a 1px clipped scrollport when the drawer is closed, so
+ * `scrollWidth > clientWidth` is not a statement about the hand any more — it
+ * is a statement about a deliberately collapsed box. These diagnostics
+ * therefore measure the presentation the player actually sees: the closed
+ * summary must never show arrows, and the open sheet must show them exactly
+ * when its strip overflows. Opening is done through the real button.
+ */
+async function isNarrowHand(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const trigger = document.querySelector<HTMLElement>('.hand-trigger');
+    return !!trigger && getComputedStyle(trigger).display !== 'none';
+  });
+}
+
+async function openHandDrawer(page: Page) {
+  const trigger = page.locator('.hand-trigger');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.hand-zone')).toHaveClass(/sheet-open/);
+}
+
+async function closeHandDrawer(page: Page) {
+  const trigger = page.locator('.hand-trigger');
+  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+}
+
 async function measureHand(page: Page): Promise<HandEvidence> {
   return page.evaluate(() => {
     const zone = document.querySelector<HTMLElement>('.hand-zone');
@@ -70,6 +100,15 @@ for (const [width, height] of [[1440, 900], [390, 844]] as const) {
       const zone = page.locator('.hand-zone').first();
       await expect(zone).toBeVisible();
       await expect(zone.locator('.hand-card')).toHaveCount(count);
+
+      // On a phone the drawer starts closed: a collapsed 1px box must never
+      // advertise overflow controls it cannot back up.
+      const drawer = await isNarrowHand(page);
+      if (drawer) {
+        await expect(zone.locator('.scroll-controls')).toHaveCount(0);
+        await expect(zone.locator('.more-hint')).toHaveCount(0);
+        await openHandDrawer(page);
+      }
 
       // Current behavior uses scrollWidth, not a geometric face-visibility
       // decision. Wait for the post-render rAF rather than logging stale UI.
@@ -136,11 +175,21 @@ test('Hand overflow diagnostic: react to viewport resize without remounting', as
   await settleLayout();
   const desktop = await measureHand(page);
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.hand-trigger')).toBeVisible();
+  // The resize alone must not leave desktop arrows on a closed phone drawer.
+  await expect(page.locator('.hand-zone .scroll-controls')).toHaveCount(0);
+  await expect(page.locator('.hand-zone .more-hint')).toHaveCount(0);
+  await openHandDrawer(page);
   await settleLayout();
   const mobile = await measureHand(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await settleLayout();
   const restored = await measureHand(page);
+  // The drawer must not survive the trip back to desktop: a stale open sheet
+  // would leave the board `inert` behind an invisible trigger.
+  await expect(page.locator('.hand-trigger')).toBeHidden();
+  await expect(page.locator('.hand-zone')).not.toHaveClass(/sheet-open/);
+  await expect(page.locator('.hand-zone .hand-close')).toHaveCount(0);
   const evidence = { desktop, mobile, restored };
   console.log('MESA_HAND_RESIZE_EVIDENCE ' + JSON.stringify(evidence));
   await persistEvidence(page, testInfo, 'hand-resize-without-remount', evidence);

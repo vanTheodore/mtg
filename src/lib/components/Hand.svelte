@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import BoardCard from './BoardCard.svelte';
   import { wideFan } from '#lib/ui/wideFan.ts';
   import { session } from '#lib/game/session.svelte.ts';
@@ -23,17 +24,68 @@
   } = $props();
   let scroller: HTMLDivElement | undefined = $state();
   let overflow = $state(false);
+  /** Below 1100px the hand is a drawer; above it the fan is laid out inline. */
+  let narrowViewport = $state(false);
   const useFan = $derived(session.boardStyle === 'arena' && objects.length >= 2 && objects.length <= 20);
   const geometry = $derived(wideFan(Math.max(1, objects.length)));
   const fanWidth = $derived(Math.round(148 * session.cardScale * 1.1));
 
+  /**
+   * `overflow` is a *layout* fact. With the drawer closed on a phone the
+   * scrollport is deliberately collapsed to 1px (see the drawer CSS), which is
+   * not "this hand overflows, show the arrows": the arrows belong to the open
+   * sheet and to the desktop fan, where the scrollport is always laid out.
+   */
   function updateOverflow() {
-    if (scroller) overflow = scroller.scrollWidth > scroller.clientWidth + 2;
+    if (!scroller) return;
+    if (narrowViewport && !session.handDrawerOpen) { overflow = false; return; }
+    overflow = scroller.scrollWidth > scroller.clientWidth + 2;
+  }
+
+  // Measure after layout, not while Svelte is still replacing the card list.
+  // A single pending frame avoids duplicate work when resize and ResizeObserver
+  // fire together. The scroll event continues to update immediately below.
+  let measureFrame = 0;
+  function scheduleOverflowMeasurement() {
+    if (measureFrame) cancelAnimationFrame(measureFrame);
+    measureFrame = requestAnimationFrame(() => {
+      measureFrame = 0;
+      updateOverflow();
+    });
   }
 
   $effect(() => {
-    objects.length;
-    requestAnimationFrame(updateOverflow);
+    // Account for the count, fan mode, the user's card scale and the drawer's
+    // open state: any of them can change what fits in the scrollport.
+    void objects.length;
+    void useFan;
+    void fanWidth;
+    void session.handDrawerOpen;
+    scheduleOverflowMeasurement();
+  });
+
+  onMount(() => {
+    const media = matchMedia('(max-width: 640px)');
+    const sync = () => {
+      narrowViewport = media.matches;
+      // A drawer that survived a resize into a desktop window would keep the
+      // board `inert` (Board.svelte) with no visible trigger to close it. The
+      // wide layout has no drawer, so wide means closed.
+      if (!media.matches && session.handDrawerOpen) session.setHandDrawer(false);
+      scheduleOverflowMeasurement();
+    };
+    sync();
+    media.addEventListener('change', sync);
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleOverflowMeasurement) : null;
+    if (scroller) observer?.observe(scroller);
+    window.addEventListener('resize', scheduleOverflowMeasurement);
+    return () => {
+      observer?.disconnect();
+      media.removeEventListener('change', sync);
+      window.removeEventListener('resize', scheduleOverflowMeasurement);
+      if (measureFrame) cancelAnimationFrame(measureFrame);
+    };
   });
 
   function scrollBy(dir: number) {
@@ -43,9 +95,63 @@
   function metaFor(obj: GameObject): CardMeta | undefined {
     return metas[obj.printed_ref?.oracle_id ?? ''] ?? metas[obj.name.toLowerCase()];
   }
+
+  /**
+   * Phone drawer behaviour.
+   *
+   * On a touch-sized viewport the hand becomes a fixed sheet with a summary
+   * button. It opens on explicit request, closes with Escape or the close
+   * button, moves focus into the sheet, and returns focus to the summary on
+   * close. `inert` is applied to the board by the caller, never to the sheet.
+   *
+   * The drawer is a *phone* affordance. Tablets (768px) still have room for
+   * the inline fan and keep it: `arena-scene-evidence` measures the 768px
+   * hand tools, and a 768px screen shows seven cards without stealing the
+   * board. 640px is where the fan stops fitting (±147px cards).
+   */
+  let sheet = $state<HTMLElement | undefined>();
+  let port = $state<HTMLElement | undefined>();
+  let trigger = $state<HTMLButtonElement | undefined>();
+  const open = $derived(session.handDrawerOpen);
+
+  function close() {
+    session.setHandDrawer(false);
+    trigger?.focus();
+  }
+
+  function onSheetKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
+  }
 </script>
 
-<section class="hand-zone" aria-label={title}>
+<button
+  class="hand-trigger"
+  type="button"
+  bind:this={trigger}
+  aria-expanded={open}
+  aria-controls="mesa-hand-sheet"
+  onclick={() => session.setHandDrawer(true)}
+>
+  <span class="hand-trigger-label">Mano</span>
+  <span class="hand-trigger-count">{objects.length}</span>
+  {#if objects.length}
+    <span class="hand-trigger-hint">Desliza para jugar</span>
+  {/if}
+</button>
+
+<section
+  class="hand-zone"
+  class:sheet-open={open}
+  aria-label={title}
+  id="mesa-hand-sheet"
+  bind:this={sheet}
+>
+  {#if open}
+    <button class="hand-close" type="button" aria-label="Cerrar la mano" onclick={close}>✕<span class="sr-only"> Cerrar la mano</span></button>
+  {/if}
   <header class="zone-head">
     <h2>{title} <span class="count">{objects.length}</span></h2>
     {#if overflow}
@@ -55,13 +161,16 @@
       </div>
     {/if}
   </header>
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <!-- The scrollport already carries role=region and a tab stop; Escape is the
+       standard way out of the phone sheet, so it listens on the same element. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
     class="hand-scroll"
     class:fan={useFan}
     style={useFan ? `--hand-natural-w: min(${fanWidth}px, ${(92 / geometry.spreadFactor).toFixed(3)}vw); --fan-overlap-factor: ${geometry.overlapFraction}` : undefined}
     bind:this={scroller}
     onscroll={updateOverflow}
+    onkeydown={onSheetKeydown}
     role="region"
     tabindex="0"
     aria-label={`${title}, ${objects.length} cartas. Desplázate para ver todas.`}
@@ -165,4 +274,115 @@
   .playable.focus { color: var(--accent); font-weight: 700; }
   .empty { color: var(--ink-muted); font-size: .85rem; margin: .5rem 0; }
   .more-hint { margin: .1rem 0 0; font-size: .72rem; color: var(--ink-muted); }
+
+  /*
+   * Phone hand drawer.
+   *
+   * Everything below is scoped to phone widths (≤640px, where the fan stops
+   * fitting a 147px card). Above that the trigger does not exist and the sheet
+   * keeps its inline role, so the tablet and desktop fan, its keyboard order
+   * and every existing E2E are untouched.
+   *
+   * The sheet is `position: fixed` with its own scrollport: thirty cards are
+   * reachable by swipe and by Tab, which is what the mission asked for
+   * (320/390/768 px, "todas las 30 cartas alcanzables").
+   */
+  .hand-trigger { display: none; }
+
+  @media (max-width: 640px) {
+    .hand-trigger {
+      display: flex;
+      align-items: center;
+      gap: .45rem;
+      width: 100%;
+      min-height: 44px;
+      padding: .4rem .7rem;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--ink);
+      font-size: .85rem;
+      font-weight: 650;
+      text-align: left;
+    }
+    .hand-trigger-count {
+      display: inline-grid;
+      place-items: center;
+      min-width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-size: .78rem;
+      font-weight: 700;
+    }
+    .hand-trigger-hint { margin-left: auto; font-weight: 500; color: var(--ink-muted); font-size: .78rem; }
+    .hand-trigger[aria-expanded="true"] { border-color: var(--accent); }
+
+    /* Closed: the inline row stays in the DOM (so counts and tests that read
+       the hand keep working) but does not take vertical space. */
+    /* The closed sheet keeps its scrollport in the DOM — so the hand's
+       region, counts and card list stay in the accessibility tree and every
+       existing test that reads them keeps working — but takes no space and
+       cannot be reached by pointer. Opening the sheet is the only way in. */
+    .hand-zone:not(.sheet-open) .hand-scroll {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .hand-zone:not(.sheet-open) { position: relative; padding-block: .25rem; }
+    .hand-zone:not(.sheet-open) .zone-head { margin-bottom: 0; }
+
+    .hand-zone.sheet-open {
+      position: fixed;
+      inset: auto 0 0 0;
+      z-index: 60;
+      max-height: 78dvh;
+      display: flex;
+      flex-direction: column;
+      border-radius: 18px 18px 0 0;
+      border-bottom: 0;
+      box-shadow: 0 -12px 34px rgb(0 0 0 / 38%);
+      padding: .5rem .6rem calc(.6rem + env(safe-area-inset-bottom, 0px));
+    }
+    .hand-zone.sheet-open .hand-scroll {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior-x: contain;
+      scroll-snap-type: x proximity;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* A round close control in the sheet's top-left corner, where it cannot
+       collide with the title or the scroll arrows (measured overlap: the
+       button landed on top of "Tu mano · Jugador N"). */
+    .hand-close {
+      position: absolute;
+      top: .4rem;
+      left: .5rem;
+      width: 2.25rem;
+      height: 2.25rem;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--ink);
+      font-size: 1rem;
+      z-index: 3;
+    }
+    .hand-zone.sheet-open .zone-head { padding-left: 2.6rem; }
+  }
+
+  @media (max-width: 640px) and (prefers-reduced-motion: no-preference) {
+    .hand-zone.sheet-open { animation: sheet-in .18s ease-out; }
+    @keyframes sheet-in { from { transform: translateY(14%); opacity: .6; } to { transform: none; opacity: 1; } }
+  }
 </style>
