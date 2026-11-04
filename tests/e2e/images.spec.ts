@@ -67,7 +67,12 @@ test('imagen caída mantiene nombre/reglas y el reintento recupera arte', async 
   await expect(bears).toContainText('Grizzly Bears');
   await expect(bears).toContainText('2/2');
   bearsAvailable = true;
-  await bears.locator('..').getByRole('button', { name: 'Reintentar imagen' }).click();
+  // Arena's secondary tools are contextual: a real mouse user hovers the
+  // card before trying Retry. The hand scrollport must not clip the button.
+  await bears.hover();
+  const retry = bears.locator('..').getByRole('button', { name: 'Reintentar imagen' });
+  await expect(bears.locator('..').locator('.card-tools')).toHaveCSS('opacity', '1');
+  await retry.click();
   await expect(bears).toHaveAttribute('data-image-state', 'ready');
 });
 
