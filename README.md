@@ -236,7 +236,7 @@ idioma y su reserva en [`docs/LOCALE.md`](docs/LOCALE.md); las dependencias en
 
 `.github/workflows/ci.yml` publica builds estáticos, motor WASM con SHA-256, informes nativos y evidencia Playwright. El instalador `bun run engine:download` solo acepta motores de un CI verde del mismo commit, no de otra rama. No se despliega automáticamente ni se incorporan imágenes propietarias de cartas.
 
-Las optimizaciones para **omitir Rust y Chromium en PRs exclusivamente documentales** se desarrollan por separado en [PR #31](https://github.com/vanTheodore/mtg/pull/31); **todavía no forman parte de `main`** hasta que ese PR esté fusionado.
+Desde el [PR #31](https://github.com/vanTheodore/mtg/pull/31), el CI usa una [clasificación conservadora de cambios](docs/CI-SCOPE.md): documentación y herramientas locales conocidas pueden omitir Rust/WASM/Chromium **solo en PRs**, pero cada `push main` ejecuta la batería completa. El [PR #33](https://github.com/vanTheodore/mtg/pull/33) incorporó pruebas en runners Windows: el test del instalador y el catálogo ya pasaron; la descarga real del motor se verifica únicamente después de un CI de `main` completamente verde.
 
 ## Arquitectura
 
