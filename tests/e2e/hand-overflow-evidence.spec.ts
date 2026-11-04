@@ -137,3 +137,48 @@ test('Hand overflow diagnostic: react to viewport resize without remounting', as
   await persistEvidence(page, testInfo, 'hand-resize-without-remount', evidence);
   expect(restored.faces).toHaveLength(4);
 });
+
+test('Hand contextual toolbar diagnostic: rendered pointer target inside scrollport', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route('**/api.scryfall.com/**', (route) => route.abort());
+  await page.goto('/stress?hand=4&tokens=0&mirror=1');
+
+  const card = page.locator('.hand-zone .hand-card').first();
+  const face = card.locator('.card');
+  const toolbar = card.locator('.card-tools');
+  await expect(face).toBeVisible();
+  await face.focus();
+  await expect(face).toBeFocused();
+  await expect(toolbar).toBeVisible();
+
+  // Chromium's actual hit-test reveals clipping even when an element has a
+  // nonzero bounding rect and Playwright considers it "visible".
+  const evidence = await page.evaluate(() => {
+    const scroll = document.querySelector<HTMLElement>('.hand-zone .hand-scroll');
+    const tools = scroll?.querySelector<HTMLElement>('.hand-card .card-tools');
+    const inspect = tools?.querySelector<HTMLButtonElement>('button.inspect');
+    if (!scroll || !tools || !inspect) throw new Error('Card tools are missing');
+    const scrollRect = scroll.getBoundingClientRect();
+    const toolsRect = tools.getBoundingClientRect();
+    const buttonRect = inspect.getBoundingClientRect();
+    const x = buttonRect.left + buttonRect.width / 2;
+    const y = buttonRect.top + buttonRect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return {
+      overflowX: getComputedStyle(scroll).overflowX,
+      overflowY: getComputedStyle(scroll).overflowY,
+      toolbarPosition: getComputedStyle(tools).position,
+      toolbarOpacity: getComputedStyle(tools).opacity,
+      scrollRect: scrollRect.toJSON(),
+      toolsRect: toolsRect.toJSON(),
+      buttonRect: buttonRect.toJSON(),
+      buttonInsideScrollport: x >= scrollRect.left && x <= scrollRect.right
+        && y >= scrollRect.top && y <= scrollRect.bottom,
+      pointerHitsToolbar: !!hit && tools.contains(hit),
+      hitTag: hit?.tagName ?? null
+    };
+  });
+  console.log('MESA_HAND_TOOLBAR_EVIDENCE ' + JSON.stringify(evidence));
+  await persistEvidence(page, testInfo, 'hand-toolbar-scrollport-1440', evidence);
+  expect(evidence.toolbarOpacity).toBe('1');
+});
