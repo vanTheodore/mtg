@@ -6,7 +6,7 @@ No se debe mantener un SHA histórico duplicado en el verificador ni en otros do
 - Upstream: https://github.com/phase-rs/phase
 - Commit incorporado: el valor `commit` de [`PHASE-UPSTREAM-PIN.json`](PHASE-UPSTREAM-PIN.json), sin duplicar el SHA aquí.
 - Workspace: `0.119.0`
-- Actualizaciones importadas: [#6](https://github.com/vanTheodore/mtg/pull/6) (2 de noviembre de 2026) y [#16](https://github.com/vanTheodore/mtg/pull/16) (3 de noviembre de 2026). Véase el historial de importación en esos PR.
+- Actualizaciones importadas: [#6](https://github.com/vanTheodore/mtg/pull/6), [#16](https://github.com/vanTheodore/mtg/pull/16) y la revisión de 11 commits hasta `d963d0a` (3 de noviembre de 2026). Véanse los informes de importación.
 - Crates de reglas importados: `crates/phase-engine`, `crates/phase-ast` y `crates/phase-parser`.
 - Licencias: MIT OR Apache-2.0; `licenses/PHASE-MIT` y `licenses/PHASE-APACHE`.
 
@@ -39,6 +39,7 @@ a los componentes Svelte.
 - El origen y las decisiones del import anterior están en
   [`PHASE-UPSTREAM-2026-11-02.md`](PHASE-UPSTREAM-2026-11-02.md);
   la revisión posterior está en
-  [`PHASE-UPSTREAM-2026-11-03.md`](PHASE-UPSTREAM-2026-11-03.md).
+  [`PHASE-UPSTREAM-2026-11-03.md`](PHASE-UPSTREAM-2026-11-03.md) y la nueva auditoría
+  [`PHASE-UPSTREAM-2026-11-03-D963D0.md`](PHASE-UPSTREAM-2026-11-03-D963D0.md).
 
 No se inventan reglas en TypeScript ni se incorpora React a Mesa.
