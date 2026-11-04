@@ -341,7 +341,7 @@
     --card-w: min(var(--arena-base-card-w, 124px), 7.5dvh);
   }
   .app[data-board-style="arena"] .layout > .hand-zone .hand-scroll.fan {
-    --hand-card-w: min(var(--hand-natural-w), var(--arena-base-card-w, 124px), 10dvh);
+    --hand-card-w: min(var(--hand-natural-w), var(--arena-base-card-w, 124px), 11dvh);
     padding-block: .55rem .6rem;
   }
 }
