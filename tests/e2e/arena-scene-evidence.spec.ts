@@ -44,7 +44,9 @@ test('Arena 1440×900: compare mirrored 6+4 seats and a 7-card hand', async ({ p
   // PR #25 measured 804px of vertical debt in the identical presentation
   // fixture. The new Arena-only short-desktop lanes must beat that baseline;
   // do not claim one-screen success until verticalOverflow reaches zero.
-  expect(measurements.verticalOverflow).toBeLessThan(804);
+  // PR #27: 194px of debt at identical 1440×900 /stress state.
+  // 0.8.2 must save at least 70px without scaling the actual cards smaller.
+  expect(measurements.verticalOverflow).toBeLessThan(125);
   expect(measurements.elements.opponentField).not.toBeNull();
   expect(measurements.elements.playerField).not.toBeNull();
   expect(measurements.elements.hand).not.toBeNull();

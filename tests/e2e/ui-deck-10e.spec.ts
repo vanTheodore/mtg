@@ -231,7 +231,9 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   // the synthetic scene; keep the Phase action and its legal targets intact.
   // The previous PR #26 measured 742px of vertical overflow at this exact
   // real-engine blocking prompt. The sidecar must beat that baseline.
-  expect(viewport.verticalOverflow).toBeLessThan(742);
+  // PR #27: 396px debt at real Phase DeclareBlockers 1440×900.
+  // Reduce at least 75px while preserving all clickable Phase targets.
+  expect(viewport.verticalOverflow).toBeLessThan(321);
   expect(viewport.elements.hud).not.toBeNull();
   expect(viewport.elements.opponentField).not.toBeNull();
   expect(viewport.elements.playerField).not.toBeNull();
