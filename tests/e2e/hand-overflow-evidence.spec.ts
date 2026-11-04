@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 type HandEvidence = {
   viewport: { width: number; height: number };
@@ -16,11 +18,22 @@ type HandEvidence = {
  * rotated face might clip without changing the scroll metric as expected.
  * Record both signals before changing Hand.svelte's scroll controls.
  */
+async function persistEvidence(page: Page, testInfo: TestInfo, label: string, evidence: unknown) {
+  const dir = join(testInfo.project.outputDir, 'hand-evidence');
+  await mkdir(dir, { recursive: true });
+  const jsonPath = join(dir, label + '.json');
+  const screenshotPath = join(dir, label + '.png');
+  await writeFile(jsonPath, JSON.stringify(evidence, null, 2));
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach(label + '.json', { path: jsonPath, contentType: 'application/json' });
+  await testInfo.attach(label + '.png', { path: screenshotPath, contentType: 'image/png' });
+}
+
 async function scrollerScrollLeft(zone: import('@playwright/test').Locator): Promise<number> {
   return zone.locator('.hand-scroll').evaluate((el) => el.scrollLeft);
 }
 
-async function measureHand(page: import('@playwright/test').Page): Promise<HandEvidence> {
+async function measureHand(page: Page): Promise<HandEvidence> {
   return page.evaluate(() => {
     const zone = document.querySelector<HTMLElement>('.hand-zone');
     const scroll = zone?.querySelector<HTMLElement>('.hand-scroll');
@@ -90,10 +103,7 @@ for (const [width, height] of [[1440, 900], [390, 844]] as const) {
 
       const evidence = { initial, rightmost, restored };
       console.log('MESA_HAND_OVERFLOW_EVIDENCE ' + JSON.stringify({ width, height, count, ...evidence }));
-      await testInfo.attach(`hand-overflow-${width}-${count}.json`, {
-        body: JSON.stringify(evidence, null, 2),
-        contentType: 'application/json'
-      });
+      await persistEvidence(page, testInfo, `hand-overflow-${width}-${count}`, evidence);
 
       expect(restored.faces).toHaveLength(count);
       // Do NOT assert that scrollWidth and rendered clipping agree yet:
@@ -124,9 +134,6 @@ test('Hand overflow diagnostic: react to viewport resize without remounting', as
   const restored = await measureHand(page);
   const evidence = { desktop, mobile, restored };
   console.log('MESA_HAND_RESIZE_EVIDENCE ' + JSON.stringify(evidence));
-  await testInfo.attach('hand-resize-without-remount.json', {
-    body: JSON.stringify(evidence, null, 2),
-    contentType: 'application/json'
-  });
+  await persistEvidence(page, testInfo, 'hand-resize-without-remount', evidence);
   expect(restored.faces).toHaveLength(4);
 });
