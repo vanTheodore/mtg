@@ -1,5 +1,8 @@
 import { expect, test } from 'bun:test';
-import { requiresHeavyCi } from '../../../scripts/ci-change-scope.ts';
+import { mkdtempSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { gitChangedPaths, requiresHeavyCi } from '../../../scripts/ci-change-scope.ts';
 
 test('documentation and vetted local installer tools use quick static CI', () => {
   expect(requiresHeavyCi(['docs/LOCAL-ASSETS-WINDOWS.md'])).toBe(false);
@@ -34,4 +37,30 @@ test('mixed and empty diffs fail closed', () => {
   expect(requiresHeavyCi([])).toBe(true);
   expect(requiresHeavyCi(['docs/README.md', 'Cargo.lock'])).toBe(true);
   expect(requiresHeavyCi(['scripts/preflight.ts', 'src/lib/engine/client.ts'])).toBe(true);
+});
+
+test('renaming gameplay code into docs never bypasses the full matrix', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'mesa-ci-renames-'));
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(['git', ...args], { cwd, stdout: 'pipe', stderr: 'pipe' });
+    if (result.exitCode !== 0) throw new Error(result.stderr.toString());
+  };
+  try {
+    git('init', '-q');
+    mkdirSync(join(cwd, 'src/lib/components'), { recursive: true });
+    const source = join(cwd, 'src/lib/components/Board.svelte');
+    writeFileSync(source, '<script lang="ts">let player = 1;</script>\n<h1>Phase battlefield</h1>\n');
+    git('add', '-A');
+    git('-c', 'user.name=Mesa CI', '-c', 'user.email=ci@example.invalid', 'commit', '-qm', 'original');
+    mkdirSync(join(cwd, 'docs'), { recursive: true });
+    renameSync(source, join(cwd, 'docs/Board.md'));
+    git('add', '-A');
+    git('-c', 'user.name=Mesa CI', '-c', 'user.email=ci@example.invalid', 'commit', '-qm', 'moved');
+    const paths = gitChangedPaths('HEAD~1', 'HEAD', cwd);
+    expect(paths).toContain('docs/Board.md');
+    expect(paths).toContain('src/lib/components/Board.svelte');
+    expect(requiresHeavyCi(paths ?? [])).toBe(true);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });

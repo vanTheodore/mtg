@@ -14,7 +14,7 @@ const SAFE = new Set([
 ]);
 
 /**
- * Names from \`git diff --name-only -z\`; new/renamed files count as changed.
+ * Names from `git diff --no-renames --name-only -z`; both sides of a rename count.
  * Cargo.lock, package.json, TS game code, CI config, and new unknown paths are
  * never in the safe list.
  */
@@ -27,6 +27,20 @@ function emit(heavy: boolean, note: string): void {
   const value = heavy ? 'true' : 'false';
   console.log('Mesa CI scope: heavy=' + value + ' (' + note + ')');
   if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, 'heavy=' + value + '\n');
+}
+
+/**
+ * Without --no-renames, Git reports only the DESTINATION of a rename:
+ * moving src/lib/components/Board.svelte to docs/Board.md would appear to
+ * change docs alone and incorrectly suppress engine/UI regressions.
+ * Deliberately list both the deleted source and added destination.
+ */
+export function gitChangedPaths(base: string, head: string, cwd = process.cwd()): string[] | null {
+  const diff = Bun.spawnSync(
+    ['git', 'diff', '--no-renames', '--name-only', '-z', '--diff-filter=ACDMRT', base, head],
+    { cwd, stdout: 'pipe', stderr: 'pipe' }
+  );
+  return diff.exitCode === 0 ? diff.stdout.toString().split('\0').filter(Boolean) : null;
 }
 
 function main(): void {
@@ -42,14 +56,11 @@ function main(): void {
   }
   // GITHUB_SHA is the synthetic PR merge commit, which also contains the head
   // of a forked PR. Comparing to the base sha covers all proposed changes.
-  const diff = Bun.spawnSync(['git', 'diff', '--name-only', '-z', '--diff-filter=ACDMRT', base, head], {
-    stdout: 'pipe', stderr: 'pipe'
-  });
-  if (diff.exitCode !== 0) {
-    emit(true, 'git diff failed, fail closed: ' + diff.stderr.toString().trim().slice(0, 200));
+  const changed = gitChangedPaths(base, head);
+  if (!changed) {
+    emit(true, 'git diff failed, fail closed');
     return;
   }
-  const changed = diff.stdout.toString().split('\0').filter(Boolean);
   emit(requiresHeavyCi(changed), changed.length ? changed.join(', ') : 'empty diff, fail closed');
 }
 
