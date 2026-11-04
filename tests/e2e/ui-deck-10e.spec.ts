@@ -114,6 +114,24 @@ test('mazo pegado de 10E: estados, descarga selectiva y arranque 40/40', async (
 
   // 3. Only the pack the deck needs is fetched, and its URL carries the digest.
   await expect(page.getByRole('status').filter({ hasText: /Motor: 40 \/ 40/ })).toBeVisible({ timeout: 180_000 });
+  // Arena keeps successful 40/40 load provenance available without a banner
+  // consuming a card row; a partial load must still use the warning below.
+  const status = page.locator('.engine-ready');
+  await expect(page.locator('.app')).toHaveAttribute('data-board-style', 'arena');
+  await expect(status).toHaveText('Motor: 40 / 40');
+  await expect(status).toHaveAttribute('aria-label', /El mazo se cargó completo/);
+  await expect(page.locator('.notice.ok')).toHaveCount(0);
+
+  // Native details means timings are available to mouse, touch, keyboard and
+  // assistive tech, rather than being silently hidden by CSS.
+  const diagnostics = page.locator('.metrics-details');
+  await expect(diagnostics).toHaveJSProperty('open', false);
+  await diagnostics.locator('summary').click();
+  await expect(diagnostics).toHaveJSProperty('open', true);
+  await expect(diagnostics.locator('footer.metrics')).toContainText('Reglas');
+  await diagnostics.locator('summary').click();
+  await expect(diagnostics).toHaveJSProperty('open', false);
+
   const tenE = packRequests.find((url) => url.startsWith('/data/catalog/packs/10e.json'));
   expect(tenE, 'la partida debe descargar el pack 10e').toBeTruthy();
   expect(tenE).toMatch(/\?v=[0-9a-f]{64}$/);
