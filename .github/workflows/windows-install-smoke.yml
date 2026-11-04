@@ -1,4 +1,7 @@
 name: Windows Mesa install smoke (no Rust)
+# PR validation uses GitHub's merge checkout against main, which includes
+# the installer and bundled data. The real WASM download requires a green
+# workflow_run from a push to main; PRs only exercise portable contracts.
 
 on:
   pull_request:
