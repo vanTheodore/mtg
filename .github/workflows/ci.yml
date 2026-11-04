@@ -9,6 +9,14 @@ on:
 permissions:
   contents: read
 
+# A new push to the same PR supersedes its previous measurements. Without
+# cancellation, every small CSS/test correction starts independent native and
+# WASM builds, wasting Actions minutes. Do not cancel runs on main: each merge
+# is a distinct commit whose green CI may be useful for auditing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   BUN_VERSION: 1.4.4
   RUST_TOOLCHAIN: nightly-2025-03-02
