@@ -1,48 +1,44 @@
-# Procedencia del motor
+# Procedencia del motor Phase (actualizado 2026-11-03)
 
-- Upstream: `https://github.com/phase-rs/phase.git`
-- Commit fijado: `c2fbb7a6634a440c7c6b47e6a87a554cc7382f05` (workspace `0.119.0`)
-- Licencias upstream: MIT OR Apache-2.0; ver `licenses/PHASE-MIT` y `licenses/PHASE-APACHE`.
-- Copia local de estudio: `/home/user/phase-reference` (no forma parte del cliente).
-- Árbol incorporado: `crates/phase-engine`.
+El pin **autoritativo** está en [`docs/PHASE-UPSTREAM-PIN.json`](PHASE-UPSTREAM-PIN.json).
+No se debe mantener un SHA histórico duplicado en el verificador ni en otros documentos.
 
-## Integridad de las reglas
+- Upstream: https://github.com/phase-rs/phase
+- Commit incorporado: el valor `commit` de [`PHASE-UPSTREAM-PIN.json`](PHASE-UPSTREAM-PIN.json), sin duplicar el SHA aquí.
+- Workspace: `0.119.0`
+- Actualizaciones importadas: [#6](https://github.com/vanTheodore/mtg/pull/6) (2 de noviembre de 2026) y [#16](https://github.com/vanTheodore/mtg/pull/16) (3 de noviembre de 2026). Véase el historial de importación en esos PR.
+- Crates de reglas importados: `crates/phase-engine`, `crates/phase-ast` y `crates/phase-parser`.
+- Licencias: MIT OR Apache-2.0; `licenses/PHASE-MIT` y `licenses/PHASE-APACHE`.
 
-El directorio `crates/phase-engine/src` es byte-idéntico al upstream en el commit
-fijado. Huella SHA-256 del árbol (rutas relativas + hash de cada archivo,
-ordenado):
+## Qué verifica el proyecto
 
-```text
-7ca901b32a2ae92ab8d760b32ff65c9ea174f35c374260874968148397cc8aa5
-868 archivos
-```
+`bun run engine:verify` recorre `crates/phase-engine/src` y calcula
+SHA-256 de cada ruta/contenido, ordenadas por nombre; compara el digest
+agregado con `sourceSha256` del JSON de procedencia. El digest solo se declara una vez en [`PHASE-UPSTREAM-PIN.json`](PHASE-UPSTREAM-PIN.json); el verificador lo lee directamente y devuelve el valor calculado en su informe.
 
-Verificar con:
+**Alcance explícito:** esta huella corresponde al código fuente de
+`phase-engine/src`; **no** acredita por sí sola que `phase-ast` o
+`phase-parser` sean byte-idénticos. El build/lock de Cargo, la compilación
+WASM y la paridad se verifican por separado en CI. No afirmar que se
+verificaron los tres árboles con un único digest.
 
-```sh
-bun scripts/verify-engine.ts
-```
+`cargo metadata --locked`, `engine:parity`, `engine:scenarios` y
+la suite Chromium acompañan la comprobación. La autoridad de
+legalidad, estados de juego y visibilidad pertenece a Rust/WASM, no
+a los componentes Svelte.
 
-No se reescribieron reglas en TypeScript. El cliente consulta acciones legales y
-envía acciones al motor Rust/WASM; la autoridad de reglas, visibilidad y
-legalidad sigue siendo Phase.
+## Adaptaciones locales deliberadas
 
-## Adaptaciones de build (sin cambios de reglas)
+- `crates/mtg-engine-wasm` es un puente ABI C/JSON de Mesa, no el cliente
+  React upstream.
+- La toolchain compilada por CI está fijada a `nightly-2025-03-02`.
+- `Cargo.lock` es específico del workspace importado; no se actualiza
+  de manera independiente de un cambio de Phase validado.
+- Las pinturas WebP del cliente de Phase tienen procedencia y hashes en
+  `static/phase/arenas/SOURCE.md`, separados del motor de reglas.
+- El origen y las decisiones del import anterior están en
+  [`PHASE-UPSTREAM-2026-11-02.md`](PHASE-UPSTREAM-2026-11-02.md);
+  la revisión posterior está en
+  [`PHASE-UPSTREAM-2026-11-03.md`](PHASE-UPSTREAM-2026-11-03.md).
 
-- `crates/phase-engine/Cargo.toml` se des-workspacé y se retiraron binarios,
-  dev-dependencies y features no necesarias para el puente WASM.
-- `crates/mtg-engine-wasm` es un puente propio de ABI C/JSON, sin `wasm-bindgen`.
-- El upstream usa `if let` guards experimentales. En este sandbox se compila con
-  nightly y se inyectan `feature(if_let_guard)` / `feature(let_chains)` por
-  `RUSTFLAGS`, en vez de modificar el código de reglas.
-- Dependencias vendidas fuera del repositorio por restricciones de red. Versiones
-  que difieren del lock upstream y motivo:
-  - `strum` / `strum_macros` 0.27.1 (tag upstream disponible)
-  - `rand_core` 0.9.3 (+ parche de feature `std`), 0.6.4
-  - `rand_xoshiro` 0.6.0 (mirror openkylin del crate publicado)
-  - `equivalent` 1.0.1
-  - `generic-array` 0.14.7, `same-file` 1.0.6 (mirror Chromium)
-  - `js-sys` 0.3.98
-  - `tracing` 0.1.41 / `tracing-attributes` 0.1.28 / `tracing-core` 0.1.33
-- `data/mtgjson/test_fixture.json` proviene del fixture upstream (508 KB). No
-  incluye ilustraciones propietarias de Wizards.
+No se inventan reglas en TypeScript ni se incorpora React a Mesa.

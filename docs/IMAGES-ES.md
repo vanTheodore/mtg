@@ -23,3 +23,16 @@ y consultar `/cards/{set}/{number}/es`. El motor Phase no cambia.
 Las ilustraciones pertenecen a Wizards of the Coast y los artistas.
 Respetar las directrices de Scryfall sobre créditos, proporciones y
 redistribución. No es una licencia abierta para reempaquetar un catálogo.
+
+
+## Validación al integrar Mesa Arena
+
+El E2E `tests/e2e/spanish-images.spec.ts` monta una respuesta simulada de
+Scryfall (sin imágenes externas) y comprueba que **Ajustes** persiste el idioma,
+que la cara visible carga el escaneo español de identidad Oracle coincidente,
+que volver al inglés invalida la imagen anterior y que las **cartas ocultas
+nunca solicitan sus nombres**. La cara accesible conserva nombre y reglas
+canónicos, independientemente del idioma del arte.
+
+El selector no cambia la traducción de reglas de Phase ni garantiza la
+impresión exacta del mazo; ese trabajo necesita datos de set y número.

@@ -1,12 +1,13 @@
 # Mesa · cliente MTG independiente con motor Phase
 
-> **Estado integrado (2 de noviembre de 2026):** Mesa 0.6 «Mi primera partida»,
-> las correcciones del motor WASM y las pruebas de Chromium están fusionadas en
-> `main`. Ver [Mesa CI](https://github.com/vanTheodore/mtg/actions/workflows/ci.yml)
-> para el estado actual; los informes antiguos de 0.5 describen etapas previas.
-> El motor Phase está fijado a un commit para permitir builds reproducibles;
-> una actualización mayor de upstream requiere validar de nuevo su ABI, paridad
-> y partidas reales antes de fusionarla.
+> **Mesa 0.6 + interfaz Arena (3 de noviembre de 2026):** Tutorial,
+> tablero espejado, mano en abanico y composición adaptativa para escritorio
+> y móvil. **Phase sigue siendo la única autoridad de reglas**: motor fijado
+> a `bf584d6` y validado por Rust/WASM, paridad, Chromium y 26 regresiones
+> originales de Ripple/Hellrider/Cavalcade. Ver
+> [Mesa CI](https://github.com/vanTheodore/mtg/actions/workflows/ci.yml)
+> y [procedencia del motor](docs/PHASE-UPSTREAM-PIN.json).
+> La fidelidad visual completa a Phase todavía está en desarrollo.
 
 
 Cliente web ligero y accesible para Magic: The Gathering construido con
@@ -269,7 +270,7 @@ son transitorios atados al rango de su padre. Detalle en
 
 ## Procedencia y licencias
 
-- Phase: commit `c2fbb7a6634a440c7c6b47e6a87a554cc7382f05`, MIT OR Apache-2.0.
+- Phase: pin `bf584d6bd39f254549be49ed9ff2b845e748e32c`, MIT OR Apache-2.0; commit y huella vigentes en `docs/PHASE-UPSTREAM-PIN.json`.
 - `crates/phase-engine/src` es byte-idéntico al upstream; ver
   `docs/ENGINE-PROVENANCE.md` y `bun run engine:verify`.
 - No se redistribuyen ilustraciones propietarias de Wizards. Las imágenes se

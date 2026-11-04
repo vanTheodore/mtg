@@ -76,8 +76,8 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await expect(stepTitle(page)).toHaveText('Juega tu primera tierra');
   // La mano inicial, ya resuelta el mulligan: es la que la repetición debe
   // volver a dar. Al arrancar, el motor todavía puede estar repartiendo.
-  // A visible card can precede the completed mulligan. Wait for the
-  // seven actual card faces published by Phase, not an interim DOM sample.
+  // A card can appear while Phase is still resolving the opening mulligan.
+  // Capture a complete seven-card hand instead of an intermediate render.
   let openingHand: string[] = [];
   await expect.poll(async () => {
     openingHand = await handNames(page);

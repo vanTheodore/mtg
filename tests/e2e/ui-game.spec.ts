@@ -169,7 +169,22 @@ test('partida completa y victoria desde controles Svelte', async ({ page }) => {
   expect(interactions).toBeGreaterThan(20);
   expect(handoffs).toBeGreaterThan(0);
   expect(discards).toBeGreaterThanOrEqual(0);
-  await expect(page.locator('section[aria-label="Registro de la partida"]')).toContainText(/daño|vidas/);
+  const history = page.locator('section[aria-label="Registro de la partida"]');
+  await expect(history).toContainText(/daño|vidas/);
+  await expect(history).toHaveAttribute('data-compact', 'true');
+  // Latest event remains announced; all twelve remain on-demand in Arena.
+  const latest = history.locator('.latest[aria-live="polite"]');
+  await expect(latest).toBeVisible();
+  await expect(latest).not.toBeEmpty();
+  const more = history.locator('details.history-entries');
+  await expect(more).toBeVisible();
+  await expect(more).not.toHaveAttribute('open', '');
+  await more.locator('summary').click();
+  await expect(more).toHaveAttribute('open', '');
+  await expect(more.locator('ol > li')).toHaveCount(12);
+  await expect(more.locator('ol')).toContainText(/daño|vidas/);
+  await more.locator('summary').click();
+  await expect(more).not.toHaveAttribute('open', '');
   expect(errors).toEqual([]);
   await page.screenshot({ path: 'test-results/ui-game-victory.png', fullPage: true });
   test.info().annotations.push({ type: 'interacciones', description: `${interactions} acciones, ${handoffs} pasos de asiento, ${discards} descartes` });
@@ -237,6 +252,25 @@ test('objetivo elegido con clic en el jugador y daño visible', async ({ page })
     const viewer = await app.getAttribute('data-viewer');
     const turnText = await decision.locator('.phase').first().innerText().catch(() => '');
     if (waiting === 'MulliganDecision') { await keep.click({ timeout: 3_000 }).catch(() => {}); continue; }
+    if (waiting === 'DiscardToHandSize') {
+      // Phase genuinely asks the other seat to discard at cleanup. The
+      // regression test must answer that *legal UI decision*, not loop forever
+      // searching for a Pass Priority control that cannot exist here.
+      const discard = decision.locator('[aria-label="Descartar hasta siete cartas"]');
+      const label = await discard.locator('strong').innerText();
+      const needed = Number(label.match(/Descartar (\d+)/)?.[1] ?? 0);
+      expect(needed).toBeGreaterThan(0);
+      const cards = hand.locator('[data-card-id]');
+      await expect(cards).toHaveCount(7 + needed);
+      for (let index = 0; index < needed; index++) {
+        await cards.nth(index).click();
+      }
+      const confirm = discard.getByRole('button', { name: /Confirmar descarte/ });
+      await expect(confirm).toBeEnabled();
+      await confirm.click();
+      await expect(decision).not.toHaveAttribute('data-waiting', 'DiscardToHandSize');
+      continue;
+    }
     if (viewer !== '0' || !turnText.includes('Fase principal')) {
       const pass = decision.locator('.confirmations button').filter({ hasText: /^Pasar/ }).first();
       if (await pass.count()) await pass.click({ timeout: 2_000 }).catch(() => {});

@@ -1,86 +1,70 @@
-# Auditoría de dependencias (2026-10-29)
+# Dependencias de Mesa — auditoría del 3 de noviembre de 2026
 
-Reproducible con `bun run deps:audit` (`scripts/deps-audit.ts`): lee cada paquete
-fijado en `bun.lock`, consulta el canal `latest` del registro npm y compara
-versiones con orden semántico (incluidas preversiones). No instala ni modifica
-nada.
+**Stack estable:** Bun 1.4.4, Svelte 5, SvelteKit 3, Vite 8, TypeScript 6,
+Rust/Phase vendorizado y Playwright Chromium. La versión de Bun está
+fijada tanto en `package.json` como en CI. El registro de versiones
+exactas de los paquetes está en `package.json` y el lock reproducible
+está en `bun.lock`.
 
-## Resultado (re-auditado el 2026-10-29 tras la ronda 0.4.1)
+## Versiones contrastadas
 
-- **88 paquetes** en `bun.lock`, **10 directos**.
-- **9 desactualizados**, de los cuales **1 es directo**: `typescript`.
-- `rolldown` pasó de 1.2.15 a **1.2.16** (`bun update rolldown`): es transitiva de
-  `vite` 8.3.5, cuyo rango `~1.2.14` la admite. Build y pruebas se repitieron
-  después del cambio.
-- El resto de los desactualizados son transitivas fijadas por el rango de su
-  padre (tabla de abajo): actualizarlas obliga a subir el paquete padre, así que
-  quedan como están y se documentan.
-
-| Directo | Fijado | `latest` | Estado |
+| Dependencia | Fijada | Última estable consultada | Acción |
 | --- | --- | --- | --- |
-| `typescript` | 6.0.3 | 7.0.2 | Retenido a propósito: el stack obligatorio es TS 6 |
-| `@sveltejs/kit` | 3.1.0 | 3.1.0 | Al día |
-| `svelte` | 5.57.3 | 5.57.3 | Al día |
-| `vite` | 8.3.5 | 8.3.5 | Al día |
-| `@sveltejs/vite-plugin-svelte` | 7.3.1 | 7.3.1 | Al día |
-| `@sveltejs/adapter-static` | 4.0.0 | 4.0.0 | Al día |
-| `svelte-check` | 4.7.7 | 4.7.7 | Al día |
-| `@playwright/test` | 1.64.1 | 1.64.1 | Al día |
-| `@axe-core/playwright` | 4.14.0 | 4.14.0 | Al día |
-| `@types/bun` | 1.4.4 | 1.4.4 | Al día |
-| runtime `bun` | 1.4.4 | 1.4.4 | Fijado en `packageManager` y `engines` |
+| Bun | 1.4.4 | 1.4.4 | Mantener |
+| `@sveltejs/kit` | 3.1.0 | **3.1.1** | Candidata, en PR generado con lockfile |
+| `@sveltejs/adapter-static` | 4.0.0 | **4.0.1** | Candidata, junto con Kit |
+| `svelte-check` | 4.7.7 | **4.7.8** | Candidata, con test de tipos |
+| `@sveltejs/vite-plugin-svelte` | 7.3.1 | 7.3.1 | Mantener |
+| Vite | 8.3.5 | 8.3.5 | Mantener |
+| Playwright | 1.64.1 | 1.64.1 | Mantener |
+| `@axe-core/playwright` | 4.14.0 | 4.14.0 | Mantener |
+| Svelte | 5.57.3 | Se mantiene hasta confirmar tag estable más nuevo | Mantener |
+| TypeScript | 6.0.3 | Serie 7 publicada | **Mantener TS 6** por contrato del proyecto |
+| `@types/bun` | 1.4.4 | Compatible con Bun 1.4.4 | Mantener |
 
-### Por qué TypeScript no se sube
+Referencias: https://www.npmjs.com/package/@sveltejs/kit ;
+https://www.npmjs.com/package/@sveltejs/adapter-static ;
+https://www.npmjs.com/package/svelte-check ;
+https://www.npmjs.com/package/vite ;
+https://www.npmjs.com/package/@playwright/test ;
+https://bun.com/blog .
 
-TypeScript 7 es el compilador nativo (port a Go) y cambia el toolchain del
-proyecto. El stack acordado es TS 6 con `svelte-check`/Vite 8; subir de mayor
-exigiría revalidar tipos, build, pruebas unitarias, E2E y el contrato del worker
-bajo un compilador distinto. Se deja anotado, no aplicado.
+## Actualizaciones propuestas de forma segura
 
-### Transitorios desactualizados (contexto, no acción directa)
+GitHub Dependabot admite el ecosistema `bun` y el **`bun.lock` de texto**
+con Bun 1.4 (soporte anunciado el 20 de octubre de 2026):
+https://github.blog/changelog/2026-10-20-dependabot-now-supports-npm-12-pnpm-11-and-12-and-bun-1-4/
 
-| Paquete | Fijado | `latest` | Por qué no se toca a mano |
-| --- | --- | --- | --- |
-| `chokidar`, `readdirp` | 4.x | 6 / 5 | Rangos `^4` de Vite/Kit; el salto es de sus padres |
-| `devalue` | 5.9.4 | 6.0.3 | Rango `^5` de SvelteKit/Svelte |
-| `nanoid`, `obug` | 3.3.20 / 2.2.1 | 6 / 3 | Rangos de los padres |
-| `@types/estree`, `aria-query`, `undici-types` | 1.0.9 / 5.3.1 / 8.9.0 | 1.0.10 / 5.3.2 / 8.12.3 | Parches/minors dentro del rango; una resolución limpia los tomaría |
+La nueva [configuración de Dependabot](../.github/dependabot.yml)
+solicita **como máximo dos PR activos**, agrupa los parches/minor de Svelte
+y herramientas, revisa semanalmente en horario de Chile y desactiva el
+rebase automático. Así evita generar numerosas ejecuciones CI al subir
+un upstream o al reabrir un PR.
 
-`aria-query` está fijado a `5.3.1` exacto por Svelte 5.57.3, así que el
-`5.3.2` disponible no entra sin cambiar Svelte.
+El bot debe actualizar **`package.json` + `bun.lock` juntos**; no se
+sube solo `package.json` porque el CI exige
+`bun install --frozen-lockfile`. Ninguna actualización de Dependabot
+hace merge automático. Los PR requieren `bun run check`,
+`bun test src/lib`, `bun run engine:verify`, build,
+WASM/paridad y Chromium completos cuando cambian librerías de UI.
 
-## Rust y el motor
+Se ignoran los saltos **major**, incluido TypeScript 7. Los updates
+de Cargo/Phase están fuera de Dependabot a propósito: los crates son
+fuentes vendorizadas y el hash del motor, Cargo.lock y la toolchain
+requieren un proceso de importación controlado y sus propios tests.
 
-- Phase permanece en el commit `c2fbb7a6634a440c7c6b47e6a87a554cc7382f05`
-  (v0.119.0) para que `crates/phase-engine/src` siga byte-idéntico al upstream
-  (`bun run engine:verify`, 868 archivos, SHA-256 `7ca901b3…8aa5`).
-- `main` de Phase está **2 commits por delante** de ese pin al 2026-10-29
-  (`57ef03d2` «refresh metagame feeds», `db0decf6` «close the AST layer against
-  state and game modules»). No se adoptan en esta fase: cambiaría el árbol de
-  reglas y exigiría repetir paridad, escenarios, E2E y medición.
-- Dependencias del puente (`crates/mtg-engine-wasm`): `serde` 1.0.228,
-  `serde_json` 1.0.149, `web-time`, `getrandom` 0.3.4, `wasm-bindgen` 0.2.121 y
-  `rand` 0.9.4 (heredado de Phase), todas resueltas y fijadas en `Cargo.lock`.
-  El registro de crates no es alcanzable en este entorno; el lock se valida
-  compilando (`cargo check --offline`) y con `bun run engine:parity`.
+**Limitación:** para Bun, Dependabot publica actualizaciones de versión,
+pero sus actualizaciones automáticas por avisos de seguridad no tienen
+el mismo soporte que npm. Conviene conservar `bun run deps:audit` y
+revisiones de advisories sin asumir que el bot cubre todo.
 
-## Fase 0.4
+Este documento **es una auditoría**; no afirma que las tres versiones
+candidatas estén instaladas ni que sus tests hayan pasado. Un futuro PR
+de Dependabot aportará el lock regenerado y el CI correspondiente.
 
-No se añadió ninguna dependencia de aplicación. Los scripts nuevos
-(`catalog-packs`, `build-impressions-es`, `measure-catalog`) usan sólo la stdlib de
-Bun/Node (`node:crypto`, `node:fs`, `node:path`). TypeScript sigue fijado en
-6.0.3 a propósito.
+## Revisión anterior
 
-La auditoría de este turno vuelve a dar 26 desactualizados (antes 24) porque el
-registro publicó parches nuevos de transitorios (`@rolldown/binding-*`,
-`playwright-core` alpha); el único directo sigue siendo `typescript`.
-
-## Política de actualización
-
-1. Solo se sube un directo con verificación completa:
-   `bun run check && bun test src/lib && bun run engine:verify && bun run build`
-   más `bun run test:e2e` cuando haya navegador disponible.
-2. Nada de Node/npm/pnpm ni dependencias de aplicación en Node: el runtime es
-   Bun 1.4.4 y las herramientas nativas (Rust, Binaryen) no son dependencias de
-   la app.
-3. Los transitorios se actualizan subiendo su padre, no editando `bun.lock`.
+La versión anterior (29 oct.) seguía a Phase `c2fbb7a`, antes de
+la actualización ya fusionada del PR #6 a `0dd35e4`. Ver la procedencia
+vigente en [`ENGINE-PROVENANCE.md`](ENGINE-PROVENANCE.md) y la auditoría
+de upstream del [3 de noviembre](PHASE-UPSTREAM-2026-11-03.md).
