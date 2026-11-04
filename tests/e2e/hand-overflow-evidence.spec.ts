@@ -101,3 +101,32 @@ for (const [width, height] of [[1440, 900], [390, 844]] as const) {
     });
   }
 }
+
+test('Hand overflow diagnostic: react to viewport resize without remounting', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route('**/api.scryfall.com/**', (route) => route.abort());
+  await page.goto('/stress?hand=4&tokens=0&mirror=1');
+  await expect(page.locator('.hand-zone .hand-card')).toHaveCount(4);
+
+  // Let Svelte's post-render rAF finish after each viewport change. This
+  // intentionally does not navigate: updateOverflow only tracks objects.length
+  // and scroll events; responsive relayout might therefore leave stale arrows.
+  const settleLayout = () => page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+  await settleLayout();
+  const desktop = await measureHand(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await settleLayout();
+  const mobile = await measureHand(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await settleLayout();
+  const restored = await measureHand(page);
+  const evidence = { desktop, mobile, restored };
+  console.log('MESA_HAND_RESIZE_EVIDENCE ' + JSON.stringify(evidence));
+  await testInfo.attach('hand-resize-without-remount.json', {
+    body: JSON.stringify(evidence, null, 2),
+    contentType: 'application/json'
+  });
+  expect(restored.faces).toHaveLength(4);
+});
