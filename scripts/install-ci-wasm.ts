@@ -73,6 +73,23 @@ async function sha256(path: string): Promise<string> {
   return hash.digest('hex');
 }
 
+/**
+ * Hash the exact Cargo.lock blob committed to HEAD, not the Windows checkout.
+ * Git may convert LF to CRLF on checkout (core.autocrlf), changing its raw
+ * bytes without changing the source/lockfile identity. The caller also
+ * requires a clean worktree before trusting the committed blob.
+ */
+export function committedCargoLockSha256(cwd: string): string {
+  const result = Bun.spawnSync(['git', 'show', 'HEAD:Cargo.lock'], {
+    cwd, stdout: 'pipe', stderr: 'pipe'
+  });
+  if (result.exitCode !== 0) {
+    throw new Error('No se pudo leer Cargo.lock desde el commit de Git: ' +
+      result.stderr.toString().trim().slice(0, 250));
+  }
+  return createHash('sha256').update(result.stdout).digest('hex');
+}
+
 async function checkWasm(path: string): Promise<void> {
   const size = (await stat(path)).size;
   if (size <= 1_000_000) throw new Error('El motor descargado es demasiado pequeño.');
@@ -138,10 +155,14 @@ async function install(): Promise<void> {
     const expectedCargo = parseSha256sum(await readFile(cargo, 'utf8'), 'Cargo.lock');
     const [actualEngine, actualCargo] = await Promise.all([
       sha256(wasm),
-      sha256(join(root, 'Cargo.lock'))
+      Promise.resolve(committedCargoLockSha256(root))
     ]);
-    if (actualEngine !== expectedEngine || actualCargo !== expectedCargo) {
-      throw new Error('La identidad SHA-256 del motor o Cargo.lock no coincide. No se instaló nada.');
+    if (actualEngine !== expectedEngine) {
+      throw new Error('El SHA-256 del WASM descargado no coincide con el CI. No se instaló nada.');
+    }
+    if (actualCargo !== expectedCargo) {
+      throw new Error('Cargo.lock del commit no coincide con el CI. No se instaló nada. ' +
+        '(CI: ' + expectedCargo + ', Git HEAD: ' + actualCargo + ')');
     }
 
     const output = join(root, 'static', 'wasm');
