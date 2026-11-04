@@ -3,8 +3,8 @@
 > **Mesa 0.6 + interfaz Arena (3 de noviembre de 2026):** Tutorial,
 > tablero espejado, mano en abanico y composición adaptativa para escritorio
 > y móvil. **Phase sigue siendo la única autoridad de reglas**: motor fijado
-> a `bf584d6` y validado por Rust/WASM, paridad, Chromium y 26 regresiones
-> originales de Ripple/Hellrider/Cavalcade. Ver
+> en el [manifiesto de procedencia](docs/PHASE-UPSTREAM-PIN.json), con
+> verificación de Rust/WASM, paridad, Chromium y regresiones de reglas. Ver
 > [Mesa CI](https://github.com/vanTheodore/mtg/actions/workflows/ci.yml)
 > y [procedencia del motor](docs/PHASE-UPSTREAM-PIN.json).
 > La fidelidad visual completa a Phase todavía está en desarrollo.
@@ -270,7 +270,7 @@ son transitorios atados al rango de su padre. Detalle en
 
 ## Procedencia y licencias
 
-- Phase: pin `bf584d6bd39f254549be49ed9ff2b845e748e32c`, MIT OR Apache-2.0; commit y huella vigentes en `docs/PHASE-UPSTREAM-PIN.json`.
+- Phase: MIT OR Apache-2.0. Commit y huella autoritativos: [`docs/PHASE-UPSTREAM-PIN.json`](docs/PHASE-UPSTREAM-PIN.json).
 - `crates/phase-engine/src` es byte-idéntico al upstream; ver
   `docs/ENGINE-PROVENANCE.md` y `bun run engine:verify`.
 - No se redistribuyen ilustraciones propietarias de Wizards. Las imágenes se
