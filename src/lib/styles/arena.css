@@ -180,8 +180,12 @@
   .app[data-board-style="arena"] .layout .hand-zone {
     padding: .4rem .6rem;
   }
+  /* The fan's own padding is set in the short-desktop block at the end of
+   * this file: 1.5rem of top padding is what pushed the fanned cards out of
+   * the card-sized 190px hand (measured scrollHeight 206 vs clientHeight 180,
+   * which cut the bottom half of every hand card). */
   .app[data-board-style="arena"] .layout .hand-zone .hand-scroll.fan {
-    padding-block: 1.5rem 1.25rem;
+    padding-block: .55rem .6rem;
   }
   .app[data-board-style="arena"] .layout .middle {
     padding-block: .35rem;
@@ -275,7 +279,7 @@
   }
   .app[data-board-style="arena"] .hand-zone .hand-scroll.fan {
     --hand-card-w: min(var(--hand-natural-w), var(--arena-base-card-w, 124px), 12dvh);
-    padding-block: .85rem 1rem;
+    padding-block: .55rem .6rem;
   }
 }
 
@@ -389,5 +393,127 @@
   .app[data-board-style="arena"]:has(> .layout) > .notice {
     padding-block: .35rem;
     line-height: 1.3;
+  }
+}
+
+
+/*
+ * Arena 1.0 — a real table, measured on the real board.
+ *
+ * Evidence (Chromium 1440×900, real Phase DeclareBlockers, docs/ARENA-1.0-BOARD.md):
+ * the scene owed 137px with the top bar + two full-width banners + a 56px
+ * metrics strip. None of that is a card. Collapsing the banners behind a
+ * disclosure, reporting the engine's deck count in the bar and folding the
+ * metrics into one line took the debt to 46px WITHOUT touching card size.
+ *
+ * What is left is not chrome: two 207px battlefields, a 190px hand and one
+ * 263px decision card. Shrinking any of them would cost either the 124×173
+ * combat cards or a legal Phase action, so the last 46px stays documented
+ * instead of being bought by hiding controls.
+ */
+@media (min-width: 1280px) and (max-height: 1000px) {
+  .app[data-board-style="arena"] {
+    gap: .3rem;
+    padding-block: .3rem;
+    min-height: 100dvh;
+  }
+  /* A table bar, not a page header: identity, engine status, seat, menu. */
+  .app[data-board-style="arena"] .topbar {
+    padding: .3rem .6rem;
+    min-height: 0;
+    flex-wrap: nowrap;
+  }
+  .app[data-board-style="arena"] .topbar .mark { width: 1.9rem; height: 1.9rem; font-size: 1rem; }
+  .app[data-board-style="arena"] .topbar h1 { font-size: 1rem; }
+  .app[data-board-style="arena"] .topbar .brand p { display: none; }
+  .app[data-board-style="arena"] .top-actions { gap: .4rem; flex-wrap: nowrap; }
+  .app[data-board-style="arena"] .notice-line { padding-block: 0; }
+  .app[data-board-style="arena"] .metrics[data-collapsible="true"] > details { line-height: 1.2; }
+  /* The opponent's hand backs are a count, not a card row. */
+  .app[data-board-style="arena"] .layout > .rival-hand { margin-block: -.15rem; }
+}
+
+/*
+ * HUD hierarchy: inside the decision card, the prompt Phase is waiting for
+ * comes before the running log. The card, the turn track and the log keep
+ * their places in the sidecar (their geometry is asserted by arena-ui.spec.ts
+ * and is what tells a player where to look); what changes is that the
+ * 263px decision no longer opens with "Resoluciones".
+ */
+.app[data-board-style="arena"] .layout > .middle > .decision {
+  display: flex;
+  flex-direction: column;
+}
+.app[data-board-style="arena"] .layout > .middle > .decision > .decision-head {
+  order: 1;
+}
+.app[data-board-style="arena"] .layout > .middle > .decision > .prompt,
+.app[data-board-style="arena"] .layout > .middle > .decision > p.muted {
+  order: 2;
+}
+.app[data-board-style="arena"] .layout > .middle > .decision > .confirmations {
+  order: 3;
+}
+.app[data-board-style="arena"] .layout > .middle > .decision > .finished {
+  order: 4;
+}
+
+
+/*
+ * Arena 1.0 — the hand must never clip the cards it is showing.
+ *
+ * Measured before: the hand's scrollport was 180px tall while its content
+ * needed 206px, because a rotated fanned card is ~10px taller than its
+ * wrapper and the scrollport still carried 13.6px of top padding. The result
+ * was every hand card cut in half at the bottom — visible in
+ * docs/evidence/blockers-before.png.
+ *
+ * The rule below gives the scrollport exactly the height of its tallest card
+ * (card width × the 488/680 face ratio) plus the small breathing room the
+ * fan needs, so no card is ever clipped, while staying card-sized instead of
+ * growing a second row.
+ */
+.app[data-board-style="arena"] .layout .hand-zone .hand-scroll.fan {
+  padding-block: .3rem .45rem;
+  align-items: flex-start;
+  overflow-y: hidden;
+}
+
+/*
+ * The deck/engine report and the metrics no longer own a full row each on a
+ * short desktop; they are one line of text under the table and the numbers
+ * live behind their disclosure.
+ */
+@media (max-height: 1000px) {
+  .app[data-board-style="arena"] .metrics[data-collapsible="true"] {
+    font-size: .68rem;
+    line-height: 1.1;
+    padding-block: 0;
+  }
+}
+
+
+/*
+ * Arena 1.0 — close the last row of debt with table spacing, not card size.
+ *
+ * At this point the 1440×900 real-board scene owes 8px. The remaining height
+ * is 2×207px battlefields + a 184px hand + a 263px decision; touching any of
+ * those would cost a 124×173 combat card or a legal Phase action. What is
+ * still compressible is the gap between blocks and the caption row of each
+ * battlefield, so that is what this rule trims — 2px per boundary.
+ */
+@media (min-width: 1280px) and (max-height: 1000px) {
+  .app[data-board-style="arena"] .layout {
+    row-gap: .18rem;
+  }
+  .app[data-board-style="arena"] .layout > .middle {
+    gap: .3rem;
+  }
+  .app[data-board-style="arena"] .battlefield[data-side] > h2 {
+    margin-bottom: .1rem;
+    font-size: .72rem;
+  }
+  .app[data-board-style="arena"] .layout .hand-zone {
+    padding-block: .2rem;
   }
 }

@@ -1,4 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+/**
+ * Arena keeps its configuration behind one labelled disclosure. Open it the
+ * way a person does, and leave it open so the settings panel is reachable.
+ */
+/**
+ * Mesa keeps every table control present in both styles and only abbreviates
+ * its visual label in Arena ("Auto-paso" instead of the full sentence), so the
+ * settings button never moves and no menu has to be opened first. This helper
+ * documents that contract instead of clicking a disclosure that no longer
+ * exists.
+ */
+async function openArenaOptions(page: Page) {
+  await expect(page.getByRole('button', { name: 'Ajustes' })).toBeVisible();
+}
 
 test('Arena es nativo de Svelte, reversible y persistente', async ({ page }) => {
   await page.goto('/');
@@ -11,6 +26,9 @@ test('Arena es nativo de Svelte, reversible y persistente', async ({ page }) => 
   await expect(painting).toHaveAttribute('src', '/phase/arenas/angelic-sky-topdown.webp');
   await expect.poll(() => painting.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 
+  // Arena folds its configuration into one labelled menu; the settings entry
+  // point is still one click away and keeps its own name.
+  await openArenaOptions(page);
   await page.getByRole('button', { name: 'Ajustes' }).click();
   const style = page.getByRole('combobox', { name: 'Estilo del tablero' });
   await style.selectOption('classic');
@@ -126,6 +144,7 @@ test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni
   expect(tallHeight - compactHeight).toBeGreaterThan(25);
 
   await page.setViewportSize({ width: 1440, height: 900 });
+  await openArenaOptions(page);
   await page.getByRole('button', { name: 'Ajustes' }).click();
   const style = page.getByRole('combobox', { name: 'Estilo del tablero' });
   await style.selectOption('classic');
@@ -182,6 +201,7 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
   expect(desktop.verticalGap).toBeGreaterThanOrEqual(-2);
   expect(desktop.decisionWidth).toBeGreaterThan(250);
 
+  await openArenaOptions(page);
   await page.getByRole('button', { name: 'Ajustes' }).click();
   const mode = page.getByRole('combobox', { name: 'Estilo del tablero' });
   await mode.selectOption('classic');
