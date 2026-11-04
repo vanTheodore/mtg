@@ -57,7 +57,9 @@ test('Cargo.lock: hash de Git HEAD, igual en LF y checkout Windows CRLF', () => 
     expect(committedCargoLockSha256(root)).toBe(expected);
     writeFileSync(lock, contentLF.replace(/\n/g, '\r\n'));
     expect(createHash('sha256').update(readFileSync(lock)).digest('hex')).not.toBe(expected);
-    expect(runGit('status', '--porcelain', '--', 'Cargo.lock')).toBe('');
+    // Linux may mark a manually rewritten CRLF worktree as modified even
+    // when its committed blob remains LF. This helper measures only the
+    // committed bytes; the installer separately enforces a clean worktree.
     expect(committedCargoLockSha256(root)).toBe(expected);
   } finally {
     rmSync(root, { recursive: true, force: true });
