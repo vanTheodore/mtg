@@ -243,8 +243,12 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
 
   // 3) confirm: Phase validates the assignment and answers with a new revision.
   const before = await driver.revision();
-  await driver.press(driver.decision.locator('button').filter({ hasText: /^Confirmar bloqueos/ }).first());
-  expect(await driver.revision()).toBeGreaterThan(before);
+  // The short-desktop rail scrolls independently when it grows. A keyboard
+  // player must still reach and activate the exact Phase-authored decision.
+  await confirmBlock.focus();
+  await expect(confirmBlock).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => driver.revision(), { timeout: 15_000 }).toBeGreaterThan(before);
 
   // 4) Proof that Phase accepted it: its own event, in the game log.
   await expect(driver.log).toContainText(`${blockerName} bloquea a ${attackerName}`, { timeout: 15_000 });
