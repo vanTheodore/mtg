@@ -314,5 +314,21 @@
     :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:focus-within .card-tools {
       pointer-events: auto;
     }
+
+    /*
+     * Hand.svelte uses an overflow-x scrollport for the fan. Overflow-y:
+     * visible computes to auto there, so a toolbar anchored BELOW the card
+     * may be clipped. Keep the tools centered OVER the card face in the hand
+     * while focused/hovered, instead of adding height to the scrollport.
+     * With the shell hovered, the same buttons are pointer-reachable; the
+     * rest of the time they are transparent and ignore pointer events.
+     */
+    :global(.app[data-board-style="arena"] .hand-zone) .card-shell .card-tools {
+      inset-block-start: 50%;
+      transform: translateY(-50%);
+      max-width: calc(100% - .3rem);
+      flex-direction: column;
+      align-items: stretch;
+    }
   }
 </style>
