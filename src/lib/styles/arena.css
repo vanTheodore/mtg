@@ -278,3 +278,72 @@
     padding-block: .85rem 1rem;
   }
 }
+
+
+/*
+ * Arena 0.8.1 — sidecar for short desktop combat.
+ *
+ * Evidence from Phase at 1440x900 after PR #26:
+ *   full game document 1642px, 742px vertical debt at DeclareBlockers.
+ * Keeping the entire decision HUD between the two battlefields is expensive:
+ * it becomes a scrollable, keyboard-reachable right rail instead.
+ *
+ * The DOM and Phase event sequence stay unchanged. On narrower/tablet screens
+ * the original center-line HUD returns automatically (no position:fixed,
+ * hidden legal actions or copied/secondary game logic).
+ */
+@media (min-width: 1100px) and (max-height: 1000px) {
+  .app[data-board-style="arena"] .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, .4fr);
+    column-gap: .55rem;
+    align-items: start;
+  }
+  .app[data-board-style="arena"] .layout > :not(.middle) {
+    grid-column: 1;
+  }
+  .app[data-board-style="arena"] .layout > .middle {
+    grid-column: 2;
+    grid-row: 1 / span 8;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .5rem;
+    position: sticky;
+    top: .4rem;
+    align-self: start;
+    max-height: calc(100dvh - .8rem);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+    padding: .4rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--surface) 85%, transparent);
+  }
+  .app[data-board-style="arena"] .layout > .middle > .turn-track {
+    grid-column: 1;
+    width: 100%;
+  }
+  .app[data-board-style="arena"] .layout > .middle > .center {
+    grid-column: 1;
+  }
+  .app[data-board-style="arena"] .layout > .middle > .decision {
+    grid-column: 1;
+    padding: .6rem;
+  }
+  .app[data-board-style="arena"] .layout > .middle > .decision .actions > button {
+    min-width: 0;
+    flex: 1 1 8rem;
+  }
+  .app[data-board-style="arena"] .layout > .battlefield[data-side]:has(> .middle-permanents.single-lane):has(> .row[data-zone="creatures"]) {
+    grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  }
+  .app[data-board-style="arena"] .layout > .battlefield[data-side] .row[data-zone="lands"] {
+    --card-w: min(var(--arena-base-card-w, 124px), 7.5dvh);
+  }
+  .app[data-board-style="arena"] .layout > .hand-zone .hand-scroll.fan {
+    --hand-card-w: min(var(--hand-natural-w), var(--arena-base-card-w, 124px), 10dvh);
+    padding-block: .55rem .6rem;
+  }
+}
+/* Scroll remains available when the rail grows (large stack or expanded
+ * history), and tabbing can reveal every control inside its own scrollport. */
