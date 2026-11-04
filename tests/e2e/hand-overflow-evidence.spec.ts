@@ -135,6 +135,17 @@ test('Hand overflow diagnostic: react to viewport resize without remounting', as
   const evidence = { desktop, mobile, restored };
   console.log('MESA_HAND_RESIZE_EVIDENCE ' + JSON.stringify(evidence));
   await persistEvidence(page, testInfo, 'hand-resize-without-remount', evidence);
+
+  // Four cards fit the 1440px scene but exceed the 390px scrollport.
+  // This transition was invisible to the old $effect, which only observed
+  // objects.length, so the arrows could stay hidden after resize.
+  expect(desktop.layoutSaysOverflow).toBe(false);
+  expect(mobile.layoutSaysOverflow).toBe(true);
+  expect(desktop.controls).toBe(desktop.layoutSaysOverflow);
+  expect(mobile.controls).toBe(mobile.layoutSaysOverflow);
+  expect(mobile.hint).toBe(mobile.layoutSaysOverflow);
+  expect(restored.controls).toBe(restored.layoutSaysOverflow);
+  expect(restored.hint).toBe(restored.layoutSaysOverflow);
   expect(restored.faces).toHaveLength(4);
 });
 
