@@ -1,0 +1,27 @@
+name: Phase upstream watch
+
+on:
+  schedule:
+    # Weekly, no Rust/WASM/Chromium compilation. GitHub cron runs in UTC.
+    - cron: '20 12 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Verify tracker classification
+        run: bun test scripts/phase-upstream-watch.test.ts
+      - name: Compare pinned Phase source with main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/phase-upstream-watch.ts
