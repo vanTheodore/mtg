@@ -19,7 +19,8 @@ Archivo: `tests/e2e/hand-overflow-evidence.spec.ts`.
 - `1440×900`, `390×844` con 4 y 30 cartas, en `/stress?hand=N&tokens=0&mirror=1`. Registrar `scrollWidth`, `clientWidth`, `scrollLeft`, controles, aviso y rectángulos reales de las caras.
 - Capturar posiciones iniciales, extremo derecho y extremo izquierdo restaurado. Con 30 cartas, además de ver las flechas, **enfocar el botón y pulsar Enter**; comprobar que la mano se desplaza.
 - Cambiar **la misma instancia** 1440×900 → 390×844 → 1440×900 sin recargar, registrar la discrepancia de UI y métricas tras dos `requestAnimationFrame`.
-- Los logs `MESA_HAND_OVERFLOW_EVIDENCE` y `MESA_HAND_RESIZE_EVIDENCE` y sus JSON adjuntos son la fuente de observación.
+- En 1440×900, enfocar una carta y registrar si la barra `Ampliar` está realmente dentro del **scrollport** y si `document.elementFromPoint()` puede acertar sobre su botón. Esto distingue visibilidad geométrica de mera opacidad/foco.
+- Los logs `MESA_HAND_OVERFLOW_EVIDENCE`, `MESA_HAND_RESIZE_EVIDENCE` y `MESA_HAND_TOOLBAR_EVIDENCE` y sus JSON adjuntos son la fuente de observación.
 
 Comando para ejecución focalizada en entorno con Bun, navegador y dependencias:
 
