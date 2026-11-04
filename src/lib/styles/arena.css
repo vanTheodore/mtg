@@ -297,7 +297,7 @@
  * the original center-line HUD returns automatically (no position:fixed,
  * hidden legal actions or copied/secondary game logic).
  */
-@media (min-width: 1280px) and (max-height: 1000px) {
+@media (min-width: 1100px) and (max-height: 1000px) {
   .app[data-board-style="arena"] .layout {
     grid-template-columns: minmax(0, 1fr) minmax(300px, .4fr);
     column-gap: .55rem;
@@ -367,7 +367,7 @@
  * only the frame around it becomes slightly denser. No fixed positioning,
  * clipped choices or changes to the Phase game state.
  */
-@media (min-width: 1280px) and (max-height: 1000px) {
+@media (min-width: 1100px) and (max-height: 1000px) {
   /* Doubled class: Board.svelte's scoped `.app` rule has the same specificity
      (0,2,0) and is injected after this file, so a single `.app[data-board-style]`
      lost the cascade and the shell kept its 12.8px gap and padding — measured
@@ -418,7 +418,7 @@
  * combat cards or a legal Phase action, so the last 46px stays documented
  * instead of being bought by hiding controls.
  */
-@media (min-width: 1280px) and (max-height: 1000px) {
+@media (min-width: 1100px) and (max-height: 1000px) {
   .app.app[data-board-style="arena"] {
     gap: .3rem;
     padding-block: .3rem;
@@ -509,7 +509,7 @@
  * still compressible is the gap between blocks and the caption row of each
  * battlefield, so that is what this rule trims — 2px per boundary.
  */
-@media (min-width: 1280px) and (max-height: 1000px) {
+@media (min-width: 1100px) and (max-height: 1000px) {
   .app[data-board-style="arena"] .layout {
     row-gap: .18rem;
   }
@@ -728,4 +728,234 @@
     display: block;
   }
   .app[data-board-style="arena"] > .topbar > .engine-status .dot { display: none; }
+}
+
+
+/*
+ * Arena 1.0 — la banda intermedia (tablet y portátil chica), medida.
+ *
+ * `/?autostart` a 1024×768 debía 243 px después de convertir la mano en cajón:
+ * la barra superior en dos filas (104 px), los dos marcadores de asiento
+ * (55 px cada uno) y, sobre todo, la columna del HUD apilada (decisión 252 +
+ * pila/registro + pista de turnos = 441 px) que dejaba el campo propio fuera
+ * de la primera pantalla.
+ *
+ * Aquí la decisión de Phase pasa a compartir fila con la pila y la pista de
+ * turnos: hay 1024 px de ancho, así que no hace falta apilar nada. No se
+ * elimina ni se reordena ningún control, y por debajo de 641 px (teléfono
+ * vertical) sigue mandando la columna con la decisión primero.
+ */
+@media (min-width: 641px) and (max-width: 1099px) and (min-height: 521px) {
+  .app[data-board-style="arena"] .layout > .middle {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr);
+    grid-template-rows: auto auto;
+    column-gap: .55rem;
+    row-gap: .3rem;
+    align-items: start;
+  }
+  .app[data-board-style="arena"] .layout > .middle > .decision {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+  .app[data-board-style="arena"] .layout > .middle > .center {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .app[data-board-style="arena"] .layout > .middle > .turn-track {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  /* Un marcador de asiento en una tableta es una línea de números, no una
+     tarjeta: la vida sigue en tamaño de lectura. */
+  .app[data-board-style="arena"] .layout > .player-bar,
+  .app[data-board-style="arena"] .board > .player-bar {
+    padding-block: .2rem;
+    padding-inline: .8rem;
+  }
+  .app[data-board-style="arena"] .layout .player-bar .life-value,
+  .app[data-board-style="arena"] .board .player-bar .life-value {
+    font-size: 1.35rem;
+  }
+}
+
+
+/*
+ * Arena 1.0 — un teléfono en horizontal es un teléfono.
+ *
+ * `/?autostart` a 844×390 debía 636 px con el cajón de mano ya activo: el HUD
+ * seguía siendo una banda central entre los dos campos y cada marcador de
+ * asiento ocupaba 55 px de los 390 disponibles. Con el tablero en dos
+ * columnas —campos a la izquierda, decisión de Phase a la derecha, como en el
+ * escritorio corto— la decisión queda entera en la primera pantalla.
+ *
+ * Nada se esconde: la pila, el registro y la pista de turnos siguen en la
+ * columna derecha, debajo de la decisión, en el mismo orden de tabulación.
+ */
+@media (max-height: 520px) {
+  /*
+   * Una sola columna con la decisión de Phase primero.
+   *
+   * Se probó antes el rail de escritorio (campos a la izquierda, decisión a la
+   * derecha) y medía 938 px de documento: el rail ocupa la primera fila del
+   * grid y los demás hijos siguen apilándose por debajo, así que no ahorraba
+   * nada. Poner la decisión al principio sí: el jugador ve el prompt completo
+   * sin desplazar y el tablero queda justo debajo.
+   */
+  .app[data-board-style="arena"] .layout {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    align-items: stretch;
+  }
+  .app[data-board-style="arena"] .layout > .middle {
+    order: -1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: .25rem;
+    padding-block: .2rem;
+    border: 0;
+  }
+  .app[data-board-style="arena"] .layout > .middle > .decision { order: 1; }
+  .app[data-board-style="arena"] .layout > .middle > .center { order: 2; }
+  .app[data-board-style="arena"] .layout > .middle > .turn-track { order: 3; }
+  .app[data-board-style="arena"] .layout > .player-bar,
+  .app[data-board-style="arena"] .board > .player-bar {
+    padding-block: .15rem;
+    font-size: .82rem;
+  }
+  .app[data-board-style="arena"] .layout .player-bar .life-value,
+  .app[data-board-style="arena"] .board .player-bar .life-value {
+    font-size: 1.2rem;
+  }
+  .app[data-board-style="arena"] .layout .rival-hand { padding-block: 0; }
+  .app[data-board-style="arena"] .layout .mini-back { width: 18px; height: 25px; }
+  .app[data-board-style="arena"] .battlefield[data-side] .row { gap: .3rem; }
+  .app[data-board-style="arena"] .battlefield[data-side] > h2 {
+    font-size: .68rem;
+    margin-bottom: .1rem;
+  }
+  /* La barra del teléfono horizontal cabe en una fila: identidad, motor,
+     asiento y menú, con el texto del motor completo y más pequeño. */
+  .app[data-board-style="arena"] > .topbar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: .2rem .5rem;
+    padding: .2rem .5rem;
+  }
+  .app[data-board-style="arena"] > .topbar > .brand { grid-column: 1; }
+  .app[data-board-style="arena"] > .topbar > .brand .mark { width: 1.5rem; height: 1.5rem; font-size: .8rem; }
+  .app[data-board-style="arena"] > .topbar > .brand h1 { font-size: .9rem; }
+  .app[data-board-style="arena"] > .topbar > .brand p { display: none; }
+  .app[data-board-style="arena"] > .topbar > .engine-status {
+    grid-column: 2;
+    justify-self: start;
+    font-size: .62rem;
+    padding: .05rem .4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .app[data-board-style="arena"] > .topbar > .top-actions {
+    grid-column: 3;
+    flex-wrap: nowrap;
+    gap: .2rem;
+  }
+  .app[data-board-style="arena"] .top-actions button { min-height: 28px; padding: .1rem .4rem; font-size: .7rem; }
+  .app[data-board-style="arena"] .top-actions .seat { font-size: .68rem; }
+}
+
+
+/* La barra de la tableta también es una barra: una fila en 641–1099 px.
+ * Medido a 1024×768: la barra en dos filas costaba 104 px y el documento
+ * quedaba 62 px por encima de la pantalla; en una fila son 56. */
+@media (min-width: 641px) and (max-width: 1099px) and (min-height: 521px) {
+  .app[data-board-style="arena"] > .topbar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: .2rem .5rem;
+    padding: .3rem .55rem;
+  }
+  .app[data-board-style="arena"] > .topbar > .brand { grid-column: 1; }
+  .app[data-board-style="arena"] > .topbar > .brand .mark { width: 1.7rem; height: 1.7rem; font-size: .9rem; }
+  .app[data-board-style="arena"] > .topbar > .brand h1 { font-size: .95rem; }
+  .app[data-board-style="arena"] > .topbar > .brand p { display: none; }
+  .app[data-board-style="arena"] > .topbar > .engine-status {
+    grid-column: 2;
+    justify-self: start;
+    font-size: .68rem;
+    padding: .08rem .45rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .app[data-board-style="arena"] > .topbar > .top-actions {
+    grid-column: 3;
+    flex-wrap: nowrap;
+    gap: .25rem;
+  }
+  .app[data-board-style="arena"] .top-actions button { min-height: 30px; padding: .15rem .45rem; font-size: .72rem; }
+  .app[data-board-style="arena"] .top-actions .seat { font-size: .7rem; }
+}
+
+
+/*
+ * Arena 1.0 — la barra de asiento y la barra superior en un teléfono vertical.
+ *
+ * Medido en `/?autostart` a 390×844 antes de este bloque: barra superior
+ * 131 px y dos marcadores de asiento de 115 y 84 px, es decir 330 px —casi el
+ * 40 % de la pantalla— gastados en cromo que no es ni una carta ni una
+ * decisión. La vida sigue en tamaño de lectura (1.15rem) y los contadores de
+ * zona siguen todos ahí; lo que se va es el aire.
+ */
+@media (max-width: 640px) {
+  .app.app[data-board-style="arena"] > .topbar {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: .2rem .45rem;
+    padding: .25rem .5rem;
+  }
+  .app.app[data-board-style="arena"] > .topbar > .brand { grid-column: 1; }
+  .app.app[data-board-style="arena"] > .topbar > .brand .mark { width: 1.5rem; height: 1.5rem; font-size: .8rem; }
+  .app.app[data-board-style="arena"] > .topbar > .brand h1 { font-size: .88rem; }
+  .app.app[data-board-style="arena"] > .topbar > .brand p { display: none; }
+  .app.app[data-board-style="arena"] > .topbar > .engine-status {
+    grid-column: 2;
+    justify-self: start;
+    font-size: .62rem;
+    padding: .05rem .4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .app.app[data-board-style="arena"] > .topbar > .top-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: .2rem;
+  }
+  .app.app[data-board-style="arena"] .top-actions button { min-height: 30px; padding: .12rem .45rem; font-size: .7rem; }
+  .app.app[data-board-style="arena"] .top-actions .seat { font-size: .68rem; }
+
+  .app.app[data-board-style="arena"] .layout > .player-bar,
+  .app.app[data-board-style="arena"] .board > .player-bar {
+    padding: .25rem .5rem;
+    border-radius: 10px;
+    gap: .35rem;
+  }
+  .app.app[data-board-style="arena"] .player-bar .identity { gap: .3rem; }
+  .app.app[data-board-style="arena"] .player-bar .life { gap: .28rem; }
+  .app.app[data-board-style="arena"] .player-bar .life-label,
+  .app.app[data-board-style="arena"] .player-bar .unit { font-size: .66rem; }
+  .app.app[data-board-style="arena"] .player-bar .life-value { font-size: 1.15rem; }
+  .app.app[data-board-style="arena"] .player-bar button.life { padding: .15rem .4rem; border-width: 1px; border-radius: 8px; }
+  .app.app[data-board-style="arena"] .player-bar .zone-counts { font-size: .64rem; gap: .3rem .45rem; }
+  .app.app[data-board-style="arena"] .layout > .middle > .turn-track { padding-block: .2rem; }
 }
