@@ -49,7 +49,7 @@ if (existsSync(wasmPath)) {
     detail: isWasm
       ? `${(size / 1024 / 1024).toFixed(1)} MiB en static/wasm/mtg_engine_wasm.wasm`
       : 'el archivo no empieza con la firma \\0asm',
-    fix: 'bun run engine:build   (requiere Rust 1.87.0-nightly + target wasm32-unknown-unknown)'
+    fix: 'bun run engine:download   (desde CI sin Rust)  o  bun run engine:build   (compilar local)'
   });
 } else {
   push({
@@ -57,7 +57,7 @@ if (existsSync(wasmPath)) {
     label: 'Motor WASM publicado',
     ok: false,
     detail: 'falta static/wasm/mtg_engine_wasm.wasm (artifact generado, no versionado)',
-    fix: 'bun run engine:build   (ver docs/BROWSER-RUNBOOK.md §3)'
+    fix: 'bun run engine:download   (GitHub CLI, sin Rust; ver docs/LOCAL-ASSETS-WINDOWS.md)'
   });
 }
 
@@ -183,7 +183,7 @@ if (json) {
   } else {
     console.log('No listo para E2E. Bloqueos:');
     if (!browserReady) console.log('  · no hay navegador: instala uno, usa Edge/Chrome (MESA_BROWSER=msedge) o apunta a un Chromium existente (PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH).');
-    if (!engineReady) console.log('  · falta el artefacto WASM: `bun run engine:build` (no se versiona, ver docs/BROWSER-RUNBOOK.md).');
+    if (!engineReady) console.log('  · falta el artefacto WASM: `bun run engine:download` (CI del mismo commit; ver docs/LOCAL-ASSETS-WINDOWS.md).');
   }
 }
 
