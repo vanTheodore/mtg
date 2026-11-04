@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import BoardCard from './BoardCard.svelte';
   import { wideFan } from '#lib/ui/wideFan.ts';
   import { session } from '#lib/game/session.svelte.ts';
@@ -31,9 +32,38 @@
     if (scroller) overflow = scroller.scrollWidth > scroller.clientWidth + 2;
   }
 
+  // Measure after layout, not while Svelte is still replacing the card list.
+  // A single pending frame avoids duplicate work when resize and ResizeObserver
+  // fire together. The scroll event continues to update immediately below.
+  let measureFrame = 0;
+  function scheduleOverflowMeasurement() {
+    if (measureFrame) cancelAnimationFrame(measureFrame);
+    measureFrame = requestAnimationFrame(() => {
+      measureFrame = 0;
+      updateOverflow();
+    });
+  }
+
   $effect(() => {
-    objects.length;
-    requestAnimationFrame(updateOverflow);
+    // Account for the count, fan mode and the user's card scale, rather than
+    // only the number of cards: changing density can also alter scrollWidth.
+    void objects.length;
+    void useFan;
+    void fanWidth;
+    scheduleOverflowMeasurement();
+  });
+
+  onMount(() => {
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleOverflowMeasurement) : null;
+    if (scroller) observer?.observe(scroller);
+    window.addEventListener('resize', scheduleOverflowMeasurement);
+    scheduleOverflowMeasurement();
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', scheduleOverflowMeasurement);
+      if (measureFrame) cancelAnimationFrame(measureFrame);
+    };
   });
 
   function scrollBy(dir: number) {
