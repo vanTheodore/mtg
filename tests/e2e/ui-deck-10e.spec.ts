@@ -233,6 +233,9 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   const viewport = await captureViewportEvidence(page, 'arena-live-block-1440x900', {
     layout: 'main.layout',
     hud: 'main.layout > .middle',
+    compactEngineStatus: '.engine-ready',
+    metricsDisclosure: '.metrics-details',
+    coverageNotice: '.notice.warn',
     opponentField: 'section.battlefield[data-side="opponent"]',
     playerField: 'section.battlefield[data-side="player"]',
     attacker: `[data-card-id="${attackerId}"][data-combat-role="Atacando"]`,
@@ -253,6 +256,11 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   // Reduce at least 75px while preserving all clickable Phase targets.
   expect(viewport.verticalOverflow).toBeLessThan(321);
   expect(viewport.elements.hud).not.toBeNull();
+  // These selectors make the exact sources of reclaimed height visible in
+  // the artifact, rather than inferring savings from the total document size.
+  expect(viewport.elements.compactEngineStatus).not.toBeNull();
+  expect(viewport.elements.metricsDisclosure).not.toBeNull();
+  expect(viewport.elements.coverageNotice).not.toBeNull();
   expect(viewport.elements.opponentField).not.toBeNull();
   expect(viewport.elements.playerField).not.toBeNull();
   expect(viewport.elements.hud!.left).toBeGreaterThanOrEqual(viewport.elements.opponentField!.right);
