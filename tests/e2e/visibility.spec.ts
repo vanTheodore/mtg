@@ -100,6 +100,7 @@ test('la cara de la carta no se desborda ni tapa texto, a 320 y 1440', async ({ 
       const artBox = art.getBoundingClientRect();
       const costBox = cost.getBoundingClientRect();
       return {
+        zone: (card.closest('[data-zone="lands"], [data-zone="creatures"], [data-zone="support"]') as HTMLElement | null)?.dataset.zone ?? 'other',
         height: Math.round(box.height),
         overflows: face.scrollHeight - face.clientHeight,
         artHeight: Math.round(artBox.height),
@@ -109,9 +110,16 @@ test('la cara de la carta no se desborda ni tapa texto, a 320 y 1440', async ({ 
       };
     }));
 
-    // Every card on a row is the same height, whatever its fields.
-    const heights = new Set(faces.map((face) => face.height));
-    expect(heights.size, `alturas distintas a ${width}px: ${[...heights].join(', ')}`).toBe(1);
+    // Each zone must keep a consistent card size. The Arena short-desktop
+    // view intentionally makes *lands* smaller than creatures; the previous
+    // global equality check (173px creatures, 119px lands at 1440px)
+    // incorrectly rejected that legitimate density treatment.
+    const zones = new Set(faces.map((face) => face.zone));
+    expect(zones).toEqual(new Set(['lands', 'creatures']));
+    for (const zone of zones) {
+      const heights = new Set(faces.filter((face) => face.zone === zone).map((face) => face.height));
+      expect(heights.size, `alturas distintas en ${zone} a ${width}px: ${[...heights].join(', ')}`).toBe(1);
+    }
 
     for (const face of faces) {
       expect(face.overflows, `contenido fuera de la cara a ${width}px`).toBeLessThanOrEqual(1);
