@@ -94,6 +94,24 @@ test('Arena desktop: tools do not steal card rows and remain keyboard-accessible
   await expect(page.getByRole('dialog', { name: 'Carta ampliada' })).toBeVisible();
   await page.getByRole('button', { name: 'Cerrar' }).click();
 
+  // A hand card lives inside a horizontal scrollport. A toolbar below the
+  // card may be non-interactive due to overflow clipping even while it is
+  // keyboard-focusable. Check the browser's pointer hit target explicitly.
+  const handCard = scene.locator('.hand-zone .hand-card').first();
+  const handFace = handCard.locator('.card');
+  const handInspect = handCard.getByRole('button', { name: /^Ampliar / });
+  await handFace.hover();
+  await expect(handCard.locator('.card-tools')).toHaveCSS('opacity', '1');
+  const hit = await handInspect.evaluate((button) => {
+    const rect = button.getBoundingClientRect();
+    const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return target === button || button.contains(target);
+  });
+  expect(hit, 'the contextual hand toolbar must receive real mouse clicks').toBe(true);
+  await handInspect.click();
+  await expect(page.getByRole('dialog', { name: 'Carta ampliada' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cerrar' }).click();
+
   // Tablet/touch layout uses the original persistent in-flow controls.
   await page.setViewportSize({ width: 768, height: 900 });
   await expect(tools).toHaveCSS('position', 'static');
