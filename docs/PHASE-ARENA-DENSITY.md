@@ -39,3 +39,31 @@ página. La fixture y las pruebas existentes también siguen en el CI.
 Este PR no proclama todavía paridad exacta con la captura de Phase:
 queda pendiente integrar HUD, prioridad/pila/acciones en una sola escena
 y medir capturas de un estado comparable.
+
+## Arena 0.8.3: herramientas contextuales (4 nov 2026)
+
+**Problema observado:** las acciones secundarias «Ampliar» y «Reintentar imagen»
+en `CardView.svelte` tenían `opacity: 0` en escritorio con mouse, pero
+seguían reservando altura bajo cada carta de las dos filas de permanentes y
+del abanico. No son acciones de Phase; sus botones son herramientas de inspección
+de imágenes y reglas.
+
+**Cambio acotado:** solo en Arena con ancho ≥1280px, alto ≤1000px y
+`(hover: hover) and (pointer: fine)`, la misma barra conserva sus botones
+en el DOM y en el orden de tabulación, pero sale del flujo visual.
+Aparece con mouse o al enfocar la carta y permanece accesible al tabular
+hacia los botones. En Clásico, táctil/móvil, pantallas altas y diálogo
+de inspección la barra queda en el flujo original.
+
+El E2E nuevo verifica que un usuario de teclado puede enfocar la carta,
+entrar a **Ampliar** y abrir la inspección con **Enter**, y que a 768px
+los botones vuelven al flujo. Los dos E2E comparables de 1440×900
+tienen puertas nuevas: menos de 90px de desbordamiento en el fixture
+6 tierras + 4 criaturas por asiento + mano de 7, y menos de 300px
+en un bloqueo **real** decidido por Phase. Sus baselines comprobados
+del PR #37 son, respectivamente, 105px y 320px.
+
+**No confundir criterios con resultados:** estas metas solo quedarán
+acreditadas cuando Chromium del HEAD del PR las mida y todos sus trabajos
+terminen en verde. El objetivo final de una pantalla sin scroll sigue
+abierto en el issue #19.

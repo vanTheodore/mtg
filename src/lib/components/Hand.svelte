@@ -121,8 +121,23 @@
       transition: transform 160ms ease, filter 160ms ease;
     }
     .hand-scroll.fan .hand-card + .hand-card { margin-left: var(--fan-overlap); }
+    /*
+     * Lift + zoom on hover/focus.
+     *
+     * Geometry, measured in Chromium at 1440×900 (docs/ARENA-HAND-OVERFLOW-DIAGNOSTIC.md):
+     * the fan rotates around `center 82%`, so a card's BOTTOM barely moves
+     * while its TOP rises by (`0.82 × overflow`) plus the translate. With the
+     * old -24px / 1.04 the raised tool strip sat 25px above the scrollport
+     * (button top 599 against a port top of 624): a person hovering a hand
+     * card could see "Ampliar" and never click it.
+     *
+     * -14px / 1.05 keeps the whole raised card inside the hand's scrollport
+     * (7 of 7 hand cards hit-test to the button) and still reads as "this card
+     * is the one you are pointing at". The tools stay anchored to the card's
+     * top edge, so the card's centre is never covered.
+     */
     .hand-scroll.fan .hand-card:focus-within {
-      transform: translateY(-24px) rotate(0deg) scale(1.04);
+      transform: translateY(-14px) rotate(0deg) scale(1.05);
       z-index: 3;
       filter: drop-shadow(0 8px 9px rgb(0 0 0 / 17%));
     }
@@ -137,7 +152,7 @@
   }
   @media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
     .hand-scroll.fan .hand-card:hover {
-      transform: translateY(-24px) rotate(0deg) scale(1.04);
+      transform: translateY(-14px) rotate(0deg) scale(1.05);
       z-index: 3;
       filter: drop-shadow(0 8px 9px rgb(0 0 0 / 17%));
     }
