@@ -15,12 +15,14 @@ test('Arena 1440×900: compare mirrored 6+4 seats and a 7-card hand', async ({ p
 
   const scene = page.locator('[data-testid="stress-page"]');
   await expect(scene).toBeVisible();
+  await expect(scene).toHaveAttribute('data-board-style', 'arena');
   const hand = page.getByRole('region', { name: /Mano de prueba, 7 cartas/ });
   await expect(hand.locator('[data-card-id]')).toHaveCount(7);
 
   for (const side of ['opponent', 'player'] as const) {
     const field = scene.locator(`section.battlefield[data-side="${side}"]`);
     await expect(field).toBeVisible();
+    await expect(field).toHaveCSS('display', 'grid');
     await expect(field.locator('.row[data-zone="lands"] [data-card-id]')).toHaveCount(6);
     await expect(field.locator('.row[data-zone="creatures"] [data-card-id]')).toHaveCount(4);
   }
@@ -39,6 +41,10 @@ test('Arena 1440×900: compare mirrored 6+4 seats and a 7-card hand', async ({ p
   // All cards remain on the horizontal canvas. A vertical scroll is recorded
   // as *debt*, not silently treated as a one-screen success.
   expect(measurements.horizontalOverflow).toBeLessThanOrEqual(1);
+  // PR #25 measured 804px of vertical debt in the identical presentation
+  // fixture. The new Arena-only short-desktop lanes must beat that baseline;
+  // do not claim one-screen success until verticalOverflow reaches zero.
+  expect(measurements.verticalOverflow).toBeLessThan(804);
   expect(measurements.elements.opponentField).not.toBeNull();
   expect(measurements.elements.playerField).not.toBeNull();
   expect(measurements.elements.hand).not.toBeNull();
@@ -46,6 +52,18 @@ test('Arena 1440×900: compare mirrored 6+4 seats and a 7-card hand', async ({ p
   // A mirrored battlefield faces the centerline from BOTH sides.
   expect(measurements.elements.opponentLands!.top)
     .toBeLessThan(measurements.elements.opponentCreatures!.top);
-  expect(measurements.elements.playerCreatures!.top)
-    .toBeLessThan(measurements.elements.playerLands!.top);
+  // In the compact desktop scene each side has lands and creatures on the
+  // same visual row: neither lane steals a second full card-height.
+  expect(Math.abs(measurements.elements.opponentLands!.top - measurements.elements.opponentCreatures!.top))
+    .toBeLessThanOrEqual(8);
+  expect(Math.abs(measurements.elements.playerLands!.top - measurements.elements.playerCreatures!.top))
+    .toBeLessThanOrEqual(8);
+
+  // Mobile/tablet keep the original, vertically mirrored layout.
+  await page.setViewportSize({ width: 768, height: 900 });
+  const mobileField = scene.locator('section.battlefield[data-side="player"]');
+  await expect(mobileField).toHaveCSS('display', 'flex');
+  await expect(mobileField.locator('.row[data-zone="lands"] [data-card-id]')).toHaveCount(6);
+  await expect(mobileField.locator('.row[data-zone="creatures"] [data-card-id]')).toHaveCount(4);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 });
