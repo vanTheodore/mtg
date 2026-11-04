@@ -1,0 +1,57 @@
+name: Windows Mesa install smoke (no Rust)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-install-smoke.yml'
+      - 'scripts/install-ci-wasm.ts'
+      - 'src/lib/game/ci-wasm-artifact.test.ts'
+      - 'docs/LOCAL-ASSETS-WINDOWS.md'
+      - 'package.json'
+      - 'bun.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-smoke:
+    name: Windows 11 tools and installer contracts
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Verify Windows tools
+        shell: pwsh
+        run: |
+          git --version
+          gh --version
+          bun --version
+      - name: Frozen dependencies
+        shell: pwsh
+        run: bun install --frozen-lockfile
+      - name: Installer test cases (selection, SHA256 and rejection)
+        shell: pwsh
+        run: bun test src/lib/game/ci-wasm-artifact.test.ts
+      - name: Installer help works without Rust or credentials
+        shell: pwsh
+        run: bun run engine:download -- --help
+      - name: Bundled catalog and backgrounds are in checkout
+        shell: pwsh
+        run: |
+          $required = @(
+            'static/data/catalog/index.json',
+            'static/data/catalog/packs/10e.json',
+            'static/data/impressions.es.json',
+            'static/phase/arenas/angelic-sky-topdown.webp',
+            'docs/LOCAL-ASSETS-WINDOWS.md'
+          )
+          foreach ($file in $required) {
+            if (!(Test-Path $file -PathType Leaf)) { throw "Missing asset: $file" }
+          }
+          if (Test-Path static/wasm/mtg_engine_wasm.wasm) {
+            throw 'WASM must remain a downloaded, non-versioned artifact'
+          }
