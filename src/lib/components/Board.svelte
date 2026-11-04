@@ -259,6 +259,15 @@
       {#if snapshot}
         <span class="seat">Jugador {viewer + 1}</span>
         {#if session.modeLabel}<span class="seat mode">{session.modeLabel}</span>{/if}
+        {#if session.boardStyle === 'arena' && engineLoad && engineLoad.seats.every((size) => size === engineLoad!.requested)}
+          <!-- A successful load is important, but does not need a full-width
+               banner throughout combat. Keep the same status text and an
+               explicit accessible description. Partial loads stay warnings. -->
+          <span class="seat mode engine-ready" role="status" aria-live="polite"
+            aria-label={`Motor: ${engineLoad.seats.join(' / ')} cartas cargadas por asiento (${engineLoad.requested} pedidas). El mazo se cargó completo.`}>
+            Motor: {engineLoad.seats.join(' / ')}
+          </span>
+        {/if}
       {/if}
       <label class="auto-pass"><input type="checkbox" checked={session.autoPass} onchange={(e) => session.setAutoPass(e.currentTarget.checked)} /> Auto-pasar ventanas sin acciones</label>
       <label class="auto-pass"><input type="checkbox" checked={session.handoffMode === 'every'} onchange={(e) => session.setHandoffMode(e.currentTarget.checked ? 'every' : 'turn')} /> Confirmar cada cambio de asiento</label>
@@ -283,7 +292,7 @@
       Se usa la primera definición (el pack dueño del nombre) y el resto no sobrescribe nada.
     </div>
   {/if}
-  {#if engineLoad && snapshot}
+  {#if engineLoad && snapshot && (session.boardStyle !== 'arena' || engineLoad.seats.some((size) => size !== engineLoad!.requested))}
     {@const short = engineLoad.seats.filter((size) => size !== engineLoad!.requested)}
     <div class="notice {short.length ? 'warn' : 'ok'}" role="status" aria-live="polite">
       Motor: {engineLoad.seats.join(' / ')} cartas cargadas por asiento ({engineLoad.requested} pedidas).
@@ -404,7 +413,13 @@
     {/snippet}
     </svelte:boundary>
 
-    <footer class="metrics" aria-label="Métricas del motor">
+    <!-- Raw timing counters are useful for debugging, but not critical
+         gameplay information. Arena starts with them collapsed; native
+         details/summary keeps every metric keyboard-accessible on demand.
+         Classic remains expanded just as it was before. -->
+    <details class="metrics-details" open={session.boardStyle !== 'arena'}>
+      <summary>Métricas del motor</summary>
+      <footer class="metrics" aria-label="Métricas del motor">
       {#if session.lastMetrics}
         <span>Reglas {session.lastMetrics.engine_ms?.toFixed(1) ?? '—'} ms</span>
         <span>Legales {session.lastMetrics.legal_ms?.toFixed(1) ?? '—'} ms</span>
@@ -422,7 +437,8 @@
         <span>{session.lastMetrics.objects ?? '—'} objetos</span>
         <span>Memoria WASM {session.lastMetrics.wasm_memory_bytes ? (session.lastMetrics.wasm_memory_bytes / 1048576).toFixed(1) : '—'} MiB</span>
       {/if}
-    </footer>
+      </footer>
+    </details>
   {/if}
 
   {#if needsHandoff}
@@ -484,6 +500,20 @@
   .count { color: var(--ink-muted); font-weight: 500; }
   .grave-scroll { display: flex; gap: .6rem; overflow-x: auto; padding: .4rem .2rem; }
   .metrics { display: flex; flex-wrap: wrap; gap: .8rem; font-size: .72rem; color: var(--ink-muted); font-family: var(--mono); padding: .3rem 0; }
+  .engine-ready { white-space: nowrap; color: var(--ok); }
+  .metrics-details { min-width: 0; }
+  /* In Classic, keep the identical always-expanded metrics footer; Arena
+     trades its wrapping counters for a one-line native disclosure. */
+  .app:not([data-board-style="arena"]) .metrics-details > summary { display: none; }
+  .app[data-board-style="arena"] .metrics-details > summary {
+    width: max-content;
+    max-width: 100%;
+    cursor: pointer;
+    color: var(--ink-muted);
+    font: .72rem var(--mono);
+    padding: .15rem .25rem;
+  }
+  .app[data-board-style="arena"] .metrics-details[open] .metrics { padding-block: .3rem; }
   .handoff { position: fixed; inset: 0; background: rgb(0 0 0 / 65%); display: grid; place-items: center; z-index: 50; padding: 1rem; }
   .handoff-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 1.4rem; max-width: 420px; display: grid; gap: .8rem; text-align: center; }
   .handoff-card h2 { margin: 0; font-size: 1.1rem; }
