@@ -21,6 +21,8 @@ bun run test:e2e
 no se consulta el CDN de Playwright, que es lo único bloqueado en el sandbox de
 desarrollo.
 
+**Actualización para Windows 11 / checkout de `main`:** ya existe una vía que no necesita compilar Rust: `bun run engine:download`, que obtiene del CI verde el WASM del **mismo commit** y verifica los SHA-256 del motor y `Cargo.lock`. Véase [`LOCAL-ASSETS-WINDOWS.md`](LOCAL-ASSETS-WINDOWS.md). Las rutas A/B de compilación que se describen más abajo siguen siendo alternativas para quienes modifiquen Phase o no tengan un artefacto CI vigente.
+
 ## 1. Comprobar el entorno antes de gastar tiempo
 
 ```sh

@@ -109,7 +109,8 @@ Guía completa: [`docs/LOCAL-ASSETS-WINDOWS.md`](docs/LOCAL-ASSETS-WINDOWS.md).
 bun install
 bun run catalog:build        # static/data/cards.json + card-meta.json
 bun run catalog:packs        # static/data/catalog/index.json + packs/
-bun run engine:build         # static/wasm/mtg_engine_wasm.wasm
+bun run engine:download      # main: WASM exacto desde CI, sin Rust local
+# Alternativa para desarrollar el motor: bun run engine:build
 bun run wasm:packcheck static/data/catalog/packs/fixture.json,static/data/catalog/packs/10e.json \
   --decks docs/packcheck-10e-decks.json   # partida real por el puente, sin navegador
 bun run impressions:es --set-file data/mtgjson/10E.es.json   # opcional
