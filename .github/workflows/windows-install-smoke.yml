@@ -1,0 +1,111 @@
+name: Windows Mesa install smoke (no Rust)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-install-smoke.yml'
+      - 'scripts/install-ci-wasm.ts'
+      - 'src/lib/game/ci-wasm-artifact.test.ts'
+      - 'docs/LOCAL-ASSETS-WINDOWS.md'
+      - 'package.json'
+      - 'bun.lock'
+  # After a *successful push main* CI, verify the real WASM download on
+  # hosted Windows only if this commit modified the installer contract.
+  workflow_run:
+    workflows: [Mesa CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  scope:
+    name: Only verify main installs if installer changed
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      relevant: ${{ steps.changed.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          changes=$(git diff --name-only HEAD^1 HEAD)
+          echo "Changed files: $changes"
+          if printf '%s\n' "$changes" | grep -Eq '^(scripts/install-ci-wasm\.ts|src/lib/game/ci-wasm-artifact\.test\.ts|docs/LOCAL-ASSETS-WINDOWS\.md|\.github/workflows/windows-install-smoke\.yml|package\.json|bun\.lock)$'; then
+            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'relevant=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  windows-smoke:
+    name: Hosted Windows runner: CLI and installer contracts
+    needs: [scope]
+    if: >-
+      always() &&
+      (github.event_name != 'workflow_run' || needs.scope.outputs.relevant == 'true')
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Verify Windows tools
+        shell: pwsh
+        run: |
+          git --version
+          gh --version
+          bun --version
+      - name: Frozen dependencies
+        shell: pwsh
+        run: bun install --frozen-lockfile
+      - name: Installer test cases (selection, SHA256 and rejection)
+        shell: pwsh
+        run: bun test src/lib/game/ci-wasm-artifact.test.ts
+      - name: Installer help works without Rust or credentials
+        shell: pwsh
+        run: bun run engine:download -- --help
+      - name: Bundled catalog and backgrounds are in checkout
+        shell: pwsh
+        run: |
+          $required = @(
+            'static/data/catalog/index.json',
+            'static/data/catalog/packs/10e.json',
+            'static/data/impressions.es.json',
+            'static/phase/arenas/angelic-sky-topdown.webp',
+            'docs/LOCAL-ASSETS-WINDOWS.md'
+          )
+          foreach ($file in $required) {
+            if (!(Test-Path $file -PathType Leaf)) { throw "Missing asset: $file" }
+          }
+          if (Test-Path static/wasm/mtg_engine_wasm.wasm) {
+            throw 'WASM must remain a downloaded, non-versioned artifact'
+          }
+      - name: Download and hash-verify the real motor from the same main HEAD
+        if: github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bun run engine:download
+          if (!(Test-Path static/wasm/mtg_engine_wasm.wasm -PathType Leaf)) {
+            throw 'Installer did not publish the verified WASM'
+          }
+          $bytes = (Get-Item static/wasm/mtg_engine_wasm.wasm).Length
+          if ($bytes -lt 1000000) { throw "WASM unexpectedly small: $bytes" }
+          Write-Host "Verified Windows installation: $bytes bytes"
