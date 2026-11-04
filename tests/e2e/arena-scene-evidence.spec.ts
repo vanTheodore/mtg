@@ -49,9 +49,6 @@ test('Arena 1440×900: compare mirrored 6+4 seats and a 7-card hand', async ({ p
   expect(measurements.elements.playerField).not.toBeNull();
   expect(measurements.elements.hand).not.toBeNull();
 
-  // A mirrored battlefield faces the centerline from BOTH sides.
-  expect(measurements.elements.opponentLands!.top)
-    .toBeLessThan(measurements.elements.opponentCreatures!.top);
   // In the compact desktop scene each side has lands and creatures on the
   // same visual row: neither lane steals a second full card-height.
   expect(Math.abs(measurements.elements.opponentLands!.top - measurements.elements.opponentCreatures!.top))
