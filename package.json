@@ -15,6 +15,7 @@
     "test": "bun test src/lib",
     "test:e2e": "bun --bun playwright test",
     "engine:build": "bun scripts/build-engine.ts",
+    "engine:download": "bun scripts/install-ci-wasm.ts",
     "engine:optimize": "bun scripts/optimize-wasm.ts",
     "catalog:build": "bun scripts/build-catalog.ts",
     "catalog:packs": "bun scripts/catalog-packs.ts",

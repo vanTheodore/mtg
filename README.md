@@ -97,6 +97,12 @@ catálogo y muestra lo que el motor cargó, **no** legalidad de formato.
 No se usan npm/pnpm/Node como dependencias del proyecto. Playwright se ejecuta
 con `bun --bun playwright`.
 
+## Instalación rápida en Windows 11 (sin Rust local)
+
+Clona el repositorio, ejecuta `bun install --frozen-lockfile`, autentica GitHub CLI con `gh auth login` y descarga el motor compilado para **el mismo HEAD de main** mediante `bun run engine:download`. Después usa `bun run dev`. Los fondos Arena, packs 10E y textos españoles ya vienen incluidos; las ilustraciones se consultan en Scryfall según demanda.
+
+Guía completa: [`docs/LOCAL-ASSETS-WINDOWS.md`](docs/LOCAL-ASSETS-WINDOWS.md).
+
 ## Puesta en marcha
 
 ```sh
