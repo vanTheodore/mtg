@@ -9,18 +9,58 @@ on:
       - 'docs/LOCAL-ASSETS-WINDOWS.md'
       - 'package.json'
       - 'bun.lock'
+  # After a *successful push main* CI, verify the real WASM download on
+  # hosted Windows only if this commit modified the installer contract.
+  workflow_run:
+    workflows: [Mesa CI]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  scope:
+    name: Only verify main installs if installer changed
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      relevant: ${{ steps.changed.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          changes=$(git diff --name-only HEAD^1 HEAD)
+          echo "Changed files: $changes"
+          if printf '%s\n' "$changes" | grep -Eq '^(scripts/install-ci-wasm\.ts|src/lib/game/ci-wasm-artifact\.test\.ts|docs/LOCAL-ASSETS-WINDOWS\.md|\.github/workflows/windows-install-smoke\.yml|package\.json|bun\.lock)$'; then
+            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'relevant=false' >> "$GITHUB_OUTPUT"
+          fi
+
   windows-smoke:
     name: Hosted Windows runner: CLI and installer contracts
+    needs: [scope]
+    if: >-
+      always() &&
+      (github.event_name != 'workflow_run' || needs.scope.outputs.relevant == 'true')
     runs-on: windows-latest
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
@@ -55,3 +95,16 @@ jobs:
           if (Test-Path static/wasm/mtg_engine_wasm.wasm) {
             throw 'WASM must remain a downloaded, non-versioned artifact'
           }
+      - name: Download and hash-verify the real motor from the same main HEAD
+        if: github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bun run engine:download
+          if (!(Test-Path static/wasm/mtg_engine_wasm.wasm -PathType Leaf)) {
+            throw 'Installer did not publish the verified WASM'
+          }
+          $bytes = (Get-Item static/wasm/mtg_engine_wasm.wasm).Length
+          if ($bytes -lt 1000000) { throw "WASM unexpectedly small: $bytes" }
+          Write-Host "Verified Windows installation: $bytes bytes"
