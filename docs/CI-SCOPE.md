@@ -15,3 +15,5 @@ Solo se omiten los trabajos caros si **todos** los archivos cambiados pertenecen
 La etapa WASM espera el resultado estático para no consumir Rust cuando typecheck o tests ya fallaron. Chromium sigue dependiendo del artefacto WASM de ese mismo run. Un PR ligero puede ver trabajos nativos/WASM/Chromium `skipped`; esto es deliberado **solo** para su diff. Tras fusionarlo, el `push main` ejecuta la matriz completa.
 
 Los escenarios de rutas están cubiertos por `src/lib/game/ci-change-scope.test.ts`. El primer PR que cambia este workflow está clasificado como **full** y prueba la integración real de la puerta.
+
+> Prueba temporal del PR de documentación: solo debe ejecutarse CI estático. No integrar este cambio.
