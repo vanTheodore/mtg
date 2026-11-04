@@ -175,7 +175,7 @@
   {#if !hidden}
     <div class="card-tools">
       <button class="inspect" type="button" aria-label={`Ampliar ${object.name}`} onclick={() => oninspect?.(object.id)}>Ampliar</button>
-      {#if imageState === 'error'}<button class="retry" type="button" onclick={() => retryToken++}>Reintentar imagen</button>{/if}
+      {#if imageState === 'error'}<button class="retry" type="button" aria-label="Reintentar imagen" onclick={() => retryToken++}>Reintentar imagen</button>{/if}
     </div>
   {/if}
 </div>
@@ -280,55 +280,74 @@
     .spinner { animation-duration: 1.6s; }
   }
 
+
   /*
-   * Arena 0.8.3: on a short desktop with a real hover pointer, these tools
-   * were invisible yet reserved 24–48px under EVERY card. Show the same
-   * native buttons on hover/focus in an out-of-flow toolbar instead.
+   * Arena 0.8.3: compact, keyboard-accessible card tools. The first attempt
+   * placed a full-width toolbar under the card, which a horizontal scrollport
+   * clipped. Moving that toolbar to the CENTER of the card instead caused it
+   * to intercept real Phase gameplay clicks (10 Chromium failures).
    *
-   * The .card (tabindex=0) receives keyboard focus before its tool buttons,
-   * so :focus-within reveals them before Tab reaches a tool. No display:none:
-   * keyboard and assistive-technology navigation stay intact. Touch, mobile,
-   * Classic and the enlarged inspection dialog retain their normal buttons.
+   * Keep only two small contextual icon targets INSIDE the card's upper edge.
+   * Their native button labels remain available to assistive technology.
+   * The surrounding toolbar ignores pointer input, and buttons accept input
+   * only when the card is hovered or focused. No card-center hit target is
+   * covered. Classic, tablet, touch and enlarged dialogs remain unchanged.
    */
   @media (min-width: 1280px) and (max-height: 1000px) and (hover: hover) and (pointer: fine) {
     :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell .card-tools {
       position: absolute;
-      inset-block-start: 100%;
-      inset-inline-start: 0;
+      inset-block-start: .18rem;
+      inset-inline-start: auto;
+      inset-inline-end: .18rem;
       z-index: 11;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: .15rem;
       width: max-content;
-      max-width: min(13rem, 90vw);
-      padding: .2rem;
+      max-width: calc(100% - .36rem);
+      padding: 0;
       margin: 0;
-      background: color-mix(in srgb, var(--surface) 97%, transparent);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
+      background: transparent;
+      border: 0;
+      box-shadow: none;
       pointer-events: none;
     }
     :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:hover,
     :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:focus-within {
       z-index: 12;
     }
-    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:hover .card-tools,
-    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:focus-within .card-tools {
-      pointer-events: auto;
+    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell .card-tools button {
+      box-sizing: border-box;
+      width: 1.55rem;
+      height: 1.55rem;
+      min-width: 1.55rem;
+      min-height: 1.55rem;
+      padding: 0;
+      font-size: 0;
+      line-height: 1;
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--ink);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      pointer-events: none;
     }
-
-    /*
-     * Hand.svelte uses an overflow-x scrollport for the fan. Overflow-y:
-     * visible computes to auto there, so a toolbar anchored BELOW the card
-     * may be clipped. Keep the tools centered OVER the card face in the hand
-     * while focused/hovered, instead of adding height to the scrollport.
-     * With the shell hovered, the same buttons are pointer-reachable; the
-     * rest of the time they are transparent and ignore pointer events.
-     */
-    :global(.app[data-board-style="arena"] .hand-zone) .card-shell .card-tools {
-      inset-block-start: 50%;
-      transform: translateY(-50%);
-      max-width: calc(100% - .3rem);
-      flex-direction: column;
-      align-items: stretch;
+    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell .card-tools .inspect::before {
+      content: "⤢";
+      font-size: 1rem;
+      line-height: 1;
+    }
+    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell .card-tools .retry::before {
+      content: "↻";
+      font-size: 1.15rem;
+      line-height: 1;
+    }
+    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:hover .card-tools button,
+    :global(.app[data-board-style="arena"] :is(.battlefield, .hand-zone)) .card-shell:focus-within .card-tools button {
+      pointer-events: auto;
     }
   }
 </style>

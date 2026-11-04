@@ -151,6 +151,12 @@ jobs:
           name: mtg-engine-wasm
           path: static/wasm
       - run: bun --bun playwright test
+      - name: Drop oversized traces before artifact upload
+        if: always()
+        run: |
+          if [ -d test-results ]; then
+            find test-results -type f -name 'trace.zip' -size +25M -print -delete
+          fi
       - if: always()
         uses: actions/upload-artifact@v4
         with:

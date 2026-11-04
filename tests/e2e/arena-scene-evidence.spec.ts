@@ -94,6 +94,17 @@ test('Arena desktop: tools do not steal card rows and remain keyboard-accessible
   await expect(page.getByRole('dialog', { name: 'Carta ampliada' })).toBeVisible();
   await page.getByRole('button', { name: 'Cerrar' }).click();
 
+  // The old centered overlay blocked clicking cards in actual Phase games.
+  // Hover the battlefield face and confirm its CENTER is still the hit target.
+  await face.hover();
+  const faceHit = await face.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return target === element || element.contains(target);
+  });
+  expect(faceHit, 'the battlefield face center must not be covered by its toolbar').toBe(true);
+  await face.click();
+
   // A hand card lives inside a horizontal scrollport. A toolbar below the
   // card may be non-interactive due to overflow clipping even while it is
   // keyboard-focusable. Check the browser's pointer hit target explicitly.
@@ -102,6 +113,14 @@ test('Arena desktop: tools do not steal card rows and remain keyboard-accessible
   const handInspect = handCard.getByRole('button', { name: /^Ampliar / });
   await handFace.hover();
   await expect(handCard.locator('.card-tools')).toHaveCSS('opacity', '1');
+  const handFaceHit = await handFace.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return target === element || element.contains(target);
+  });
+  expect(handFaceHit, 'the hand face center must remain playable when tools appear').toBe(true);
+  await handFace.click();
+  await handFace.hover();
   const hit = await handInspect.evaluate((button) => {
     const rect = button.getBoundingClientRect();
     const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
