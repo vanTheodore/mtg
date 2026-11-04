@@ -1,0 +1,51 @@
+name: Phase upstream watch
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/phase-upstream-watch.ts'
+      - 'scripts/phase-upstream-watch.test.ts'
+      - '.github/workflows/phase-upstream-watch.yml'
+  schedule:
+    # Weekly; no Rust/WASM/Chromium compilation. GitHub cron is UTC.
+    - cron: '20 12 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Read-only source drift audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Verify tracker classification
+        run: bun test scripts/phase-upstream-watch.test.ts
+      - name: Compare pinned Phase source with main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bun scripts/phase-upstream-watch.ts
+
+  issue-sync:
+    name: Update one tracker issue if needed
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Synchronize tracker (no source imports)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bun scripts/phase-upstream-watch.ts
