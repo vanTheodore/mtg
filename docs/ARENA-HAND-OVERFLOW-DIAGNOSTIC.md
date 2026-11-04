@@ -43,3 +43,17 @@ Esta ruta de `/stress` es un **fixture de presentación**: no demuestra paridad 
 `clippedFaceCount` usa el rectángulo de la cara frente a la zona visible, no evalúa superposiciones entre cartas ni garantiza que el contenido sea clicable. Completar con foco y capturas cuando las cifras diverjan.
 
 **No arreglar ocultando flechas sin demostración**: una mano grande (hasta 30 cartas o más) debe seguir siendo operable con mouse, táctil y teclado. Si se confirma un problema, convertir el caso a una prueba de regresión que falle en `main` y pase con la corrección; ejecutar Chromium antes de merge.
+
+
+## Corrección acotada de recalculado responsivo (rama `fix/arena-hand-resize-overflow-20261104`)
+
+Una revisión del código encontró una dependencia omitida: el `$effect` que actualiza `overflow` únicamente lee `objects.length`, y el evento `onscroll` no necesariamente se dispara al cambiar el ancho disponible. Se preparó una corrección **aún sin ejecutar en Chromium** que conserva intacto el criterio de `scrollWidth > clientWidth + 2` y añade:
+
+- `ResizeObserver` sobre el área desplazable para rediseños de contenedor;
+- `resize` de ventana para cambios de viewport, aun sin remonte;
+- recálculo reactivo cuando cambian modo abanico o escala;
+- coalescencia de mediciones mediante `requestAnimationFrame` y limpieza al desmontar.
+
+El test de redimensión ahora exige que cuatro cartas **no** desborden a 1440×900, que **sí** desborden a 390×844 y que las flechas/aviso sigan en concordancia antes y después de volver a escritorio. No sustituye el diagnóstico independiente de false positives por transformaciones ni la prueba de click real en la barra contextual.
+
+**Integración:** primero validar y fusionar PR #39 (si pasa los gates); luego rebasar/actualizar esta rama contra `main`, ejecutar Bun + Chromium y abrir PR con las evidencias obtenidas. No reportar bug reparado ni merge hasta cumplir ese orden.
