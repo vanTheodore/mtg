@@ -7,6 +7,7 @@ on:
     paths:
       - 'crates/phase-engine/src/**'
       - 'crates/phase-engine/tests/integration/**'
+      - 'crates/phase-parser/src/**'
       - 'docs/PHASE-UPSTREAM-PIN.json'
   workflow_dispatch:
 
@@ -39,7 +40,7 @@ jobs:
           # The script is never executed or committed; hash-check its exact
           # upstream Git blob before compiling any Rust integration tests.
           curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
-            https://raw.githubusercontent.com/phase-rs/phase/bf584d6bd39f254549be49ed9ff2b845e748e32c/scripts/audit-resolution-face-casting.sh \
+            https://raw.githubusercontent.com/phase-rs/phase/d963d0a2379c8396e8ffff28c4df87ab8580559f/scripts/audit-resolution-face-casting.sh \
             -o scripts/audit-resolution-face-casting.sh
           test "$(git hash-object scripts/audit-resolution-face-casting.sh)" = \
             "39bd4a9d04bcdf4ca7ea81eb71dad6c21af5e069"
@@ -54,6 +55,10 @@ jobs:
           mod attacked_player_referent;
           #[path = "integration/cast_during_resolution_pipeline.rs"]
           mod cast_during_resolution_pipeline;
+          #[path = "integration/issue_10401_off_zone_ability_cost_reduction.rs"]
+          mod off_zone_ability_cost_reduction;
+          #[path = "integration/ignite_memories_random_reveal.rs"]
+          mod ignite_memories_random_reveal;
           RUST
       - name: Assert the specific upstream regression tests are registered
         run: |
@@ -64,7 +69,10 @@ jobs:
             finished_ripple_with_stacked_hit_does_not_retain_later_reveal \
             ripple_free_cast_keeps_reveal_through_mana_ability_color_choice \
             hellrider_trigger_follows_the_triggering_attacker_not_the_attacking_source \
-            animated_cavalcade_attacking_damages_what_the_triggering_creature_attacks; do
+            animated_cavalcade_attacking_damages_what_the_triggering_creature_attacks \
+            training_grounds_does_not_discount_a_graveyard_unearth \
+            training_grounds_does_not_discount_hand_cycling \
+            reveals_one_random_card_and_deals_its_mana_value; do
             grep -Fq "$name: test" /tmp/mesa-phase-tests.txt || {
               echo "Missing required test: $name" >&2
               exit 1
@@ -76,3 +84,8 @@ jobs:
         run: cargo test --locked -p phase-engine --test mesa_phase_regressions hellrider -- --test-threads=1
       - name: Execute Cavalcade attack-recipient regressions
         run: cargo test --locked -p phase-engine --test mesa_phase_regressions cavalcade -- --test-threads=1
+
+      - name: Execute original Training Grounds scope regressions
+        run: cargo test --locked -p phase-engine --test mesa_phase_regressions off_zone_ability_cost_reduction -- --test-threads=1
+      - name: Execute original Ignite Memories random reveal regressions
+        run: cargo test --locked -p phase-engine --test mesa_phase_regressions ignite_memories_random_reveal -- --test-threads=1
