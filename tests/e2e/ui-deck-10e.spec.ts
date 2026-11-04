@@ -214,6 +214,7 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   await expect(confirmBlock).toBeEnabled();
   const viewport = await captureViewportEvidence(page, 'arena-live-block-1440x900', {
     layout: 'main.layout',
+    hud: 'main.layout > .middle',
     opponentField: 'section.battlefield[data-side="opponent"]',
     playerField: 'section.battlefield[data-side="player"]',
     attacker: `[data-card-id="${attackerId}"][data-combat-role="Atacando"]`,
@@ -228,7 +229,14 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   // PR #25 measured 1273px of vertical debt during this actual blocking
   // decision. The Arena-only compact lanes must improve real play, not only
   // the synthetic scene; keep the Phase action and its legal targets intact.
-  expect(viewport.verticalOverflow).toBeLessThan(1273);
+  // The previous PR #26 measured 742px of vertical overflow at this exact
+  // real-engine blocking prompt. The sidecar must beat that baseline.
+  expect(viewport.verticalOverflow).toBeLessThan(742);
+  expect(viewport.elements.hud).not.toBeNull();
+  expect(viewport.elements.opponentField).not.toBeNull();
+  expect(viewport.elements.playerField).not.toBeNull();
+  expect(viewport.elements.hud!.left).toBeGreaterThanOrEqual(viewport.elements.opponentField!.right);
+  expect(viewport.elements.hud!.left).toBeGreaterThanOrEqual(viewport.elements.playerField!.right);
   expect(viewport.elements.attacker).not.toBeNull();
   expect(viewport.elements.blocker).not.toBeNull();
   expect(viewport.elements.confirmation).not.toBeNull();
