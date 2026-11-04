@@ -1,0 +1,206 @@
+{
+  "viewport": {
+    "w": 1440,
+    "h": 900
+  },
+  "doc": {
+    "scrollH": 900,
+    "scrollW": 1440
+  },
+  "css": {
+    "app": {
+      "gap": "12.8px",
+      "padTop": "12.8px",
+      "padBottom": "12.8px"
+    },
+    "layout": {
+      "gap": "2.88px",
+      "pad": "6.4px"
+    },
+    "cardW": "min(124px, 15dvh, calc((100vw - 6rem) / 2))"
+  },
+  "blocks": {
+    "topbar": {
+      "top": 13,
+      "bottom": 62,
+      "left": 22,
+      "right": 1418,
+      "h": 50,
+      "w": 1395,
+      "scrollH": 48,
+      "clientH": 48
+    },
+    "notices": [],
+    "layout": {
+      "top": 106,
+      "bottom": 858,
+      "left": 22,
+      "right": 1418,
+      "h": 752,
+      "w": 1395,
+      "scrollH": 750,
+      "clientH": 750
+    },
+    "rivalPanel": {
+      "top": 113,
+      "bottom": 163,
+      "left": 140,
+      "right": 900,
+      "h": 50,
+      "w": 760,
+      "scrollH": 48,
+      "clientH": 48
+    },
+    "rivalHand": {
+      "top": 163,
+      "bottom": 195,
+      "left": 30,
+      "right": 1010,
+      "h": 32,
+      "w": 980,
+      "scrollH": 32,
+      "clientH": 32
+    },
+    "opponentField": {
+      "top": 196,
+      "bottom": 400,
+      "left": 30,
+      "right": 1010,
+      "h": 204,
+      "w": 980,
+      "scrollH": 202,
+      "clientH": 202
+    },
+    "middle": {
+      "top": 113,
+      "bottom": 594,
+      "left": 1018,
+      "right": 1410,
+      "h": 481,
+      "w": 392,
+      "scrollH": 479,
+      "clientH": 479
+    },
+    "turnTrack": {
+      "top": 120,
+      "bottom": 179,
+      "left": 1026,
+      "right": 1388,
+      "h": 59,
+      "w": 362,
+      "scrollH": 59,
+      "clientH": 59
+    },
+    "stack": {
+      "top": 184,
+      "bottom": 217,
+      "left": 1026,
+      "right": 1388,
+      "h": 33,
+      "w": 362,
+      "scrollH": 31,
+      "clientH": 31
+    },
+    "history": {
+      "top": 223,
+      "bottom": 318,
+      "left": 1026,
+      "right": 1388,
+      "h": 95,
+      "w": 362,
+      "scrollH": 93,
+      "clientH": 93
+    },
+    "decision": {
+      "top": 323,
+      "bottom": 586,
+      "left": 1026,
+      "right": 1388,
+      "h": 263,
+      "w": 362,
+      "scrollH": 261,
+      "clientH": 261
+    },
+    "playerField": {
+      "top": 403,
+      "bottom": 607,
+      "left": 30,
+      "right": 1010,
+      "h": 204,
+      "w": 980,
+      "scrollH": 202,
+      "clientH": 202
+    },
+    "playerPanel": null,
+    "hand": {
+      "top": 662,
+      "bottom": 845,
+      "left": 30,
+      "right": 1010,
+      "h": 182,
+      "w": 980,
+      "scrollH": 180,
+      "clientH": 180
+    },
+    "metrics": {
+      "top": 871,
+      "bottom": 888,
+      "left": 22,
+      "right": 1418,
+      "h": 17,
+      "w": 1395,
+      "scrollH": 17,
+      "clientH": 17
+    }
+  },
+  "rows": [
+    {
+      "seat": "opponent",
+      "h": 204,
+      "rows": [
+        {
+          "cls": "svelte-18x5xea",
+          "tag": "H2",
+          "h": 13,
+          "cards": 0
+        },
+        {
+          "cls": "middle-permanents svelte-18x5xea single-lane",
+          "tag": "DIV",
+          "h": 97,
+          "cards": 4
+        },
+        {
+          "cls": "row svelte-18x5xea",
+          "tag": "DIV",
+          "h": 176,
+          "cards": 2
+        }
+      ]
+    },
+    {
+      "seat": "player",
+      "h": 204,
+      "rows": [
+        {
+          "cls": "svelte-18x5xea",
+          "tag": "H2",
+          "h": 13,
+          "cards": 0
+        },
+        {
+          "cls": "row svelte-18x5xea",
+          "tag": "DIV",
+          "h": 176,
+          "cards": 3
+        },
+        {
+          "cls": "middle-permanents svelte-18x5xea single-lane",
+          "tag": "DIV",
+          "h": 97,
+          "cards": 3
+        }
+      ]
+    }
+  ]
+}

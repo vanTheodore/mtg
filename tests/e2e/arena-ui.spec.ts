@@ -1,4 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+/**
+ * Arena keeps its configuration behind one labelled disclosure. Open it the
+ * way a person does, and leave it open so the settings panel is reachable.
+ */
+/**
+ * Mesa keeps every table control present in both styles and only abbreviates
+ * its visual label in Arena ("Auto-paso" instead of the full sentence), so the
+ * settings button never moves and no menu has to be opened first. This helper
+ * documents that contract instead of clicking a disclosure that no longer
+ * exists.
+ */
+async function openArenaOptions(page: Page) {
+  await expect(page.getByRole('button', { name: 'Ajustes' })).toBeVisible();
+}
 
 test('Arena es nativo de Svelte, reversible y persistente', async ({ page }) => {
   await page.goto('/');
@@ -11,6 +26,9 @@ test('Arena es nativo de Svelte, reversible y persistente', async ({ page }) => 
   await expect(painting).toHaveAttribute('src', '/phase/arenas/angelic-sky-topdown.webp');
   await expect.poll(() => painting.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 
+  // Arena folds its configuration into one labelled menu; the settings entry
+  // point is still one click away and keeps its own name.
+  await openArenaOptions(page);
   await page.getByRole('button', { name: 'Ajustes' }).click();
   const style = page.getByRole('combobox', { name: 'Estilo del tablero' });
   await style.selectOption('classic');
@@ -126,6 +144,7 @@ test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni
   expect(tallHeight - compactHeight).toBeGreaterThan(25);
 
   await page.setViewportSize({ width: 1440, height: 900 });
+  await openArenaOptions(page);
   await page.getByRole('button', { name: 'Ajustes' }).click();
   const style = page.getByRole('combobox', { name: 'Estilo del tablero' });
   await style.selectOption('classic');
@@ -182,6 +201,7 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
   expect(desktop.verticalGap).toBeGreaterThanOrEqual(-2);
   expect(desktop.decisionWidth).toBeGreaterThan(250);
 
+  await openArenaOptions(page);
   await page.getByRole('button', { name: 'Ajustes' }).click();
   const mode = page.getByRole('combobox', { name: 'Estilo del tablero' });
   await mode.selectOption('classic');
@@ -197,9 +217,23 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
   const mobile = await middle.evaluate((element) => {
     const left = element.querySelector<HTMLElement>('.center')!.getBoundingClientRect();
     const right = element.querySelector<HTMLElement>('.decision')!.getBoundingClientRect();
-    return { horizontalDifference: Math.abs(right.x - left.x), below: right.y - left.bottom };
+    return {
+      horizontalDifference: Math.abs(right.x - left.x),
+      decisionFirst: right.top <= left.top,
+      decisionBottom: right.bottom,
+      decisionHeight: right.height,
+      viewportHeight: innerHeight
+    };
   });
   expect(mobile.horizontalDifference).toBeLessThan(4);
-  expect(mobile.below).toBeGreaterThanOrEqual(-2);
+  // Arena 1.0: on a phone the rail is read top-down and the Phase decision is
+  // what the player must answer, so it comes *before* the stack/log instead of
+  // sitting under a 400px column of reference material (measured: the mulligan
+  // prompt started at y=617 on an 844px screen, and the decision moved to
+  // y=431 once it led the column). Leading also means "visible without
+  // scrolling", which the old `below >= -2` check never claimed.
+  expect(mobile.decisionFirst).toBe(true);
+  expect(mobile.decisionHeight).toBeGreaterThan(0);
+  expect(mobile.decisionBottom).toBeLessThanOrEqual(mobile.viewportHeight);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 });

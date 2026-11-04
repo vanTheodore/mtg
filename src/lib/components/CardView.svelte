@@ -173,9 +173,18 @@
     <span id={rulesDescriptionId} class="rules-description">{rulesText}</span>
   {/if}
   {#if !hidden}
+    <!--
+      The contextual tools live INSIDE the card box, anchored to its top-right
+      corner. Two measured reasons (Chromium 1440×900, docs/ARENA-HAND-OVERFLOW-DIAGNOSTIC.md):
+      a toolbar placed under the card added a full row of height to every
+      permanent, and inside the hand's horizontal scrollport that row fell
+      below the viewport (`hitTag: null` at y≈916 of 900). Anchoring it to the
+      face keeps it inside the scrollport and out of the layout flow, while a
+      click on the card's center still reaches the card itself.
+    -->
     <div class="card-tools">
       <button class="inspect" type="button" aria-label={`Ampliar ${object.name}`} onclick={() => oninspect?.(object.id)}>Ampliar</button>
-      {#if imageState === 'error'}<button class="retry" type="button" onclick={() => retryToken++}>Reintentar imagen</button>{/if}
+      {#if imageState === 'error'}<button class="retry" type="button" aria-label="Reintentar imagen" onclick={() => retryToken++}>Reintentar imagen</button>{/if}
     </div>
   {/if}
 </div>
@@ -255,17 +264,121 @@
   }
 
   .art-status { font-size: .55rem; color: var(--ink-muted); line-height: 1.15; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
-  .card-tools { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .25rem; transition: opacity .12s ease; }
-  /* Two buttons per card is a wall of chrome on a 40-permanent board (counted:
-     80 buttons for 40 permanents). They come back on pointer hover and on
-     keyboard focus, so they stay reachable with Tab; touch keeps them visible
-     because there is no hover there. */
+  /*
+   * Contextual card tools.
+   *
+   * Measured (Chromium 1440×900, PR #41 diagnostic): a toolbar in normal flow
+   * under the card costs one row per permanent on the battlefield AND, inside
+   * the hand's horizontal scrollport, landed at y≈916 in a 900px viewport with
+   * `elementFromPoint` returning null. It was "visible" to Playwright and
+   * impossible to click for a person.
+   *
+   * So the toolbar is anchored to the card's own box (top-right corner), out
+   * of the layout flow, with no permanent footprint. Two buttons per card is
+   * still a wall of chrome on a 40-permanent board (counted: 80 buttons for 40
+   * permanents), so it only appears on hover or keyboard focus; touch keeps it
+   * visible because there is no hover there. The card center is never covered:
+   * the buttons occupy a 1.55rem strip along the top edge only.
+   */
+  .card-tools {
+    position: absolute;
+    z-index: 11;
+    inset-block-start: .18rem;
+    inset-inline-end: .18rem;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: .15rem;
+    width: max-content;
+    max-width: calc(100% - .36rem);
+    padding: 0;
+    margin: 0;
+    pointer-events: none;
+    transition: opacity .12s ease;
+  }
+  .card-shell .card-tools { opacity: 1; }
   @media (hover: hover) and (pointer: fine) {
     .card-shell .card-tools { opacity: 0; }
     .card-shell:hover .card-tools,
     .card-shell:focus-within .card-tools { opacity: 1; }
+    /* Only a hovered/focused card lets its buttons take the pointer. */
+    .card-shell:hover .card-tools button,
+    .card-shell:focus-within .card-tools button { pointer-events: auto; }
   }
-  .card-tools button { font-size: .65rem; padding: .2rem .35rem; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--ink); min-height: 24px; }
+  .card-tools button {
+    box-sizing: border-box;
+    width: 1.55rem;
+    height: 1.55rem;
+    min-width: 1.55rem;
+    min-height: 1.55rem;
+    padding: 0;
+    font-size: 0;
+    line-height: 1;
+    flex: 0 0 auto;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--ink);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    pointer-events: none;
+  }
+  /* The written label stays for assistive technology; the face shows a glyph. */
+  .card-tools .inspect::before { content: "⤢"; font-size: 1rem; line-height: 1; }
+  .card-tools .retry::before { content: "↻"; font-size: 1.15rem; line-height: 1; }
+  /* Tablet and phone keep the wider toolbar in flow: no hover, bigger target. */
+  @media (hover: none), (pointer: coarse) {
+    .card-tools {
+      position: static;
+      width: auto;
+      max-width: none;
+      margin-top: .25rem;
+      pointer-events: auto;
+    }
+    .card-tools button {
+      pointer-events: auto;
+      width: auto;
+      height: auto;
+      min-width: 2.25rem;
+      min-height: 32px;
+      padding: .2rem .4rem;
+      font-size: .65rem;
+    }
+    .card-tools .inspect::before,
+    .card-tools .retry::before { content: none; }
+  }
+  /*
+   * Phones: the labelled in-flow strip costs ~40px on *every* card row and a
+   * 390px wide battlefield measured 804px tall with it, which pushed the
+   * opponent's side and the player's own permanents off screen. On a phone the
+   * tools stay always visible and hit-testable (no hover is required — the
+   * buttons take the pointer unconditionally), but they sit on the card's top
+   * edge as 32×32 glyphs, exactly like the desktop toolbar, so a row is only
+   * as tall as its card. The hand is deliberately excluded: its cards live in
+   * the drawer's horizontal strip, where vertical space is free and the wider
+   * labelled target is kept.
+   */
+  @media (max-width: 640px) and (hover: none) {
+    :global(.battlefield) .card-tools {
+      position: absolute;
+      inset-block-start: .1rem;
+      inset-inline-end: .1rem;
+      width: max-content;
+      max-width: calc(100% - .2rem);
+      margin-top: 0;
+      pointer-events: none;
+    }
+    :global(.battlefield) .card-tools button {
+      width: 2rem;
+      height: 2rem;
+      min-width: 2rem;
+      min-height: 2rem;
+      padding: 0;
+      font-size: 0;
+      pointer-events: auto;
+    }
+    :global(.battlefield) .card-tools .inspect::before { content: "⤢"; font-size: .95rem; }
+    :global(.battlefield) .card-tools .retry::before { content: "↻"; font-size: 1.05rem; }
+  }
   .status-strip { position: absolute; z-index: 2; left: .2rem; bottom: .2rem; right: .2rem; display: flex; flex-wrap: wrap; gap: .2rem; align-content: flex-end; pointer-events: none; }
   /* The strip floats over the card, so the fallback has to leave that band
      empty: without this, "Girada" is painted on top of the rules text and the

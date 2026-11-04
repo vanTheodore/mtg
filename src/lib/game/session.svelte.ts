@@ -35,6 +35,18 @@ class GameSession {
   history = $state<HistoryEntry[]>([]);
   lifeChanges = $state<Record<string, { amount: number; revision: number }>>({});
   autoPass = $state(true);
+  /**
+   * Phone hand drawer. On a touch-sized screen the hand is a fixed sheet over
+   * the board instead of an inline row: thirty cards inline pushed the
+   * battlefield off screen (measured on /stress at 390×844: 3261px of
+   * document height, of which the hand alone was ~1500px).
+   *
+   * This is presentation state only. The hand still renders exactly the
+   * viewer's own cards and Phase's legality marks; nothing about the game
+   * changes when the sheet opens or closes.
+   */
+  handDrawerOpen = $state(false);
+  setHandDrawer(open: boolean) { this.handDrawerOpen = open; }
   autoPasses = $state(0);
   choosing = $state<number[]>([]);
   private autoPassQueued = false;

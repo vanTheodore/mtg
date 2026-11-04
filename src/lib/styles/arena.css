@@ -177,11 +177,16 @@
     gap: clamp(.25rem, .55vw, .6rem);
     padding-block: .2rem;
   }
+  .app[data-board-style="arena"] > .hand-zone,
   .app[data-board-style="arena"] .layout .hand-zone {
     padding: .4rem .6rem;
   }
+  /* The fan's own padding is set in the short-desktop block at the end of
+   * this file: 1.5rem of top padding is what pushed the fanned cards out of
+   * the card-sized 190px hand (measured scrollHeight 206 vs clientHeight 180,
+   * which cut the bottom half of every hand card). */
   .app[data-board-style="arena"] .layout .hand-zone .hand-scroll.fan {
-    padding-block: 1.5rem 1.25rem;
+    padding-block: .55rem .6rem;
   }
   .app[data-board-style="arena"] .layout .middle {
     padding-block: .35rem;
@@ -275,7 +280,7 @@
   }
   .app[data-board-style="arena"] .hand-zone .hand-scroll.fan {
     --hand-card-w: min(var(--hand-natural-w), var(--arena-base-card-w, 124px), 12dvh);
-    padding-block: .85rem 1rem;
+    padding-block: .55rem .6rem;
   }
 }
 
@@ -340,6 +345,7 @@
   .app[data-board-style="arena"] .layout > .battlefield[data-side] .row[data-zone="lands"] {
     --card-w: min(var(--arena-base-card-w, 124px), 7.5dvh);
   }
+  .app[data-board-style="arena"] > .hand-zone .hand-scroll.fan,
   .app[data-board-style="arena"] .layout > .hand-zone .hand-scroll.fan {
     --hand-card-w: min(var(--hand-natural-w), var(--arena-base-card-w, 124px), 11dvh);
     padding-block: .55rem .6rem;
@@ -362,7 +368,11 @@
  * clipped choices or changes to the Phase game state.
  */
 @media (min-width: 1280px) and (max-height: 1000px) {
-  .app[data-board-style="arena"] {
+  /* Doubled class: Board.svelte's scoped `.app` rule has the same specificity
+     (0,2,0) and is injected after this file, so a single `.app[data-board-style]`
+     lost the cascade and the shell kept its 12.8px gap and padding — measured
+     921px of document on a real DeclareBlockers at 1440×900. */
+  .app.app[data-board-style="arena"] {
     gap: .35rem;
     padding-block: .35rem;
   }
@@ -379,6 +389,7 @@
   .app[data-board-style="arena"] .battlefield[data-side] .row {
     padding-block: .1rem;
   }
+  .app[data-board-style="arena"] > .hand-zone,
   .app[data-board-style="arena"] .layout > .hand-zone,
   .app[data-board-style="arena"].stress > .hand-zone {
     padding-block: .25rem;
@@ -390,4 +401,331 @@
     padding-block: .35rem;
     line-height: 1.3;
   }
+}
+
+
+/*
+ * Arena 1.0 — a real table, measured on the real board.
+ *
+ * Evidence (Chromium 1440×900, real Phase DeclareBlockers, docs/ARENA-1.0-BOARD.md):
+ * the scene owed 137px with the top bar + two full-width banners + a 56px
+ * metrics strip. None of that is a card. Collapsing the banners behind a
+ * disclosure, reporting the engine's deck count in the bar and folding the
+ * metrics into one line took the debt to 46px WITHOUT touching card size.
+ *
+ * What is left is not chrome: two 207px battlefields, a 190px hand and one
+ * 263px decision card. Shrinking any of them would cost either the 124×173
+ * combat cards or a legal Phase action, so the last 46px stays documented
+ * instead of being bought by hiding controls.
+ */
+@media (min-width: 1280px) and (max-height: 1000px) {
+  .app.app[data-board-style="arena"] {
+    gap: .3rem;
+    padding-block: .3rem;
+    min-height: 100dvh;
+  }
+  /* A table bar, not a page header: identity, engine status, seat, menu. */
+  .app[data-board-style="arena"] .topbar {
+    padding: .3rem .6rem;
+    min-height: 0;
+    flex-wrap: nowrap;
+  }
+  .app[data-board-style="arena"] .topbar .mark { width: 1.9rem; height: 1.9rem; font-size: 1rem; }
+  .app[data-board-style="arena"] .topbar h1 { font-size: 1rem; }
+  .app[data-board-style="arena"] .topbar .brand p { display: none; }
+  .app[data-board-style="arena"] .top-actions { gap: .4rem; flex-wrap: nowrap; }
+  .app[data-board-style="arena"] .notice-line { padding-block: 0; }
+  .app[data-board-style="arena"] .metrics[data-collapsible="true"] > details { line-height: 1.2; }
+  /* The opponent's hand backs are a count, not a card row. */
+  .app[data-board-style="arena"] .layout > .rival-hand { margin-block: -.15rem; }
+}
+
+/*
+ * HUD hierarchy: inside the decision card, the prompt Phase is waiting for
+ * comes before the running log. The card, the turn track and the log keep
+ * their places in the sidecar (their geometry is asserted by arena-ui.spec.ts
+ * and is what tells a player where to look); what changes is that the
+ * 263px decision no longer opens with "Resoluciones".
+ */
+.app[data-board-style="arena"] .layout > .middle > .decision {
+  display: flex;
+  flex-direction: column;
+}
+.app[data-board-style="arena"] .layout > .middle > .decision > .decision-head {
+  order: 1;
+}
+.app[data-board-style="arena"] .layout > .middle > .decision > .prompt,
+.app[data-board-style="arena"] .layout > .middle > .decision > p.muted {
+  order: 2;
+}
+.app[data-board-style="arena"] .layout > .middle > .decision > .confirmations {
+  order: 3;
+}
+.app[data-board-style="arena"] .layout > .middle > .decision > .finished {
+  order: 4;
+}
+
+
+/*
+ * Arena 1.0 — the hand must never clip the cards it is showing.
+ *
+ * Measured before: the hand's scrollport was 180px tall while its content
+ * needed 206px, because a rotated fanned card is ~10px taller than its
+ * wrapper and the scrollport still carried 13.6px of top padding. The result
+ * was every hand card cut in half at the bottom — visible in
+ * docs/evidence/blockers-before.png.
+ *
+ * The rule below gives the scrollport exactly the height of its tallest card
+ * (card width × the 488/680 face ratio) plus the small breathing room the
+ * fan needs, so no card is ever clipped, while staying card-sized instead of
+ * growing a second row.
+ */
+.app[data-board-style="arena"] .layout .hand-zone .hand-scroll.fan {
+  padding-block: .3rem .45rem;
+  align-items: flex-start;
+  overflow-y: hidden;
+}
+
+/*
+ * The deck/engine report and the metrics no longer own a full row each on a
+ * short desktop; they are one line of text under the table and the numbers
+ * live behind their disclosure.
+ */
+@media (max-height: 1000px) {
+  .app[data-board-style="arena"] .metrics[data-collapsible="true"] {
+    font-size: .68rem;
+    line-height: 1.1;
+    padding-block: 0;
+  }
+}
+
+
+/*
+ * Arena 1.0 — close the last row of debt with table spacing, not card size.
+ *
+ * At this point the 1440×900 real-board scene owes 8px. The remaining height
+ * is 2×207px battlefields + a 184px hand + a 263px decision; touching any of
+ * those would cost a 124×173 combat card or a legal Phase action. What is
+ * still compressible is the gap between blocks and the caption row of each
+ * battlefield, so that is what this rule trims — 2px per boundary.
+ */
+@media (min-width: 1280px) and (max-height: 1000px) {
+  .app[data-board-style="arena"] .layout {
+    row-gap: .18rem;
+  }
+  .app[data-board-style="arena"] .layout > .middle {
+    gap: .3rem;
+  }
+  .app[data-board-style="arena"] .battlefield[data-side] > h2 {
+    margin-bottom: .1rem;
+    font-size: .72rem;
+  }
+  .app[data-board-style="arena"] .layout .hand-zone {
+    padding-block: .2rem;
+  }
+}
+
+
+/*
+ * Arena 1.0 — phones get a table, not a forty-card column.
+ *
+ * Measured on /stress at 390×844 with a 30-card hand: the document was
+ * 3261px tall and the hand alone was ~1500px of it, so the battlefield —
+ * the actual game — started off screen. The hand is now a fixed drawer
+ * (Hand.svelte) with a summary button; this block only makes sure the board
+ * above it stops stacking tall rows.
+ *
+ * The drawer keeps every card reachable by swipe and by Tab, keeps the region
+ * in the accessibility tree when closed, and moves focus in and out. No rule
+ * here hides a legal Phase action.
+ */
+@media (max-width: 1099px) {
+  .app[data-board-style="arena"] .layout {
+    row-gap: .22rem;
+  }
+  /* Opponent hand backs are a count, not a row of cards. */
+  .app[data-board-style="arena"] .layout > .rival-hand {
+    max-height: 1.4rem;
+    overflow: hidden;
+    margin-block: -.1rem;
+  }
+  .app[data-board-style="arena"] .layout .battlefield[data-side] {
+    min-height: 0;
+    padding-block: .3rem;
+  }
+  .app[data-board-style="arena"] .layout .battlefield[data-side] > h2 {
+    margin-bottom: .15rem;
+  }
+  .app[data-board-style="arena"] .layout .battlefield[data-side] .row {
+    padding-block: .2rem;
+    gap: .35rem;
+  }
+  /* The closed drawer must not reserve a row for the cards it hides. */
+  .app[data-board-style="arena"] > .hand-zone:not(.sheet-open) {
+    padding-block: .1rem;
+  }
+  .app[data-board-style="arena"] > .hand-zone:not(.sheet-open) .zone-head h2 {
+    font-size: .8rem;
+  }
+}
+
+/* The open drawer is a modal surface: it must sit above the table and be the
+ * only scrollport in play. Cards inside keep their normal size. */
+@media (max-width: 1099px) {
+  .app[data-board-style="arena"] > .hand-zone.sheet-open {
+    z-index: 60;
+    border-radius: 18px 18px 0 0;
+  }
+  .app[data-board-style="arena"] > .hand-zone.sheet-open .hand-scroll {
+    justify-content: flex-start;
+    padding-block: .4rem .2rem;
+  }
+}
+
+
+/*
+ * Arena 1.0 — a phone battlefield is card-sized, not lane-sized.
+ *
+ * Measured on /stress at 390×844 (touch): one battlefield was 1336px tall
+ * because the "lands and support share the back lane" rule from the desktop
+ * layout kept two 1-of-2-column lanes, so six lands stacked into a 764px
+ * column of single cards. On a phone the back row goes back to a wrapping
+ * row and the creatures keep their lane; nothing about the board's meaning
+ * changes, only how many cards fit per line.
+ */
+@media (max-width: 1099px) {
+  .app[data-board-style="arena"] .battlefield[data-side] .middle-permanents {
+    display: block;
+  }
+  .app[data-board-style="arena"] .battlefield[data-side] .middle-permanents .middle-lane + .middle-lane {
+    margin-top: .2rem;
+  }
+  .app[data-board-style="arena"] .battlefield[data-side] .row {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: .3rem;
+  }
+  /* A phone card keeps a legible face: below 96px the rules text, the cost
+     and the type line stop fitting inside the face (measured overflow on
+     /stress at 320px: 47px at 76px wide, 8px at 96px, 0 from 100px). The floor
+     is therefore a readability contract, not a density preference. */
+  .app[data-board-style="arena"] .battlefield[data-side] .row[data-zone="lands"] {
+    --card-w: min(var(--arena-base-card-w, 124px), clamp(100px, 15vw, 118px));
+  }
+  .app[data-board-style="arena"] .battlefield[data-side] .row[data-zone="creatures"],
+  .app[data-board-style="arena"] .battlefield[data-side] .row[data-zone="support"] {
+    --card-w: min(var(--arena-base-card-w, 124px), clamp(100px, 24vw, 124px));
+  }
+  /* Card tools are never removed on a phone: `(hover: none)` already turns
+     them into an in-flow 32px strip (CardView.svelte), and a finger must be
+     able to open the inspect dialog. Hiding them to save vertical space
+     removed the only way to read a card on the battlefield. */
+}
+
+
+/*
+ * Arena 1.0 — the phone top bar is chrome, not the game.
+ *
+ * Measured at 390×844: the bar and the engine report took 200px of a 844px
+ * screen, so the mulligan prompt the player must answer started at y=641.
+ * The bar keeps every control and the full engine sentence (it is Phase's own
+ * report and the E2E quotes it), but on a phone it wraps into fewer, tighter
+ * rows.
+ */
+@media (max-width: 1099px) {
+  .app[data-board-style="arena"] > .topbar {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: .3rem .5rem;
+    padding: .35rem .55rem;
+  }
+  .app[data-board-style="arena"] > .topbar > .brand { grid-column: 1; }
+  .app[data-board-style="arena"] > .topbar > .brand .mark { width: 1.8rem; height: 1.8rem; font-size: .95rem; }
+  .app[data-board-style="arena"] > .topbar > .brand h1 { font-size: 1rem; }
+  .app[data-board-style="arena"] > .topbar > .brand p { display: none; }
+  .app[data-board-style="arena"] > .topbar > .top-actions {
+    grid-column: 2;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: .3rem;
+  }
+  .app[data-board-style="arena"] > .topbar > .engine-status {
+    grid-column: 1 / -1;
+    font-size: .7rem;
+    line-height: 1.25;
+    border-radius: 8px;
+    padding: .15rem .45rem;
+  }
+  .app[data-board-style="arena"] .top-actions .seat { font-size: .72rem; }
+  .app[data-board-style="arena"] .top-actions .auto-pass.chip { font-size: .72rem; padding: .12rem .45rem .12rem .35rem; }
+}
+
+
+/*
+ * Arena 1.0 — on a phone the decision comes before the reference material.
+ *
+ * Measured at 390×844: the middle block was 495px (turn track 56 + empty stack
+ * 33 + log 65 + gaps) and the mulligan decision did not start until y=617,
+ * with the player's own battlefield and hand below it. The `.middle` grid from
+ * the desktop layout keeps stacking here because its selector is more specific
+ * than the plain mobile rule above.
+ *
+ * The decision is the only part of that column a player must act on, so it
+ * goes first on phones. Nothing is removed: the turn track, the stack and the
+ * log stay right below it, in tab order.
+ */
+@media (max-width: 1099px) {
+  .app[data-board-style="arena"] .layout > .middle {
+    display: flex;
+    flex-direction: column;
+    /* The desktop rule aligns items to `start`; as a phone column that left
+       the stack, the log and the turn track shrunk to their text width. */
+    align-items: stretch;
+    gap: .3rem;
+  }
+  .app[data-board-style="arena"] .layout > .middle > .decision { order: 1; }
+  .app[data-board-style="arena"] .layout > .middle > .center { order: 2; }
+  .app[data-board-style="arena"] .layout > .middle > .turn-track { order: 3; }
+  /* The empty stack is a label, not a panel. */
+  .app[data-board-style="arena"] .layout > .middle > .center > .stack[data-empty="true"] {
+    padding-block: .25rem;
+  }
+}
+
+
+/* Phone table bar: keep all five controls on two rows instead of wrapping
+ * into four (measured 205px before, which is a fifth of a 844px screen). */
+@media (max-width: 1099px) {
+  .app[data-board-style="arena"] .top-actions { gap: .25rem; }
+  .app[data-board-style="arena"] .top-actions .seat.mode {
+    max-width: 7.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app[data-board-style="arena"] .top-actions button { min-height: 32px; padding: .2rem .5rem; font-size: .75rem; }
+  .app[data-board-style="arena"] > .topbar > .engine-status { font-size: .68rem; }
+}
+
+
+/* The seat/mode label is already announced by the player panel below; on a
+ * phone it is repeated in the bar and costs a wrapped row. Keep it in the
+ * accessibility tree, drop it from the phone layout. */
+@media (max-width: 1099px) {
+  .app[data-board-style="arena"] .top-actions .seat.mode {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .app[data-board-style="arena"] > .topbar > .engine-status {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+  .app[data-board-style="arena"] > .topbar > .engine-status .dot { display: none; }
 }

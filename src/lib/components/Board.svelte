@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import ArenaSurface from './ArenaSurface.svelte';
   import TurnTrack from './TurnTrack.svelte';
   import Hand from './Hand.svelte';
@@ -68,6 +68,7 @@
   };
   let handoffButton = $state<HTMLButtonElement | undefined>();
 
+
   const snapshot = $derived(session.snapshot);
   const objects = $derived(snapshot?.state.objects ?? {});
   const viewer = $derived(snapshot?.viewer ?? 0);
@@ -83,6 +84,33 @@
   $effect(() => {
     if (needsHandoff) handoffButton?.focus();
   });
+
+  /**
+   * The phone hand sheet is a modal surface: while it is open the board is
+   * inert so a stray tap cannot target a hidden permanent, and focus moves
+   * into the sheet. Closing returns focus to the summary button (Hand.svelte
+   * does that itself). Nothing here reads or changes Phase state.
+   *
+   * The focus call has to wait for the sheet to be laid out (`tick`), and the
+   * hand region itself is a tab stop, so it is a safe target even when the
+   * hand is empty.
+   */
+  $effect(() => {
+    if (!session.handDrawerOpen) return;
+    void tick().then(() => {
+      const target = document.querySelector<HTMLElement>('#mesa-hand-sheet .hand-scroll');
+      target?.focus();
+    });
+  });
+
+  /** Escape closes the phone hand sheet from anywhere (the board is inert). */
+  function onWindowKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && session.handDrawerOpen) {
+      event.preventDefault();
+      session.setHandDrawer(false);
+      document.querySelector<HTMLElement>('.hand-trigger')?.focus();
+    }
+  }
 
   onMount(async () => {
     try {
@@ -102,6 +130,7 @@
       decks = deckData;
       const params = new URLSearchParams(location.search);
       if (params.has('autostart')) await start();
+      window.addEventListener('keydown', onWindowKeydown);
     } catch (e) {
       loadError = e instanceof Error ? e.message : String(e);
     }
@@ -247,21 +276,61 @@
   {#if session.boardStyle === 'arena'}
     <ArenaSurface color={arenaColor} />
   {/if}
+  <!--
+    Arena 1.0 — the top bar is a *table* bar, not a settings page.
+    Measured at 1440×900 during a real DeclareBlockers: the bar plus two
+    full-width notice rows took 145px before the battlefield began, on a
+    board that owed 137px. Arena now keeps the identity, the engine status
+    and one disclosure; the Classic board keeps every control in the open
+    (its own tests assert that) and no state is hidden in either.
+  -->
   <header class="topbar">
     <div class="brand">
       <span class="mark" aria-hidden="true">M</span>
-      <div>
+      <div class="brand-text">
         <h1>Mesa</h1>
         <p>Cliente MTG · motor Phase</p>
       </div>
     </div>
+    {#if snapshot && session.boardStyle === 'arena' && engineLoad}
+      {@const short = engineLoad.seats.filter((size) => size !== engineLoad!.requested)}
+      <p class="engine-status" role="status" data-state={short.length ? 'warn' : 'ok'}>
+        <span class="dot" aria-hidden="true"></span>
+        <!-- Same sentence Phase's deck report has always used: the status
+             moved from a full-width banner into the table bar, so the wording
+             the documentation and the E2E quote still holds ("Motor: 40 / 40
+             cartas cargadas por asiento"). -->
+        Motor: {engineLoad.seats.join(' / ')} cartas cargadas por asiento ({engineLoad.requested} pedidas)
+        {#if short.length}
+          <strong>· revisa el mazo antes de jugar.</strong>
+        {:else}
+          · El mazo se cargó completo
+        {/if}
+      </p>
+    {/if}
     <div class="top-actions">
       {#if snapshot}
         <span class="seat">Jugador {viewer + 1}</span>
         {#if session.modeLabel}<span class="seat mode">{session.modeLabel}</span>{/if}
       {/if}
-      <label class="auto-pass"><input type="checkbox" checked={session.autoPass} onchange={(e) => session.setAutoPass(e.currentTarget.checked)} /> Auto-pasar ventanas sin acciones</label>
-      <label class="auto-pass"><input type="checkbox" checked={session.handoffMode === 'every'} onchange={(e) => session.setHandoffMode(e.currentTarget.checked ? 'every' : 'turn')} /> Confirmar cada cambio de asiento</label>
+      <!--
+        Arena 1.0 — compact table controls, complete accessible names.
+        A previous iteration folded these into a disclosure; that hid a
+        gameplay toggle from the driver and made the settings button vanish on
+        a style switch (its panel remounted), so instead every control stays
+        present and only its *label* is abbreviated on screen. The full name
+        is what assistive technology and the E2E read.
+      -->
+      <label class="auto-pass chip">
+        <input type="checkbox" checked={session.autoPass} onchange={(e) => session.setAutoPass(e.currentTarget.checked)} />
+        <span aria-hidden="true">Auto-paso</span>
+        <span class="sr-only">Auto-pasar ventanas sin acciones</span>
+      </label>
+      <label class="auto-pass chip">
+        <input type="checkbox" checked={session.handoffMode === 'every'} onchange={(e) => session.setHandoffMode(e.currentTarget.checked ? 'every' : 'turn')} />
+        <span aria-hidden="true">Asiento</span>
+        <span class="sr-only">Confirmar cada cambio de asiento</span>
+      </label>
       <Settings />
     </div>
   </header>
@@ -273,9 +342,16 @@
     <div class="notice error" role="alert">{session.error}</div>
   {/if}
   {#if coverageNotice && snapshot}
-    <div class="notice warn" role="status">
-      Cobertura: {coverageNotice}.{limitedCards.length ? ' Partida iniciada con permiso explícito.' : ''}
-    </div>
+    {#if session.boardStyle === 'arena'}
+      <details class="notice-line warn">
+        <summary>Cobertura del mazo: {coverageNotice}</summary>
+        <p>{limitedCards.length ? 'Partida iniciada con permiso explícito para las cartas marcadas.' : 'Phase analizó todas las cartas del mazo.'}</p>
+      </details>
+    {:else}
+      <div class="notice warn" role="status">
+        Cobertura: {coverageNotice}.{limitedCards.length ? ' Partida iniciada con permiso explícito.' : ''}
+      </div>
+    {/if}
   {/if}
   {#if catalogConflicts.length}
     <div class="notice warn" role="status">
@@ -283,7 +359,7 @@
       Se usa la primera definición (el pack dueño del nombre) y el resto no sobrescribe nada.
     </div>
   {/if}
-  {#if engineLoad && snapshot}
+  {#if engineLoad && snapshot && session.boardStyle !== 'arena'}
     {@const short = engineLoad.seats.filter((size) => size !== engineLoad!.requested)}
     <div class="notice {short.length ? 'warn' : 'ok'}" role="status" aria-live="polite">
       Motor: {engineLoad.seats.join(' / ')} cartas cargadas por asiento ({engineLoad.requested} pedidas).
@@ -349,7 +425,7 @@
     </section>
   {:else}
     <svelte:boundary>
-    <main class="layout" inert={needsHandoff} aria-hidden={needsHandoff}>
+    <main class="layout" inert={needsHandoff || session.handDrawerOpen} aria-hidden={needsHandoff}>
       <PlayerPanel player={rival!} showHand />
       <!-- While the device changes hands the board is covered and inert, so
            the other seat's hand is not drawn either: the dialog promises that
@@ -388,12 +464,6 @@
         </section>
       {/if}
 
-      <!-- While the device changes hands, the seat that is being handed the
-           device must not see the incoming seat's cards: the overlay only
-           dims the board, so anything painted under it is still readable. -->
-      {#if !needsHandoff}
-        <Hand objects={handObjects} {metas} title={`Tu mano · Jugador ${viewer + 1}`} />
-      {/if}
     </main>
     {#snippet failed(error, reset)}
       <div class="notice error" role="alert">
@@ -404,7 +474,50 @@
     {/snippet}
     </svelte:boundary>
 
-    <footer class="metrics" aria-label="Métricas del motor">
+    <!--
+      The hand is a sibling of the board, not a row inside it.
+
+      Two reasons, both measured: (1) on a phone it is a fixed drawer, and a
+      drawer that lives inside an `inert` container cannot receive focus —
+      Chrome refuses to focus anything under `inert`, so the sheet opened and
+      trapped the player outside it; (2) a row inside the 1440×900 grid costs
+      182px that the battlefield needs.
+
+      On desktop it is still the same fan, still at the bottom of the table,
+      and every card, count and legality mark comes from Phase.
+    -->
+    {#if !needsHandoff}
+      <Hand objects={handObjects} {metas} title={`Tu mano · Jugador ${viewer + 1}`} />
+    {/if}
+
+    <footer class="metrics" aria-label="Métricas del motor" data-collapsible={session.boardStyle === 'arena'}>
+      {#if session.boardStyle === 'arena'}
+        <!-- One line until the player asks for numbers: 56px of metric text
+             under the table is not part of a card game. The full set stays one
+             keystroke away and is still labelled for assistive technology. -->
+        <details>
+          <summary>Rendimiento del motor{session.lastMetrics ? ` · reglas ${session.lastMetrics.engine_ms?.toFixed(1) ?? '—'} ms · ${session.lastMetrics.objects ?? '—'} objetos` : ''}</summary>
+          <div class="metric-items">
+            {#if session.lastMetrics}
+              <span>Reglas {session.lastMetrics.engine_ms?.toFixed(1) ?? '—'} ms</span>
+              <span>Legales {session.lastMetrics.legal_ms?.toFixed(1) ?? '—'} ms</span>
+              <span>Proyección {session.lastMetrics.projection_ms?.toFixed(1) ?? '—'} ms</span>
+              <span>Serialización {session.lastMetrics.serialize_ms?.toFixed(1) ?? '—'} ms</span>
+              <span>Transporte {session.lastMetrics.transport_ms?.toFixed(1) ?? '—'} ms</span>
+              <span>Encode {session.lastMetrics.encode_ms?.toFixed(1) ?? '—'} ms</span>
+              <span>Decode {session.lastMetrics.decode_ms?.toFixed(1) ?? '—'} ms</span>
+              <span>Commit Svelte {session.lastMetrics.svelte_commit_ms?.toFixed(1) ?? '—'} ms</span>
+              <span>Auto-pasos {session.autoPasses}</span>
+              <span>Presentación {session.lastMetrics.presentation_ms?.toFixed(1) ?? '—'} ms</span>
+              <span>Worker {session.lastMetrics.worker_ms?.toFixed(1) ?? '—'} ms</span>
+              <span>WASM {session.lastMetrics.wasm_compile_ms?.toFixed(0) ?? '—'} ms</span>
+              <span>{session.lastMetrics.response_bytes ?? '—'} B</span>
+              <span>{session.lastMetrics.objects ?? '—'} objetos</span>
+              <span>Memoria WASM {session.lastMetrics.wasm_memory_bytes ? (session.lastMetrics.wasm_memory_bytes / 1048576).toFixed(1) : '—'} MiB</span>
+            {/if}
+          </div>
+        </details>
+      {:else}
       {#if session.lastMetrics}
         <span>Reglas {session.lastMetrics.engine_ms?.toFixed(1) ?? '—'} ms</span>
         <span>Legales {session.lastMetrics.legal_ms?.toFixed(1) ?? '—'} ms</span>
@@ -421,6 +534,7 @@
         <span>{session.lastMetrics.response_bytes ?? '—'} B</span>
         <span>{session.lastMetrics.objects ?? '—'} objetos</span>
         <span>Memoria WASM {session.lastMetrics.wasm_memory_bytes ? (session.lastMetrics.wasm_memory_bytes / 1048576).toFixed(1) : '—'} MiB</span>
+      {/if}
       {/if}
     </footer>
   {/if}
@@ -443,13 +557,32 @@
   .game-over strong { font: 700 20px var(--font-serif); }
   .game-over span { color: var(--text-secondary); font-size: 13px; }
   .app { min-height: 100vh; display: flex; flex-direction: column; gap: .8rem; padding: .8rem clamp(.6rem, 2vw, 1.4rem); max-width: 1600px; margin: 0 auto; }
-  .topbar { display: flex; justify-content: space-between; align-items: center; gap: .8rem; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: .8rem; flex-wrap: wrap; }
+  /* Engine status: one measured line instead of a full-width banner. The
+     numbers are Phase's own report of what it loaded (never a UI guess). */
+  .engine-status { margin: 0; display: inline-flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--ink-muted); border: 1px solid var(--line); border-radius: 999px; padding: .18rem .7rem; }
+  .engine-status .dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--ok); }
+  .engine-status[data-state="warn"] { border-color: var(--accent); color: var(--ink); }
+  .engine-status[data-state="warn"] .dot { background: var(--danger); }
+  /* Collapsed status lines in Arena: readable, one row, no full-width banner. */
+  .notice-line { font-size: .76rem; color: var(--ink-muted); padding: .1rem .2rem; }
+  .notice-line > summary { cursor: pointer; }
+  .notice-line p { margin: .25rem 0 0; }
+  .metrics[data-collapsible="true"] { padding: 0; }
+  .metrics[data-collapsible="true"] > details { font-size: .72rem; color: var(--ink-muted); }
+  .metrics[data-collapsible="true"] > details > summary { cursor: pointer; padding: .1rem 0; list-style: none; }
+  .metrics[data-collapsible="true"] > details > summary::-webkit-details-marker { display: none; }
+  .metrics[data-collapsible="true"] > details > summary::before { content: "▸ "; }
+  .metrics[data-collapsible="true"] > details[open] > summary::before { content: "▾ "; }
+  .metrics .metric-items { display: flex; flex-wrap: wrap; gap: .8rem; padding-block: .2rem; }
   .brand { display: flex; align-items: center; gap: .65rem; }
   .mark { width: 2.4rem; height: 2.4rem; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 800; font-size: 1.2rem; }
   h1 { margin: 0; font-size: 1.15rem; letter-spacing: .02em; }
   .brand p { margin: 0; font-size: .74rem; color: var(--ink-muted); }
   .top-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
   .auto-pass { display: flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--ink-muted); }
+  .auto-pass.chip { border: 1px solid var(--line); border-radius: 999px; padding: .18rem .6rem .18rem .45rem; background: var(--surface-2); }
+  .auto-pass.chip input { margin: 0; }
   .seat { font-size: .8rem; color: var(--ink-muted); }
   .seat.mode { border: 1px solid var(--line); border-radius: 999px; padding: .1rem .5rem; }
   .allow-limited { display: flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--ink-muted); }

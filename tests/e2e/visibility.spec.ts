@@ -43,8 +43,13 @@ test('fallback identificable, error de imagen y reintento', async ({ page }) => 
   const shell = card.locator('..');
   await expect(card).toContainText('Grizzly Bears');
   await expect(card).toContainText('2/2');
-  await expect(shell.getByRole('button', { name: 'Reintentar imagen' })).toBeVisible();
-  await shell.getByRole('button', { name: 'Reintentar imagen' }).click();
+  const retry = shell.getByRole('button', { name: 'Reintentar imagen' });
+  await expect(retry).toBeVisible();
+  // Hover explicitly to reveal Arena's contextual toolbar before clicking.
+  // The scrollport must not clip the visible button's hit target.
+  await card.hover();
+  await expect(shell.locator('.card-tools')).toHaveCSS('opacity', '1');
+  await retry.click();
   await expect(card).toContainText('Grizzly Bears');
 });
 

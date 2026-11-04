@@ -55,10 +55,16 @@
 </script>
 
 <section class="decision" aria-label="Decisión pendiente" data-waiting={kind ?? 'none'}>
-  <h2>Tu siguiente decisión</h2>
+  <!-- The heading block is a unit so the Arena HUD can put the prompt before
+       the log without splitting the announced decision guide from its title. -->
+  <div class="decision-head">
+    <h2>Tu siguiente decisión</h2>
+    {#if s}
+      <p class="phase">Turno {s.state.turn_number} · {PHASES[s.state.phase] ?? s.state.phase} · Jugador {s.state.priority_player + 1}</p>
+      <p class="waiting" aria-label="Guía de decisión" aria-live="polite">{decisionGuide(kind, s.state.phase, s.state.priority_player)}</p>
+    {/if}
+  </div>
   {#if s}
-    <p class="phase">Turno {s.state.turn_number} · {PHASES[s.state.phase] ?? s.state.phase} · Jugador {s.state.priority_player + 1}</p>
-    <p class="waiting" aria-label="Guía de decisión" aria-live="polite">{decisionGuide(kind, s.state.phase, s.state.priority_player)}</p>
 
     {#if discard && discard.player === s.viewer}
       <div class="prompt" aria-label="Descartar hasta siete cartas">

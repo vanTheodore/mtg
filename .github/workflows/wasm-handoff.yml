@@ -1,0 +1,85 @@
+name: Mesa WASM handoff
+
+# Publishes the *pinned* Phase WASM bridge from the current commit on a
+# disposable branch, so a sandbox that cannot reach GitHub artifact storage
+# (and has no Rust toolchain) can still run the real engine for Chromium
+# evidence.
+#
+# It never touches `main`, never changes the pin and does not replace the
+# provenance-checked `bun run engine:download`, which keeps requiring a green
+# Mesa CI run of `main` at the same commit. This is a developer bridge for
+# agents working in restricted networks, and `main` stays the source of truth.
+#
+# The blob is published gzip+base64 because git is the only channel some
+# sandboxes can read.
+
+on:
+  push:
+    branches:
+      - 'ci/wasm-bridge**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  BUN_VERSION: 1.4.4
+  RUST_TOOLCHAIN: nightly-2025-03-02
+
+jobs:
+  publish:
+    name: Build Phase WASM and publish it on ci/wasm-artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target-wasm"
+          shared-key: mesa-wasm-${{ hashFiles('Cargo.lock', 'crates/mtg-engine-wasm/**') }}
+      - name: Validate Cargo.lock with pinned Rust
+        run: cargo metadata --locked --format-version 1 > /dev/null
+      - name: Build Phase bridge with precompiled wasm32 std
+        env:
+          CARGO_TARGET_DIR: target-wasm
+          CARGO_LOCKED: "1"
+        run: bun run engine:build
+      - name: Package the same files Mesa CI records
+        run: |
+          set -euo pipefail
+          WASM=static/wasm/mtg_engine_wasm.wasm
+          test -s "$WASM"
+          mkdir -p /tmp/handoff
+          sha256sum "$WASM" > /tmp/handoff/mtg_engine_wasm.wasm.sha256
+          sha256sum Cargo.lock > /tmp/handoff/Cargo.lock.sha256
+          rustc -Vv > /tmp/handoff/rustc-version.txt
+          cp "$WASM" /tmp/handoff/mtg_engine_wasm.wasm
+          gzip -9 -c /tmp/handoff/mtg_engine_wasm.wasm | base64 -w 0 > /tmp/handoff/mtg_engine_wasm.wasm.gz.b64
+          printf '{\n  "commit": "%s",\n  "run": %s,\n  "engine_sha256": "%s",\n  "workflow": "wasm-handoff"\n}\n' \
+            "$GITHUB_SHA" "$GITHUB_RUN_ID" \
+            "$(cut -d' ' -f1 /tmp/handoff/mtg_engine_wasm.wasm.sha256)" > /tmp/handoff/manifest.json
+          ls -l /tmp/handoff
+      - name: Publish on the disposable ci/wasm-artifacts branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd /tmp/handoff
+          git init -q -b ci/wasm-artifacts publish
+          cd publish
+          cp ../manifest.json ../mtg_engine_wasm.wasm.gz.b64 ../mtg_engine_wasm.wasm.sha256 ../Cargo.lock.sha256 ../rustc-version.txt .
+          git config user.name 'mesa-ci'
+          git config user.email 'mesa-ci@users.noreply.github.com'
+          git add -A
+          git commit -q -m "chore(ci): Phase WASM for ${GITHUB_SHA}"
+          git push -q --force \
+            "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            ci/wasm-artifacts
+          echo "Publicado: https://github.com/${GITHUB_REPOSITORY}/tree/ci/wasm-artifacts"

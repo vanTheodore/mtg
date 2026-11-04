@@ -231,9 +231,14 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   // the synthetic scene; keep the Phase action and its legal targets intact.
   // The previous PR #26 measured 742px of vertical overflow at this exact
   // real-engine blocking prompt. The sidecar must beat that baseline.
-  // PR #27: 396px debt at real Phase DeclareBlockers 1440×900.
-  // Reduce at least 75px while preserving all clickable Phase targets.
-  expect(viewport.verticalOverflow).toBeLessThan(321);
+  // History of this measurement, all from the same real blocking prompt:
+  //   PR #25: 1273px   PR #26: 742px   PR #27: 396px   #39: 137px
+  // Arena 1.0 took the chrome (top bar, two full-width banners, 56px metrics
+  // strip) out of the table's height budget and fixed the hand's clipping
+  // scrollport; the scene now fits in one 1440×900 screen. Asserting 0 means a
+  // future CSS change cannot quietly buy back the 137px by hiding a legal
+  // Phase action again.
+  expect(viewport.verticalOverflow).toBe(0);
   expect(viewport.elements.hud).not.toBeNull();
   expect(viewport.elements.opponentField).not.toBeNull();
   expect(viewport.elements.playerField).not.toBeNull();
