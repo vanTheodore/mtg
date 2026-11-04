@@ -59,11 +59,11 @@ principio a fin». Esta tabla mantiene la distinción:
 | Declarar atacantes con destino | Sí | Sí |
 | Descartar hasta siete, historial, victoria | Sí | Sí (partida completa ganada) |
 | Pago de maná: fuentes pulsables, "Elegir maná manualmente" y "Confirmar pago" | Sí | Parcial: el E2E confirma pagos, pero no hay aserción dedicada de costes genéricos multi-maná |
-| **Declarar bloqueadoras por atacante** | **Sí** (borrador por pares, `nextBlockAssignment`, quitar bloqueo) | **No por UI**: sólo está cubierto por `engine-gameplay.spec.ts`, que declara bloqueos vía `EngineClient` |
+| **Declarar bloqueadoras por atacante** | **Sí** (pares, selección y confirmación) | **Sí**: `ui-deck-10e.spec.ts` ejecuta el bloqueo real desde Svelte y lo confirma con teclado |
 | Paso de asiento cada cambio de jugador | Sí | Sí (modal, modo por turno) |
 | Vista ampliada, tamaño/densidad/tema | Sí | Sí (a11y y anchos 320–1440) |
-| Constructor: buscar, cantidades, guardar, importar lista | Sí | **No**: `tests/e2e/deck-builder.spec.ts` está escrito y no se ejecutó (sin Chromium/WASM en este entorno) |
-| Jugar un mazo propio y leer cartas cargadas por el motor | Sí | **No**: misma razón; la capa de datos sí está cubierta por `catalog-http.test.ts` |
+| Constructor: buscar, cantidades, guardar, importar lista | Sí | **Sí**: `tests/e2e/deck-builder.spec.ts` en Chromium con motor disponible |
+| Jugar un mazo propio y leer cartas cargadas por el motor | Sí | **Sí**: prueba de constructor → partida con cartas del pack real |
 
 Sobre el bloqueo, en tres niveles distintos:
 
@@ -73,17 +73,12 @@ Sobre el bloqueo, en tres niveles distintos:
    `DeclareBlockers` desde los pares que el propio motor ofrece
    (`derived.blocker_assignment_pairs`) y observa `blockers` y `combat_damage`.
    Prueba el motor a través del cliente, **no** los controles Svelte.
-3. **Interacción visual**: la UI existe (selección atacante→bloqueadora o al
-   revés, lista de bloqueos, quitar), la lógica pura tiene pruebas unitarias,
-   pero **no hay E2E estable que la ejerza**. Requiere que el defensor tenga una
-   criatura y que a la vez se declare un atacante, y el duelo determinista tiende
-   a saltarse el emparejamiento. Por eso no se declara «bloqueo verificado
-   visualmente».
+3. **Interacción visual**: `tests/e2e/ui-deck-10e.spec.ts` alcanza un turno real de bloqueadoras con Phase, asigna la criatura al atacante desde los controles Svelte y confirma la decisión con teclado. Comprueba que la revisión del motor cambie y que el atacante conserve su estado legal. Esto es evidencia de ese escenario, **no** de compatibilidad con todas las cartas o reglas de MTG.
 
 Limitaciones actuales: sin IA, sin multijugador de red y sin recuperación de
-partidas. El catálogo jugable sigue siendo un subconjunto verificado (90 caras del
-fixture upstream): la tubería para sets reales existe, pero **ninguna carta nueva
-entra al juego sin pasar la puerta de cobertura del motor** (ver
+partidas. El catálogo jugable sigue siendo un subconjunto verificado (fixture
+y una parte certificada de Décima Edición): la tubería para sets reales existe,
+pero **ninguna carta nueva entra al juego sin pasar la puerta de cobertura del motor** (ver
 [`docs/CATALOG-PLAN.md`](docs/CATALOG-PLAN.md)). El puente aún no expone la
 validación de mazo de Phase, así que el constructor comprueba existencia en el
 catálogo y muestra lo que el motor cargó, **no** legalidad de formato.
@@ -91,8 +86,8 @@ catálogo y muestra lo que el motor cargó, **no** legalidad de formato.
 ## Requisitos
 
 - Bun **1.4.4** (`packageManager` fijado).
-- Rust nightly con el target `wasm32-unknown-unknown`.
-- Para el build WASM sin `wasm-bindgen`: scripts propios en `scripts/`.
+- **Para jugar en un checkout de `main`**: GitHub CLI y acceso a un run verde del mismo commit (`bun run engine:download`). No necesitas Rust local.
+- **Para recompilar el motor o modificar Phase**: Rust nightly con el target `wasm32-unknown-unknown`; los scripts de `scripts/` construyen el WASM sin `wasm-bindgen`.
 
 No se usan npm/pnpm/Node como dependencias del proyecto. Playwright se ejecuta
 con `bun --bun playwright`.
@@ -105,17 +100,25 @@ Guía completa: [`docs/LOCAL-ASSETS-WINDOWS.md`](docs/LOCAL-ASSETS-WINDOWS.md).
 
 ## Puesta en marcha
 
+Para jugar con los datos incluidos en el clon (también en Windows PowerShell 7):
+
 ```sh
-bun install
-bun run catalog:build        # static/data/cards.json + card-meta.json
-bun run catalog:packs        # static/data/catalog/index.json + packs/
-bun run engine:download      # main: WASM exacto desde CI, sin Rust local
-# Alternativa para desarrollar el motor: bun run engine:build
-bun run wasm:packcheck static/data/catalog/packs/fixture.json,static/data/catalog/packs/10e.json \
-  --decks docs/packcheck-10e-decks.json   # partida real por el puente, sin navegador
-bun run impressions:es --set-file data/mtgjson/10E.es.json   # opcional
+bun install --frozen-lockfile
+bun run engine:download      # WASM desde el CI verde del mismo commit en main
 bun run dev
 ```
+
+Los packs 10E, tierras, catálogo e impresiones españolas ya están en `static/data/`. Si estás desarrollando el generador de datos, **opcionalmente** puedes regenerarlos y validar un mazo; esto no es necesario para abrir la partida:
+
+```sh
+bun run catalog:build
+bun run catalog:packs
+bun run wasm:packcheck static/data/catalog/packs/fixture.json,static/data/catalog/packs/10e.json --decks docs/packcheck-10e-decks.json
+bun run impressions:es --set-file data/mtgjson/10E.es.json
+```
+
+Para reconstruir WASM desde Rust, la alternativa de desarrollo es `bun run engine:build`.
+
 
 `catalog:packs` acepta la exportación plana del motor (`cards.json`) o un archivo
 **AtomicCards v5** (`{ meta, data }`). Un set MTGJSON **v3** (como
@@ -229,16 +232,11 @@ idioma y su reserva en [`docs/LOCALE.md`](docs/LOCALE.md); las dependencias en
 
 ## Integración continua
 
-**Sin cobertura CI real al 2026-10-29**: las ejecuciones del workflow terminan sin
-runner asignado (0 pasos ejecutados). El análisis y la evidencia están en
-[`docs/CI-DIAGNOSIS.md`](docs/CI-DIAGNOSIS.md); no se cita ningún resultado de CI
-como prueba.
+**GitHub Actions activo y verificado.** El [run de `main` del 4 de noviembre de 2026](https://github.com/vanTheodore/mtg/actions/runs/41773779460) terminó en verde: build y tests Bun, procedencia de Phase, paridad y escenarios nativos, WASM y **45 E2E Chromium aprobados (una prueba de imágenes Scryfall en vivo omitida)**. El documento [`CI-DIAGNOSIS.md`](docs/CI-DIAGNOSIS.md) describe un bloqueo **histórico** anterior a que hubiera runners, no el estado vigente.
 
-`.github/workflows/ci.yml` define trabajos separados: estáticos (Bun con
-`--frozen-lockfile`, procedencia, typecheck, unitarias, build), WASM (toolchain
-Rust fijado, `rust-src`, `--locked`, Binaryen 132, hash del artefacto), nativos
-(paridad y escenarios con reportes) y navegador (Chromium con el WASM compilado
-descargado del trabajo anterior). No incluye IA, red ni deploy.
+`.github/workflows/ci.yml` publica builds estáticos, motor WASM con SHA-256, informes nativos y evidencia Playwright. El instalador `bun run engine:download` solo acepta motores de un CI verde del mismo commit, no de otra rama. No se despliega automáticamente ni se incorporan imágenes propietarias de cartas.
+
+Desde el [PR #31](https://github.com/vanTheodore/mtg/pull/31), el CI usa una [clasificación conservadora de cambios](docs/CI-SCOPE.md): documentación y herramientas locales conocidas pueden omitir Rust/WASM/Chromium **solo en PRs**, pero cada `push main` ejecuta la batería completa. El [PR #33](https://github.com/vanTheodore/mtg/pull/33) incorporó pruebas en runners Windows: el test del instalador y el catálogo ya pasaron; la descarga real del motor se verifica únicamente después de un CI de `main` completamente verde.
 
 ## Arquitectura
 
