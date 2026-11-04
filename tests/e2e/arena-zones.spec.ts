@@ -58,12 +58,23 @@ test('el orden visual CSS y el DOM espejan ambos asientos en Arena', async ({ pa
       return {
         creaturesTop: creatures.getBoundingClientRect().top,
         middleTop: middle.getBoundingClientRect().top,
+        creaturesLeft: creatures.getBoundingClientRect().left,
+        middleRight: middle.getBoundingClientRect().right,
+        display: getComputedStyle(element).display,
         creaturesOrder: getComputedStyle(creatures).order
       };
     });
     expect(locations.creaturesOrder).toBe('0');
-    if (side === 'player') expect(locations.creaturesTop).toBeLessThan(locations.middleTop);
-    else expect(locations.middleTop).toBeLessThan(locations.creaturesTop);
+    if (locations.display === 'grid') {
+      // At short desktop heights, both seats use the same two-lane stage.
+      // DOM order is still mirrored, but lands and creatures are alongside.
+      expect(Math.abs(locations.creaturesTop - locations.middleTop)).toBeLessThanOrEqual(8);
+      expect(locations.middleRight).toBeLessThanOrEqual(locations.creaturesLeft + 1);
+    } else {
+      // With normal height (or on mobile), keep the vertical Phase mirror.
+      if (side === 'player') expect(locations.creaturesTop).toBeLessThan(locations.middleTop);
+      else expect(locations.middleTop).toBeLessThan(locations.creaturesTop);
+    }
   }
 });
 
