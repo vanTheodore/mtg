@@ -292,7 +292,7 @@
  * the original center-line HUD returns automatically (no position:fixed,
  * hidden legal actions or copied/secondary game logic).
  */
-@media (min-width: 1100px) and (max-height: 1000px) {
+@media (min-width: 1280px) and (max-height: 1000px) {
   .app[data-board-style="arena"] .layout {
     grid-template-columns: minmax(0, 1fr) minmax(300px, .4fr);
     column-gap: .55rem;
