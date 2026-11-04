@@ -73,7 +73,7 @@
 
 <svelte:head><title>Mesa · pruebas de visibilidad</title></svelte:head>
 
-<div class="stress" style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2))" data-testid="stress-page">
+<div class="stress app" data-board-style={session.boardStyle} style="--stress-card-w: {cardWidth}px; --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-testid="stress-page">
   <header>
     <h1>Pruebas de visibilidad</h1>
     <p>Fixture de interfaz determinista. No ejecuta reglas; la partida real está en <a href="/">/</a>.</p>
@@ -98,7 +98,14 @@
 </div>
 
 <style>
-  .stress { grid-template-columns: minmax(0, 1fr); max-width: 1600px; margin: 0 auto; padding: .8rem; display: grid; gap: .8rem; }
+  .stress { --card-w: min(var(--stress-card-w), calc((100vw - 6rem) / 2)); grid-template-columns: minmax(0, 1fr); max-width: 1600px; margin: 0 auto; padding: .8rem; display: grid; gap: .8rem; }
+  /* Match Board.svelte's Arena short-viewport card cap: /stress is a
+   * presentation-only comparison fixture, never the rules authority. */
+  @media (min-width: 1100px) and (max-height: 1000px) {
+    .stress[data-board-style="arena"] {
+      --card-w: min(var(--arena-base-card-w), 15dvh, calc((100vw - 6rem) / 2));
+    }
+  }
   .stress > * { min-width: 0; }
   header { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; }
   h1 { font-size: 1.2rem; margin: 0; }

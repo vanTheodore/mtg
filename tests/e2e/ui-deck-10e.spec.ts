@@ -225,6 +225,10 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   });
   expect(await driver.app.getAttribute('data-board-style')).toBe('arena');
   expect(viewport.horizontalOverflow).toBeLessThanOrEqual(1);
+  // PR #25 measured 1273px of vertical debt during this actual blocking
+  // decision. The Arena-only compact lanes must improve real play, not only
+  // the synthetic scene; keep the Phase action and its legal targets intact.
+  expect(viewport.verticalOverflow).toBeLessThan(1273);
   expect(viewport.elements.attacker).not.toBeNull();
   expect(viewport.elements.blocker).not.toBeNull();
   expect(viewport.elements.confirmation).not.toBeNull();

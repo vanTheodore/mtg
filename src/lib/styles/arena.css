@@ -219,3 +219,62 @@
     max-width: 100%;
   }
 }
+
+
+/*
+ * Arena 0.8 — short desktop stage, based on 1440×900 Chromium evidence.
+ *
+ * The previous 6-land + 4-creature scene consumed 582px *per seat* while
+ * the actual Phase blocking scene grew to 2173px overall (900px viewport).
+ * When a seat has only creatures and a single back lane (lands OR support),
+ * put those two zones side by side. This is PRESENTATION only: card IDs,
+ * click targets, DOM order, hidden-card rules and Phase actions do not change.
+ *
+ * A complex board with both lands and support retains the original stacked
+ * rows instead of squeezing three zones into too-narrow columns.
+ */
+@media (min-width: 1100px) and (max-height: 1000px) {
+  .app[data-board-style="arena"] .battlefield[data-side]:has(> .middle-permanents.single-lane):has(> .row[data-zone="creatures"]) {
+    display: grid;
+    grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+    grid-template-rows: auto auto;
+    column-gap: .55rem;
+    row-gap: .2rem;
+    align-items: start;
+  }
+  .app[data-board-style="arena"] .battlefield[data-side]:has(> .middle-permanents.single-lane):has(> .row[data-zone="creatures"]) > h2 {
+    grid-column: 1 / -1;
+  }
+  .app[data-board-style="arena"] .battlefield[data-side]:has(> .middle-permanents.single-lane):has(> .row[data-zone="creatures"]) > .middle-permanents {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .app[data-board-style="arena"] .battlefield[data-side]:has(> .middle-permanents.single-lane):has(> .row[data-zone="creatures"]) > .row[data-zone="creatures"] {
+    grid-column: 2;
+    grid-row: 2;
+    min-height: 0;
+  }
+  .app[data-board-style="arena"] .battlefield[data-side] .row[data-zone="lands"] {
+    --card-w: min(var(--arena-base-card-w, 124px), 9.5dvh);
+  }
+  .app[data-board-style="arena"] .battlefield[data-side] .row[data-zone="lands"],
+  .app[data-board-style="arena"] .battlefield[data-side] .row[data-zone="creatures"] {
+    justify-content: safe center;
+    align-content: start;
+    gap: .35rem;
+  }
+  .app[data-board-style="arena"] .layout {
+    row-gap: .32rem;
+  }
+  .app[data-board-style="arena"] .layout .rival-hand {
+    padding-block: 0;
+  }
+  .app[data-board-style="arena"] .layout .mini-back {
+    width: 23px;
+    height: 32px;
+  }
+  .app[data-board-style="arena"] .hand-zone .hand-scroll.fan {
+    --hand-card-w: min(var(--hand-natural-w), var(--arena-base-card-w, 124px), 12dvh);
+    padding-block: .85rem 1rem;
+  }
+}
