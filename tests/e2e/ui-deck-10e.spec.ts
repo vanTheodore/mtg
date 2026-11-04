@@ -214,6 +214,7 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   await expect(confirmBlock).toBeEnabled();
   const viewport = await captureViewportEvidence(page, 'arena-live-block-1440x900', {
     layout: 'main.layout',
+    hud: 'main.layout > .middle',
     opponentField: 'section.battlefield[data-side="opponent"]',
     playerField: 'section.battlefield[data-side="player"]',
     attacker: `[data-card-id="${attackerId}"][data-combat-role="Atacando"]`,
@@ -228,15 +229,26 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   // PR #25 measured 1273px of vertical debt during this actual blocking
   // decision. The Arena-only compact lanes must improve real play, not only
   // the synthetic scene; keep the Phase action and its legal targets intact.
-  expect(viewport.verticalOverflow).toBeLessThan(1273);
+  // The previous PR #26 measured 742px of vertical overflow at this exact
+  // real-engine blocking prompt. The sidecar must beat that baseline.
+  expect(viewport.verticalOverflow).toBeLessThan(742);
+  expect(viewport.elements.hud).not.toBeNull();
+  expect(viewport.elements.opponentField).not.toBeNull();
+  expect(viewport.elements.playerField).not.toBeNull();
+  expect(viewport.elements.hud!.left).toBeGreaterThanOrEqual(viewport.elements.opponentField!.right);
+  expect(viewport.elements.hud!.left).toBeGreaterThanOrEqual(viewport.elements.playerField!.right);
   expect(viewport.elements.attacker).not.toBeNull();
   expect(viewport.elements.blocker).not.toBeNull();
   expect(viewport.elements.confirmation).not.toBeNull();
 
   // 3) confirm: Phase validates the assignment and answers with a new revision.
   const before = await driver.revision();
-  await driver.press(driver.decision.locator('button').filter({ hasText: /^Confirmar bloqueos/ }).first());
-  expect(await driver.revision()).toBeGreaterThan(before);
+  // The short-desktop rail scrolls independently when it grows. A keyboard
+  // player must still reach and activate the exact Phase-authored decision.
+  await confirmBlock.focus();
+  await expect(confirmBlock).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => driver.revision(), { timeout: 15_000 }).toBeGreaterThan(before);
 
   // 4) Proof that Phase accepted it: its own event, in the game log.
   await expect(driver.log).toContainText(`${blockerName} bloquea a ${attackerName}`, { timeout: 15_000 });
@@ -248,6 +260,12 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   await expect(blockerAfter).toHaveAttribute('data-combat-role', 'Bloqueando');
   await expect(blockerAfter.locator('.status-strip')).toContainText('Bloqueando');
   await expect(page.locator(`[data-card-id="${attackerId}"][data-combat-role="Atacando"]`)).toHaveCount(1);
+
+  // At tablet width the sidecar is not a second scrollport; decisions return
+  // to the normal board sequence without changing Phase's legal outcome.
+  await page.setViewportSize({ width: 768, height: 900 });
+  await expect(page.locator('main.layout > .middle')).toHaveCSS('position', 'static');
+  await expect(driver.decision).toBeVisible();
   expect(errors).toEqual([]);
 });
 

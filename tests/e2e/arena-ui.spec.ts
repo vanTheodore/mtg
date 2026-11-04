@@ -108,7 +108,9 @@ test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni
   // includes corners and does not measure the intended card CSS width.
   const compactWidth = await first.evaluate((node) => parseFloat(getComputedStyle(node).width));
   const compactHeight = await page.locator('.layout').evaluate((node) => node.getBoundingClientRect().height);
-  expect(compactWidth).toBeGreaterThan(90);
+  // The sidecar leaves a legible 11dvh (99px at 900px) fan, rather
+  // than shrinking the cards to 90px merely to save a few scroll pixels.
+  expect(compactWidth).toBeGreaterThan(95);
   expect(compactWidth).toBeLessThanOrEqual(130);
   const fanBoundsWidth = await first.evaluate((node) => node.getBoundingClientRect().width);
   expect(fanBoundsWidth).toBeGreaterThan(compactWidth);
@@ -158,23 +160,38 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
   await expect(history).toHaveAttribute('data-compact', 'true');
   await expect(history.locator('p.latest[aria-live="polite"]')).toBeVisible();
 
+  // Arena's short-desktop HUD is a *right rail*, not a horizontal strip
+  // separating the two battlefields. Stack/history and the Phase decision
+  // sit vertically inside this one keyboard-scrollable rail.
+  await expect(middle).toHaveCSS('position', 'sticky');
   const desktop = await middle.evaluate((element) => {
-    const left = element.querySelector<HTMLElement>('.center')!.getBoundingClientRect();
-    const right = element.querySelector<HTMLElement>('.decision')!.getBoundingClientRect();
-    return { leftX: left.x, leftWidth: left.width, rightX: right.x, rightWidth: right.width, yDifference: Math.abs(right.y - left.y) };
+    const center = element.querySelector<HTMLElement>('.center')!.getBoundingClientRect();
+    const decision = element.querySelector<HTMLElement>('.decision')!.getBoundingClientRect();
+    const hud = element.getBoundingClientRect();
+    const field = document.querySelector<HTMLElement>('main.layout > .battlefield[data-side="player"]')!.getBoundingClientRect();
+    return {
+      horizontalDifference: Math.abs(decision.left - center.left),
+      verticalGap: decision.top - center.bottom,
+      hudLeft: hud.left,
+      fieldRight: field.right,
+      decisionWidth: decision.width
+    };
   });
-  expect(desktop.rightX).toBeGreaterThan(desktop.leftX + desktop.leftWidth - 3);
-  expect(desktop.rightWidth).toBeGreaterThan(desktop.leftWidth * 1.45);
-  expect(desktop.yDifference).toBeLessThan(4);
+  expect(desktop.hudLeft).toBeGreaterThanOrEqual(desktop.fieldRight);
+  expect(desktop.horizontalDifference).toBeLessThan(4);
+  expect(desktop.verticalGap).toBeGreaterThanOrEqual(-2);
+  expect(desktop.decisionWidth).toBeGreaterThan(250);
 
   await page.getByRole('button', { name: 'Ajustes' }).click();
   const mode = page.getByRole('combobox', { name: 'Estilo del tablero' });
   await mode.selectOption('classic');
   await expect(history).toHaveAttribute('data-compact', 'false');
   await expect(history.locator('.latest')).toHaveCount(0);
+  await expect(middle).toHaveCSS('position', 'static');
   await mode.selectOption('arena');
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(middle).toHaveCSS('position', 'static');
   await expect(history).toHaveAttribute('data-compact', 'true');
   await expect(decision).toBeVisible();
   const mobile = await middle.evaluate((element) => {
