@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   windows-smoke:
-    name: Windows 11 tools and installer contracts
+    name: Hosted Windows runner: CLI and installer contracts
     runs-on: windows-latest
     timeout-minutes: 12
     steps:
