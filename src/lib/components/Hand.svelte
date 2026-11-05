@@ -24,7 +24,19 @@
   } = $props();
   let scroller: HTMLDivElement | undefined = $state();
   let overflow = $state(false);
-  /** Below 1100px the hand is a drawer; above it the fan is laid out inline. */
+  /**
+   * When the fan does not fit, the hand is a drawer. "Does not fit" is a
+   * measured condition, not a taste:
+   *
+   *   ≤640 px wide          the ±147px cards no longer fit a row;
+   *   ≤1099 × ≤899 px tall  the fan is 324px of a 768px screen (measured on
+   *                         /?autostart at 1024×768: 486px of document debt);
+   *   ≤520 px tall          a phone in landscape is a phone.
+   *
+   * 768×1024 (tablet portrait) keeps the inline fan: the fan fits and the
+   * existing 768px coverage measures that layout.
+   */
+  const DRAWER_QUERY = '(max-width: 640px), (max-width: 1099px) and (max-height: 899px), (max-height: 520px)';
   let narrowViewport = $state(false);
   const useFan = $derived(session.boardStyle === 'arena' && objects.length >= 2 && objects.length <= 20);
   const geometry = $derived(wideFan(Math.max(1, objects.length)));
@@ -65,7 +77,7 @@
   });
 
   onMount(() => {
-    const media = matchMedia('(max-width: 640px)');
+    const media = matchMedia(DRAWER_QUERY);
     const sync = () => {
       narrowViewport = media.matches;
       // A drawer that survived a resize into a desktop window would keep the
@@ -278,10 +290,10 @@
   /*
    * Phone hand drawer.
    *
-   * Everything below is scoped to phone widths (≤640px, where the fan stops
-   * fitting a 147px card). Above that the trigger does not exist and the sheet
-   * keeps its inline role, so the tablet and desktop fan, its keyboard order
-   * and every existing E2E are untouched.
+   * Everything below is scoped to the widths and heights where the fan does
+   * not fit (see DRAWER_QUERY). Where it does fit, the trigger does not exist
+   * and the sheet keeps its inline role, so the tablet-and-desktop fan, its
+   * keyboard order and every existing E2E are untouched.
    *
    * The sheet is `position: fixed` with its own scrollport: thirty cards are
    * reachable by swipe and by Tab, which is what the mission asked for
@@ -289,7 +301,7 @@
    */
   .hand-trigger { display: none; }
 
-  @media (max-width: 640px) {
+  @media (max-width: 640px), (max-width: 1099px) and (max-height: 899px), (max-height: 520px) {
     .hand-trigger {
       display: flex;
       align-items: center;
@@ -381,7 +393,9 @@
     .hand-zone.sheet-open .zone-head { padding-left: 2.6rem; }
   }
 
-  @media (max-width: 640px) and (prefers-reduced-motion: no-preference) {
+  @media (max-width: 640px) and (prefers-reduced-motion: no-preference),
+    (max-width: 1099px) and (max-height: 899px) and (prefers-reduced-motion: no-preference),
+    (max-height: 520px) and (prefers-reduced-motion: no-preference) {
     .hand-zone.sheet-open { animation: sheet-in .18s ease-out; }
     @keyframes sheet-in { from { transform: translateY(14%); opacity: .6; } to { transform: none; opacity: 1; } }
   }

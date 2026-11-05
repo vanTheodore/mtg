@@ -11,7 +11,8 @@ import { captureViewportEvidence } from './support/viewport-evidence.ts';
  * promete:
  *
  *   320 / 375 / 390   teléfono (táctil real: `hasTouch`, `isMobile`)
- *   768               tableta (táctil)
+ *   844               teléfono en horizontal (táctil)
+ *   768 / 1024        tableta vertical y horizontal (táctil)
  *   1440              escritorio (ratón y teclado)
  *
  * En cada ancho se exige, en este orden:
@@ -43,6 +44,12 @@ const PROFILES: Profile[] = [
   { width: 375, height: 812, label: 'teléfono 375×812', touch: true },
   { width: 390, height: 844, label: 'teléfono 390×844', touch: true },
   { width: 768, height: 1024, label: 'tableta 768×1024', touch: true },
+  // A phone on its side is a phone: this profile exercises the landscape HUD
+  // (Phase decision first, board underneath) with a coarse pointer.
+  { width: 844, height: 390, label: 'teléfono horizontal 844×390', touch: true },
+  // Tablet/laptop band: the decision shares a row with the stack and the
+  // hand is a drawer because the fan does not fit 768px of height.
+  { width: 1024, height: 768, label: 'tableta horizontal 1024×768', touch: true },
   { width: 1440, height: 900, label: 'escritorio 1440×900', touch: false }
 ];
 

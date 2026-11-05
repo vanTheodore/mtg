@@ -347,17 +347,17 @@
     .card-tools .retry::before { content: none; }
   }
   /*
-   * Phones: the labelled in-flow strip costs ~40px on *every* card row and a
-   * 390px wide battlefield measured 804px tall with it, which pushed the
-   * opponent's side and the player's own permanents off screen. On a phone the
-   * tools stay always visible and hit-testable (no hover is required — the
-   * buttons take the pointer unconditionally), but they sit on the card's top
-   * edge as 32×32 glyphs, exactly like the desktop toolbar, so a row is only
-   * as tall as its card. The hand is deliberately excluded: its cards live in
-   * the drawer's horizontal strip, where vertical space is free and the wider
-   * labelled target is kept.
+   * Touch without hover: the labelled in-flow strip costs ~40px on *every*
+   * card row. Measured on /stress (6 lands + 4 creatures) at 1024×768 with a
+   * touch pointer: fields 430 → 715px, i.e. +285px of document for two seats.
+   * On a touch screen the tools stay always visible and hit-testable (no hover
+   * is required — the buttons take the pointer unconditionally), but they sit
+   * on the card's top edge as 32×32 glyphs, exactly like the desktop toolbar,
+   * so a row is only as tall as its card. The hand is deliberately excluded:
+   * its cards live in the drawer's horizontal strip, where vertical space is
+   * free and the wider labelled target is kept.
    */
-  @media (max-width: 640px) and (hover: none) {
+  @media (hover: none) and (max-width: 1099px) {
     :global(.battlefield) .card-tools {
       position: absolute;
       inset-block-start: .1rem;
