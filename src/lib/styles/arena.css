@@ -993,3 +993,57 @@
     border-radius: 5px;
   }
 }
+
+
+/*
+ * Arena 1.0 — el 320, donde el cromo se envolvía.
+ *
+ * Medido en `/?autostart` a 320×800 contra el mismo estado a 390×844, el
+ * documento debía 161 px y 76 de ellos no eran ni cartas ni decisiones: eran
+ * cuatro textos que se partían en dos líneas porque a 320 no caben.
+ *
+ *   320×800                         390×844     causa
+ *   barra superior      93 px       67 px      los cinco controles no cabían en 283 px (faltaban 3,6)
+ *   recuento del rival  34 px       15 px      «Mano 7 … Maná 0» no cabía en 268 px
+ *   título del campo    36 px       18 px      «Tu campo de batalla · Jugador 1 0» no cabía en 266 px
+ *   métricas            29 px       16 px      «Rendimiento del motor · reglas … » se partía
+ *
+ * Nada se esconde ni se recorta: sólo se aprieta lo que ya estaba en una línea
+ * a 390. El resumen de métricas es la única excepción y es diagnóstico, no
+ * juego: se queda en una línea con puntos suspensivos y el `details` sigue
+ * mostrando todos los números al abrirlo.
+ */
+@media (max-width: 380px) {
+  .app.app[data-board-style="arena"] > .topbar > .top-actions {
+    gap: .1rem;
+  }
+  .app.app[data-board-style="arena"] .top-actions button {
+    min-height: 28px;
+    padding: .1rem .38rem;
+    font-size: .68rem;
+  }
+  .app.app[data-board-style="arena"] .top-actions .auto-pass.chip {
+    padding: .12rem .5rem .12rem .35rem;
+    gap: .25rem;
+    font-size: .68rem;
+  }
+  .app.app[data-board-style="arena"] .player-bar .zone-counts {
+    font-size: .6rem;
+    gap: .1rem .3rem;
+  }
+  /* El título va en versalitas con tracking; a 320 eso basta para partir
+     «TU CAMPO DE BATALLA · JUGADOR 1» en dos líneas (274 px en 266). Se
+     aprieta el tracking y dos centésimas de tamaño, no se cambia el texto:
+     sigue siendo la misma etiqueta en mayúsculas. */
+  .app.app[data-board-style="arena"] .layout > .battlefield > h2,
+  .app.app[data-board-style="arena"] .board > .battlefield > h2 {
+    font-size: .74rem;
+    letter-spacing: .02em;
+    margin-bottom: .3rem;
+  }
+  .app.app[data-board-style="arena"] .metrics[data-collapsible="true"] > details > summary {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

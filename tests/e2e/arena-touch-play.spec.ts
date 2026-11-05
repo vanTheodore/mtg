@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
  * El teléfono juega: tocar una carta del cajón tiene que llevar a la acción.
@@ -25,6 +25,23 @@ import { expect, test, type Page } from '@playwright/test';
  *
  * Se corre en los dos anchos donde existe el cajón: 390×844 y 320×800.
  */
+
+/**
+ * A real finger, no autoscroll: the coordinates are taken once, the viewport is
+ * checked first, and the tap lands wherever those pixels are. Playwright's
+ * `locator.tap()` scrolls the element into view on its own, so it can never
+ * prove that a player holding the phone can reach a control without scrolling.
+ */
+async function fingerTap(page: Page, selector: Locator) {
+  const box = (await selector.boundingBox()) ?? { x: 0, y: 0, width: 0, height: 0 };
+  const viewport = page.viewportSize()!;
+  expect(box.width, 'el control no tiene caja').toBeGreaterThan(0);
+  expect(box.y, 'el control está por encima del viewport').toBeGreaterThanOrEqual(-1);
+  expect(box.y + box.height, 'el control cae por debajo del viewport sin desplazar').toBeLessThanOrEqual(
+    viewport.height + 1
+  );
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+}
 
 async function revision(page: Page): Promise<number> {
   return Number(await page.locator('.app').getAttribute('data-actions-applied'));
@@ -76,12 +93,24 @@ async function playFromHand(page: Page) {
     field: await page.locator('section.battlefield[data-side="player"] [data-card-id]').count()
   };
 
-  // 1) Open the drawer and tap the card.
+  // 1) Open the drawer and tap the card — with the finger, at scrollY 0.
+  expect(await page.evaluate(() => scrollY), 'la partida arranca desplazada').toBe(0);
   const trigger = page.locator('.hand-trigger');
-  await trigger.tap();
+  const triggerBox = (await trigger.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  expect(triggerBox.y + triggerBox.height, 'la mano cae fuera de la pantalla al empezar').toBeLessThanOrEqual(
+    viewport.height + 1
+  );
+  const triggerHit = await page.evaluate(
+    ([x, y]) => document.elementFromPoint(x, y)?.closest('.hand-trigger') !== null,
+    [triggerBox.x + triggerBox.width / 2, triggerBox.y + triggerBox.height / 2]
+  );
+  expect(triggerHit, 'otra capa tapa el botón de la mano').toBe(true);
+  await fingerTap(page, trigger);
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   const playable = page.locator('.hand-card').filter({ hasText: 'Disponible para jugar' }).first();
-  await playable.locator('[data-card-id]').tap();
+  await expect(playable).toBeInViewport();
+  await fingerTap(page, playable.locator('[data-card-id]'));
 
   // 2) The sheet closes and the action it unlocked is the pointer target.
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
@@ -115,7 +144,9 @@ async function playFromHand(page: Page) {
 
   // 3) Tap the action: Phase applies it, the card leaves the hand and lands
   //    on the battlefield.
-  await action.tap();
+  await page.evaluate(() => scrollTo(0, 0));
+  expect(hit.insideViewport).toBe(true);
+  await fingerTap(page, action);
   await expect.poll(() => revision(page), { timeout: 20_000 }).toBeGreaterThan(before.revision);
   await expect.poll(() => page.locator('.hand-zone [data-card-id]').count()).toBe(before.hand - 1);
   await expect

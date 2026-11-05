@@ -351,6 +351,24 @@
       font-size: .85rem;
       font-weight: 650;
       text-align: left;
+      /*
+       * El pulgar no hace scroll.
+       *
+       * Medido a 320×800 con el motor real: el documento mide 961 px y el
+       * botón que abre la mano caía en y=879, fuera de un viewport de 800 —
+       * para jugar una carta había que desplazar la página primero, y el
+       * `tap()` de las pruebas sólo funcionaba porque Playwright desplaza
+       * solo. Pegado al borde inferior, la mano queda siempre a un toque.
+       *
+       * Es la misma fila que ya estaba en el flujo: no se añade ni se quita
+       * documento, y por debajo de la hoja abierta (z-index 60) para no
+       * taparla. `env(safe-area-inset-bottom)` lo separa del gesto del
+       * sistema en los teléfonos con barra inferior.
+       */
+      position: sticky;
+      bottom: env(safe-area-inset-bottom, 0px);
+      z-index: 40;
+      box-shadow: 0 -10px 22px rgb(0 0 0 / 22%);
     }
     .hand-trigger-count {
       display: inline-grid;
