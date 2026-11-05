@@ -46,4 +46,27 @@
   .history-entries summary { cursor: pointer; color: var(--ink-muted); padding: .25rem 0; }
   .history-entries summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .history-entries[open] ol { max-height: min(30vh, 260px); overflow-y: auto; overscroll-behavior: contain; padding-right: .35rem; }
+  /*
+   * Teléfono: el registro es una línea, no una tarjeta.
+   *
+   * Medido a 390×844 con el motor real, el bloque "Registro de la partida"
+   * ocupaba 65 px de un documento que debía 163: dos líneas de texto más el
+   * resumen del desplegable. Con la cabecera y la última resolución en la
+   * misma fila sigue estando todo (recuento, última resolución anunciada por
+   * `aria-live` y el acceso a las doce anteriores) en 44 px.
+   */
+  @media (max-width: 640px) {
+    .history {
+      padding: .3rem .5rem;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      column-gap: .45rem;
+      align-items: baseline;
+    }
+    h2 { margin: 0; font-size: .78rem; }
+    .count { font-size: .7rem; }
+    .latest { margin: 0; font-size: .76rem; line-clamp: 1; -webkit-line-clamp: 1; }
+    .history-entries { grid-column: 1 / -1; margin-top: .1rem; font-size: .72rem; }
+    .history-entries summary { padding: .05rem 0; }
+  }
 </style>

@@ -30,12 +30,12 @@ const MATRIX = [
   { width: 1440, height: 900, ceiling: 8 },
   { width: 1280, height: 800, ceiling: 8 },
   { width: 1180, height: 820, ceiling: 40 },
-  { width: 1024, height: 768, ceiling: 420 },
-  { width: 844, height: 390, ceiling: 780 },
-  { width: 740, height: 360, ceiling: 1120 },
-  { width: 768, height: 1024, ceiling: 700 },
-  { width: 390, height: 844, ceiling: 850 },
-  { width: 320, height: 800, ceiling: 1300 }
+  { width: 1024, height: 768, ceiling: 360 },
+  { width: 844, height: 390, ceiling: 720 },
+  { width: 740, height: 360, ceiling: 1050 },
+  { width: 768, height: 1024, ceiling: 660 },
+  { width: 390, height: 844, ceiling: 740 },
+  { width: 320, height: 800, ceiling: 1200 }
 ] as const;
 
 async function settle(page: Page) {
@@ -96,7 +96,9 @@ test('matriz de tamaños: el fixture espejo no desborda ni retrocede', async ({ 
       const box = (await trigger.boundingBox())!;
       // A drawer handle is a touch target, not a caption.
       expect(box.height, `el botón de la mano es pequeño a ${where}`).toBeGreaterThanOrEqual(40);
-      expect(sample.handZoneHeight, `la mano cerrada reserva alto a ${where}`).toBeLessThan(110);
+      // Closed, the drawer is a floating affordance: it must not own a row of
+      // the document (measured: 3px of border, not 24px of empty card area).
+      expect(sample.handZoneHeight, `la mano cerrada reserva alto a ${where}`).toBeLessThan(20);
     } else {
       expect(sample.handCards, `la mano no está montada a ${where}`).toBeGreaterThan(0);
     }

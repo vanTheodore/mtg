@@ -16,8 +16,8 @@ nadie había mirado:
 | 768×1024 | **61 px** | **0 px** |
 | 844×390 (teléfono girado) | **880 px** | 515 px |
 | 740×360 (teléfono girado) | **901 px** | 537 px |
-| 390×844 | 305 px | **163 px** |
-| 320×800 | 450 px | **322 px** |
+| 390×844 | 305 px | **50 px** |
+| 320×800 | 450 px | **209 px** |
 
 ## Los dos agujeros reales
 
@@ -58,6 +58,27 @@ a **57 px** cada uno (390×844: 1149 → **1007 px**; 320×800: 1250 → **1122 
   etiqueta en flujo: medido, la tira costaba ~285 px de documento en un tablero
   de dos asientos.
 
+## Segunda pasada: el teléfono, sin cromo de más
+
+Con la tableta y el teléfono girado ya a cero, en 390×844 quedaban 163 px de
+deuda que no eran ni cartas ni decisiones: cuatro huecos de 12,8 px del shell,
+la pista de turnos con su leyenda y un registro de dos líneas, más 24 px de una
+zona de mano cerrada que no mostraba nada.
+
+| Elemento (390×844, motor real) | Antes | Ahora |
+| --- | --- | --- |
+| Huecos del shell (4 × 12,8 px) | 51 px | **19 px** |
+| Registro de la partida | 65 px | **36 px** |
+| Pista de turnos | 63 px | **49 px** |
+| Zona de mano cerrada | 24 px | **0 px** (flota, fuera del flujo) |
+| **Documento** | 1007 px | **894 px** |
+| **Deuda vertical** | 163 px | **50 px** |
+
+A 320×800 el mismo recorte deja el documento en 1009 px (deuda 209, antes 322).
+La mano cerrada sigue montada con su lista de cartas en el árbol de
+accesibilidad —sólo deja de ocupar una fila—, y el registro sigue anunciando la
+última resolución con `aria-live` mientras las doce anteriores quedan a un toque.
+
 ## Lo que no se hizo
 
 - **No se recorta ninguna carta por debajo de lo legible.** El piso sigue siendo
@@ -97,8 +118,9 @@ Evidencia cruda de las mediciones: `MESA_VIEWPORT_MATRIX` y
 
 ## Pendiente
 
-- 320×800 sigue debiendo 322 px en la partida real: es el ancho donde el piso de
-  legibilidad de 100 px y una barra de 93 px dejan menos margen. Un "modo
+- 320×800 sigue debiendo 209 px en la partida real: es el ancho donde el piso de
+  legibilidad de 100 px, una barra de 93 px (dos filas porque los cinco controles
+  no caben en 296) y una decisión de 329 px dejan menos margen. Un "modo
   miniatura" (tablero a escala con panel de detalle) es la vía honesta.
 - El registro de la partida (101 px) sigue siempre visible en el teléfono; un
   plegado por defecto con contador sería la siguiente ganancia, pero toca un

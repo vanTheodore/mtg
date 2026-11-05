@@ -959,3 +959,37 @@
   .app.app[data-board-style="arena"] .player-bar .zone-counts { font-size: .64rem; gap: .3rem .45rem; }
   .app.app[data-board-style="arena"] .layout > .middle > .turn-track { padding-block: .2rem; }
 }
+
+
+/*
+ * Arena 1.0 — el teléfono, sin cromo de más.
+ *
+ * Medido en `/?autostart` a 390×844: el documento debía 163 px y de ellos 51
+ * eran los cuatro huecos de 12,8 px del shell y 63 la pista de turnos con su
+ * leyenda. En una pantalla de 844 px eso es una décima parte de la pantalla
+ * gastada en aire. No se quita ninguna información: la pista sigue mostrando
+ * las cinco fases, la actual y el turno.
+ */
+@media (max-width: 640px) {
+  .app.app[data-board-style="arena"] {
+    gap: .3rem;
+    padding-block: .3rem;
+  }
+  .app.app[data-board-style="arena"] .layout > .middle > .turn-track {
+    gap: .15rem;
+    padding-block: .1rem;
+  }
+  .app.app[data-board-style="arena"] .turn-track .turn-caption {
+    font-size: .7rem;
+  }
+  .app.app[data-board-style="arena"] .turn-track .segments,
+  .app.app[data-board-style="arena"] .turn-track ol {
+    font-size: .62rem;
+    gap: .15rem;
+  }
+  .app.app[data-board-style="arena"] .turn-track .segments li,
+  .app.app[data-board-style="arena"] .turn-track ol li {
+    padding: .1rem .25rem;
+    border-radius: 5px;
+  }
+}

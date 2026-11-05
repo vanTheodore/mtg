@@ -346,8 +346,31 @@
       white-space: nowrap;
       pointer-events: none;
     }
-    .hand-zone:not(.sheet-open) { position: relative; padding-block: .25rem; }
-    .hand-zone:not(.sheet-open) .zone-head { margin-bottom: 0; }
+    /* Cerrada, la mano no ocupa ninguna fila: en un teléfono el borde inferior
+       es el pulgar del jugador, no una sección del documento. La zona sigue
+       montada (con su scrollport de 1 px recortado) para no perder ni el
+       recuento ni las cartas del árbol de accesibilidad; medido a 390×844
+       eran 24 px de documento que no mostraban nada. */
+    .hand-zone:not(.sheet-open) {
+      position: fixed;
+      inset: auto 0 0 0;
+      height: 0;
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    .hand-zone:not(.sheet-open) .zone-head {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      margin: 0;
+    }
 
     .hand-zone.sheet-open {
       position: fixed;
