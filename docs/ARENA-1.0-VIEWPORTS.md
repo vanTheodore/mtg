@@ -1,7 +1,7 @@
 # Arena 1.0 — el tablero donde de verdad se juega
 
 **Fecha:** 4 de noviembre de 2026 · **Misión:** issue #42, continuación de M3
-**Base:** `main` @ `989493b` (M0–M3 mergeados)
+**Base:** `main` @ `95f2fdc` (M0–M5 mergeados)
 
 M1 cerró el escritorio de 1440×900 y M2 el teléfono vertical. Al medir con el
 motor real (`/?autostart`, Chromium, Phase del pin) quedaban dos agujeros que
@@ -79,6 +79,41 @@ La mano cerrada sigue montada con su lista de cartas en el árbol de
 accesibilidad —sólo deja de ocupar una fila—, y el registro sigue anunciando la
 última resolución con `aria-live` mientras las doce anteriores quedan a un toque.
 
+## Tercera pasada: el teléfono que juega, no sólo se ve
+
+El cajón ya no ocupaba una fila y el documento cabía en 894 px. Pero caber no es
+jugar. Medido con puntero táctil real (`hasTouch`, 390×844) sobre `/?autostart`
+con el motor de Phase, en la ventana de prioridad:
+
+| Paso | Antes | Ahora |
+| --- | --- | --- |
+| Tocar una carta jugable del cajón | el panel ofrece «Jugar tierra: Plains» (caja 306×39 px en y=403) | igual |
+| `elementFromPoint` en el centro de ese botón | `DIV.app` | `BUTTON` |
+| `tap()` en el botón | agota el tiempo; nada ocurre | Phase aplica la acción |
+| `data-actions-applied` | 4 → 4 | 4 → **5** |
+| Mano / campo | 7 cartas / 0 permanentes | 6 / **1** |
+| Foco tras elegir la carta | donde quedó el toque | el botón que la carta desbloquea |
+
+Causa medida, no supuesta: la selección sí abría la acción en el panel, pero el
+cajón de 78dvh seguía abierto por encima y el tablero seguía `inert`
+(`Board.svelte`: `inert={needsHandoff || session.handDrawerOpen}`). El botón
+existía, se veía a medias y no era alcanzable ni con el dedo ni con el foco:
+**desde la mano del teléfono no se podía empezar una partida**.
+
+Arreglo en `Hand.svelte` (`select`): si el cajón está abierto y la selección
+desbloquea un `CastSpell` o un `PlayLand`, el cajón se cierra, la acción entra en
+el viewport (`scrollIntoView({ block: 'nearest' })`) y toma el foco. Las
+selecciones que deben mantener la mano abierta —descartar hasta siete, elegir
+objetivos— no llevan esas acciones y no se tocan.
+
+Regresión: `tests/e2e/arena-touch-play.spec.ts` (contexto táctil, 390×844, motor
+real de Phase) exige que el cajón se cierre solo, que el botón de la acción sea
+el objetivo real del puntero, que tocarlo mueva la partida (acción aplicada,
+carta fuera de la mano y en el campo), que después se pueda **pasar prioridad**
+con el mismo dedo y que el teclado recorra el mismo camino con `Enter`. Con el
+código anterior el test falla en la primera aserción: `aria-expanded` sigue en
+`true` y la hoja nunca se cierra.
+
 ## Lo que no se hizo
 
 - **No se recorta ninguna carta por debajo de lo legible.** El piso sigue siendo
@@ -103,6 +138,9 @@ accesibilidad —sólo deja de ocupar una fila—, y el registro sigue anunciand
     cierra solo al crecer a 1280×800 sin dejar el tablero `inert`.
 - `arena-quality-gate.spec.ts` pasa de cinco a **siete perfiles**: se suman
   844×390 y 1024×768, con axe-core limpio en ambos modos nuevos.
+- `arena-touch-play.spec.ts` (nuevo, M6): la partida real jugada con el dedo a
+  390×844 — elegir carta, jugarla, pasar prioridad — sin que el cajón tape la
+  decisión. Falla con el código anterior.
 
 ## Verificación
 
@@ -111,7 +149,7 @@ accesibilidad —sólo deja de ocupar una fila—, y el registro sigue anunciand
 | `bun run check` | 0 errores (2 avisos preexistentes) |
 | `bun test src/lib` | 251 pasadas |
 | `bun run build` | correcto |
-| `bun --bun playwright test` | **66 pasadas, 1 saltada, 0 rojas** |
+| `bun --bun playwright test` | **67 pasadas, 1 saltada, 0 rojas** |
 
 Evidencia cruda de las mediciones: `MESA_VIEWPORT_MATRIX` y
 `MESA_VIEWPORT_MATRIX_REAL` en la salida del test, con JSON adjunto por corrida.
@@ -121,7 +159,10 @@ Evidencia cruda de las mediciones: `MESA_VIEWPORT_MATRIX` y
 - 320×800 sigue debiendo 209 px en la partida real: es el ancho donde el piso de
   legibilidad de 100 px, una barra de 93 px (dos filas porque los cinco controles
   no caben en 296) y una decisión de 329 px dejan menos margen. Un "modo
-  miniatura" (tablero a escala con panel de detalle) es la vía honesta.
+  miniatura" (tablero a escala con panel de detalle) es la vía honesta. Medido
+  además en M6: a 320×800 el panel de decisión mide 329 px con el `.actions`
+  vacío hasta que se elige una carta (cabecera 101 + prompt 191); ahí el cajón
+  tapa todavía más.
 - El registro de la partida (101 px) sigue siempre visible en el teléfono; un
   plegado por defecto con contador sería la siguiente ganancia, pero toca un
   texto que hoy leen las pruebas de partida real y merece su propio PR.
