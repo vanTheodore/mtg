@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import BoardCard from './BoardCard.svelte';
   import { wideFan } from '#lib/ui/wideFan.ts';
   import { session } from '#lib/game/session.svelte.ts';
@@ -137,6 +137,41 @@
       close();
     }
   }
+
+  /**
+   * Selecting a card in the phone drawer has to reveal the action it unlocks.
+   *
+   * Measured on /?autostart at 390×844 with a real touch pointer: tapping a
+   * hand card made the panel offer "Jugar tierra: Plains", but the sheet
+   * (78dvh) covered the panel — `elementFromPoint` at the button's centre
+   * returned the app root and the tap timed out. A phone player could not play
+   * a card from the hand at all.
+   *
+   * So: when the sheet is open and the selection unlocks a cast/land action,
+   * the sheet closes, the action is scrolled into view and takes focus. Prompts
+   * that keep the hand open on purpose (choosing discard cards, targets) are
+   * not touched — those selections do not carry a CastSpell/PlayLand action.
+   */
+  function select(id: number) {
+    if (onselect) {
+      onselect(id);
+      return;
+    }
+    session.selectObject(id);
+    if (!session.handDrawerOpen) return;
+    const actions = actionsForObject(session.snapshot?.legal.by_object ?? {}, id);
+    if (!actions.some((action) => action.type === 'CastSpell' || action.type === 'PlayLand')) return;
+    session.setHandDrawer(false);
+    void tick().then(() => {
+      const panel = document.querySelector('section[aria-label="Decisión pendiente"]');
+      const action =
+        panel?.querySelector<HTMLButtonElement>('[aria-label^="Carta seleccionada"] .actions button:not([disabled])') ??
+        panel?.querySelector<HTMLButtonElement>('.actions button:not([disabled])');
+      if (!action) return;
+      action.scrollIntoView({ block: 'nearest' });
+      action.focus();
+    });
+  }
 </script>
 
 <button
@@ -192,7 +227,7 @@
         class="hand-card"
         style={`--fan-angle: ${geometry.rotation(index)}deg; --fan-drop: ${geometry.arc(index)}px`}
       >
-        <BoardCard object={obj} meta={metaFor(obj)} highlight={focusId === obj.id} {onselect} />
+        <BoardCard object={obj} meta={metaFor(obj)} highlight={focusId === obj.id} onselect={select} />
         {#if focusId === obj.id}
           <span class="playable focus">Toca esta carta</span>
         {:else if objectSelectLabel(session.snapshot, obj.id)}
