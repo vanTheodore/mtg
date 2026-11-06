@@ -179,6 +179,59 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
   console.log('MESA_VIEWPORT_MATRIX_REAL ' + JSON.stringify(samples));
   await persist(testInfo, 'real-game-matrix', samples);
 
+  // M9: en la banda intermedia (tablet) el tablero sigue desplazando como
+  // documento, pero el HUD se queda pegado al borde inferior. La prueba tiene
+  // que mirar las dos puntas del recorrido: medido a 1024×768 sin esto, al
+  // llegar al final la decisión se había ido por arriba (y=-38..212) justo
+  // cuando el jugador mira su propio campo, y al principio el botón de la mano
+  // tapaba el último botón del panel (y=745–785 bajo un control de 724–768).
+  for (const [width, height] of [[1024, 768], [768, 1024]] as const) {
+    await page.setViewportSize({ width, height });
+    await settle(page);
+    for (const at of ['inicio', 'final'] as const) {
+      await page.evaluate(
+        (where) => scrollTo(0, where === 'final' ? document.documentElement.scrollHeight : 0),
+        at
+      );
+      await settle(page);
+      const sample = await page.evaluate(() => {
+        const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
+        const box = panel.getBoundingClientRect();
+        const buttons = [...panel.querySelectorAll('button')];
+        const last = buttons.at(-1);
+        const lb = last?.getBoundingClientRect();
+        const hit = lb
+          ? document.elementFromPoint(lb.x + lb.width / 2, Math.min(lb.y + lb.height / 2, innerHeight - 1))
+          : null;
+        const middle = panel.closest<HTMLElement>('.middle');
+        const mr = middle?.getBoundingClientRect();
+        const trigger = document.querySelector<HTMLElement>('.hand-trigger');
+        const shown = trigger && getComputedStyle(trigger).display !== 'none';
+        const tr = shown ? trigger!.getBoundingClientRect() : null;
+        return {
+          top: Math.round(box.top),
+          bottom: Math.round(box.bottom),
+          lastHit: lb ? hit === last || !!last?.contains(hit) : false,
+          position: middle ? getComputedStyle(middle).position : null,
+          middleBottom: mr ? Math.round(mr.bottom) : null,
+          triggerTop: tr ? Math.round(tr.top) : null
+        };
+      });
+      const where = `${width}×${height} (${at} del recorrido)`;
+      expect(sample.top, `la decisión se escapa por arriba a ${where}`).toBeGreaterThanOrEqual(0);
+      expect(sample.bottom, `la decisión se escapa por abajo a ${where}`).toBeLessThanOrEqual(height);
+      expect(sample.lastHit, `el último botón no responde al puntero a ${where}`).toBe(true);
+      expect(sample.position, `el HUD debería quedarse pegado a ${where}`).toBe('sticky');
+      // El HUD pegado no puede comerse el botón de la mano: el jugador necesita
+      // las dos cosas en la misma pantalla.
+      if (sample.triggerTop !== null) {
+        expect(sample.middleBottom!, `el HUD tapa el botón de la mano a ${where}`).toBeLessThanOrEqual(
+          sample.triggerTop
+        );
+      }
+    }
+  }
+
   // The drawer may only exist where the fan does not fit; it must open, take
   // focus, and close itself when the window grows again, or the board would
   // stay `inert` behind a trigger that is no longer rendered.

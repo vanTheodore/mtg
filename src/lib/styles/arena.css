@@ -1221,3 +1221,41 @@
     font-size: .8rem;
   }
 }
+
+/*
+ * arena-band-m9 — en la banda intermedia el HUD no se va de la pantalla.
+ *
+ * Medido con el motor real y cartas en la mesa (5 permanentes del rival, 6
+ * propios), a 1024×768 el documento medía 1354 px: los dos campos de 390 px
+ * (fila de tierras 171 + criaturas 179, porque por debajo de 1100 px no hay
+ * tope de carta por alto como en el rail), el HUD de 270 y la barra de arriba.
+ * El panel de decisión empezaba en y=548 y sus acciones acababan en y=833, con
+ * el botón de la mano (sticky, z=40, y=724–768) encima del último botón: la
+ * acción de Phase no se podía pulsar sin desplazar la página, y la primera
+ * pantalla no la mostraba entera.
+ *
+ * Aquí el tablero sigue desplazando como documento —en una tablet eso es
+ * legítimo— pero el HUD completo (pista de turnos, pila, registro y decisión)
+ * se queda pegado al borde inferior, por encima del botón de la mano. Al final
+ * del recorrido vuelve a su sitio en el flujo, así que no tapa ninguna carta de
+ * forma permanente. El teléfono no entra aquí: ahí el panel es una hoja fija y
+ * desplaza sólo el tablero (M8).
+ */
+@media (min-width: 641px) and (max-width: 1099px) and (min-height: 521px) {
+  .app.app[data-board-style="arena"] > .layout > .middle {
+    /* El HUD va al final del recorrido visual —igual que en el teléfono la
+       decisión va primero— para que al llegar al final del tablero no se haya
+       ido por arriba: medido con el `sticky` puesto y el `order` revertido en
+       caliente, a 1024×768 acababa en y=-38..212 y la decisión se salía de la
+       pantalla justo al mirar el propio campo. */
+    order: 1;
+    position: sticky;
+    /* El botón de la mano mide 44 px y va pegado al borde inferior: 54,4 px
+       dejan 10 px de aire entre el HUD y el control. */
+    bottom: 3.4rem;
+    z-index: 25;
+    /* El tablero pasa por detrás: el HUD necesita fondo propio. */
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    border-radius: 14px;
+  }
+}

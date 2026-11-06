@@ -301,18 +301,109 @@ guía de Phase.
   (`page.touchscreen.tap`) y comprobando que el estado observable del motor
   cambia después del toque.
 
+## Sexta pasada (M9): en la tablet, el HUD no se va de la pantalla
+
+M8 dejó el teléfono con deuda 0. La banda intermedia (641–1099 px) no se había
+medido **en partida**: la matriz real sólo miraba el `MulliganDecision`, y ahí
+cabe todo. Con el motor real y cartas en la mesa —5 permanentes del rival, 6
+propios, medidos a 1024×768— la situación era otra:
+
+| Ventana (motor real, mid-game) | Documento | Deuda | Decisión | Último botón |
+| --- | --- | --- | --- | --- |
+| 1024×768 | 1354 px | 586 px | y=548–798 (**fuera por 30**) | y=745–785, **tapado** |
+| 900×700 | 1352 px | 652 px | y=546–797 (**fuera por 97**) | — |
+| 768×1024 | 1555 px | 531 px | y=538–789 | y=736–775 |
+| 1024×1366 | 1574 px | 208 px | y=548–798 | y=745–785 |
+
+A 1024×768 la primera pantalla no mostraba la decisión entera y el botón de la
+mano (sticky, `z-index: 40`, y=724–768) tapaba el último botón del panel: la
+acción de Phase sólo se podía pulsar desplazando la página, porque el `click()`
+de las pruebas desplaza solo. El desglose de la altura explica por qué no cabe:
+
+| Parte (1024×768, 5+6 permanentes) | Alto |
+| --- | --- |
+| Barra superior | 42 px |
+| Campo del rival (tierras 171 + criaturas 179) | 390 px |
+| HUD (pista 59, pila+registro 131, decisión 251) | 270 px |
+| Tu campo (criaturas 179 + tierras 171) | 390 px |
+| Barras de asiento | 80 px |
+| Botón de la mano + métricas | 60 px |
+
+Los campos miden 390 px porque **por debajo de 1100 px no hay tope de carta por
+alto**: el rail de escritorio limita `--card-w` a `7.5dvh`, la banda intermedia
+no. Con cartas de 118–124 px (legibles) y diez permanentes en la mesa, el
+tablero no cabe en 768 px de alto: o se encogen las cartas o el tablero desplaza.
+
+Lo que se hizo —y lo que se descartó, con su medida—:
+
+- **El HUD se queda pegado al borde inferior.** `main.layout > .middle` pasa a
+  `position: sticky; bottom: 3.4rem` (los 44 px del botón de la mano más 10 de
+  aire) y a `order: 1`, para que al llegar al final del recorrido no se haya ido
+  por arriba. Medido con `bottom` pegado pero sin el `order` (revertido en
+  caliente con una hoja de estilo inyectada, sin tocar el código), a 1024×768 el
+  HUD acababa en y=−38..212: la decisión se iba por arriba, justo al mirar tu
+  propio campo.
+- **Deuda intacta.** La deuda no se toca: 586/531/652/208 px, los mismos
+  números que antes de M9. La compensación obvia —estrechar el HUD con
+  `padding-inline` para que la guía vuelva a caber en menos líneas— se midió y
+  **no mueve un píxel**: con 0,5, 0,8, 1, 1,5 y 2 rem la guía sigue en 122 px y
+  la deuda idéntica (635 en una corrida con la guía más larga, 586 en el estado
+  de referencia), a cambio de 10–50 px menos de ancho para la decisión. Se
+  descartó. No se gana altura aquí; se gana que la decisión no se vaya de la
+  pantalla.
+- **No se tocó el shell del teléfono.** Un `100dvh` con `overflow: hidden` en
+  esta banda rompería el `sticky` (el `.layout` pasaría a ser el scrollport y el
+  HUD no podría viajar), y un panel `fixed` aterrizaría encima del abanico de la
+  mano: medido a 768×1024, el abanico ocupa y=1253–1512 y el documento sigue
+  desplazando. El HUD en flujo es lo único que no puede solaparse con él.
+- **No se encogieron las cartas.** Bajar el tope del rail a esta banda
+  (`7.5dvh`) daría cartas de 54–62 px, por debajo del mínimo legible que ya
+  fijan las pruebas del fixture.
+
+Resultado medido, en las dos puntas del recorrido (y también a 25, 50 y 75 %):
+
+| Ventana | Decisión al inicio | Decisión al final | Último botón | ¿Choca con la mano? |
+| --- | --- | --- | --- | --- |
+| 1024×768 | y=453–704 | y=398–649 | **acierta en las dos** | no |
+| 900×700 | y=385–636 | y=331–582 | **acierta** | no |
+| 768×1024 | y=709–960 | y=440–690 | **acierta** | no |
+| 1024×1366 | y=984–1235 | y=776–1027 | **acierta** | no |
+
+`tests/e2e/arena-viewport-matrix.spec.ts` fija ahora esa propiedad: en la partida
+real, a 1024×768 y 768×1024, desplaza hasta el final y exige que la decisión
+siga entera (`top >= 0`, `bottom <= alto`), que el último botón acierte bajo el
+puntero y que el HUD sea `sticky`. La prueba sólo miraba el principio del
+documento, que es donde el problema no estaba.
+
+`tests/e2e/ui-deck-10e.spec.ts` comprobaba a 768×900 que el HUD volvía a ser
+`position: static` (el contrato de "en la tablet vuelve la línea central"). Con
+M9 esa aserción sólo podía pasar si el arreglo no existía, así que se sustituye
+por las propiedades que de verdad importan, todas medidas en la misma corrida:
+**una sola columna** (no el rail de escritorio), el HUD **tan ancho como el
+campo** (≥95 %), `position: sticky` y `top: auto` con `bottom` positivo. Es decir:
+no es el rail, sigue en el flujo de la línea central y además se queda al pie.
+
 ## Pendiente
 
-- **1024×768 (327 px) y 768×1024 (639 px) siguen debiendo altura** en el
-  fixture espejo con los campos llenos: son tablet y portátil chico, con
-  `main.layout` desplazando pero sin el alto fijo del teléfono. Ahí sí hay
-  densidad que ganar (los campos miden 430 y 592 px) y el siguiente paso medido
-  es aplicar el criterio de M8 por ancho, no por alto: regiones que desplazan en
-  vez de una página que crece.
-- El registro de la partida (101 px) sigue siempre visible en el teléfono; un
-  plegado por defecto con contador sería la siguiente ganancia, pero toca un
-  texto que hoy leen las pruebas de partida real y merece su propio PR.
-- Las pruebas de `arena-touch-play` y la matriz real son sensibles al estado: la
-  mano y la decisión cambian de tamaño según el turno, así que las cifras de este
-  documento son de una corrida concreta y se vuelven a imprimir con
-  `MESA_VIEWPORT_MATRIX_REAL` en cada ejecución.
+- **En la tablet el documento sigue desplazando** (1024×768: 586 px; 900×700:
+  652; 768×1024: 531; 1024×1366: 208). Es deliberado: con cartas legibles y diez
+  permanentes no cabe, y el HUD pegado garantiza que la decisión no se pierda.
+  Encoger cartas **no** es la vía, y se midió para no volver a suponerlo: con el
+  mismo estado a 1024×768, limitar las cartas a 100 px deja la deuda en 469; a 88
+  px, 402; a 73 px (`9.5dvh`, el tope del rail), **319**; y a 55 px —por debajo
+  del mínimo legible de 70 px— todavía 218. Para llegar a 0 en esta banda lo que
+  tiene que dejar de crecer es el documento, no la carta: aplicar el shell de M8
+  por ancho implica decidir qué pasa con el abanico de la mano y con el HUD, y
+  merece su propio PR.
+- **El abanico de la mano queda bajo el borde en la tablet vertical**: a
+  768×1024 ocupa y=1253–1512 (empieza **229 px por debajo** de una pantalla de
+  1024) y a 1024×1366, y=1269–1528 (dentro de la pantalla). Se llega con un desplazamiento, pero el teléfono no lo necesita porque
+  tiene cajón. Las dos salidas medidas son un abanico `sticky` con el HUD
+  desplazado su alto, o extender el cajón a esta banda; la segunda toca las
+  pruebas táctiles y merece PR aparte.
+- El registro de la partida sigue siempre visible en el teléfono; un plegado por
+  defecto con contador sería la siguiente ganancia, pero toca un texto que hoy
+  leen las pruebas de partida real.
+- Las cifras de este documento son de una corrida concreta con el estado de
+  partida descrito; la matriz real imprime `MESA_VIEWPORT_MATRIX_REAL` en cada
+  ejecución para volver a medirlas.
