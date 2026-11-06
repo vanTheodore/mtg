@@ -6,6 +6,30 @@
   import type { GameAction } from '#lib/engine/types.ts';
 
   const s = $derived(session.snapshot);
+
+  /**
+   * En el teléfono este panel se fija al borde de la pantalla (arena.css, «un
+   * teléfono es una pantalla»), así que deja de ocupar su fila en el flujo. La
+   * mesa que hay detrás necesita saber cuánto mide para reservar ese alto: si
+   * no, lo último del campo quedaría siempre debajo del panel.
+   *
+   * Se publica como `--decision-h` en el elemento raíz, medido de verdad y no
+   * estimado, y se recalcula con cada cambio de contenido (la guía de Phase
+   * pasa de dos a tres líneas según lo que pregunte).
+   */
+  let root = $state<HTMLElement | null>(null);
+  $effect(() => {
+    const element = root;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const publish = () => {
+      const height = Math.ceil(element.getBoundingClientRect().height);
+      document.documentElement.style.setProperty('--decision-h', `${height}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
   const waiting = $derived(s?.state.waiting_for);
   const kind = $derived(waiting?.type);
   const objects = $derived(s?.state.objects ?? {});
@@ -54,7 +78,7 @@
   }
 </script>
 
-<section class="decision" aria-label="Decisión pendiente" data-waiting={kind ?? 'none'}>
+<section class="decision" aria-label="Decisión pendiente" data-waiting={kind ?? 'none'} bind:this={root}>
   <!-- The heading block is a unit so the Arena HUD can put the prompt before
        the log without splitting the announced decision guide from its title. -->
   <div class="decision-head">

@@ -1047,3 +1047,177 @@
     text-overflow: ellipsis;
   }
 }
+
+
+/*
+ * Arena 1.0 — un teléfono es una pantalla (M8).
+ *
+ * Medido con el motor real y permanentes en la mesa: a 320×800 el documento
+ * crecía a 1241 px (deuda 441) y a 844×390 a 1503 (deuda 1113). Los dos campos
+ * eran el 46 % de esa altura, y con la mesa desplazada la decisión de Phase
+ * quedaba por encima del borde (−63 px a 390×844, −178 a 844×390): el jugador
+ * miraba su campo y la pregunta había quedado fuera de la pantalla.
+ *
+ * Un teléfono no es un documento largo, es una pantalla: la barra arriba, el
+ * panel de decisión siempre a la vista y la mesa desplazándose dentro de su
+ * región. El documento deja de crecer (deuda 0 por construcción) y el alto que
+ * el panel ocupa se reserva al final de la región que sí desplaza —medido por
+ * DecisionPanel y publicado como `--decision-h`— para que ninguna carta quede
+ * debajo del panel para siempre.
+ *
+ * No se oculta nada: los dos campos, el registro, la pila y la pista de turnos
+ * siguen ahí, en el mismo orden de lectura, dentro de la región que desplaza.
+ */
+@media (max-width: 640px), (max-height: 520px) {
+  /* Sólo donde existe la región de la mesa (`main.layout`). El fixture
+     `/stress` no la tiene: ahí la página sigue desplazando como siempre, si no
+     el `overflow: hidden` recortaría su contenido y fingiría una deuda 0. */
+  .app.app[data-board-style="arena"]:has(> .layout) {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .app.app[data-board-style="arena"] > .layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* El tablero es una rejilla de una columna: dentro de un alto fijo, las
+       filas `auto` se aplastan y los campos quedaban en 12 px (medido). Con
+       las filas a su contenido, el tablero crece y es la región la que
+       desplaza. */
+    align-content: start;
+    grid-auto-rows: max-content;
+    /* El panel fijo tapa el final de la región: se le reserva su alto medido
+       (más el botón de la mano) para que todo se pueda traer a la vista. */
+    padding-bottom: calc(var(--decision-h, 8rem) + 4.9rem);
+    /* El teclado también: lo que se enfoca se trae a la vista por encima del
+       panel, nunca debajo de él. */
+    scroll-padding-block-end: calc(var(--decision-h, 8rem) + 4.9rem);
+  }
+  /* Hacia abajo también: en el teléfono girado el `.layout` es una columna
+     flex y los campos se encogían a 12 px (medido) en vez de dejar que la
+     región desplace. */
+  .app.app[data-board-style="arena"] > .layout > * {
+    flex-shrink: 0;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision,
+  .app.app[data-board-style="arena"] > .layout > .decision {
+    position: fixed;
+    /* Mismo borde que el botón de la mano (medido: los dos a 9,6 px), para que
+       el panel y el cajón se lean como una sola pila al pie de la pantalla. */
+    left: .6rem;
+    right: .6rem;
+    /* Por encima del botón de la mano, que medido ocupa de 731 a 775 en
+       320×800 (44 px de botón + 4,8 de hueco + 16 de métricas + relleno). */
+    bottom: calc(4.6rem + env(safe-area-inset-bottom, 0px));
+    z-index: 30;
+    max-height: calc(100dvh - 8rem);
+    /* El panel no desplaza entero: desplaza su explicación. Los botones con la
+       decisión de Phase se quedan siempre a la vista, también cuando la guía
+       ocupa cuatro líneas en un teléfono girado (medido: 8 px de scroll
+       interno en 844×390 y el último botón fuera del alcance del puntero). */
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    overflow: hidden;
+    border-radius: 14px;
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+    box-shadow: 0 -10px 26px rgb(0 0 0 / 30%);
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .decision-head,
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .actions,
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .confirmations,
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .finished {
+    flex: 0 0 auto;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .prompt,
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > p.muted {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .confirmations {
+    margin-top: 0;
+  }
+}
+
+/*
+ * Girado, el ancho es lo que sobra: la decisión pasa a una columna a la
+ * derecha y la mesa desplaza a la izquierda, en vez de comerle 248 px de los
+ * 390 de alto.
+ */
+@media (max-height: 520px) and (min-width: 641px) {
+  .app.app[data-board-style="arena"] > .layout {
+    padding-bottom: 0;
+    padding-right: calc(min(20rem, 46vw) + .6rem);
+    scroll-padding-block-end: 0;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision,
+  .app.app[data-board-style="arena"] > .layout > .decision {
+    left: auto;
+    right: .5rem;
+    width: min(24rem, 52vw);
+    /* Por encima del botón de la mano y de las métricas: medido, el botón
+       ocupa de 305 a 349 en 844×390 y de 278 a 322 en 740×360. */
+    top: 2.9rem;
+    bottom: 6rem;
+    max-height: none;
+  }
+  /* El título del panel y la instrucción fija dicen lo que ya dicen el
+     `aria-label` de la región y la guía de Phase: en 390 px de alto, 28 px de
+     título son la diferencia entre ver la acción o desplazar el panel. Se
+     quedan en el árbol de accesibilidad. */
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .decision-head > h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    margin: 0;
+  }
+  /* Un panel de 218 px de alto en 360 de pantalla: en vez de recortar la guía
+     de Phase, las acciones pasan a dos columnas (el ancho sobra, el alto no) y
+     el resto se aprieta un poco. Medido antes: 3 px de scroll interno dentro
+     del panel y el último botón fuera del alcance del puntero. */
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision {
+    padding: .45rem .55rem;
+  }
+  /* La instrucción fija («selecciona una carta…») repite lo que ya dice la guía
+     de Phase que se anuncia sola. En 390 px de alto se queda en el árbol de
+     accesibilidad y libera el alto que el panel necesita para no desplazarse
+     por dentro: medido, 8 px de scroll interno en 844×390. */
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > p.muted {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    margin: 0;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision .decision-head > p.phase {
+    margin-block: .1rem;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision .waiting {
+    font-size: .8rem;
+    line-height: 1.2;
+    margin: .1rem 0 .3rem;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision .prompt {
+    padding: .5rem;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision .actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: .3rem;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision .actions > button,
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision .confirmations > button {
+    flex: 1 1 45%;
+    min-width: 0;
+    min-height: 36px;
+    padding: .35rem .5rem;
+    font-size: .8rem;
+  }
+}

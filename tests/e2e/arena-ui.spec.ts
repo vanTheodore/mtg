@@ -215,25 +215,68 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
   await expect(history).toHaveAttribute('data-compact', 'true');
   await expect(decision).toBeVisible();
   const mobile = await middle.evaluate((element) => {
-    const left = element.querySelector<HTMLElement>('.center')!.getBoundingClientRect();
-    const right = element.querySelector<HTMLElement>('.decision')!.getBoundingClientRect();
+    const decision = element.querySelector<HTMLElement>('.decision')!;
+    const panel = decision.getBoundingClientRect();
+    const column = element.querySelector<HTMLElement>('.center')!.getBoundingClientRect();
+    const trigger = document.querySelector<HTMLElement>('.hand-trigger');
+    const hand = trigger?.getBoundingClientRect() ?? null;
+    const buttons = [...decision.querySelectorAll('button')];
+    const last = buttons.at(-1);
     return {
-      horizontalDifference: Math.abs(right.x - left.x),
-      decisionFirst: right.top <= left.top,
-      decisionBottom: right.bottom,
-      decisionHeight: right.height,
+      position: getComputedStyle(decision).position,
+      panelLeft: panel.left,
+      panelRight: panel.right,
+      panelTop: panel.top,
+      panelBottom: panel.bottom,
+      panelWidth: panel.width,
+      panelScrolls: decision.scrollHeight - decision.clientHeight,
+      columnLeft: column.left,
+      columnWidth: column.width,
+      handLeft: hand?.left ?? null,
+      handRight: hand?.right ?? null,
+      handTop: hand?.top ?? null,
+      buttons: buttons.length,
+      lastButtonHit: last
+        ? (() => {
+            const box = last.getBoundingClientRect();
+            const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+            return hit === last || last.contains(hit);
+          })()
+        : false,
+      lastButtonBottom: last ? last.getBoundingClientRect().bottom : null,
+      viewportWidth: innerWidth,
       viewportHeight: innerHeight
     };
   });
-  expect(mobile.horizontalDifference).toBeLessThan(4);
-  // Arena 1.0: on a phone the rail is read top-down and the Phase decision is
-  // what the player must answer, so it comes *before* the stack/log instead of
-  // sitting under a 400px column of reference material (measured: the mulligan
-  // prompt started at y=617 on an 844px screen, and the decision moved to
-  // y=431 once it led the column). Leading also means "visible without
-  // scrolling", which the old `below >= -2` check never claimed.
-  expect(mobile.decisionFirst).toBe(true);
-  expect(mobile.decisionHeight).toBeGreaterThan(0);
-  expect(mobile.decisionBottom).toBeLessThanOrEqual(mobile.viewportHeight);
+  // Arena 1.0 (M8): on a phone the decision is no longer a row of the column
+  // that the player has to scroll to. It is a fixed sheet pinned above the hand
+  // button, so the Phase prompt is always on screen while the board scrolls
+  // inside its own region.
+  //
+  // Measured at 390x844 with the real engine (mulligan prompt, permanents on
+  // the table): before M8 the document was 575px taller than the screen and the
+  // decision sat in the column at x=17 / 356px wide, below the log. Now the
+  // sheet spans x=9.6-380.4 (370.8px, the same edges as the hand trigger), its
+  // bottom is at 770.4 and the hand trigger starts at 774.6, it has no inner
+  // scroll and the last button ("Hacer mulligan", 701-740) answers the pointer.
+  expect(mobile.position).toBe('fixed');
+  expect(mobile.panelTop).toBeGreaterThanOrEqual(0);
+  expect(mobile.panelBottom).toBeLessThanOrEqual(mobile.viewportHeight);
+  // Centred in the viewport, and never narrower than the column it replaced.
+  expect(Math.abs(mobile.panelLeft - (mobile.viewportWidth - mobile.panelRight))).toBeLessThanOrEqual(1);
+  expect(mobile.panelWidth).toBeGreaterThanOrEqual(mobile.columnWidth);
+  expect(mobile.panelLeft).toBeLessThan(mobile.columnLeft);
+  // The sheet never swallows the hand button: it stops just above it and shares
+  // its edges, so the two read as one stack at the foot of the screen.
+  if (mobile.handTop !== null) {
+    expect(mobile.panelBottom).toBeLessThanOrEqual(mobile.handTop);
+    expect(Math.abs(mobile.panelLeft - mobile.handLeft!)).toBeLessThanOrEqual(1);
+    expect(Math.abs(mobile.panelRight - mobile.handRight!)).toBeLessThanOrEqual(1);
+  }
+  // Only the explanation scrolls inside the sheet; the buttons move with it.
+  expect(mobile.panelScrolls).toBe(0);
+  expect(mobile.buttons).toBeGreaterThan(0);
+  expect(mobile.lastButtonHit).toBe(true);
+  expect(mobile.lastButtonBottom).toBeLessThanOrEqual(mobile.panelBottom);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 });
