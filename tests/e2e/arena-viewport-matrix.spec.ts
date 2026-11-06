@@ -123,15 +123,35 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
   const decision = page.locator('section[aria-label="Decisión pendiente"]');
   await expect(decision).toBeVisible({ timeout: 180_000 });
 
-  const samples: Array<{ size: string; decision: { top: number; bottom: number }; debt: number; horizontalOverflow: number }> = [];
-  for (const [width, height] of [[1440, 900], [1024, 768], [844, 390], [390, 844]] as const) {
+  const samples: Array<{
+    size: string;
+    decision: { top: number; bottom: number };
+    panelScroll: number;
+    buttons: number;
+    lastButtonHit: boolean;
+    debt: number;
+    horizontalOverflow: number;
+  }> = [];
+  for (const [width, height] of [[1440, 900], [1024, 768], [844, 390], [740, 360], [390, 844]] as const) {
     await page.setViewportSize({ width, height });
     await settle(page);
     const sample = await page.evaluate(() => {
-      const rect = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!.getBoundingClientRect();
+      const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
+      const rect = panel.getBoundingClientRect();
+      // M8: the panel itself never scrolls — only the Phase explanation inside
+      // it does — so a legal button can't be parked outside the scrollport.
+      const buttons = [...panel.querySelectorAll('button')];
+      const last = buttons.at(-1);
+      const box = last?.getBoundingClientRect();
+      const hit = box
+        ? document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+        : null;
       return {
         size: `${innerWidth}x${innerHeight}`,
         decision: { top: Math.round(rect.top), bottom: Math.round(rect.bottom) },
+        panelScroll: panel.scrollHeight - panel.clientHeight,
+        buttons: buttons.length,
+        lastButtonHit: last ? hit === last || last.contains(hit) : false,
         debt: Math.max(0, document.documentElement.scrollHeight - innerHeight),
         horizontalOverflow: document.documentElement.scrollWidth - innerWidth
       };
@@ -143,6 +163,18 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
     // The Phase prompt the player must answer is fully on the first screen.
     expect(sample.decision.top, `la decisión empieza fuera de la vista a ${where}`).toBeGreaterThanOrEqual(0);
     expect(sample.decision.bottom, `la decisión no cabe en la primera pantalla a ${where}`).toBeLessThanOrEqual(height);
+    // ...and answering it must be physically possible: the panel hides no part
+    // of itself (measured before M8: 8px of inner scroll at 844×390) and the
+    // last legal button really is the element under its own centre. Both
+    // landscape sizes failed that hit-test before the flex-column panel.
+    // Where the phone/landscape shell is active the document must equal the
+    // screen: the board scrolls inside its own region (M8).
+    if (width <= 640 || height <= 520) {
+      expect(sample.debt, `el teléfono vuelve a ser un documento a ${where}`).toBe(0);
+    }
+    expect(sample.panelScroll, `el panel oculta su propio contenido a ${where}`).toBe(0);
+    expect(sample.buttons, `la decisión no ofrece ningún botón a ${where}`).toBeGreaterThan(0);
+    expect(sample.lastButtonHit, `el último botón de la decisión no responde al puntero a ${where}`).toBe(true);
   }
   console.log('MESA_VIEWPORT_MATRIX_REAL ' + JSON.stringify(samples));
   await persist(testInfo, 'real-game-matrix', samples);

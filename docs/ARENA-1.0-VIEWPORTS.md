@@ -152,7 +152,7 @@ código anterior el test falla en la primera aserción: `aria-expanded` sigue en
 | `bun run check` | 0 errores (2 avisos preexistentes) |
 | `bun test src/lib` | 251 pasadas |
 | `bun run build` | correcto |
-| `bun --bun playwright test` | **68 pasadas, 1 saltada, 0 rojas** |
+| `bun --bun playwright test` | **68 pasadas, 1 saltada, 0 rojas** (69 pruebas) |
 
 Evidencia cruda de las mediciones: `MESA_VIEWPORT_MATRIX` y
 `MESA_VIEWPORT_MATRIX_REAL` en la salida del test, con JSON adjunto por corrida.
@@ -202,14 +202,117 @@ solo y por eso no podía demostrar nada—. Con el código anterior la prueba de
 320 falla en la primera aserción: *«la mano cae fuera de la pantalla al
 empezar: 923 px > 801 px»*.
 
+## Quinta pasada (M8): un teléfono es una pantalla, no un documento
+
+La cuarta pasada dejó el 320×800 debiendo 84 px **sin permanentes en la mesa**.
+Con el motor real y cartas jugadas, el estado de partida que de verdad importa,
+la deuda se disparaba otra vez y nadie la había medido:
+
+| Ventana (motor real, permanentes en la mesa) | Documento antes | Deuda antes | Documento ahora | Deuda ahora |
+| --- | --- | --- | --- | --- |
+| 320×800 | 1241 px | **441 px** | 800 px | **0 px** |
+| 390×844 | 740 px | **575 px** | 844 px | **0 px** |
+| 844×390 (girado) | 1503 px | **1113 px** | 390 px | **0 px** |
+| 740×360 (girado) | 1134 px | **750 px** | 360 px | **0 px** |
+
+La causa no era «falta de densidad»: era que el teléfono seguía siendo un
+documento. Los dos campos ocupaban el 46 % de la altura, y con la mesa
+desplazada la pregunta de Phase quedaba **por encima del borde** (−63 px a
+390×844, −178 px a 844×390): el jugador miraba su campo y la decisión había
+quedado fuera de la pantalla. Ajustar tipografías no arregla eso, sólo lo
+retrasa una carta más.
+
+Lo que se hizo, sin esconder información:
+
+1. **El documento deja de crecer.** Bajo `max-width: 640px` o
+   `max-height: 520px`, `.app` mide `100dvh` con `overflow: hidden` y es
+   `main.layout` quien desplaza (`overflow-y: auto`, `overscroll-behavior:
+   contain`). Dentro de un alto fijo las filas `auto` de la rejilla se
+   aplastaban —los campos medían **12 px**— así que el tablero pasa a
+   `align-content: start` + `grid-auto-rows: max-content` y crece para que
+   desplace la región. La deuda es 0 **por construcción**, no por recorte.
+2. **La decisión de Phase queda siempre a la vista.** El panel pasa a
+   `position: fixed` al pie, por encima del botón de la mano. Medido a 390×844:
+   el panel ocupa x=9,6–380,4 y el botón de la mano **los mismos bordes**
+   (9,6–380,4), con 4,2 px de aire entre los dos; a 320×800, x=9,6–310,4 en
+   ambos. Son 370,8 px de panel en una pantalla de 390, más ancho que los
+   356 px de la columna que reemplaza.
+3. **La mesa reserva el alto del panel.** `DecisionPanel` mide su caja y la
+   publica como `--decision-h`; `main.layout` reserva ese alto **más el botón de
+   la mano** en `padding-bottom` y `scroll-padding-block-end`. Antes el relleno
+   estaba en `.layout > *` y la reserva dejaba «tu campo» detrás del panel; ahora
+   está en la región que desplaza, así que ninguna carta queda debajo para
+   siempre y el foco por teclado también se trae por encima del panel.
+4. **La lección comparte el shell y también gana.** `/aprender` usa el mismo
+   `app` + `.layout`, así que en el teléfono el documento también mide la
+   pantalla. Medido a 320×800: el panel de la lección termina en y=615 y sus
+   cuatro controles («Continuar», «Saltar este paso», «Ver el repaso»,
+   «Palabras nuevas») quedan dentro de la vista y responden al puntero, mientras
+   la mesa de la lección desplaza 394 px dentro de su región. Antes el documento
+   medía 1185 px y había que bajar para llegar al botón que el texto pide pulsar.
+5. **El fixture no se recorta.** Todo lo anterior cuelga de
+   `:has(> .layout)` porque `/stress` no tiene `main.layout`: sin ese alcance, el
+   `overflow: hidden` habría recortado su contenido y la matriz habría medido
+   una deuda 0 falsa.
+
+### El teléfono girado: 8 px que dejaban un botón sin puntero
+
+Con la deuda ya en 0, la matriz real seguía encontrando un bloqueo de juego en
+horizontal: el panel tenía **8 px de scroll interno a 844×390** y el último botón
+de la decisión caía fuera del alcance del puntero (`elementFromPoint` devolvía el
+panel, no el botón). A 740×360 el panel no desbordaba, pero el botón tampoco
+respondía.
+
+| Punto de medida (motor real) | Antes | Ahora |
+| --- | --- | --- |
+| Panel a 844×390 | y=46–294, h=248, **scroll interno 8 px** | y=46–294, h=248, **scroll interno 0** |
+| Último botón a 844×390 | y=256, **el puntero no lo alcanza** | y=261–286, **responde** |
+| Panel a 740×360 | y=46–264, h=218 | y=46–264, h=218 |
+| Último botón a 740×360 | y=251, **el puntero no lo alcanza** | y=256, **responde** |
+| Región de la mesa a 844×390 | 228 px de alto, 837 de contenido | 228 / 485–1158 |
+| Región de la mesa a 740×360 | 204 px de alto, 1169 de contenido | 204 / 1169 |
+
+El arreglo es estructural, no de `max-height`: el panel es una columna flex con
+`overflow: hidden` donde la cabecera, las acciones, las confirmaciones y el
+cierre son `flex: 0 0 auto`, y sólo la explicación (`.prompt`) y la guía
+(`p.muted`) desplazan. Así los botones no se mueven nunca, por larga que sea la
+guía de Phase.
+
+### Lo que cambió en las pruebas
+
+- `tests/e2e/arena-viewport-matrix.spec.ts`: la matriz real pasa a cinco
+  ventanas (añade 740×360) y, además de que el panel quepa en la primera
+  pantalla, exige tres cosas nuevas: **deuda 0** donde el shell de teléfono está
+  activo (`width <= 640` o `height <= 520`), **scroll interno 0** en el panel y
+  que el **último botón de la decisión responda al puntero** en su propio centro
+  (`elementFromPoint`), no sólo que se pinte. Corrida de hoy, motor real:
+  `1440×900`, `1024×768`, `844×390`, `740×360` y `390×844` con `panelScroll: 0`,
+  `buttons: 2` y `lastButtonHit: true` en las cinco.
+- `tests/e2e/arena-ui.spec.ts`: la aserción móvil de M7 medía alineación con la
+  columna (`|decision.x − center.x| < 4`). En M8 el panel ya no es una fila de la
+  columna, así que esa medida dejó de describir el diseño y fallaba por 9 px
+  (los 8,98 que separan el borde de la hoja del relleno de la página). La
+  reemplazan aserciones más fuertes: el panel es `fixed`, cabe entero en el
+  viewport, está centrado, **nunca es más angosto que la columna**, no tapa el
+  botón de la mano, no desplaza por dentro y su último botón acierta bajo el
+  puntero. No se relajó ninguna medida: se cambió la que había dejado de ser
+  cierta por otras que sí describen lo que el jugador necesita.
+- `tests/e2e/arena-touch-play.spec.ts` sigue midiendo el 320×800 con dedo real
+  (`page.touchscreen.tap`) y comprobando que el estado observable del motor
+  cambia después del toque.
+
 ## Pendiente
 
-- 320×800 sigue debiendo 84 px en el estado medido (161 antes de la cuarta
-  pasada), y más con permanentes en la mesa. Lo que queda ya no es cromo
-  envuelto: es el panel de decisión (281 px, con la guía de Phase en tres
-  líneas), el registro (36) y la pista de turnos (49) — información que no se
-  recorta sin cambiar el juego. Un "modo miniatura" (tablero a escala con panel
-  de detalle) sigue siendo la vía honesta para llegar a cero.
+- **1024×768 (327 px) y 768×1024 (639 px) siguen debiendo altura** en el
+  fixture espejo con los campos llenos: son tablet y portátil chico, con
+  `main.layout` desplazando pero sin el alto fijo del teléfono. Ahí sí hay
+  densidad que ganar (los campos miden 430 y 592 px) y el siguiente paso medido
+  es aplicar el criterio de M8 por ancho, no por alto: regiones que desplazan en
+  vez de una página que crece.
 - El registro de la partida (101 px) sigue siempre visible en el teléfono; un
   plegado por defecto con contador sería la siguiente ganancia, pero toca un
   texto que hoy leen las pruebas de partida real y merece su propio PR.
+- Las pruebas de `arena-touch-play` y la matriz real son sensibles al estado: la
+  mano y la decisión cambian de tamaño según el turno, así que las cifras de este
+  documento son de una corrida concreta y se vuelven a imprimir con
+  `MESA_VIEWPORT_MATRIX_REAL` en cada ejecución.
