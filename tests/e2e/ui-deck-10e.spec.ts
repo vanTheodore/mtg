@@ -268,10 +268,32 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   await expect(blockerAfter.locator('.status-strip')).toContainText('Bloqueando');
   await expect(page.locator(`[data-card-id="${attackerId}"][data-combat-role="Atacando"]`)).toHaveCount(1);
 
-  // At tablet width the sidecar is not a second scrollport; decisions return
-  // to the normal board sequence without changing Phase's legal outcome.
+  // At tablet width the sidecar is not a second scrollport and decisions
+  // return to the normal board sequence without changing Phase's legal
+  // outcome. M9 keeps that shape —one column, HUD as wide as the field— but the
+  // HUD now sticks to the bottom edge while the board scrolls, so asserting
+  // `position: static` would only be checking that the fix is absent. The
+  // assertions below check the property that mattered (it is not the desktop
+  // rail) plus the new one (it is pinned at the foot, not the top).
   await page.setViewportSize({ width: 768, height: 900 });
-  await expect(page.locator('main.layout > .middle')).toHaveCSS('position', 'static');
+  const hud = await page.evaluate(() => {
+    const middle = document.querySelector<HTMLElement>('main.layout > .middle')!;
+    const layout = document.querySelector<HTMLElement>('main.layout')!;
+    const field = document.querySelector<HTMLElement>('main.layout > .battlefield[data-side="player"]')!;
+    const cs = getComputedStyle(middle);
+    return {
+      position: cs.position,
+      top: cs.top,
+      bottom: cs.bottom,
+      columns: getComputedStyle(layout).gridTemplateColumns.split(' ').length,
+      widthRatio: middle.getBoundingClientRect().width / field.getBoundingClientRect().width
+    };
+  });
+  expect(hud.columns, 'la tablet vuelve a la columna central, no al rail').toBe(1);
+  expect(hud.widthRatio, 'el HUD ocupa el ancho del campo, no una columna lateral').toBeGreaterThan(0.95);
+  expect(hud.position, 'M9: el HUD se queda al pie mientras el tablero desplaza').toBe('sticky');
+  expect(hud.top, 'el HUD de tablet no es el rail fijo de escritorio').toBe('auto');
+  expect(parseFloat(hud.bottom)).toBeGreaterThan(0);
   await expect(driver.decision).toBeVisible();
   expect(errors).toEqual([]);
 });
