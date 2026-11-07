@@ -139,9 +139,19 @@ test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni
   // only Arena renders the additional Phase turn track.
   await page.setViewportSize({ width: 1440, height: 1100 });
   const tallWidth = await first.evaluate((node) => parseFloat(getComputedStyle(node).width));
-  const tallHeight = await page.locator('.layout').evaluate((node) => node.getBoundingClientRect().height);
   expect(tallWidth - compactWidth).toBeGreaterThan(20);
-  expect(tallHeight - compactHeight).toBeGreaterThan(25);
+
+  // M11: desde que el escritorio es una pantalla, `.layout` es la región que
+  // desplaza y no crece con el documento; lo que se mide es que la región se
+  // queda con el alto que la ventana gana dentro de la misma banda de densidad
+  // (a 1100 de alto el rail ya no existe, la línea central vuelve y el abanico
+  // se lleva el alto, así que comparar 900 con 1100 mediría otra cosa).
+  await page.setViewportSize({ width: 1440, height: 700 });
+  const shortHeight = await page.locator('.layout').evaluate((node) => node.getBoundingClientRect().height);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const regionAt900 = await page.locator('.layout').evaluate((node) => node.getBoundingClientRect().height);
+  expect(regionAt900 - shortHeight).toBeGreaterThan(25);
+  expect(compactHeight).toBe(regionAt900);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await openArenaOptions(page);
@@ -190,15 +200,21 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
     const field = document.querySelector<HTMLElement>('main.layout > .battlefield[data-side="player"]')!.getBoundingClientRect();
     return {
       horizontalDifference: Math.abs(decision.left - center.left),
-      verticalGap: decision.top - center.bottom,
+      roomBeforeLog: center.top - decision.bottom,
       hudLeft: hud.left,
       fieldRight: field.right,
-      decisionWidth: decision.width
+      decisionWidth: decision.width,
+      decisionInsideRail: decision.top >= hud.top - 1 && decision.bottom <= hud.bottom + 1
     };
   });
   expect(desktop.hudLeft).toBeGreaterThanOrEqual(desktop.fieldRight);
   expect(desktop.horizontalDifference).toBeLessThan(4);
-  expect(desktop.verticalGap).toBeGreaterThanOrEqual(-2);
+  // M11: la decisión va antes que el registro. No es estético: a 1100×700 el
+  // rail mide 529 px y la región 419, así que lo que quede bajo el corte sólo
+  // se alcanza desplazando; con el registro delante, el último botón caía en
+  // y=536 (bajo el corte en 474) y lo tapaba el abanico de la mano.
+  expect(desktop.roomBeforeLog).toBeGreaterThanOrEqual(-2);
+  expect(desktop.decisionInsideRail, 'la decisión no cabe entera en el rail').toBe(true);
   expect(desktop.decisionWidth).toBeGreaterThan(250);
 
   await openArenaOptions(page);

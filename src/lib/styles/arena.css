@@ -343,7 +343,10 @@
     grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
   }
   .app[data-board-style="arena"] .layout > .battlefield[data-side] .row[data-zone="lands"] {
-    --card-w: min(var(--arena-base-card-w, 124px), 7.5dvh);
+    /* Suelo de 70 px: por debajo de eso el coste y la línea de tipo dejan de
+       caber en la cara (es el mínimo que ya exige la matriz). Medido antes:
+       7.5dvh daba 68 px a 900 de alto, 60 a 800, 58 a 768 y 53 a 700. */
+    --card-w: min(var(--arena-base-card-w, 124px), max(70px, 7.5dvh));
   }
   .app[data-board-style="arena"] > .hand-zone .hand-scroll.fan,
   .app[data-board-style="arena"] .layout > .hand-zone .hand-scroll.fan {
@@ -1310,5 +1313,60 @@
   .app.app[data-board-style="arena"] > .hand-zone,
   .app.app[data-board-style="arena"] > .hand {
     flex: 0 0 auto;
+  }
+}
+
+/*
+ * arena-desktop-m11 — el escritorio también es una pantalla.
+ *
+ * M8 hizo pantalla el teléfono, M10 la tablet. El escritorio se quedó siendo un
+ * documento: medido con el motor real y la mesa llena (5+6 permanentes, mano de
+ * 4), el documento medía 841 px a 1366×768 (deuda 73), 859 a 1280×800 (59), 876
+ * a 1180×820 (56) y 837 a 1100×700 (137). Ahí el abanico de la mano (205–225 px)
+ * se llevaba el alto que faltaba y en 1100×700 terminaba en y=810 sobre una
+ * pantalla de 700: la mano se iba 110 px por debajo.
+ *
+ * Mismo criterio que las dos pasadas anteriores, sin tocar el rail: `.app` mide
+ * la pantalla, `.layout` es la región que desplaza y la mano vive en su fila al
+ * pie. El rail de M1 sigue siendo `sticky` dentro de la región, así que la
+ * decisión de Phase no se mueve de su columna.
+ */
+@media (min-width: 1100px) {
+  .app.app[data-board-style="arena"]:has(> .layout) {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .app.app[data-board-style="arena"] > .layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    align-content: start;
+    /* Filas por contenido. Sin esto, con la región en alto definido el motor
+       encoge las filas `auto` para que quepan (medido a 1280×720: filas de
+       57 px con campos de 182 px dentro) y los campos se solapan: el campo del
+       jugador tapaba la criatura atacante del rival y `elementFromPoint`
+       devolvía el texto de tipo de la carta. Es la misma regla que M10 ya
+       aplicó a la tablet. */
+    grid-auto-rows: max-content;
+  }
+  .app.app[data-board-style="arena"] > .layout > * {
+    flex-shrink: 0;
+  }
+  /* La mano no entra en la región: su fila al pie se ve siempre, y así el
+     tablero es lo único que desplaza. */
+  .app.app[data-board-style="arena"] > .hand-zone,
+  .app.app[data-board-style="arena"] > .hand {
+    flex: 0 0 auto;
+  }
+  /* La decisión va antes que el registro también en el rail. No es estética: en
+     una pantalla de 700 px de alto el rail mide 529 y la región que desplaza
+     419, así que lo que quede debajo del corte sólo se alcanza desplazando.
+     Medido a 1100×700: con el orden de siempre el último botón caía en y=536,
+     por debajo del corte de la región (474), y `elementFromPoint` devolvía el
+     abanico de la mano; con la decisión primero cae en y=397–436 y acierta. Es
+     la misma regla que M7 aplicó a la línea central en el teléfono. */
+  .app.app[data-board-style="arena"] > .layout > .middle > .center {
+    order: 1;
   }
 }

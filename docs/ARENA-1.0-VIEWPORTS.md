@@ -454,19 +454,78 @@ el último botón de la decisión y la última carta del campo propio. La prueba
 la matriz se queda con lo que vale en cualquier estado (deuda 0, región propia,
 mano dentro de la pantalla).
 
+## Octava pasada (M11): el escritorio también es una pantalla
+
+M8 hizo pantalla al teléfono y M10 a la tablet. El escritorio (1100 px o más)
+seguía siendo un documento, y con la mesa llena la deuda volvía: medido con el
+motor real y la mano viva (4 cartas, 5 y 6 permanentes), el documento medía
+841 px a 1366×768, 859 a 1280×800, 876 a 1180×820 y 837 a 1100×700. A 1100×700
+el abanico de la mano (194 px) acababa en y=810 sobre una pantalla de 700: la
+mano se iba 110 px por debajo.
+
+| Ventana (mesa llena) | Deuda antes | Deuda ahora | Tierras antes | Tierras ahora |
+| --- | --- | --- | --- | --- |
+| 1440×900 | 0 px | 0 px | 68 px | **70 px** |
+| 1366×768 | **73 px** | **0 px** | 58 px | **70 px** |
+| 1280×800 | **59 px** | **0 px** | 60 px | **70 px** |
+| 1180×820 | **56 px** | **0 px** | 62 px | **70 px** |
+| 1100×700 | **137 px** | **0 px** | 53 px | **70 px** |
+
+Las criaturas no se tocan (124/115/120/123/105 px en esas mismas corridas): lo
+que cambia es que la mesa se queda con la pantalla y desplaza dentro.
+
+### Lo que costó encontrarlo
+
+Tres cosas salieron de medir, no de leer el CSS:
+
+1. **La mano tapaba la decisión a 1100×700.** Con la región en alto definido el
+   rail (`sticky`, 529 px) es más alto que la región (419 px). Con el orden de
+   siempre, el último botón de la decisión caía en y=536 —por debajo del corte de
+   la región en 474— y `elementFromPoint` devolvía el abanico de la mano. La
+   prueba vieja medía el rail entero en pantalla y daba verde: el rail estaba en
+   pantalla, lo que no estaba era el botón. Se arregla con la regla que M7 ya
+   había aplicado a la línea central del teléfono: **la decisión va antes que el
+   registro** (`> .middle > .center { order: 1 }`). Medido después: el panel ocupa
+   133–447 por arriba y 13–327 al final del recorrido, y su último botón responde
+   en las dos puntas.
+2. **Los dos campos se solapaban.** Con la región en alto definido el motor
+   encogía las filas `auto` para que cupieran (medido a 1280×720: filas de 57 px
+   con campos de 182 px dentro), así que el campo del jugador se pintaba encima
+   del rival. No era cosmético: la partida se atascaba al declarar bloqueadoras
+   porque Playwright no podía pulsar la criatura atacante — el texto de tipo del
+   campo propio interceptaba el puntero. Se arregla con `grid-auto-rows:
+   max-content`, la misma regla que M10 ya usaba en la tablet.
+3. **La prueba de M9 medía el documento, que ya no desplaza.** Desde M10 el
+   `scrollTo(0, scrollHeight)` del bloque de tablet era un no-op: las dos puntas
+   del recorrido medían lo mismo y el bloque daba verde por construcción. Ahora
+   desplaza el contenedor que de verdad desplaza (la región si desborda, si no el
+   documento).
+
+### Lo que quedó anotado, no arreglado
+
+- Al final del recorrido, el rail `sticky` se suelta y el **titular** del panel
+  puede recortarse 11 px por arriba (a 1100×700). Sus acciones no: la prueba mide
+  el primer y el último botón, no la caja del panel.
+- A 1440×1100 el abanico de la mano crece hasta 348 px (32 % de la pantalla)
+  porque el tope por alto del rail sólo existe en `max-height: 1000px`. Es
+  anterior a M11 y no entra en esta pasada.
+
+`tests/e2e/arena-viewport-matrix.spec.ts` gana la prueba «escritorio con la mesa
+llena»: juega hasta tener mano viva y cinco permanentes por campo y, en 1440×900,
+1366×768, 1280×800, 1180×820 y 1100×700, exige deuda 0, que la aplicación mida la
+pantalla, la región con `overflow-y: auto`, la mano dentro de la pantalla, tierras
+y cartas ≥70 px, los dos campos separados (la prueba que habría atrapado el
+solapamiento), la decisión entera y su último botón respondiendo, y al final del
+recorrido las acciones de la decisión y la última carta del campo propio. La mano
+sólo se monta si no hay traspaso de asiento pendiente, así que la prueba liquida
+el traspaso antes de medir en vez de esperar a un elemento que no va a aparecer.
+
 ## Pendiente
 
-- **Las tierras del escritorio están por debajo del mínimo legible.** Medido con
-  el motor real: la fila de tierras usa `--card-w: min(124px, 7.5dvh)`, que a
-  900 px de alto son **68 px** (60 a 800, 62 a 820, 53 a 700), mientras las
-  criaturas se quedan en 124 y el fixture exige ≥70. Es anterior a M10 —idéntico
-  con y sin el cambio— y el arreglo no puede ser subir el tope sin devolver la
-  deuda al escritorio: merece su propio PR con la medición de las dos cosas.
-- **El documento del escritorio crece cuando la mesa se llena**: en una corrida
-  con seis permanentes en un campo el documento medía 1083 px a 1440×900 (deuda
-  183) y en otra con cinco, 900 (deuda 0). También es anterior a M10. La vía es
-  la misma que en la tablet —región que desplaza— pero en un ancho donde ya hay
-  rail lateral, y necesita su propia medición.
+- **El abanico de la mano a 1440×1100**: mide 348 px de alto (32 % de la
+  pantalla) porque el tope por alto sólo existe hasta 1000 px. Un tope por
+  `dvh` en toda la banda es la vía, pero cambia el tamaño de la mano en la
+  pantalla más alta y merece su propia medición.
 - El registro de la partida sigue siempre visible en el teléfono; un plegado por
   defecto con contador sería la siguiente ganancia, pero toca un texto que hoy
   leen las pruebas de partida real.
