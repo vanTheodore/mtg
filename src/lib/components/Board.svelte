@@ -10,6 +10,7 @@
   import Settings from './Settings.svelte';
   import CardView from './CardView.svelte';
   import PlayerPanel from './PlayerPanel.svelte';
+  import BoardOverlay from './BoardOverlay.svelte';
   import HistoryPanel from './HistoryPanel.svelte';
   import DeckBuilder from './DeckBuilder.svelte';
   import { session } from '#lib/game/session.svelte.ts';
@@ -425,14 +426,14 @@
     </section>
   {:else}
     <svelte:boundary>
-    <main class="layout" inert={needsHandoff || session.handDrawerOpen} aria-hidden={needsHandoff}>
+    <main class="layout" data-board-region inert={needsHandoff || session.handDrawerOpen} aria-hidden={needsHandoff}>
       <PlayerPanel player={rival!} showHand />
       <!-- While the device changes hands the board is covered and inert, so
            the other seat's hand is not drawn either: the dialog promises that
            the previous player's hand stays hidden, and the count of those
            backs would say how many cards they are holding. -->
       {#if rivalHand.length && !needsHandoff}
-        <div class="rival-hand" aria-label={`Mano oculta del Jugador ${opponent + 1}`}>
+        <div class="rival-hand" role="group" aria-label={`Mano oculta del Jugador ${opponent + 1}`}>
           {#each rivalHand as obj (obj.id)}<div class="mini-back" aria-hidden="true"></div>{/each}
         </div>
       {/if}
@@ -465,6 +466,13 @@
       {/if}
 
     </main>
+    <!-- Phase's line layer: target, stack and combat arcs between measured
+         anchors. Fixed-position and pointer-events:none, so it adds no layout
+         and cannot steal a click from a card. Arena only: Clásico stays the
+         plain, text-first board its own tests describe. -->
+    {#if session.boardStyle === 'arena' && !needsHandoff}
+      <BoardOverlay />
+    {/if}
     {#snippet failed(error, reset)}
       <div class="notice error" role="alert">
         <strong>La interfaz encontró un error al dibujar el tablero.</strong>

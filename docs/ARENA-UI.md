@@ -15,7 +15,10 @@ accesibilidad móvil y reduced-motion.
 
 Próximas fases separadas:
 1. Abanico de mano accesible sin perder scroll ni compatibilidad con 30 cartas.
-2. Fases de turno y líneas de ataque / bloqueo desde snapshots legales de Phase.
+2. ~~Fases de turno y líneas de ataque / bloqueo desde snapshots legales de Phase.~~
+   Hecho en [`PHASE-UX-PORT.md`](PHASE-UX-PORT.md): la capa dibuja objetivos,
+   pila y combate desde la instantánea, y las zonas tienen visor. Sigue pendiente
+   el menú de acciones anclado a la carta y el selector de destino de ataque.
 3. Animaciones breves de daño y entrada de cartas tras medir rendimiento y batería.
 
 CI debe comprobar preferencias persistentes, responsive, tutorial y partida real.

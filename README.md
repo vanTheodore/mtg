@@ -40,6 +40,10 @@ Vertical slice jugable local de dos jugadores (hot-seat) con el motor real:
 - Campo de batalla, mano, biblioteca, cementerio y exilio.
 - Imágenes Scryfall con fallback identificable, reintento y caché.
 - Agrupación de fichas, cartas giradas/transformadas/adjuntas.
+- **Capa de mesa tipo Phase**: líneas de objetivo, de pila y de combate
+  dibujadas desde la instantánea del motor, más pilas de zona abribles
+  (biblioteca, cementerio, exilio) con su visor accesible y los contadores de
+  veneno/energía del asiento. Ver [`docs/PHASE-UX-PORT.md`](docs/PHASE-UX-PORT.md).
 - Vista ampliada por ratón y teclado, controles de tamaño/densidad/tema.
 - Paso de asiento seguro: la mano del jugador anterior no se renderiza.
 - Interfaz en **español de Latinoamérica** (`es-419`): copia, decisiones, palabras
@@ -64,6 +68,7 @@ principio a fin». Esta tabla mantiene la distinción:
 | Vista ampliada, tamaño/densidad/tema | Sí | Sí (a11y y anchos 320–1440) |
 | Constructor: buscar, cantidades, guardar, importar lista | Sí | **Sí**: `tests/e2e/deck-builder.spec.ts` en Chromium con motor disponible |
 | Jugar un mazo propio y leer cartas cargadas por el motor | Sí | **Sí**: prueba de constructor → partida con cartas del pack real |
+| Líneas de objetivo, pila y combate; pilas de zona con visor | Sí | **Parcial**: `ux-lab.spec.ts` (8 pruebas, con axe) lo verifica en Chromium sobre el fixture `/ux` sin motor; en partida real lo mide el CI con el WASM del pin |
 
 Sobre el bloqueo, en tres niveles distintos:
 
@@ -225,7 +230,8 @@ siguen en [`docs/VERIFICATION-0.4.1.md`](docs/VERIFICATION-0.4.1.md),
 [`docs/VERIFICATION-0.2.md`](docs/VERIFICATION-0.2.md). Los niveles de prueba se
 explican en [`docs/TESTING.md`](docs/TESTING.md).
 
-La investigación del catálogo ampliable —qué ofrece Phase, qué falta en el puente
+La capa de mesa portada desde Phase —qué se reutiliza, qué no y qué falta— está
+en [`docs/PHASE-UX-PORT.md`](docs/PHASE-UX-PORT.md). La investigación del catálogo ampliable —qué ofrece Phase, qué falta en el puente
 y el plan por PRs— está en [`docs/CATALOG-PLAN.md`](docs/CATALOG-PLAN.md). El
 idioma y su reserva en [`docs/LOCALE.md`](docs/LOCALE.md); las dependencias en
 [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md).
@@ -243,9 +249,12 @@ Desde el [PR #31](https://github.com/vanTheodore/mtg/pull/31), el CI usa una [cl
 ```text
 src/lib/engine/       Worker WASM, protocolo binario/JSON y cliente RPC
 src/lib/game/         Sesión (runas), acciones, packs de catálogo, mazos,
-                      impresiones es, imágenes Scryfall
-src/lib/components/   Board, Hand, Battlefield, CardView, DecisionPanel, …
+                      impresiones es, imágenes Scryfall, zonas de mesa
+src/lib/ui/           Geometría de arcos y proyección de líneas (puro, probado)
+src/lib/components/   Board, Hand, Battlefield, CardView, DecisionPanel,
+                      BoardOverlay, ZonePile, ZoneViewer, …
 src/routes/stress/    Fixture determinista de visibilidad (no ejecuta reglas)
+src/routes/ux/        Fixture de presentación de la capa Phase (no ejecuta reglas)
 crates/phase-engine/  Motor Phase upstream byte-idéntico (ver provenance)
 crates/mtg-engine-wasm/ Puente ABI C/JSON, exportador de catálogo y paridad
 static/data/          Catálogo del motor, índice+packs, metadatos, mazos demo,
@@ -289,6 +298,11 @@ son transitorios atados al rango de su padre. Detalle en
 manos multitudinarias, tableros con fichas, DFC, adjuntos, información oculta y
 fallbacks. **No simula reglas**; la fidelidad de juego se prueba contra el WASM
 real en `/`.
+
+`/ux?scene=targets|combat|idle` es el laboratorio de presentación de la capa
+Phase (arcos de objetivo/pila/combate y visores de zona). Instala una
+instantánea escrita a mano: **no ejecuta reglas** y lo verifica
+`tests/e2e/ux-lab.spec.ts`.
 
 Las pruebas e2e verifican anchos 320/375/390/768/1440, recorrido completo de una
 mano de 30 cartas, expansión de fichas, ausencia de desbordamiento horizontal,
