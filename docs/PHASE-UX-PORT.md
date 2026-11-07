@@ -27,9 +27,16 @@ implementación es Svelte 5 con runas y módulos TypeScript puros.
 | `zone/ZoneViewer.tsx` | `ZoneViewer.svelte` | Visor de zona con las cartas que el motor proyectó y foco devuelto al cerrar |
 | `board/CommanderDamage.tsx`, `PTBox.tsx`, `KeywordStrip.tsx` | `PlayerPanel.svelte` (contadores) | Sólo los contadores de veneno/energía; el resto sigue pendiente |
 
-Commit de referencia: `f67169218fa9f5dec439b9024906b891a926210e` (v0.119.0),
-licencias MIT OR Apache-2.0. La atribución queda también en el encabezado de
-cada archivo portado.
+Commit de referencia del port: `f67169218fa9f5dec439b9024906b891a926210e`
+(v0.119.0), licencias MIT OR Apache-2.0. La atribución queda también en el
+encabezado de cada archivo portado.
+
+El motor ya está en `1038a9d0` (v0.120.0, ver
+[`PHASE-UPSTREAM-2026-11-07-1038A9D.md`](PHASE-UPSTREAM-2026-11-07-1038A9D.md)),
+pero la geometría que se portó —`stack/StackTargetArcs.tsx`, `targeting/arcPath.ts`,
+las líneas de ataque y bloqueo— **no cambió en esos 7 commits**, así que el port
+sigue siendo fiel al componente original. Lo nuevo del cliente upstream es la
+interfaz de *Horde*, que Mesa no expone y no se ha portado.
 
 ## Contrato: la capa no decide nada
 

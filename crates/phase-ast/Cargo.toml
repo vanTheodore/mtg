@@ -1,6 +1,6 @@
 [package]
 name = "phase-ast"
-version = "0.119.0"
+version = "0.120.0"
 license.workspace = true
 edition = "2021"
 
