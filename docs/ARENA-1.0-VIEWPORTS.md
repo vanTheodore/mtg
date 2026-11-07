@@ -383,27 +383,97 @@ por las propiedades que de verdad importan, todas medidas en la misma corrida:
 campo** (≥95 %), `position: sticky` y `top: auto` con `bottom` positivo. Es decir:
 no es el rail, sigue en el flujo de la línea central y además se queda al pie.
 
+## Séptima pasada (M10): la tablet tampoco es un documento
+
+M9 dejó la decisión siempre a la vista en la banda 641–1099 px, pero el
+documento seguía creciendo: el alto lo decidían los dos campos, no la pantalla.
+Medido con el motor real y la mano viva (5 cartas, 4+4 permanentes), en un
+**mismo estado** y con el CSS de M9 restaurado en caliente para tener el «antes»
+exacto:
+
+| Ventana (mismo estado de partida) | Documento antes | Deuda antes | Documento ahora | Deuda ahora |
+| --- | --- | --- | --- | --- |
+| 641×768 | 1281 px | **513 px** | 768 px | **0 px** |
+| 768×1024 | 1593 px | **569 px** | 1024 px | **0 px** |
+| 900×700 | 1343 px | **643 px** | 700 px | **0 px** |
+| 1024×768 | 1346 px | **578 px** | 768 px | **0 px** |
+| 1099×768 | 1308 px | **540 px** | 768 px | **0 px** |
+
+Y el detalle que M9 documentó como pendiente: **el abanico de la mano nacía bajo
+el borde**. A 768×1024 empieza en y=1244 en un documento de 1593 (244 px por
+debajo de una pantalla de 1024).
+
+Lo que se hizo, con el criterio de M8 aplicado **por ancho**:
+
+1. **El documento mide la pantalla.** `.app:has(> .layout)` pasa a `100dvh` con
+   `overflow: hidden` y es `main.layout` quien desplaza (`align-content: start` +
+   `grid-auto-rows: max-content`, porque dentro de un alto fijo las filas `auto`
+   aplastan los campos; y `scroll-padding-block-end` para que el foco por teclado
+   no quede detrás del HUD pegado de M9). Medido: la región mide 601 px de alto
+   con 1178 de contenido a 1024×768, y 596/1165 a 768×1024.
+2. **La mano tiene su propia fila al pie**, y por eso ya no hay que desplazar
+   para encontrarla: a 768×1024 el abanico va de 675 a 982 y a 1024×768 el botón
+   del cajón ocupa 683–727 con las métricas del motor debajo (739–755). Antes el
+   botón era `sticky` y flotaba sobre las métricas en 724–768; ahora es una fila
+   del pie como el resto.
+3. **El HUD de M9 sigue pegado al pie de la región** (`bottom: .5rem`, ya no
+   `3.4rem`: la mano está fuera de la región que desplaza y no hay que
+   esquivarla), así que la decisión sigue entera en todo el recorrido.
+4. **`/stress` queda fuera** con `:has(> .layout)`: no tiene `main.layout`, así
+   que ahí la página sigue desplazando como siempre. Sin ese alcance el
+   `overflow: hidden` recortaría su contenido y la matriz habría medido una deuda
+   0 falsa.
+
+Resultado medido con la mesa llena (`MESA_VIEWPORT_TABLET`), en las cuatro
+ventanas de la banda:
+
+| Ventana | Región (alto/contenido) | Mano | Carta de campo | Decisión al final | Último botón | Última carta propia |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1024×768 | 601 / 1158 | 765–768 (cajón) | 118 px | y=419–641 | **acierta** | **se toca** |
+| 900×700 | 533 / 1176 | 697–700 (cajón) | 118 px | y=332–574 | **acierta** | **se toca** |
+| 768×1024 | 596 / 1165 | 675–982 (abanico) | 115 px | y=394–635 | **acierta** | **se toca** |
+| 641×768 | 607 / 1120 | 765–768 (cajón) | 100 px | y=406–648 | **acierta** | **se toca** |
+
+No se encogió ninguna carta para llegar a cero: son las mismas de la banda
+(118/115/100 px). La lección (`/aprender`) comparte `app` + `.layout`, así que a
+768×900 su documento pasa de 1189 px a los 900 de la pantalla; la captura
+`docs/screenshots/tutorial-768.png` se regenera por eso y la prueba que exige
+que la lección se vea entera en 320, 375, 390, 768 y 1440 sigue pasando. Fuera de la banda no cambia nada, y no sólo por medición: la
+`@media` no puede aplicarse a ≥1100 px ni a ≤640 px. Comprobado con el cambio
+desactivado en caliente en el mismo estado: `1440×900`, `1280×800`, `1180×820`,
+`1100×700`, `640×768`, `844×390`, `390×844` y `320×800` dan exactamente los
+mismos números con y sin M10.
+
+`tests/e2e/arena-viewport-matrix.spec.ts` gana una prueba propia («tablet con la
+mesa llena») porque la matriz existente corre en el `MulliganDecision`, donde el
+tablero está casi vacío: medir la deuda de una tablet ahí es medir una pantalla
+vacía. La prueba nueva juega hasta tener mano viva y permanentes en los dos
+campos y entonces exige deuda 0, que la región tenga algo que desplazar, que la
+mano quepa, que las cartas sigan ≥70 px y que al final del recorrido respondan
+el último botón de la decisión y la última carta del campo propio. La prueba de
+la matriz se queda con lo que vale en cualquier estado (deuda 0, región propia,
+mano dentro de la pantalla).
+
 ## Pendiente
 
-- **En la tablet el documento sigue desplazando** (1024×768: 586 px; 900×700:
-  652; 768×1024: 531; 1024×1366: 208). Es deliberado: con cartas legibles y diez
-  permanentes no cabe, y el HUD pegado garantiza que la decisión no se pierda.
-  Encoger cartas **no** es la vía, y se midió para no volver a suponerlo: con el
-  mismo estado a 1024×768, limitar las cartas a 100 px deja la deuda en 469; a 88
-  px, 402; a 73 px (`9.5dvh`, el tope del rail), **319**; y a 55 px —por debajo
-  del mínimo legible de 70 px— todavía 218. Para llegar a 0 en esta banda lo que
-  tiene que dejar de crecer es el documento, no la carta: aplicar el shell de M8
-  por ancho implica decidir qué pasa con el abanico de la mano y con el HUD, y
-  merece su propio PR.
-- **El abanico de la mano queda bajo el borde en la tablet vertical**: a
-  768×1024 ocupa y=1253–1512 (empieza **229 px por debajo** de una pantalla de
-  1024) y a 1024×1366, y=1269–1528 (dentro de la pantalla). Se llega con un desplazamiento, pero el teléfono no lo necesita porque
-  tiene cajón. Las dos salidas medidas son un abanico `sticky` con el HUD
-  desplazado su alto, o extender el cajón a esta banda; la segunda toca las
-  pruebas táctiles y merece PR aparte.
+- **Las tierras del escritorio están por debajo del mínimo legible.** Medido con
+  el motor real: la fila de tierras usa `--card-w: min(124px, 7.5dvh)`, que a
+  900 px de alto son **68 px** (60 a 800, 62 a 820, 53 a 700), mientras las
+  criaturas se quedan en 124 y el fixture exige ≥70. Es anterior a M10 —idéntico
+  con y sin el cambio— y el arreglo no puede ser subir el tope sin devolver la
+  deuda al escritorio: merece su propio PR con la medición de las dos cosas.
+- **El documento del escritorio crece cuando la mesa se llena**: en una corrida
+  con seis permanentes en un campo el documento medía 1083 px a 1440×900 (deuda
+  183) y en otra con cinco, 900 (deuda 0). También es anterior a M10. La vía es
+  la misma que en la tablet —región que desplaza— pero en un ancho donde ya hay
+  rail lateral, y necesita su propia medición.
 - El registro de la partida sigue siempre visible en el teléfono; un plegado por
   defecto con contador sería la siguiente ganancia, pero toca un texto que hoy
   leen las pruebas de partida real.
+- Una corrida de la suite completa falló una vez en
+  `arena-card-tools-reachability` (fixture `/stress`, 1440×900, sin relación con
+  esta banda): no se reprodujo ni con `--repeat-each=2` ni en dos corridas
+  completas posteriores. Queda anotado como intermitente, no como arreglado.
 - Las cifras de este documento son de una corrida concreta con el estado de
-  partida descrito; la matriz real imprime `MESA_VIEWPORT_MATRIX_REAL` en cada
-  ejecución para volver a medirlas.
+  partida descrito; la matriz real imprime `MESA_VIEWPORT_MATRIX_REAL` y la de
+  tablet `MESA_VIEWPORT_TABLET` en cada ejecución para volver a medirlas.

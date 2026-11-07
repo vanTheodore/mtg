@@ -1250,12 +1250,65 @@
        pantalla justo al mirar el propio campo. */
     order: 1;
     position: sticky;
-    /* El botón de la mano mide 44 px y va pegado al borde inferior: 54,4 px
-       dejan 10 px de aire entre el HUD y el control. */
-    bottom: 3.4rem;
+    /* La mano ya no está en esta región (M10 la saca a su propia fila), así que
+       el HUD se pega al borde inferior del tablero con 8 px de aire. */
+    bottom: .5rem;
     z-index: 25;
     /* El tablero pasa por detrás: el HUD necesita fondo propio. */
     background: color-mix(in srgb, var(--surface) 94%, transparent);
     border-radius: 14px;
+  }
+}
+
+/*
+ * arena-band-m10 — la tablet tampoco es un documento.
+ *
+ * M9 dejó la decisión de Phase siempre visible en la banda 641–1099 px, pero el
+ * documento seguía creciendo: medido con el motor real y la mano viva (5 cartas,
+ * 4+4 permanentes) a 1024×768 el documento medía 1346 px (deuda 578) y a
+ * 768×1024 1593 (deuda 569). Con el tablero desplazando, el HUD `sticky` tenía
+ * que perseguir el borde y el abanico de la mano seguía naciendo 244 px por
+ * debajo de la pantalla a 768×1024 (medido: y=1244–1551 al principio del
+ * recorrido).
+ *
+ * La causa es la misma que en el teléfono (M8): el alto lo deciden los dos
+ * campos, no la pantalla. Aquí se aplica el mismo criterio **por ancho**, y con
+ * una diferencia: en la tablet la mano se queda en su propia fila al pie, así
+ * que nunca hay que desplazar para encontrarla y el HUD no tiene que esquivarla.
+ * El tablero (`.layout`) es lo único que desplaza.
+ */
+
+@media (min-width: 641px) and (max-width: 1099px) and (min-height: 521px) {
+  /* Sólo donde existe la región de la mesa: `/stress` no la tiene y ahí la
+     página debe seguir desplazando (si no, el `overflow: hidden` recortaría su
+     contenido y la matriz mediría una deuda 0 falsa). */
+  .app.app[data-board-style="arena"]:has(> .layout) {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .app.app[data-board-style="arena"] > .layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* Dentro de un alto fijo las filas `auto` se aplastan y los campos quedan
+       en 12 px (medido en el teléfono): el tablero crece a su contenido y es la
+       región la que desplaza. */
+    align-content: start;
+    grid-auto-rows: max-content;
+    /* El HUD pegado tapa el final de la región: el foco por teclado se trae por
+       encima de él y nunca queda detrás. */
+    scroll-padding-block-end: calc(var(--decision-h, 4rem) + 1rem);
+  }
+  .app.app[data-board-style="arena"] > .layout > * {
+    flex-shrink: 0;
+  }
+  /* La mano no entra en la región que desplaza: tiene su fila al pie y se ve
+     siempre, sin `sticky`. Según el alto de la ventana esa fila es el abanico
+     (a 768×1024 mide 307 px) o el botón que abre el cajón (44 px); en los dos
+     casos el tablero se queda con el resto y es lo único que desplaza. */
+  .app.app[data-board-style="arena"] > .hand-zone,
+  .app.app[data-board-style="arena"] > .hand {
+    flex: 0 0 auto;
   }
 }
