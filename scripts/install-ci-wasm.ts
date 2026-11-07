@@ -123,9 +123,29 @@ async function install(): Promise<void> {
   }
 
   const fields = 'databaseId,headSha,headBranch,status,conclusion,event,workflowName';
-  const runs = jsonCommand<VerifiedRun[]>(['gh', 'run', 'list', '-R', REPOSITORY,
-    '--workflow', 'ci.yml', '--commit', head, '--limit', '100', '--json', fields]);
-  const matching = runs.filter((r) => chosen === null || r.databaseId === chosen);
+  const candidates: VerifiedRun[] = [];
+  if (chosen !== null) {
+    // `--run` names one run directly: asking for it avoids depending on how
+    // many main runs fit in `--limit`, and the identity is still re-checked
+    // against the local HEAD by `selectVerifiedRun`.
+    candidates.push(jsonCommand<VerifiedRun>(['gh', 'run', 'view', String(chosen),
+      '-R', REPOSITORY, '--json', fields]));
+  } else {
+    // `--commit` (gh >= 2.41) is the only way to ask the API for one commit;
+    // gh 2.23 (Debian) rejects the flag outright. Ask by commit when the CLI
+    // understands it and fall back to recent main runs, filtering by headSha
+    // before trusting anything either way.
+    const list = (extra: string[]) => jsonCommand<VerifiedRun[]>(['gh', 'run', 'list',
+      '-R', REPOSITORY, '--workflow', 'ci.yml', ...extra, '--limit', '100', '--json', fields]);
+    let runs: VerifiedRun[];
+    try {
+      runs = list(['--commit', head]);
+    } catch {
+      runs = list(['--branch', 'main']);
+    }
+    candidates.push(...runs.filter((run) => run.headSha === head));
+  }
+  const matching = candidates.filter((r) => chosen === null || r.databaseId === chosen);
   const selected = selectVerifiedRun(matching, head);
   if (!selected) {
     throw new Error('No hay Mesa CI verde de main para este commit (' + head.slice(0, 12) +
