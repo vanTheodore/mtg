@@ -324,10 +324,6 @@
     border-radius: 14px;
     background: color-mix(in srgb, var(--surface) 85%, transparent);
   }
-  .app[data-board-style="arena"] .layout > .middle > .turn-track {
-    grid-column: 1;
-    width: 100%;
-  }
   .app[data-board-style="arena"] .layout > .middle > .center {
     grid-column: 1;
   }
@@ -689,7 +685,7 @@
   }
   .app[data-board-style="arena"] .layout > .middle > .decision { order: 1; }
   .app[data-board-style="arena"] .layout > .middle > .center { order: 2; }
-  .app[data-board-style="arena"] .layout > .middle > .turn-track { order: 3; }
+  .app[data-board-style="arena"] .layout > .middle > .stop-bar { order: 3; }
   /* The empty stack is a label, not a panel. */
   .app[data-board-style="arena"] .layout > .middle > .center > .stack[data-empty="true"] {
     padding-block: .25rem;
@@ -765,10 +761,6 @@
     grid-column: 2;
     grid-row: 1;
   }
-  .app[data-board-style="arena"] .layout > .middle > .turn-track {
-    grid-column: 2;
-    grid-row: 2;
-  }
   /* Un marcador de asiento en una tableta es una línea de números, no una
      tarjeta: la vida sigue en tamaño de lectura. */
   .app[data-board-style="arena"] .layout > .player-bar,
@@ -822,7 +814,7 @@
   }
   .app[data-board-style="arena"] .layout > .middle > .decision { order: 1; }
   .app[data-board-style="arena"] .layout > .middle > .center { order: 2; }
-  .app[data-board-style="arena"] .layout > .middle > .turn-track { order: 3; }
+  .app[data-board-style="arena"] .layout > .middle > .stop-bar { order: 3; }
   .app[data-board-style="arena"] .layout > .player-bar,
   .app[data-board-style="arena"] .board > .player-bar {
     padding-block: .15rem;
@@ -960,7 +952,7 @@
   .app.app[data-board-style="arena"] .player-bar .life-value { font-size: 1.15rem; }
   .app.app[data-board-style="arena"] .player-bar button.life { padding: .15rem .4rem; border-width: 1px; border-radius: 8px; }
   .app.app[data-board-style="arena"] .player-bar .zone-counts { font-size: .64rem; gap: .3rem .45rem; }
-  .app.app[data-board-style="arena"] .layout > .middle > .turn-track { padding-block: .2rem; }
+  .app.app[data-board-style="arena"] .layout > .middle > .stop-bar { padding-block: .2rem; }
 }
 
 
@@ -978,20 +970,18 @@
     gap: .3rem;
     padding-block: .3rem;
   }
-  .app.app[data-board-style="arena"] .layout > .middle > .turn-track {
+  .app.app[data-board-style="arena"] .layout > .middle > .stop-bar {
     gap: .15rem;
     padding-block: .1rem;
   }
-  .app.app[data-board-style="arena"] .turn-track .turn-caption {
+  .app.app[data-board-style="arena"] .stop-bar .caption {
     font-size: .7rem;
   }
-  .app.app[data-board-style="arena"] .turn-track .segments,
-  .app.app[data-board-style="arena"] .turn-track ol {
+  .app.app[data-board-style="arena"] .stop-bar ol {
     font-size: .62rem;
     gap: .15rem;
   }
-  .app.app[data-board-style="arena"] .turn-track .segments li,
-  .app.app[data-board-style="arena"] .turn-track ol li {
+  .app.app[data-board-style="arena"] .stop-bar ol li {
     padding: .1rem .25rem;
     border-radius: 5px;
   }
@@ -1234,7 +1224,7 @@
  * tope de carta por alto como en el rail), el HUD de 270 y la barra de arriba.
  * El panel de decisión empezaba en y=548 y sus acciones acababan en y=833, con
  * el botón de la mano (sticky, z=40, y=724–768) encima del último botón: la
- * acción de Phase no se podía pulsar sin desplazar la página, y la primera
+ * acción de Phase no se podía seleccionar sin desplazar la página, y la primera
  * pantalla no la mostraba entera.
  *
  * Aquí el tablero sigue desplazando como documento —en una tablet eso es

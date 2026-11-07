@@ -90,7 +90,7 @@ bun run dev
 
 `/ux` instala una instantánea escrita a mano en la misma sesión que usa el
 tablero: la capa y los visores se alimentan del contrato real, no de un atajo.
-Al pulsar una ficha de zona se abre su visor; la biblioteca sólo muestra el
+Al seleccionar una ficha de zona se abre su visor; la biblioteca sólo muestra el
 recuento (y las cartas reveladas, si el motor las proyectó).
 
 ## Verificación de esta ronda
@@ -179,7 +179,7 @@ Decisiones que se apartan de la captura, con motivo:
   desplaza, y las esquinas de `.app` caen sobre la barra superior y la mano
   (medido: la pila del rival aterrizaba sobre `Ajustes`). El control accesible
   sigue siendo la ficha de zona del asiento, que es la que anuncian los lectores
-  y la que pulsan las pruebas. Queda como pendiente si la mesa pasa a alto fijo.
+  y la que seleccionan las pruebas. Queda como pendiente si la mesa pasa a alto fijo.
 
 Verificación de esta pasada: `bun run check` 0 errores, `bun test src/lib` 292
 pasan (8 nuevas de `ui/phases.ts`), `bun run build` OK, `ux-lab.spec.ts` **11/11**
@@ -190,14 +190,22 @@ y `a11y.spec.ts` verde sobre `/stress`. Las capturas son
 ## Paradas por fase (tercera pasada, 7 nov 2026)
 
 `PhaseStopBar.svelte` sustituye a `TurnTrack` en la mesa de arena. Doce pasos,
-los mismos que agrupa el carril anterior, ahora pulsables: un paso marcado es
-una **parada**.
+los mismos que agrupa el carril anterior, ahora seleccionables: un paso marcado
+es una **parada**.
 
 - **Qué hace una parada.** `session.setStop(step, on)` guarda `mesa:stops` y
   `session.stopActive` hace que `autoPassPending` sea `false` en ese paso. Es
   decir: el motor sigue publicando la ventana y su recomendación, y la interfaz
   sólo deja de aceptar esa recomendación donde el jugador lo pidió. Sin paradas
   el comportamiento es exactamente el de antes.
+
+- **El carril anterior ya no existe.** `TurnTrack.svelte` dibujaba cinco
+  segmentos y se quedó sin uso al entrar la barra con paradas; el componente y
+  sus reglas en `arena.css` se retiraron en el mismo cambio para que ninguna
+  prueba buscara un elemento que la mesa ya no pinta. Lo que sí se conservó es
+  la geometría que esas reglas imponían: la barra abarca la fila entera del
+  centro (doce pasos no caben en el carril de 362 px) y sigue yendo la última
+  en las bandas apiladas.
 - **Dónde se ve.** El paso actual lleva `aria-current="step"`, la parada
   `aria-pressed` con relleno (visible sin pasar el ratón), el rótulo dice
   «Parada en \<paso\>» o «N paradas», y `StatusDock` añade la ficha `Parada`

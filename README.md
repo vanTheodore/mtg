@@ -59,10 +59,10 @@ principio a fin». Esta tabla mantiene la distinción:
 | --- | --- | --- |
 | Iniciar partida, mulligan, mano, robo | Sí | Sí |
 | Jugar tierras y lanzar hechizos (pago automático) | Sí | Sí |
-| Elegir objetivo pulsando carta o jugador | Sí | Sí (`20 → 17` vidas con Lightning Bolt) |
+| Elegir objetivo seleccionando carta o jugador | Sí | Sí (`20 → 17` vidas con Lightning Bolt) |
 | Declarar atacantes con destino | Sí | Sí |
 | Descartar hasta siete, historial, victoria | Sí | Sí (partida completa ganada) |
-| Pago de maná: fuentes pulsables, "Elegir maná manualmente" y "Confirmar pago" | Sí | Parcial: el E2E confirma pagos, pero no hay aserción dedicada de costes genéricos multi-maná |
+| Pago de maná: fuentes seleccionables, "Elegir maná manualmente" y "Confirmar pago" | Sí | Parcial: el E2E confirma pagos, pero no hay aserción dedicada de costes genéricos multi-maná |
 | **Declarar bloqueadoras por atacante** | **Sí** (pares, selección y confirmación) | **Sí**: `ui-deck-10e.spec.ts` ejecuta el bloqueo real desde Svelte y lo confirma con teclado |
 | Paso de asiento cada cambio de jugador | Sí | Sí (modal, modo por turno) |
 | Vista ampliada, tamaño/densidad/tema | Sí | Sí (a11y y anchos 320–1440) |
@@ -218,7 +218,7 @@ Cómo ejecutar todo esto —Chromium sin CDN, Edge en Windows, `vendor/` de las
 crates sin crates.io y el límite de memoria medido al compilar el motor— está en
 [`docs/BROWSER-RUNBOOK.md`](docs/BROWSER-RUNBOOK.md). La ronda anterior
 —interacción por carta, combate marcado por el motor y presupuesto por
-pulsación— sigue en
+selección— sigue en
 [`docs/VERIFICATION-0.5.md`](docs/VERIFICATION-0.5.md), y la de mazo pegado de
 10E, estados por carta, descarga selectiva e integridad de packs en
 [`docs/VERIFICATION-0.4.3.md`](docs/VERIFICATION-0.4.3.md); la anterior, con el
