@@ -1,4 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { createBoardDriver } from './support/board-driver.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -232,6 +233,40 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
     }
   }
 
+  // M10: en la banda de tablet (641–1099 px) la página deja de ser un documento.
+  // Al empezar la partida el tablero está casi vacío, así que aquí sólo se fija
+  // lo que vale en cualquier estado: el documento mide la pantalla, la mesa
+  // tiene su propia región que desplaza y la mano no se va por abajo. Las
+  // propiedades que necesitan una mesa llena viven en la prueba siguiente.
+  for (const [width, height] of [[1024, 768], [768, 1024]] as const) {
+    await page.setViewportSize({ width, height });
+    await settle(page);
+    const where = `${width}×${height}`;
+    const shape = await page.evaluate(() => {
+      const region = document.querySelector<HTMLElement>('main.layout')!;
+      const hand = document.querySelector<HTMLElement>('.hand-zone')!.getBoundingClientRect();
+      const trigger = document.querySelector<HTMLElement>('.hand-trigger');
+      const shown = trigger && getComputedStyle(trigger).display !== 'none';
+      return {
+        debt: Math.max(0, document.documentElement.scrollHeight - innerHeight),
+        regionOverflow: getComputedStyle(region).overflowY,
+        handTop: Math.round(hand.top),
+        handBottom: Math.round(hand.bottom),
+        triggerTop: shown ? Math.round(trigger!.getBoundingClientRect().top) : null,
+        triggerBottom: shown ? Math.round(trigger!.getBoundingClientRect().bottom) : null
+      };
+    });
+    expect(shape.debt, `la tablet vuelve a ser un documento a ${where}`).toBe(0);
+    expect(shape.regionOverflow, `la mesa no tiene región propia a ${where}`).toBe('auto');
+    expect(shape.handBottom, `la mano se va por abajo a ${where}`).toBeLessThanOrEqual(height);
+    if (shape.triggerTop !== null) {
+      expect(shape.triggerTop, `el botón de la mano se va por abajo a ${where}`).toBeGreaterThanOrEqual(0);
+      expect(shape.triggerBottom!, `el botón de la mano no cabe a ${where}`).toBeLessThanOrEqual(height);
+    } else {
+      expect(shape.handTop, `el abanico de la mano se va por arriba a ${where}`).toBeGreaterThanOrEqual(0);
+    }
+  }
+
   // The drawer may only exist where the fan does not fit; it must open, take
   // focus, and close itself when the window grows again, or the board would
   // stay `inert` behind a trigger that is no longer rendered.
@@ -251,4 +286,132 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
   await expect(page.locator('.hand-zone')).not.toHaveClass(/sheet-open/);
   await expect(page.locator('main.layout')).not.toHaveAttribute('inert', '');
   await expect(page.locator('.hand-trigger')).toBeHidden();
+});
+
+/**
+ * M10 — la tablet, con la partida empezada.
+ *
+ * La matriz de arriba corre en el `MulliganDecision`, donde el tablero está casi
+ * vacío: medir ahí la deuda de una tablet es medir una pantalla vacía. Esta
+ * prueba juega hasta tener la mano viva y permanentes en los dos campos
+ * (medido: 5 cartas y 4+4 permanentes) y recién entonces mide. Antes de M10, en
+ * ese estado, el documento medía 1346 px a 1024×768 (deuda 578) y 1593 a
+ * 768×1024 (deuda 569), y el abanico de la mano nacía 244 px por debajo de la
+ * pantalla.
+ */
+test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de la pantalla', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route('**/api.scryfall.com/**', (route) => route.abort());
+  await page.goto('/?autostart');
+  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible({ timeout: 180_000 });
+  const driver = createBoardDriver(page);
+
+  const population = () => page.evaluate(() => ({
+    hand: document.querySelectorAll('.hand-zone [data-card-id]').length,
+    permanents: [...document.querySelectorAll<HTMLElement>('section.battlefield[data-side]')].map(
+      (field) => field.querySelectorAll('[data-card-id]').length
+    )
+  }));
+  let state = await population();
+  for (let turn = 0; turn < 40; turn += 1) {
+    if (state.hand >= 4 && state.permanents.every((count) => count >= 4)) break;
+    await driver.settleSeat().catch(() => {});
+    if (!(await driver.playPlayableCard().catch(() => false))) {
+      await driver.answerAnyPrompt().catch(() => false);
+    }
+    state = await population();
+  }
+  test.skip(
+    !(state.hand >= 4 && state.permanents.every((count) => count >= 4)),
+    'la partida no llegó a un tablero con mano viva y permanentes en los dos campos'
+  );
+
+  const evidence: unknown[] = [];
+  for (const [width, height] of [[1024, 768], [900, 700], [768, 1024], [641, 768]] as const) {
+    const where = `${width}×${height}`;
+    await page.setViewportSize({ width, height });
+    await settle(page);
+    const sample = await page.evaluate(() => {
+      const region = document.querySelector<HTMLElement>('main.layout')!;
+      region.scrollTop = 0;
+      const app = document.querySelector<HTMLElement>('.app')!;
+      const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
+      const hand = document.querySelector<HTMLElement>('.hand-zone')!.getBoundingClientRect();
+      return {
+        debt: Math.max(0, document.documentElement.scrollHeight - innerHeight),
+        horizontalOverflow: document.documentElement.scrollWidth - innerWidth,
+        appHeight: Math.round(app.getBoundingClientRect().height),
+        regionClient: region.clientHeight,
+        regionScroll: region.scrollHeight,
+        regionMax: region.scrollHeight - region.clientHeight,
+        handTop: Math.round(hand.top),
+        handBottom: Math.round(hand.bottom),
+        fieldHeights: [...document.querySelectorAll<HTMLElement>('section.battlefield[data-side]')].map(
+          (field) => Math.round(field.getBoundingClientRect().height)
+        ),
+        minFieldCardWidth: Math.min(
+          ...[...document.querySelectorAll<HTMLElement>('section.battlefield[data-side] [data-card-id]')].map(
+            (card) => Math.round(card.getBoundingClientRect().width)
+          )
+        ),
+        panelTop: Math.round(panel.getBoundingClientRect().top)
+      };
+    });
+    expect(sample.debt, `el documento vuelve a crecer con la mesa llena a ${where}`).toBe(0);
+    expect(sample.horizontalOverflow, `desbordamiento horizontal a ${where}`).toBeLessThanOrEqual(1);
+    expect(sample.appHeight, `la aplicación no mide la pantalla a ${where}`).toBe(height);
+    expect(sample.regionMax, `la mesa no tiene nada que desplazar a ${where}`).toBeGreaterThan(0);
+    expect(sample.handBottom, `la mano se va por abajo a ${where}`).toBeLessThanOrEqual(height);
+    expect(sample.handTop, `la mano se va por arriba a ${where}`).toBeGreaterThanOrEqual(0);
+    // Las cartas no se encogen para que la deuda dé cero: son las mismas de la
+    // banda (118/115/100 px) y siguen por encima del mínimo legible.
+    expect(sample.minFieldCardWidth, `carta ilegible a ${where}`).toBeGreaterThanOrEqual(70);
+
+    // Al final del recorrido: la decisión entera, su último botón y la última
+    // carta del campo propio siguen respondiendo.
+    const end = await page.evaluate(() => {
+      const region = document.querySelector<HTMLElement>('main.layout')!;
+      region.scrollTop = region.scrollHeight;
+      // Se mide el desplazamiento ANTES de traer la carta a la vista: el
+      // `scrollIntoView` mueve la región otra vez y falsearía el «llegó al
+      // final».
+      const scrollTop = Math.round(region.scrollTop);
+      const regionMax = Math.round(region.scrollHeight - region.clientHeight);
+      const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
+      const box = panel.getBoundingClientRect();
+      const buttons = [...panel.querySelectorAll('button')].filter((button) => button.offsetParent !== null);
+      const last = buttons.at(-1);
+      const lb = last?.getBoundingClientRect();
+      const hit = lb ? document.elementFromPoint(lb.x + lb.width / 2, Math.min(lb.y + lb.height / 2, innerHeight - 1)) : null;
+      const own = document.querySelector<HTMLElement>('main.layout > .battlefield[data-side="player"], section.battlefield[data-side="player"]')!;
+      const cards = [...own.querySelectorAll<HTMLElement>('[data-card-id]')].filter((card) => card.getBoundingClientRect().width > 0);
+      const lastCard = cards.at(-1);
+      let cardHit: boolean | null = null;
+      if (lastCard) {
+        lastCard.scrollIntoView({ block: 'center' });
+        const cardBox = lastCard.getBoundingClientRect();
+        const cardEl = document.elementFromPoint(cardBox.x + cardBox.width / 2, Math.min(cardBox.y + cardBox.height / 2, innerHeight - 1));
+        cardHit = !!cardEl && (cardEl === lastCard || lastCard.contains(cardEl));
+      }
+      return {
+        scrollTop,
+        regionMax,
+        panelTop: Math.round(box.top),
+        panelBottom: Math.round(box.bottom),
+        lastHit: lb ? hit === last || !!last?.contains(hit) : false,
+        cardHit
+      };
+    });
+    await settle(page);
+    expect(end.scrollTop, `la región no llegó al final a ${where}`).toBe(end.regionMax);
+    expect(end.panelTop, `la decisión se escapa por arriba a ${where}`).toBeGreaterThanOrEqual(0);
+    expect(end.panelBottom, `la decisión se escapa por abajo a ${where}`).toBeLessThanOrEqual(height);
+    expect(end.lastHit, `el último botón de la decisión no responde a ${where}`).toBe(true);
+    expect(end.cardHit, `la última carta del campo propio no se puede tocar a ${where}`).toBe(true);
+    evidence.push({ where, sample, end });
+    await page.evaluate(() => { document.querySelector<HTMLElement>('main.layout')!.scrollTop = 0; });
+    await settle(page);
+  }
+  console.log('MESA_VIEWPORT_TABLET ' + JSON.stringify(evidence));
+  await persist(testInfo, 'tablet-band', evidence);
 });
