@@ -295,7 +295,7 @@ test('objetivo elegido con clic en el jugador y daño visible', async ({ page })
         await expect(decision).toContainText('objetivos');
         const target = page.locator('section[aria-label^="Jugador 2"] button.targetable');
         await expect(target).toBeVisible();
-        await expect(target).toHaveAttribute('aria-label', 'Elegir Jugador 2 como objetivo');
+        await expect(target).toHaveAccessibleName(/^Elegir Jugador 2 como objetivo/);
         await target.click();
         await expect(page.locator('[data-player-id="1"]')).toHaveAttribute('data-life', '17', { timeout: 20_000 });
         await expect(page.locator('section[aria-label="Registro de la partida"]')).toContainText(/pierde 3 vidas/);

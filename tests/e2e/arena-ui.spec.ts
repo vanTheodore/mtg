@@ -60,11 +60,17 @@ test('la banda de fases refleja el snapshot de Phase durante una partida', async
   const play = page.getByRole('button', { name: 'Iniciar partida' });
   await expect(play).toBeEnabled({ timeout: 30_000 });
   await play.click();
-  const phases = page.locator('.turn-track');
+  // The arena band is the step bar with stops (`PhaseStopBar`), which replaced
+  // the five-segment drawing: one stop per step Phase names, and the step the
+  // engine reports as current is marked by the engine's own phase string.
+  const phases = page.locator('.stop-bar');
   await expect(phases).toBeVisible({ timeout: 180_000 });
-  await expect(phases.locator('li')).toHaveCount(5);
-  await expect(phases.locator('li.current')).toHaveCount(1);
+  await expect(phases.locator('ol > li')).toHaveCount(12);
   await expect(phases).toContainText('Turno');
+  // The current stop is whatever Phase reports, not a guess of ours.
+  await expect.poll(() => phases.getAttribute('data-current-phase')).not.toBe('');
+  const current = await phases.getAttribute('data-current-phase');
+  await expect(phases.locator(`[data-step="${current}"]`)).toHaveAttribute('aria-current', 'step');
 });
 
 

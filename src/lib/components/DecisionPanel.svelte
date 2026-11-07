@@ -1,6 +1,7 @@
 <script lang="ts">
   import { session } from '#lib/game/session.svelte.ts';
   import { actionPriority, actionsForObject, decisionGuide, describeAction, isKeepHand } from '#lib/game/actions.ts';
+  import DamageAssignment from './DamageAssignment.svelte';
   import { manaText } from '#lib/game/cards.ts';
   import { actionObjectId, attackLabel, attackTargets, blockTargets, isManaAction, isManaPrompt, isTargetPrompt, manaActions, manualCast, targetLabel } from '#lib/game/interaction.ts';
   import type { GameAction } from '#lib/engine/types.ts';
@@ -55,7 +56,7 @@
   const pass = $derived(actions.find((a) => a.type === 'PassPriority'));
   const cancel = $derived(actions.find((a) => a.type === 'CancelCast'));
   const handled = new Set(['PassPriority', 'CancelCast', 'ChooseTarget', 'DeclareAttackers', 'DeclareBlockers', 'CastSpell', 'PlayLand', 'TapLandForMana', 'ActivateManaSource', 'MulliganDecision', 'SelectCards']);
-  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'GameOver', 'UnlessPayment']);
+  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'GameOver', 'UnlessPayment']);
   const manaExtras = new Set(['UntapLandForMana', 'BackToManaPayment', 'PayManaAbilityMana', 'ChooseManaColor']);
   const globalActions = $derived(actions.filter((a) => !handled.has(a.type) && actionObjectId(a) === undefined && !isManaAction(a) && !(manaPrompt && manaExtras.has(a.type))));
   const attackDraft = $derived(Object.entries(session.attacks));
@@ -174,6 +175,8 @@
         {#if !selectedActions.length}<span class="muted">Esta carta no tiene una acción disponible ahora.</span>{/if}
         <button type="button" class="link" onclick={() => { session.inspect = selected.id; }}>Ampliar carta</button>
       </div>
+    {:else if kind === 'AssignCombatDamage' || kind === 'AssignBlockerDamage'}
+      <DamageAssignment />
     {:else if kind === 'MulliganDecision'}
       <div class="prompt" aria-label="Mulligan">
         <p>Puedes conservar esta mano de siete cartas o hacer mulligan. Phase aplicará la regla de Londres al robar de nuevo.</p>

@@ -20,6 +20,8 @@ class GameSession {
   busy = $state(false);
   error = $state<string | null>(null);
   selected = $state<number | null>(null);
+  /** Card whose action menu is open (context menu / Shift+F10). UI state only. */
+  cardMenu = $state<number | null>(null);
   inspect = $state<number | null>(null);
   revealedViewer = $state<number | null>(null);
   revealedTurn = $state<number | null>(null);
@@ -35,6 +37,16 @@ class GameSession {
   history = $state<HistoryEntry[]>([]);
   lifeChanges = $state<Record<string, { amount: number; revision: number }>>({});
   autoPass = $state(true);
+  /**
+   * Stops per step (`PhaseStopBar`). A stop means "do not let the auto-pass
+   * close this window": Phase still decides whether there *is* a window and
+   * whether passing is recommended, and the UI only refuses to take the
+   * recommendation on the steps the player marked.
+   *
+   * Presentation preference, persisted per device. It never creates a priority
+   * window the engine did not offer.
+   */
+  stops = $state<Record<string, boolean>>({});
   /**
    * Phone hand drawer. On a touch-sized screen the hand is a fixed sheet over
    * the board instead of an inline row: thirty cards inline pushed the
@@ -68,6 +80,12 @@ class GameSession {
       if (density === 'compact' || density === 'comfortable') this.density = density;
       if (localStorage.getItem('mesa:autoPass') === 'off') this.autoPass = false;
       if (localStorage.getItem('mesa:handoffMode') === 'every') this.handoffMode = 'every';
+      try {
+        const savedStops = JSON.parse(localStorage.getItem('mesa:stops') ?? '{}') as Record<string, unknown>;
+        this.stops = Object.fromEntries(Object.entries(savedStops).filter(([, on]) => on === true)) as Record<string, boolean>;
+      } catch {
+        this.stops = {};
+      }
     }
   }
   setTheme(theme: Theme) {
@@ -98,9 +116,26 @@ class GameSession {
     return this.handoffMode === 'every' || s.state.turn_number !== this.revealedTurn || s.state.waiting_for.type === 'MulliganDecision';
   }
   setAutoPass(enabled: boolean) { this.autoPass = enabled; localStorage.setItem('mesa:autoPass', enabled ? 'on' : 'off'); if (enabled) this.maybeAutoPass(); }
+  /** Whether the player asked to hold this step. Unknown steps are never stops. */
+  isStop(step: string | null | undefined): boolean { return !!step && this.stops[step] === true; }
+  setStop(step: string, enabled: boolean) {
+    const next = { ...this.stops };
+    if (enabled) next[step] = true; else delete next[step];
+    this.stops = next;
+    try { localStorage.setItem('mesa:stops', JSON.stringify(next)); } catch { /* private mode */ }
+    // Turning a stop off may release a window the player was holding.
+    if (!enabled) this.maybeAutoPass();
+  }
+  toggleStop(step: string) { this.setStop(step, !this.isStop(step)); }
+  get stopActive() { return this.isStop(this.snapshot?.state.phase); }
   /** Phase's viewer-scoped recommendation; the UI never decides that by itself. */
   get autoPassPending() {
-    return this.autoPass && !!this.snapshot && !this.snapshot.outcome && this.snapshot.state.waiting_for.type === 'Priority' && this.snapshot.auto_pass_recommended === true;
+    return this.autoPass
+      && !this.stopActive
+      && !!this.snapshot
+      && !this.snapshot.outcome
+      && this.snapshot.state.waiting_for.type === 'Priority'
+      && this.snapshot.auto_pass_recommended === true;
   }
   private maybeAutoPass() {
     if (this.autoPassQueued || !this.autoPassPending) return;
@@ -168,6 +203,9 @@ class GameSession {
     this.queue = this.queue.then(run, run);
     return this.queue as Promise<void>;
   }
+
+  openCardMenu(id: ObjectId) { this.cardMenu = id; }
+  closeCardMenu() { this.cardMenu = null; }
 
   selectObject(id: ObjectId) {
     const s = this.snapshot;

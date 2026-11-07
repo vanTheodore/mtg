@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import ArenaSurface from './ArenaSurface.svelte';
-  import TurnTrack from './TurnTrack.svelte';
+  import PhaseStopBar from './PhaseStopBar.svelte';
+  import StatusDock from './StatusDock.svelte';
+  import CoachTip from './CoachTip.svelte';
+  import CardActionMenu from './CardActionMenu.svelte';
   import Hand from './Hand.svelte';
   import Battlefield from './Battlefield.svelte';
   import DecisionPanel from './DecisionPanel.svelte';
@@ -10,6 +13,7 @@
   import Settings from './Settings.svelte';
   import CardView from './CardView.svelte';
   import PlayerPanel from './PlayerPanel.svelte';
+  import BoardOverlay from './BoardOverlay.svelte';
   import HistoryPanel from './HistoryPanel.svelte';
   import DeckBuilder from './DeckBuilder.svelte';
   import { session } from '#lib/game/session.svelte.ts';
@@ -76,6 +80,23 @@
   const player = $derived(snapshot?.state.players[viewer]);
   const rival = $derived(snapshot?.state.players[opponent]);
   const handObjects = $derived((player?.hand ?? []).map((id) => objects[String(id)]).filter(Boolean) as GameObject[]);
+  /**
+   * Where the card menu was opened from, in viewport coordinates. Captured when
+   * the menu opens (the card may move afterwards, e.g. a hand resize).
+   */
+  let menuAnchor = $state<DOMRect | null>(null);
+  function openMenuFrom(element: HTMLElement) {
+    const id = Number(element.getAttribute('data-card-id'));
+    if (!Number.isFinite(id)) return;
+    menuAnchor = element.getBoundingClientRect();
+    session.selected = id;
+    session.openCardMenu(id);
+  }
+  function cardFromEvent(event: Event): HTMLElement | null {
+    const target = event.target as HTMLElement | null;
+    return target?.closest?.('[data-card-id]') as HTMLElement | null;
+  }
+
   const rivalHand = $derived((rival?.hand ?? []).map((id) => objects[String(id)]).filter(Boolean) as GameObject[]);
   const graveyardObjects = $derived((player?.graveyard ?? []).map((id) => objects[String(id)]).filter(Boolean) as GameObject[]);
   const battlefieldObjects = $derived((snapshot?.state.battlefield ?? []).map((id) => objects[String(id)]).filter(Boolean) as GameObject[]);
@@ -272,7 +293,29 @@
      battlefield into a 70-card vertical marathon (docs/screenshots/cartas-320.png
      in 0.5.1). The cap only bites on narrow screens; the density control still
      wins everywhere else. -->
-<div class="app" data-board-style={session.boardStyle} style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2)); --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
+<!-- The card menu opens from the standard context-menu gestures. A window
+     listener keeps the board itself free of mouse-only affordances: a card is
+     focusable (`role="button" tabindex="0"`), so Shift+F10 works from the
+     keyboard, and right click works for everyone else. -->
+<svelte:window
+  oncontextmenu={(event) => {
+    if (document.querySelector('dialog[open]')) return;
+    const card = cardFromEvent(event);
+    if (!card) return;
+    event.preventDefault();
+    openMenuFrom(card);
+  }}
+  onkeydown={(event) => {
+    if (!(event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) return;
+    if (document.querySelector('dialog[open]')) return;
+    const card = cardFromEvent(event);
+    if (!card) return;
+    event.preventDefault();
+    openMenuFrom(card);
+  }}
+/>
+
+<div class="app" data-board-style={session.boardStyle} data-chrome={session.boardStyle === 'arena' && snapshot && !needsHandoff ? 'arena' : undefined} style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2)); --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
   {#if session.boardStyle === 'arena'}
     <ArenaSurface color={arenaColor} />
   {/if}
@@ -425,21 +468,24 @@
     </section>
   {:else}
     <svelte:boundary>
-    <main class="layout" inert={needsHandoff || session.handDrawerOpen} aria-hidden={needsHandoff}>
-      <PlayerPanel player={rival!} showHand />
+    <main class="layout" data-board-region inert={needsHandoff || session.handDrawerOpen} aria-hidden={needsHandoff}>
       <!-- While the device changes hands the board is covered and inert, so
            the other seat's hand is not drawn either: the dialog promises that
            the previous player's hand stays hidden, and the count of those
            backs would say how many cards they are holding. -->
       {#if rivalHand.length && !needsHandoff}
-        <div class="rival-hand" aria-label={`Mano oculta del Jugador ${opponent + 1}`}>
-          {#each rivalHand as obj (obj.id)}<div class="mini-back" aria-hidden="true"></div>{/each}
+        <div class="rival-hand" role="group" aria-label={`Mano oculta del Jugador ${opponent + 1}`} style={`--fan-mid: ${(rivalHand.length - 1) / 2}`}>
+          {#each rivalHand as obj, i (obj.id)}
+            <div class="mini-back" aria-hidden="true" style={`--i: ${i}`}></div>
+          {/each}
+          <span class="fan-count" aria-hidden="true">{rivalHand.length}</span>
         </div>
       {/if}
+      <PlayerPanel player={rival!} showHand />
       <Battlefield objects={battlefieldObjects} {metas} owner={opponent} side="opponent" label={`Campo de batalla · Jugador ${opponent + 1}`} />
       <div class="middle">
         {#if session.boardStyle === 'arena'}
-          <TurnTrack phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
+          <PhaseStopBar phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
         {/if}
         <div class="center">
           <StackPanel />
@@ -451,6 +497,14 @@
       <Battlefield objects={battlefieldObjects} {metas} owner={viewer} side="player" label={`Tu campo de batalla · Jugador ${viewer + 1}`} />
 
       <PlayerPanel player={player!} />
+
+      <!-- Chrome de mesa portado de Phase: quién tiene la prioridad, cuántas
+           cartas hay, en qué paso estamos y el conmutador de control total.
+           Va dentro de la rejilla para no tapar cartas en ningún alto. -->
+      {#if session.boardStyle === 'arena'}
+        <CoachTip />
+        <StatusDock />
+      {/if}
 
       {#if graveyardObjects.length}
         <section class="graveyard" aria-label="Tu cementerio">
@@ -465,6 +519,16 @@
       {/if}
 
     </main>
+    <!-- Phase's line layer: target, stack and combat arcs between measured
+         anchors. Fixed-position and pointer-events:none, so it adds no layout
+         and cannot steal a click from a card. Arena only: Clásico stays the
+         plain, text-first board its own tests describe. -->
+    {#if session.boardStyle === 'arena' && !needsHandoff}
+      <BoardOverlay />
+    {/if}
+    {#if session.cardMenu !== null}
+      <CardActionMenu objectId={session.cardMenu} anchor={menuAnchor} onclose={() => session.closeCardMenu()} />
+    {/if}
     {#snippet failed(error, reset)}
       <div class="notice error" role="alert">
         <strong>La interfaz encontró un error al dibujar el tablero.</strong>
