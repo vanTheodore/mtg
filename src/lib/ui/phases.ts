@@ -34,6 +34,29 @@ const STEP_LABELS: Readonly<Record<string, string>> = {
   Cleanup: 'Limpieza'
 };
 
+export type PhaseStep = { value: string; label: string; short: string };
+
+/**
+ * The twelve steps of a turn, in the order Phase walks them, with the label a
+ * stop button prints. `short` exists because twelve full labels do not fit in
+ * one row at 320 px (`docs/PHASE-UX-PORT.md`); the accessible name uses the
+ * full one.
+ */
+export const PHASE_STEPS: readonly PhaseStep[] = [
+  { value: 'Untap', label: 'Enderezar', short: 'Enderezar' },
+  { value: 'Upkeep', label: 'Mantenimiento', short: 'Mantener' },
+  { value: 'Draw', label: 'Robar', short: 'Robar' },
+  { value: 'PreCombatMain', label: 'Principal 1', short: 'Principal' },
+  { value: 'BeginCombat', label: 'Inicio del combate', short: 'Combate' },
+  { value: 'DeclareAttackers', label: 'Declarar atacantes', short: 'Atacar' },
+  { value: 'DeclareBlockers', label: 'Declarar bloqueadoras', short: 'Bloquear' },
+  { value: 'CombatDamage', label: 'Daño de combate', short: 'Daño' },
+  { value: 'EndCombat', label: 'Fin del combate', short: 'Fin combate' },
+  { value: 'PostCombatMain', label: 'Principal 2', short: 'Principal 2' },
+  { value: 'End', label: 'Paso final', short: 'Final' },
+  { value: 'Cleanup', label: 'Limpieza', short: 'Limpieza' }
+];
+
 /** `''` and `undefined` become `''`; unknown steps keep the engine's word. */
 export function phaseLabel(phase: string | null | undefined): string {
   if (!phase) return '';

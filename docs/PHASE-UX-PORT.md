@@ -186,3 +186,40 @@ pasan (8 nuevas de `ui/phases.ts`), `bun run build` OK, `ux-lab.spec.ts` **11/11
 (3 nuevas: dock y control persistente, aviso descartable, abanico con recuento)
 y `a11y.spec.ts` verde sobre `/stress`. Las capturas son
 `docs/screenshots/ux-cromo-1440.jpg` y las tres de la ronda anterior.
+
+## Paradas por fase (tercera pasada, 7 nov 2026)
+
+`PhaseStopBar.svelte` sustituye a `TurnTrack` en la mesa de arena. Doce pasos,
+los mismos que agrupa el carril anterior, ahora pulsables: un paso marcado es
+una **parada**.
+
+- **Qué hace una parada.** `session.setStop(step, on)` guarda `mesa:stops` y
+  `session.stopActive` hace que `autoPassPending` sea `false` en ese paso. Es
+  decir: el motor sigue publicando la ventana y su recomendación, y la interfaz
+  sólo deja de aceptar esa recomendación donde el jugador lo pidió. Sin paradas
+  el comportamiento es exactamente el de antes.
+- **Dónde se ve.** El paso actual lleva `aria-current="step"`, la parada
+  `aria-pressed` con relleno (visible sin pasar el ratón), el rótulo dice
+  «Parada en \<paso\>» o «N paradas», y `StatusDock` añade la ficha `Parada`
+  cuando la parada cae en el paso en curso.
+- **Accesible.** Nombre `corto · parada en <paso>` para cumplir
+  `label-content-name-mismatch` (el texto visible tiene que estar dentro del
+  nombre accesible), activación con `Space`/`Enter`, 12 controles en una fila que
+  desplaza en horizontal a 320 px en vez de envolver y comerse el alto medido del
+  tablero.
+- **Lo que no hace.** No crea ventanas de prioridad ni paradas «por turno» del
+  rival: el motor no las modela y no se inventan.
+
+Corrección de la lista anterior: **el selector de destino de ataque y las
+acciones de carta ya existían** en `DecisionPanel` (`Atacar a …` con
+`session.chooseAttackDestination`, y la lista de acciones legales de la carta
+seleccionada). Esta pasada no los reescribe: el hueco real que quedaba era el de
+las paradas. La asignación de daño sigue delegada en las acciones que publica
+Phase cuando el paso lo pide; si el motor abre un `waiting_for` sin vista
+propia, el panel cae en su lista de opciones legales en vez de inventar una
+interfaz.
+
+Verificación: `bun run check` 0 errores, `bun test src/lib` **294** (2 nuevas de
+pasos), `bun run build` OK, `ux-lab.spec.ts` **13/13** con axe verde (2 nuevas:
+parada persistente y ficha `Parada` en el dock). Captura:
+`docs/screenshots/ux-paradas-1440.jpg`.

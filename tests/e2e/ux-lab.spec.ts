@@ -174,3 +174,41 @@ test('la mano oculta del rival se dibuja en abanico y anuncia su recuento', asyn
   await expect(hand.locator('.fan-count')).toHaveAttribute('aria-hidden', 'true');
   await expect(hand.locator('.fan-count')).toHaveText('3');
 });
+
+test('la barra de fases marca la parada y la conserva entre recargas', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=idle');
+
+  const bar = page.getByRole('region', { name: 'Fases y paradas' });
+  await expect(bar).toBeVisible();
+  // Twelve steps, exactly the ones the turn track groups.
+  await expect(bar.getByRole('button', { name: /· parada en/ })).toHaveCount(12);
+  await expect(bar.getByRole('button', { name: 'Principal · parada en Principal 1' })).toHaveAttribute('aria-current', 'step');
+
+  const block = bar.getByRole('button', { name: 'Bloquear · parada en Declarar bloqueadoras' });
+  await expect(block).toHaveAttribute('aria-pressed', 'false');
+  await block.click();
+  await expect(block).toHaveAttribute('aria-pressed', 'true');
+  await expect(bar).toContainText('Parada en Declarar bloqueadoras');
+  expect(await page.evaluate(() => localStorage.getItem('mesa:stops'))).toBe('{"DeclareBlockers":true}');
+
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Fases y paradas' })
+    .getByRole('button', { name: 'Bloquear · parada en Declarar bloqueadoras' })).toHaveAttribute('aria-pressed', 'true');
+
+  // Keyboard reaches and releases it, and the dock stops announcing a stop.
+  await page.getByRole('button', { name: 'Bloquear · parada en Declarar bloqueadoras' }).focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('button', { name: 'Bloquear · parada en Declarar bloqueadoras' })).toHaveAttribute('aria-pressed', 'false');
+  expect(await page.evaluate(() => localStorage.getItem('mesa:stops'))).toBe('{}');
+});
+
+test('una parada en el paso actual aparece en el estado de la mesa', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=idle');
+
+  const dock = page.getByRole('group', { name: 'Estado de la mesa' });
+  await expect(dock).not.toContainText('Parada');
+  await page.getByRole('button', { name: 'Principal · parada en Principal 1' }).click();
+  await expect(dock).toContainText('Parada');
+});

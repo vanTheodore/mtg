@@ -31,6 +31,7 @@
     <span class="dot" aria-hidden="true"></span>{status.label}
   </span>
   {#if phase}<span class="chip phase"><span class="sr-only">Fase: </span>{phase}</span>{/if}
+  {#if session.stopActive}<span class="chip stop">Parada</span>{/if}
   <span class="chip hand"><span class="caps">Mano</span> {handCount}</span>
   <!-- Same preference as the top-bar checkbox, with its own name so neither
        control shadows the other for assistive technology or the E2E. -->
@@ -93,6 +94,15 @@
     font-weight: 700;
   }
   .hand { color: var(--ink); }
+  .stop {
+    border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+    background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+    color: var(--ink);
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    font-size: .64rem;
+    font-weight: 700;
+  }
   .control {
     text-transform: uppercase;
     letter-spacing: .09em;
