@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import ArenaSurface from './ArenaSurface.svelte';
   import PhaseStopBar from './PhaseStopBar.svelte';
+  import MobilePhaseChip from './MobilePhaseChip.svelte';
   import StatusDock from './StatusDock.svelte';
   import CoachTip from './CoachTip.svelte';
   import CardActionMenu from './CardActionMenu.svelte';
@@ -485,7 +486,10 @@
       <Battlefield objects={battlefieldObjects} {metas} owner={opponent} side="opponent" label={`Campo de batalla · Jugador ${opponent + 1}`} />
       <div class="middle">
         {#if session.boardStyle === 'arena'}
+          <!-- One preference, two shapes: twelve chips from 641 px up, one
+               line and a sheet below, where a 30 px chip is not tappable. -->
           <PhaseStopBar phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
+          <MobilePhaseChip phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
         {/if}
         <div class="center">
           <StackPanel />

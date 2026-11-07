@@ -970,9 +970,12 @@
     gap: .3rem;
     padding-block: .3rem;
   }
-  .app.app[data-board-style="arena"] .layout > .middle > .stop-bar {
-    gap: .15rem;
-    padding-block: .1rem;
+  /* Below 641 px the twelve-chip bar becomes `MobilePhaseChip`: one line with
+     the step, the turn and the stops, and a sheet with touch-size rows. The bar
+     is hidden outright, not with `visibility`, so its twelve buttons also leave
+     the tab order. */
+  .app.app[data-board-style="arena"] .stop-bar {
+    display: none;
   }
   .app.app[data-board-style="arena"] .stop-bar .caption {
     font-size: .7rem;

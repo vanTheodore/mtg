@@ -203,6 +203,46 @@ test('la barra de fases marca la parada y la conserva entre recargas', async ({ 
   expect(await page.evaluate(() => localStorage.getItem('mesa:stops'))).toBe('{}');
 });
 
+test('en el teléfono la ficha de fase sustituye a la barra y abre las paradas en una hoja', async ({ page }) => {
+  // At 390 px the twelve-chip bar spent 84 px of the screen and every chip was a
+  // 30 px target. The chip is one line; the sheet is where the stops live.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/ux?scene=idle');
+
+  const chip = page.locator('.phase-chip .chip');
+  await expect(chip).toBeVisible();
+  await expect(page.locator('.stop-bar')).toBeHidden();
+  await expect(chip).toContainText('Turno 4');
+  await expect(chip).toContainText('Principal');
+  await expect(chip).toContainText('Sin paradas');
+  expect(await chip.evaluate((node) => Math.round(node.getBoundingClientRect().height))).toBeLessThanOrEqual(40);
+
+  await chip.click();
+  const sheet = page.getByRole('dialog', { name: 'Paradas del turno' });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.locator('.row')).toHaveCount(12);
+  // The row the engine reports as current is the one that takes the focus.
+  await expect(sheet.getByRole('button', { name: /Principal 1/ })).toBeFocused();
+  await expect(sheet.getByRole('button', { name: /Principal 1/ })).toHaveAttribute('aria-current', 'step');
+
+  const row = sheet.getByRole('button', { name: /Declarar bloqueadoras/ });
+  await expect(row).toHaveAttribute('aria-pressed', 'false');
+  await row.click();
+  await expect(row).toHaveAttribute('aria-pressed', 'true');
+  await expect(row).toContainText('Con parada');
+  expect(await page.evaluate(() => localStorage.getItem('mesa:stops'))).toBe('{"DeclareBlockers":true}');
+
+  const axe = await new AxeBuilder({ page }).include('dialog.phase-sheet').analyze();
+  const serious = axe.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''));
+  expect(serious.map((violation) => violation.id)).toEqual([]);
+
+  // Escape closes the sheet and hands the focus back to the chip, not to the page.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Paradas del turno' })).toHaveCount(0);
+  await expect(chip).toBeFocused();
+  await expect(chip).toContainText('Parada en 1 paso');
+});
+
 test('una parada en el paso actual aparece en el estado de la mesa', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/ux?scene=idle');

@@ -15,6 +15,7 @@
   import StackPanel from '#lib/components/StackPanel.svelte';
   import StatusDock from '#lib/components/StatusDock.svelte';
   import PhaseStopBar from '#lib/components/PhaseStopBar.svelte';
+  import MobilePhaseChip from '#lib/components/MobilePhaseChip.svelte';
   import CoachTip from '#lib/components/CoachTip.svelte';
   import HistoryPanel from '#lib/components/HistoryPanel.svelte';
   import BoardOverlay from '#lib/components/BoardOverlay.svelte';
@@ -287,6 +288,7 @@
     <!-- Same rail as the real table: arena.css places `.middle` in the sticky
          right column on short desktops and back in the flow elsewhere. -->
     <PhaseStopBar phase={snapshot().state.phase} turn={4} activePlayer={0} />
+    <MobilePhaseChip phase={snapshot().state.phase} turn={4} activePlayer={0} />
 
     <div class="middle">
       <div class="center">
