@@ -1,6 +1,8 @@
 use super::super::engine::apply_as_current;
 use super::*;
+use crate::game::restrictions::spell_confined_to_sorcery_timing;
 use crate::game::scenario::{GameScenario, P0, P1};
+use crate::game::scenario_db::GameScenarioDbExt;
 use crate::game::zones;
 use crate::game::zones::create_object;
 use crate::parser::oracle::parse_oracle_text;
@@ -50778,6 +50780,55 @@ fn azula_exile_static_grants_flash_timing() {
     );
 }
 
+/// CR 601.3b: Azula's exile-cast flash grant reaches
+/// `restrictions::spell_confined_to_sorcery_timing` through
+/// `spell_has_effective_flash`; without the grant, the same exiled sorcery is
+/// confined.
+#[test]
+fn exile_flash_permission_lifts_sorcery_timing_confinement() {
+    let player = PlayerId(0);
+    for grants_flash in [true, false] {
+        let mut state = setup_game_at_main_phase();
+        let source = add_azula_exile_cast_source(&mut state, player);
+        if !grants_flash {
+            let definition = state
+                .objects
+                .get_mut(&source)
+                .unwrap()
+                .static_definitions
+                .get_mut(0)
+                .unwrap();
+            let StaticMode::ExileCastPermission { grants_flash, .. } = &mut definition.mode else {
+                panic!("the helper pushes an ExileCastPermission");
+            };
+            *grants_flash = false;
+        }
+        let spell = add_linked_blue_sorcery(&mut state, player, source, "Exiled Blue Bolt");
+        add_mana(&mut state, player, ManaType::Red, 1);
+
+        // Reach: castable in the own main with or without the grant.
+        assert!(can_cast_object_now(&state, player, spell));
+        assert_eq!(
+            spell_confined_to_sorcery_timing(&state, player, spell),
+            !grants_flash,
+            "own main"
+        );
+
+        // "During your turn": P0's upkeep is during P0's turn.
+        state.phase = Phase::Upkeep;
+        assert_eq!(
+            spell_confined_to_sorcery_timing(&state, player, spell),
+            !grants_flash,
+            "own upkeep"
+        );
+        assert_eq!(
+            !can_cast_object_now(&state, player, spell),
+            !grants_flash,
+            "parity with can_cast_object_now, own upkeep"
+        );
+    }
+}
+
 /// Add a {2}-generic (mana value 2) sorcery linked to `source_id` in the
 /// persistent `exile_links` pool. Returns the exiled spell's object id.
 fn add_linked_two_generic_sorcery(
@@ -57118,6 +57169,80 @@ fn resolution_face_legality_admits_the_land_face_only_under_a_play_policy() {
     );
 }
 
+/// CR 712.12: a Play policy's filter judges the land face being played, on the
+/// projection that elects it — not the card's front. Bala Ged Recovery //
+/// Bala Ged Sanctuary in exile: a Land filter admits Sanctuary even though the
+/// card's front is a sorcery, and a Sorcery filter rejects the land face even
+/// though the front is a sorcery. Ownership is still the card's own: a Land
+/// filter limited to an opponent's cards rejects P0's Sanctuary. The
+/// structural land leg (`resolution_land_card_admission`) and the face
+/// legality the window and election read agree.
+#[test]
+fn resolution_land_back_face_admission_reads_the_policy_filter_on_the_played_face() {
+    let db = crate::test_support::shared_card_db();
+    let mut scenario = GameScenario::new();
+    scenario.at_phase(Phase::PreCombatMain);
+    let card = scenario.add_real_card(P0, "Bala Ged Recovery", Zone::Exile, db);
+    let state = scenario.state.clone();
+    assert!(
+        state.objects[&card]
+            .card_types
+            .core_types
+            .contains(&CoreType::Sorcery),
+        "reach-guard: in exile the card has its sorcery front's characteristics"
+    );
+    let policy = |filter: TargetFilter| {
+        crate::types::ability::ResolutionCastFacePolicy::new(
+            filter,
+            ObjectId(83_021),
+            PlayerId(0),
+            None,
+        )
+        .with_play_mode(CardPlayMode::Play)
+    };
+    let back_legality = |policy: &crate::types::ability::ResolutionCastFacePolicy| {
+        let mut request = resolution_test_play_request(CardPlayMode::Play, None);
+        request.face_policy = policy.clone();
+        request.cleanup.face_policy = policy.clone();
+        resolution_test_face_legality(&state, card, &request).back
+    };
+
+    let land = policy(TargetFilter::Typed(TypedFilter::new(TypeFilter::Land)));
+    assert!(
+        resolution_land_face_admission(&state, P0, card, &land),
+        "a Land filter admits the Sanctuary face"
+    );
+    assert!(resolution_land_card_admission(&state, card, &land));
+    assert!(
+        !resolution_land_front_card_admission(&state, card, &land),
+        "a route without the frozen face policy admits only a land card as it is"
+    );
+    assert_eq!(back_legality(&land), Some(ResolutionFaceAction::PlayLand));
+
+    let sorcery = policy(TargetFilter::Typed(TypedFilter::new(TypeFilter::Sorcery)));
+    assert!(
+        !resolution_land_face_admission(&state, P0, card, &sorcery),
+        "a Sorcery filter rejects the land face"
+    );
+    assert!(!resolution_land_card_admission(&state, card, &sorcery));
+    assert_eq!(back_legality(&sorcery), None);
+
+    let opponents_land = policy(TargetFilter::Typed(
+        TypedFilter::new(TypeFilter::Land).properties(vec![FilterProp::Owned {
+            controller: crate::types::ability::ControllerRef::Opponent,
+        }]),
+    ));
+    assert!(
+        !resolution_land_face_admission(&state, P0, card, &opponents_land),
+        "ownership is read on the card"
+    );
+    assert!(!resolution_land_card_admission(
+        &state,
+        card,
+        &opponents_land
+    ));
+}
+
 /// CR 712.12 + CR 305.2a: when the land face is a Play election's only legal
 /// face, it is returned for the caller to play and no temporary permission
 /// remains. The same card under a Cast policy is rejected outright: a Cast
@@ -57138,8 +57263,14 @@ fn resolution_play_election_plays_the_only_legal_land_face_and_leaves_no_permiss
     )
     .expect("the Play election initiates");
     assert!(
-        matches!(initiation, ResolutionElectionInitiation::PlayLandFace(_)),
-        "the only legal face is the land face"
+        matches!(
+            initiation,
+            ResolutionElectionInitiation::PlayLandFace {
+                face: ModalCardFace::Back,
+                ..
+            }
+        ),
+        "the only legal face is the land (back) face"
     );
     assert!(play_state.objects[&spell].casting_permissions.is_empty());
 

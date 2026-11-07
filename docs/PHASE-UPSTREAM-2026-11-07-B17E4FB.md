@@ -1,5 +1,10 @@
 # Phase upstream: deriva medida desde `b17e4fb` — 7 nov 2026
 
+> **Aplicado el mismo día** en [`PHASE-UPSTREAM-2026-11-07-F671692.md`](PHASE-UPSTREAM-2026-11-07-F671692.md):
+> el pin pasa a `f671692` con el digest de la tabla. Este documento se queda como la
+> medición de la deriva (qué había por delante y cómo se comprobó); la sección
+> «Por qué no se aplica aquí» describe el estado del entorno antes de ese PR.
+
 Comprobación de deriva, **sin importar código ni mover el pin**. El pin
 autoritativo sigue siendo `b17e4fb` en [`PHASE-UPSTREAM-PIN.json`](PHASE-UPSTREAM-PIN.json);
 este documento sólo mide cuánto hay por delante y deja el trabajo preparado.
