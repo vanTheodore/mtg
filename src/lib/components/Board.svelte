@@ -2,6 +2,8 @@
   import { onMount, tick } from 'svelte';
   import ArenaSurface from './ArenaSurface.svelte';
   import TurnTrack from './TurnTrack.svelte';
+  import StatusDock from './StatusDock.svelte';
+  import CoachTip from './CoachTip.svelte';
   import Hand from './Hand.svelte';
   import Battlefield from './Battlefield.svelte';
   import DecisionPanel from './DecisionPanel.svelte';
@@ -273,7 +275,7 @@
      battlefield into a 70-card vertical marathon (docs/screenshots/cartas-320.png
      in 0.5.1). The cap only bites on narrow screens; the density control still
      wins everywhere else. -->
-<div class="app" data-board-style={session.boardStyle} style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2)); --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
+<div class="app" data-board-style={session.boardStyle} data-chrome={session.boardStyle === 'arena' && snapshot && !needsHandoff ? 'arena' : undefined} style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2)); --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
   {#if session.boardStyle === 'arena'}
     <ArenaSurface color={arenaColor} />
   {/if}
@@ -427,16 +429,19 @@
   {:else}
     <svelte:boundary>
     <main class="layout" data-board-region inert={needsHandoff || session.handDrawerOpen} aria-hidden={needsHandoff}>
-      <PlayerPanel player={rival!} showHand />
       <!-- While the device changes hands the board is covered and inert, so
            the other seat's hand is not drawn either: the dialog promises that
            the previous player's hand stays hidden, and the count of those
            backs would say how many cards they are holding. -->
       {#if rivalHand.length && !needsHandoff}
-        <div class="rival-hand" role="group" aria-label={`Mano oculta del Jugador ${opponent + 1}`}>
-          {#each rivalHand as obj (obj.id)}<div class="mini-back" aria-hidden="true"></div>{/each}
+        <div class="rival-hand" role="group" aria-label={`Mano oculta del Jugador ${opponent + 1}`} style={`--fan-mid: ${(rivalHand.length - 1) / 2}`}>
+          {#each rivalHand as obj, i (obj.id)}
+            <div class="mini-back" aria-hidden="true" style={`--i: ${i}`}></div>
+          {/each}
+          <span class="fan-count" aria-hidden="true">{rivalHand.length}</span>
         </div>
       {/if}
+      <PlayerPanel player={rival!} showHand />
       <Battlefield objects={battlefieldObjects} {metas} owner={opponent} side="opponent" label={`Campo de batalla · Jugador ${opponent + 1}`} />
       <div class="middle">
         {#if session.boardStyle === 'arena'}
@@ -452,6 +457,14 @@
       <Battlefield objects={battlefieldObjects} {metas} owner={viewer} side="player" label={`Tu campo de batalla · Jugador ${viewer + 1}`} />
 
       <PlayerPanel player={player!} />
+
+      <!-- Chrome de mesa portado de Phase: quién tiene la prioridad, cuántas
+           cartas hay, en qué paso estamos y el conmutador de control total.
+           Va dentro de la rejilla para no tapar cartas en ningún alto. -->
+      {#if session.boardStyle === 'arena'}
+        <CoachTip />
+        <StatusDock />
+      {/if}
 
       {#if graveyardObjects.length}
         <section class="graveyard" aria-label="Tu cementerio">

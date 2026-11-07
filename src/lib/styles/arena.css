@@ -1370,3 +1370,136 @@
     order: 1;
   }
 }
+
+/* ============================================================================
+ * Cromo de mesa al estilo Phase: chapas translúcidas casi negras sobre el
+ * arte, acento verde-azulado y vida en verde.
+ *
+ * Solo cambian los tokens del cromo dentro de la mesa de arena. El tema global
+ * (claro, u oscuro persistido) y la página de inicio siguen igual: aquí el
+ * fondo es el arte de la arena, y un papel blanco encima es lo que la captura
+ * de Phase no hace. Los contrastes se miden con la suite axe de `tests/e2e`.
+ * ========================================================================== */
+.app[data-chrome="arena"] {
+  color-scheme: dark;
+  /* Inheritance starts at `body`, which resolves `--ink` outside this scope.
+     Without this, anything that does not declare its own colour (the top bar's
+     h1, the hand's empty state) inherits the light theme's ink. */
+  color: var(--ink);
+  --surface: rgb(10 13 19 / 90%);
+  --surface-2: rgb(21 27 38 / 90%);
+  --surface-3: rgb(32 41 55 / 92%);
+  --ink: #eef1f6;
+  --ink-muted: #aab4c4;
+  --line: rgb(255 255 255 / 16%);
+  --accent: #3ad3c0;
+  --accent-ink: #04211d;
+  --accent-soft: rgb(58 211 192 / 18%);
+  --ok: #62d99c;
+  --danger: #ff9188;
+  --focus: #8ef0e4;
+  --shadow: 0 14px 34px rgb(0 0 0 / 46%);
+  /* The alias layer from `tokens.css` resolves at `:root`, so overriding only
+     `--ink` would leave every component that reads `--text-primary` painting
+     the light theme's ink on a near-black plate (measured: h1 at rgb(29,35,43)
+     over rgb(9,12,18)). Re-declaring the aliases here re-resolves them in this
+     scope. */
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-muted);
+  --text-muted: var(--ink-muted);
+  --border: var(--line);
+  --bg-card: var(--surface);
+  --accent-dim: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.app[data-chrome="arena"] .topbar {
+  background: rgb(9 12 18 / 84%);
+  border-color: rgb(255 255 255 / 14%);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 40%);
+}
+/* Seats: Phase's nameplate is an avatar, a name and the life total, not a bar
+   with five chips. Same text, same targets, smaller plate. */
+.app[data-chrome="arena"] .player-bar {
+  background: rgb(9 12 18 / 82%);
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 34%);
+}
+.app[data-chrome="arena"] .player-bar .life-value {
+  font-size: clamp(1.45rem, 2.6vw, 2rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--ok);
+  line-height: 1;
+}
+.app[data-chrome="arena"] .player-bar .life.low .life-value { color: var(--danger); }
+.app[data-chrome="arena"] .player-bar .avatar {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 9px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  background: linear-gradient(160deg, rgb(58 211 192 / 26%), rgb(10 13 19 / 70%));
+  color: var(--ink);
+  font-size: .8rem;
+  font-weight: 750;
+  letter-spacing: .02em;
+  flex: 0 0 auto;
+}
+.app[data-chrome="arena"] .player-bar .life-label {
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: .64rem;
+  font-weight: 700;
+}
+/* Opponent hand: Phase fans the backs and prints the count at the edge of the
+   fan. The rotation is presentation only; the count is `aria-hidden` because
+   the group's label already says this is a hidden hand. */
+.app[data-chrome="arena"] .rival-hand {
+  position: relative;
+  justify-self: center;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: .35rem 1.4rem 0 0;
+  min-height: 52px;
+}
+.app[data-chrome="arena"] .rival-hand .mini-back {
+  width: 36px;
+  height: 50px;
+  margin-inline: -9px;
+  border-radius: 6px;
+  border: 1px solid rgb(255 255 255 / 30%);
+  background:
+    radial-gradient(circle at 50% 46%, rgb(58 211 192 / 30%) 0 16%, transparent 17%),
+    repeating-linear-gradient(135deg, rgb(58 211 192 / 20%) 0 4px, rgb(10 14 20 / 96%) 4px 9px);
+  box-shadow: inset 0 0 0 3px rgb(9 12 18 / 55%), 0 3px 9px rgb(0 0 0 / 45%);
+  transform-origin: 50% 130%;
+  transform: rotate(calc((var(--i, 0) - var(--fan-mid, 3)) * 3.2deg));
+}
+.app[data-chrome="arena"] .rival-hand .fan-count {
+  position: absolute;
+  right: -.1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: .74rem;
+  font-weight: 750;
+  color: var(--ink);
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+}
+
+/* La ficha de zona pasa de "casilla vacía" a pila de cartas legible: tres
+   hojas con canto, del tamaño del texto que acompaña. */
+.app[data-chrome="arena"] .zone-chip {
+  border-radius: 999px;
+  padding: .12rem .5rem .12rem .3rem;
+}
+.app[data-chrome="arena"] .zone-chip .glyph {
+  width: 13px;
+  height: 17px;
+  border-radius: 3px;
+  border-color: rgb(255 255 255 / 42%);
+  background: linear-gradient(150deg, rgb(58 211 192 / 22%), rgb(10 13 19 / 88%));
+  box-shadow: 2px 2px 0 -1px var(--surface), 2px 2px 0 0 rgb(255 255 255 / 30%);
+}

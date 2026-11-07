@@ -13,6 +13,8 @@
   import Hand from '#lib/components/Hand.svelte';
   import PlayerPanel from '#lib/components/PlayerPanel.svelte';
   import StackPanel from '#lib/components/StackPanel.svelte';
+  import StatusDock from '#lib/components/StatusDock.svelte';
+  import CoachTip from '#lib/components/CoachTip.svelte';
   import HistoryPanel from '#lib/components/HistoryPanel.svelte';
   import BoardOverlay from '#lib/components/BoardOverlay.svelte';
   import Settings from '#lib/components/Settings.svelte';
@@ -184,7 +186,7 @@
 
 <svelte:head><title>Mesa · laboratorio de interfaz</title></svelte:head>
 
-<div id="mesa-ux" class="app ux" data-board-style="arena" style="--card-w: min(148px, calc((100vw - 6rem) / 2)); --arena-base-card-w: 124px">
+<div id="mesa-ux" class="app ux" data-board-style="arena" data-chrome="arena" style="--card-w: min(148px, calc((100vw - 6rem) / 2)); --arena-base-card-w: 124px">
   <ArenaSurface color="green" />
 
   <header class="topbar">
@@ -213,12 +215,15 @@
   </p>
 
   <main class="layout" data-board-region>
-    <PlayerPanel player={seats[1]} showHand />
     {#if rivalHand.length}
-      <div class="rival-hand" role="group" aria-label="Mano oculta de Jugador 2">
-        {#each rivalHand as card (card.id)}<div class="mini-back" aria-hidden="true"></div>{/each}
+      <div class="rival-hand" role="group" aria-label="Mano oculta de Jugador 2" style={`--fan-mid: ${(rivalHand.length - 1) / 2}`}>
+        {#each rivalHand as card, i (card.id)}
+          <div class="mini-back" aria-hidden="true" style={`--i: ${i}`}></div>
+        {/each}
+        <span class="fan-count" aria-hidden="true">{rivalHand.length}</span>
       </div>
     {/if}
+    <PlayerPanel player={seats[1]} showHand />
     <Battlefield objects={rivalField} metas={{}} owner={1} side="opponent" label="Campo de batalla · Jugador 2" />
 
     <!-- Same rail as the real table: arena.css places `.middle` in the sticky
@@ -232,10 +237,16 @@
 
     <Battlefield objects={viewerField} metas={{}} owner={0} side="player" label="Tu campo de batalla · Jugador 1" />
     <PlayerPanel player={seats[0]} />
+
+    <!-- Mismo cromo que la mesa real, para que el laboratorio enseñe lo que se
+         juega: estado de prioridad, mano y control total. -->
+    <CoachTip />
+    <StatusDock />
   </main>
 
   <BoardOverlay />
   <Hand objects={hand} metas={{}} title="Tu mano · Jugador 1" onselect={(id) => { session.inspect = id; }} />
+
 
   <footer class="metrics">
     <span>Escena: {scene}</span>

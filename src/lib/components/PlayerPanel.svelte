@@ -16,6 +16,9 @@
 
 <section class="player-bar" aria-label={`Jugador ${player.id + 1}`} data-player-id={player.id} data-life={player.life}>
   <div class="identity">
+    <!-- Phase's seat header leads with a portrait; Mesa has no player art, so
+         the plate shows the seat's monogram instead of inventing an image. -->
+    <span class="avatar" aria-hidden="true">J{player.id + 1}</span>
     {#if selectable}
       <!-- The accessible name keeps the visible text (axe
            `label-content-name-mismatch`), so it repeats the life total the

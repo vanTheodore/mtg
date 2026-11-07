@@ -123,3 +123,54 @@ for (const [width, height] of [[320, 800], [390, 844], [768, 1024]] as const) {
     expect(overflow).toBeLessThanOrEqual(1);
   });
 }
+
+test('el cromo de mesa nombra la prioridad, la mano y el paso, y el control conmuta el auto-paso', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=idle');
+
+  const dock = page.getByRole('group', { name: 'Estado de la mesa' });
+  await expect(dock).toBeVisible();
+  await expect(dock).toContainText('Tu prioridad');
+  await expect(dock).toContainText('Mano 3');
+  await expect(dock).toContainText('Principal 1');
+
+  const control = dock.getByRole('button', { name: /Control total/ });
+  await expect(control).toHaveAttribute('aria-pressed', 'false');
+  await control.click();
+  await expect(control).toHaveAttribute('aria-pressed', 'true');
+  // The preference is the same one the top bar writes, not a second state.
+  expect(await page.evaluate(() => localStorage.getItem('mesa:autoPass'))).toBe('off');
+
+  await page.reload();
+  await expect(page.getByRole('group', { name: 'Estado de la mesa' }).getByRole('button', { name: /Control total/ }))
+    .toHaveAttribute('aria-pressed', 'true');
+});
+
+test('el aviso de flujo explica el auto-paso, se descarta y no vuelve', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=idle');
+
+  const tip = page.getByRole('complementary', { name: 'Consejo de flujo' });
+  await expect(tip).toBeVisible();
+  await expect(tip).toContainText('Los saltos de fase son automáticos');
+  await expect(tip.getByRole('link', { name: 'Conocer el flujo' })).toHaveAttribute('href', '/aprender');
+
+  await tip.getByRole('button', { name: 'Descartar' }).click();
+  await expect(tip).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('mesa:coach:autoPass'))).toBe('off');
+
+  await page.reload();
+  await expect(page.getByRole('complementary', { name: 'Consejo de flujo' })).toHaveCount(0);
+});
+
+test('la mano oculta del rival se dibuja en abanico y anuncia su recuento', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=idle');
+
+  const hand = page.getByRole('group', { name: 'Mano oculta de Jugador 2' });
+  await expect(hand).toBeVisible();
+  await expect(hand.locator('.mini-back')).toHaveCount(3);
+  // The count is decoration: the group's label already says it is a hidden hand.
+  await expect(hand.locator('.fan-count')).toHaveAttribute('aria-hidden', 'true');
+  await expect(hand.locator('.fan-count')).toHaveText('3');
+});

@@ -103,7 +103,7 @@ Ejecutada en este checkout (Linux, Bun 1.4.4, Chromium 153 de
 | `bun test src/lib` | **284 pruebas, 0 fallos** (31 nuevas de geometría, líneas y zonas) |
 | `bun run check` | 0 errores; 2 avisos de CSS preexistentes (`Hand.svelte`, `HistoryPanel.svelte`) |
 | `bun run build` | correcto (adapter estático) |
-| `bun --bun playwright test tests/e2e/ux-lab.spec.ts` | **8/8**: 4 arcos con `d` finito, combate con 2 atacantes y 1 bloqueo (uno a trazos), 0 líneas sin decisión, visor con 2 cartas + `Escape` + foco devuelto, **axe sin violaciones críticas ni serias** (tablero y diálogo modal), y 320/390/768 px sin desbordamiento horizontal con las 4 líneas y las 6 pilas presentes |
+| `bun --bun playwright test tests/e2e/ux-lab.spec.ts` | **11/11**: 4 arcos con `d` finito, combate con 2 atacantes y 1 bloqueo (uno a trazos), 0 líneas sin decisión, visor con 2 cartas + `Escape` + foco devuelto, **axe sin violaciones críticas ni serias** (tablero y diálogo modal), y 320/390/768 px sin desbordamiento horizontal con las 4 líneas y las 6 pilas presentes |
 | Regresión `/stress` (`visibility`, `arena-zones`, `arena-quality-gate`, `arena-hand-fan`) | **24/24**, incluida la matriz de anchos y 0 px de deuda a 1440×900 |
 | Regresión de accesibilidad (`a11y.spec.ts`) | verde: el fixture de visibilidad sigue sin violaciones críticas ni serias |
 
@@ -148,3 +148,41 @@ Ordenado por lo que todavía obliga a mirar dos pantallas para jugar una carta:
 
 Ninguna de esas piezas se anuncia como hecha en el README; este documento es la
 lista de trabajo, no una promesa de paridad visual completa.
+
+## Cromo de mesa (segunda pasada, 7 nov 2026)
+
+La captura de Phase en partida (`/tmp` del usuario, no versionada) enseña una
+mesa a sangre con cromo flotante: placa del rival con avatar y vida, abanico de
+su mano con recuento, dock inferior con prioridad y control, y un aviso de
+flujo. Eso es lo que se porteó en esta pasada, sobre el laboratorio `/ux` y la
+mesa real.
+
+| En Phase | En Mesa | Comportamiento |
+| --- | --- | --- |
+| Placa de asiento (avatar, nombre, vida grande) | `PlayerPanel.svelte` + `.avatar` con el monograma del asiento | Mismo texto y mismos objetivos; no hay arte de jugador, así que la placa muestra `J1`/`J2` en vez de inventar un retrato |
+| Abanico de la mano rival con contador | `.rival-hand` en `Board.svelte` y `/ux` | Girado por CSS (`--i`, `--fan-mid`); el recuento es decorativo (`aria-hidden`) porque la etiqueta del grupo ya dice que es una mano oculta |
+| Dock de estado: prioridad, mano, paso, control | `StatusDock.svelte` | Las etiquetas salen de `waiting_for`, `phase` y `hand.length` del snapshot; `Control` escribe la misma preferencia `mesa:autoPass` que la casilla de la barra superior, con nombre accesible propio para que ninguna de las dos tape a la otra |
+| Aviso «los saltos de fase son automáticos» | `CoachTip.svelte` | Aparece solo si el auto-paso está activo y hay partida; `Descartar` persiste `mesa:coach:autoPass`; `Conocer el flujo` enlaza a `/aprender` |
+| Cromo casi negro con acento verde-azulado | `.app[data-chrome="arena"]` en `arena.css` | Los tokens del cromo se redefinen solo dentro de la mesa con partida: `/stress`, la portada y el tema claro siguen igual |
+
+Decisiones que se apartan de la captura, con motivo:
+
+- **Pasar no se duplica.** El botón `Pasar` sigue en `DecisionPanel`, donde el
+  motor publica todas las acciones legales y donde lo buscan los E2E; el dock
+  sólo informa. Dos botones con el mismo nombre accesible romperían además los
+  localizadores estrictos.
+- **Sin `Control total` inventado.** Nuestro equivalente real es desactivar el
+  auto-paso; no hay paradas por paso en el motor, así que no se dibuja un
+  control que no haría nada.
+- **Las pilas de esquina no se portan.** En Phase la mesa es un `100dvh` con
+  recorte y la biblioteca sangra por el borde; aquí la mesa es un documento que
+  desplaza, y las esquinas de `.app` caen sobre la barra superior y la mano
+  (medido: la pila del rival aterrizaba sobre `Ajustes`). El control accesible
+  sigue siendo la ficha de zona del asiento, que es la que anuncian los lectores
+  y la que pulsan las pruebas. Queda como pendiente si la mesa pasa a alto fijo.
+
+Verificación de esta pasada: `bun run check` 0 errores, `bun test src/lib` 292
+pasan (8 nuevas de `ui/phases.ts`), `bun run build` OK, `ux-lab.spec.ts` **11/11**
+(3 nuevas: dock y control persistente, aviso descartable, abanico con recuento)
+y `a11y.spec.ts` verde sobre `/stress`. Las capturas son
+`docs/screenshots/ux-cromo-1440.jpg` y las tres de la ronda anterior.
