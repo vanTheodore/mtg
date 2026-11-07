@@ -190,10 +190,17 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
     await page.setViewportSize({ width, height });
     await settle(page);
     for (const at of ['inicio', 'final'] as const) {
-      await page.evaluate(
-        (where) => scrollTo(0, where === 'final' ? document.documentElement.scrollHeight : 0),
-        at
-      );
+      // M10/M11: en estas bandas el documento ya no desplaza —el tablero vive en
+      // `main.layout`, que es la región con `overflow-y: auto`—, así que
+      // `scrollTo(0, …)` sobre el documento era un no-op y ambas puntas medían
+      // lo mismo. Se desplaza el contenedor que de verdad desplaza.
+      await page.evaluate((where) => {
+        const region = document.querySelector<HTMLElement>('main.layout');
+        const scroller = region && region.scrollHeight > region.clientHeight + 2
+          ? region
+          : document.scrollingElement as HTMLElement;
+        scroller.scrollTop = where === 'final' ? scroller.scrollHeight : 0;
+      }, at);
       await settle(page);
       const sample = await page.evaluate(() => {
         const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
@@ -414,4 +421,201 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
   }
   console.log('MESA_VIEWPORT_TABLET ' + JSON.stringify(evidence));
   await persist(testInfo, 'tablet-band', evidence);
+});
+
+/**
+ * M11 — el escritorio, con la mesa llena.
+ *
+ * M8 hizo pantalla al teléfono y M10 a la tablet; el escritorio seguía siendo un
+ * documento. Medido con el motor real y la mesa llena (5 y 6 permanentes, mano
+ * de 4), el documento medía 841 px a 1366×768 (deuda 73), 859 a 1280×800 (59),
+ * 876 a 1180×820 (56) y 837 a 1100×700 (137): el abanico de la mano se llevaba
+ * el alto que faltaba y a 1100×700 acababa en y=810 sobre una pantalla de 700.
+ *
+ * Esta prueba fija las tres cosas que M11 cambió y las dos trampas que costó
+ * encontrar midiendo:
+ *
+ *   - el documento mide la pantalla en toda la banda (1100 px o más) y el
+ *     tablero es la región que desplaza;
+ *   - las tierras no bajan de 70 px de ancho (antes: 68/58/60/62/53 px);
+ *   - los dos campos no se solapan. Con la región en alto definido el motor
+ *     encogía las filas `auto` para que cupieran (57 px de fila con 182 px de
+ *     campo) y el campo del jugador tapaba las criaturas del rival: la partida
+ *     se atascaba al declarar bloqueadoras. Se arregla con
+ *     `grid-auto-rows: max-content` y aquí se comprueba que no vuelva;
+ *   - la decisión se ve entera con el tablero arriba y con el tablero al final
+ *     del recorrido, y su último botón responde al puntero en las dos puntas.
+ */
+test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desplaza dentro', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route('**/api.scryfall.com/**', (route) => route.abort());
+  await page.goto('/?autostart');
+  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible({ timeout: 180_000 });
+  const driver = createBoardDriver(page);
+
+  const population = () => page.evaluate(() => ({
+    hand: document.querySelectorAll('.hand-zone [data-card-id]').length,
+    permanents: [...document.querySelectorAll<HTMLElement>('section.battlefield[data-side]')].map(
+      (field) => field.querySelectorAll('[data-card-id]').length
+    )
+  }));
+  let state = await population();
+  for (let turn = 0; turn < 60; turn += 1) {
+    if (state.hand >= 4 && state.permanents.every((count) => count >= 5)) break;
+    await driver.settleSeat().catch(() => {});
+    if (!(await driver.playPlayableCard().catch(() => false))) {
+      await driver.answerAnyPrompt().catch(() => false);
+    }
+    state = await population();
+  }
+  test.skip(
+    !(state.hand >= 4 && state.permanents.every((count) => count >= 5)),
+    'la partida no llegó a un tablero con mano viva y cinco permanentes por campo'
+  );
+
+  const evidence: unknown[] = [];
+  const decision = page.locator('section[aria-label="Decisión pendiente"]');
+  for (const [width, height] of [[1440, 900], [1366, 768], [1280, 800], [1180, 820], [1100, 700]] as const) {
+    const where = `${width}×${height}`;
+    await page.setViewportSize({ width, height });
+    await settle(page);
+    // La decisión de Phase tiene que estar en pantalla en toda la banda; si en
+    // este estado no hay ninguna pendiente, la medición no dice nada y la
+    // prueba lo dice explícitamente.
+    await expect(decision, `no hay decisión pendiente que medir a ${where}`).toBeVisible({ timeout: 30_000 });
+    // La mano no se monta mientras hay un traspaso de asiento pendiente
+    // (`{#if !needsHandoff}` en Board.svelte): medido, una de cada tres corridas
+    // llegaba aquí con el traspaso abierto y sin `.hand-zone`. Se liquida el
+    // traspaso primero, en vez de esperar 30 s a algo que no va a aparecer.
+    for (let attempt = 0; attempt < 3 && !(await page.locator('.hand-zone').count()); attempt += 1) {
+      await driver.settleSeat().catch(() => {});
+      await driver.answerAnyPrompt().catch(() => {});
+      await settle(page);
+    }
+    await expect(page.locator('.hand-zone'), `la mano no está montada a ${where}`).toBeVisible({ timeout: 30_000 });
+    const atStart = await page.evaluate(() => {
+      const region = document.querySelector<HTMLElement>('main.layout');
+      const app = document.querySelector<HTMLElement>('.app');
+      const handEl = document.querySelector<HTMLElement>('.hand-zone');
+      const missing = [!region && 'main.layout', !app && '.app', !handEl && '.hand-zone'].filter(Boolean).join(',');
+      if (region) region.scrollTop = 0;
+      const hand = handEl?.getBoundingClientRect() ?? { top: 0, bottom: 0 };
+      const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
+      const buttons = [...panel.querySelectorAll('button')].filter((button) => button.offsetParent !== null);
+      const last = buttons.at(-1);
+      const lb = last?.getBoundingClientRect();
+      const hit = lb ? document.elementFromPoint(lb.x + lb.width / 2, Math.min(lb.y + lb.height / 2, innerHeight - 1)) : null;
+      const fields = [...document.querySelectorAll<HTMLElement>('section.battlefield[data-side]')]
+        .map((field) => {
+          const box = field.getBoundingClientRect();
+          return { side: field.dataset.side, top: Math.round(box.top), bottom: Math.round(box.bottom) };
+        })
+        .sort((a, b) => a.top - b.top);
+      const landWidths = [...document.querySelectorAll<HTMLElement>('section.battlefield[data-side] .row[data-zone="lands"] [data-card-id]')]
+        .map((card) => Math.round(card.getBoundingClientRect().width))
+        .filter((value) => value > 0);
+      const widths = [...document.querySelectorAll<HTMLElement>('section.battlefield[data-side] [data-card-id]')]
+        .map((card) => Math.round(card.getBoundingClientRect().width))
+        .filter((value) => value > 0);
+      return {
+        missing,
+        debt: Math.max(0, document.documentElement.scrollHeight - innerHeight),
+        horizontalOverflow: document.documentElement.scrollWidth - innerWidth,
+        appHeight: Math.round(app?.getBoundingClientRect().height ?? 0),
+        regionOverflow: region ? getComputedStyle(region).overflowY : null,
+        regionMax: region ? region.scrollHeight - region.clientHeight : 0,
+        handTop: Math.round(hand.top),
+        handBottom: Math.round(hand.bottom),
+        fields,
+        minLandWidth: landWidths.length ? Math.min(...landWidths) : null,
+        minCardWidth: widths.length ? Math.min(...widths) : null,
+        panelTop: Math.round(panel.getBoundingClientRect().top),
+        panelBottom: Math.round(panel.getBoundingClientRect().bottom),
+        lastHit: lb ? hit === last || !!last?.contains(hit) : false
+      };
+    });
+
+    expect(atStart.missing, `la escena no tiene lo que hay que medir a ${where}`).toBe('');
+    expect(atStart.debt, `el escritorio vuelve a ser un documento a ${where}`).toBe(0);
+    expect(atStart.horizontalOverflow, `desbordamiento horizontal a ${where}`).toBeLessThanOrEqual(1);
+    expect(atStart.appHeight, `la aplicación no mide la pantalla a ${where}`).toBe(height);
+    expect(atStart.regionOverflow, `la mesa no tiene región propia a ${where}`).toBe('auto');
+    expect(atStart.handTop, `la mano se va por arriba a ${where}`).toBeGreaterThanOrEqual(0);
+    expect(atStart.handBottom, `la mano se va por abajo a ${where}`).toBeLessThanOrEqual(height);
+    // Medido antes de M11: 68 px a 900, 58 a 768, 60 a 800, 62 a 820, 53 a 700.
+    expect(atStart.minLandWidth, `tierra ilegible a ${where}`).toBeGreaterThanOrEqual(70);
+    expect(atStart.minCardWidth, `carta ilegible a ${where}`).toBeGreaterThanOrEqual(70);
+    // Los dos campos, separados: si se solapan, el campo propio tapa las
+    // criaturas del rival y declarar bloqueadoras se vuelve imposible.
+    expect(atStart.fields.length, `faltan campos a ${where}`).toBe(2);
+    expect(
+      atStart.fields[1].top,
+      `los campos se solapan a ${where} (${atStart.fields[0].side} ${atStart.fields[0].bottom} > ${atStart.fields[1].side} ${atStart.fields[1].top})`
+    ).toBeGreaterThanOrEqual(atStart.fields[0].bottom);
+    expect(atStart.panelTop, `la decisión empieza fuera de la vista a ${where}`).toBeGreaterThanOrEqual(0);
+    expect(atStart.panelBottom, `la decisión no cabe a ${where}`).toBeLessThanOrEqual(height);
+    expect(atStart.lastHit, `el último botón de la decisión no responde a ${where}`).toBe(true);
+
+    const atEnd = await page.evaluate(() => {
+      const region = document.querySelector<HTMLElement>('main.layout')!;
+      region.scrollTop = region.scrollHeight;
+      // El desplazamiento se lee ANTES de traer la carta a la vista: el
+      // `scrollIntoView` mueve la región otra vez y falsearía el «llegó al final».
+      const scrollTop = Math.round(region.scrollTop);
+      const regionMax = Math.round(region.scrollHeight - region.clientHeight);
+      const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
+      const box = panel.getBoundingClientRect();
+      const buttons = [...panel.querySelectorAll('button')].filter((button) => button.offsetParent !== null);
+      const last = buttons.at(-1);
+      const lb = last?.getBoundingClientRect();
+      const hit = lb ? document.elementFromPoint(lb.x + lb.width / 2, Math.min(lb.y + lb.height / 2, innerHeight - 1)) : null;
+      const own = document.querySelector<HTMLElement>('main.layout > .battlefield[data-side="player"], section.battlefield[data-side="player"]')!;
+      const cards = [...own.querySelectorAll<HTMLElement>('[data-card-id]')].filter((card) => card.getBoundingClientRect().width > 0);
+      const lastCard = cards.at(-1);
+      let cardHit: boolean | null = null;
+      if (lastCard) {
+        lastCard.scrollIntoView({ block: 'center' });
+        const cardBox = lastCard.getBoundingClientRect();
+        const cardEl = document.elementFromPoint(cardBox.x + cardBox.width / 2, Math.min(cardBox.y + cardBox.height / 2, innerHeight - 1));
+        cardHit = !!cardEl && (cardEl === lastCard || lastCard.contains(cardEl));
+      }
+      const firstButton = buttons[0]?.getBoundingClientRect();
+      const lastButton = buttons.at(-1)?.getBoundingClientRect();
+      return {
+        scrollTop,
+        regionMax,
+        panelTop: Math.round(box.top),
+        panelBottom: Math.round(box.bottom),
+        firstButtonTop: firstButton ? Math.round(firstButton.top) : null,
+        lastButtonBottom: lastButton ? Math.round(lastButton.bottom) : null,
+        lastHit: lb ? hit === last || !!last?.contains(hit) : false,
+        cardHit
+      };
+    });
+    await settle(page);
+    expect(atEnd.scrollTop, `la región no llegó al final a ${where}`).toBe(atEnd.regionMax);
+    // Al final del recorrido el rail `sticky` se suelta y puede recortarse el
+    // titular del panel (medido: 11 px a 1100×700). Lo que no puede recortarse
+    // son sus acciones: se miden el primer y el último botón, no la caja.
+    expect(atEnd.panelTop, `la decisión se va por arriba a ${where}`).toBeGreaterThanOrEqual(-32);
+    expect(atEnd.firstButtonTop, `la primera acción se escapa por arriba a ${where}`).toBeGreaterThanOrEqual(0);
+    expect(atEnd.lastButtonBottom, `la última acción se escapa por abajo a ${where}`).toBeLessThanOrEqual(height);
+    expect(atEnd.panelBottom, `la decisión se escapa por abajo a ${where}`).toBeLessThanOrEqual(height);
+    expect(atEnd.lastHit, `el último botón de la decisión no responde al final a ${where}`).toBe(true);
+    expect(atEnd.cardHit, `la última carta del campo propio no se puede tocar a ${where}`).toBe(true);
+
+    evidence.push({ where, atStart, atEnd });
+    await page.evaluate(() => { document.querySelector<HTMLElement>('main.layout')!.scrollTop = 0; });
+    await settle(page);
+  }
+  // A 1440×900 la mesa llena cabe entera: lo que no puede pasar es que la banda
+  // corta (1100×700) pierda el desplazamiento interno y vuelva a mover el
+  // documento, que es justo la deuda de 137 px que M11 quitó.
+  const cramped = evidence.find((entry) => (entry as { where: string }).where === '1100×700') as
+    | { where: string; atStart: { regionMax: number } }
+    | undefined;
+  expect(cramped, 'falta la muestra de 1100×700').toBeTruthy();
+  expect(cramped!.atStart.regionMax, 'la mesa no desplaza dentro a 1100×700').toBeGreaterThan(0);
+  console.log('MESA_VIEWPORT_DESKTOP ' + JSON.stringify(evidence));
+  await persist(testInfo, 'desktop-band', evidence);
 });
