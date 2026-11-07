@@ -134,17 +134,26 @@ ejecutó en esta ronda**; el mismo componente sí se verificó con axe en `/ux`.
 
 ## Lo que queda de la UI/UX de Phase
 
-Ordenado por lo que todavía obliga a mirar dos pantallas para jugar una carta:
+La lista se ordena por lo que todavía obliga a mirar dos pantallas para jugar una
+carta. Lo que ya está hecho se queda aquí tachado con la pasada que lo trajo, no
+se borra: es el registro de que se hizo y de cuándo.
 
-1. **Menú de acciones de carta** (`cardActionChoice.ts`, `BoardContextMenu.tsx`):
-   hoy las opciones viven en el panel de decisión, no junto a la carta.
-2. **Selector de destino de ataque** (`AttackTargetPicker.tsx`): hoy se elige en
-   el panel; Phase lo ancla al atacante.
-3. **Barra de fases con paradas** (`PhaseStopBar.tsx`): `TurnTrack` muestra la
-   fase, pero no permite fijar paradas por paso.
-4. **Asignación de daño de combate** (`DamageAssignmentModal.tsx`).
+1. ~~Menú de acciones de carta~~ (`BoardContextMenu.tsx`, `cardActionChoice.ts`):
+   hecho en la cuarta pasada (`CardActionMenu.svelte`).
+2. **Selector de destino de ataque** (`AttackTargetPicker.tsx`): sigue pendiente.
+   Hoy el destino se elige en el panel y el borrador local sólo se dibuja como
+   línea a trazos; Phase ancla el selector al atacante.
+3. ~~Barra de fases con paradas~~ (`PhaseStopBar.tsx`): tercera pasada, más la
+   ficha del teléfono de la quinta.
+4. ~~Asignación de daño de combate~~ (`DamageAssignmentModal.tsx`): cuarta
+   pasada (`DamageAssignment.svelte`).
 5. **Reparto de la columna derecha** (pila + historial + decisión): el E2E de
    `/ux` cubre la capa, no la composición de una partida larga.
+
+Fuera de la mesa, el trabajo que queda vive en los issues: #55 comandante, auras
+y contadores de mesa; #56 draft; #57 lobby, multijugador, torneos y replay; #58
+constructor de mazos; #59 animación, audio y PWA; #60 vistas de `waiting_for`
+sin representar.
 
 Ninguna de esas piezas se anuncia como hecha en el README; este documento es la
 lista de trabajo, no una promesa de paridad visual completa.
