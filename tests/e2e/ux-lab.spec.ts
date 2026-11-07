@@ -212,3 +212,61 @@ test('una parada en el paso actual aparece en el estado de la mesa', async ({ pa
   await page.getByRole('button', { name: 'Principal · parada en Principal 1' }).click();
   await expect(dock).toContainText('Parada');
 });
+
+test('el menú de acciones de una carta se abre con el teclado, lista lo que ofrece el motor y devuelve el foco', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=idle');
+
+  const card = page.locator('[data-card-id="100"]').first();
+  await card.focus();
+  await page.keyboard.press('Shift+F10');
+
+  const menu = page.getByRole('menu', { name: 'Acciones de Grizzly Bears' });
+  await expect(menu).toBeVisible();
+  const items = menu.getByRole('menuitem');
+  // The engine's action plus the two safe entries; nothing invented.
+  await expect(items.filter({ hasText: 'Ampliar carta' })).toHaveCount(1);
+  await expect(items.filter({ hasText: 'Quitar selección' })).toHaveCount(1);
+
+  // Arrow keys move focus inside the menu.
+  await expect(items.first()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(items.nth(1)).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(card).toBeFocused();
+});
+
+test('el menú también se abre con el botón derecho y respeta un diálogo abierto', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=idle');
+
+  await page.locator('[data-card-id="100"]').first().click({ button: 'right' });
+  await expect(page.getByRole('menu', { name: 'Acciones de Grizzly Bears' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // With a modal open the background menu must not open over it.
+  await page.getByRole('button', { name: /Biblioteca 33 · Biblioteca de Jugador 1/ }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('la vista de asignación de daño nombra los repartos que propone Phase', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=damage');
+
+  const view = page.getByRole('region', { name: 'Asignación de daño de combate' });
+  await expect(view).toBeVisible();
+  await expect(view).toContainText('reparte 3');
+  await expect(view).toContainText('mínimo letal 2');
+  await expect(view.getByRole('button', { name: '2 a Grizzly Bears, 1 de exceso a Jugador 2' })).toBeVisible();
+  await expect(view.getByRole('button', { name: 'Repartir como si no estuviera bloqueada' })).toBeVisible();
+  // It says who proposed the numbers: the UI does not invent splits.
+  await expect(view).toContainText('Las cantidades las propone Phase');
+
+  const board = await new AxeBuilder({ page }).analyze();
+  const serious = board.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''));
+  expect(serious).toEqual([]);
+});

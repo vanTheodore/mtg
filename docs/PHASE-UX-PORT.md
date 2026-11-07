@@ -223,3 +223,44 @@ Verificación: `bun run check` 0 errores, `bun test src/lib` **294** (2 nuevas d
 pasos), `bun run build` OK, `ux-lab.spec.ts` **13/13** con axe verde (2 nuevas:
 parada persistente y ficha `Parada` en el dock). Captura:
 `docs/screenshots/ux-paradas-1440.jpg`.
+
+## Menú de acciones y asignación de daño (cuarta pasada, 7 nov 2026)
+
+Cierra los dos huecos que quedaban en la mesa: el menú por carta y la vista del
+reparto de daño.
+
+**`CardActionMenu.svelte`** — port de `board/BoardContextMenu.tsx`.
+
+- Se abre con **clic derecho** o **`Mayús+F10`/tecla Menú** sobre una carta con
+  foco (`CardView` ya es `role="button" tabindex="0"`), que es el gesto estándar
+  de menú contextual y funciona con teclado. No hay ningún disparador que
+  dependa de `hover`.
+- Es un `role="menu"` con `menuitem`s: flechas, `Home`/`End`, `Escape` y `Tab`
+  para salir; al cerrar **devuelve el foco a la carta**.
+- Solo lista `legal.by_object` de esa carta: si el motor no ofrece una acción,
+  no aparece. Los ítems son `menuitem`, no `button`, para no duplicar el nombre
+  accesible de los botones del panel de decisión.
+- El fondo usa `--chrome-solid`: `--surface` es translúcida sobre el arte y un
+  menú que deja ver el aviso de detrás no se lee.
+
+**`DamageAssignment.svelte`** — vista para `WaitingFor::AssignCombatDamage` y
+`WaitingFor::AssignBlockerDamage` (CR 510.1c/d), hasta ahora delegados en la
+lista genérica de acciones legales.
+
+- Enseña el atacante o bloqueadora, el total a repartir y cada receptor con su
+  **mínimo letal** (`DamageSlot.lethal_minimum`).
+- Las opciones son **los candidatos que publica Phase** en `legal.actions`
+  (letal primero y «como si no estuviera bloqueada» cuando aplica). La interfaz
+  solo los nombra: `2 a Grizzly Bears, 1 de exceso a Jugador 2`. No calcula
+  repartos, así que no puede ofrecer uno que el motor rechace.
+- Si esa ventana llegara sin candidatos, cae en la lista legal y lo dice.
+
+Verificación: `bun run check` 0 errores, `bun test src/lib` **294**,
+`bun run build` OK, `ux-lab.spec.ts` **16/16** con axe verde (3 nuevas: menú con
+teclado y foco devuelto, clic derecho y diálogo abierto, y vista de daño con sus
+dos repartos). Capturas: `docs/screenshots/ux-menu-1440.jpg` y
+`ux-dano-1440.jpg`. Escena nueva del laboratorio: `/ux?scene=damage`.
+
+**Sin verificar aquí**: ninguna de las dos se ha visto con el WASM del pin. El
+menú y la vista están montados en `Board.svelte`/`DecisionPanel`, y su prueba en
+partida real la tiene que dar el CI.

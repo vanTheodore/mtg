@@ -20,6 +20,8 @@ class GameSession {
   busy = $state(false);
   error = $state<string | null>(null);
   selected = $state<number | null>(null);
+  /** Card whose action menu is open (context menu / Shift+F10). UI state only. */
+  cardMenu = $state<number | null>(null);
   inspect = $state<number | null>(null);
   revealedViewer = $state<number | null>(null);
   revealedTurn = $state<number | null>(null);
@@ -201,6 +203,9 @@ class GameSession {
     this.queue = this.queue.then(run, run);
     return this.queue as Promise<void>;
   }
+
+  openCardMenu(id: ObjectId) { this.cardMenu = id; }
+  closeCardMenu() { this.cardMenu = null; }
 
   selectObject(id: ObjectId) {
     const s = this.snapshot;

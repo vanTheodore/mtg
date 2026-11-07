@@ -4,6 +4,7 @@
   import PhaseStopBar from './PhaseStopBar.svelte';
   import StatusDock from './StatusDock.svelte';
   import CoachTip from './CoachTip.svelte';
+  import CardActionMenu from './CardActionMenu.svelte';
   import Hand from './Hand.svelte';
   import Battlefield from './Battlefield.svelte';
   import DecisionPanel from './DecisionPanel.svelte';
@@ -79,6 +80,23 @@
   const player = $derived(snapshot?.state.players[viewer]);
   const rival = $derived(snapshot?.state.players[opponent]);
   const handObjects = $derived((player?.hand ?? []).map((id) => objects[String(id)]).filter(Boolean) as GameObject[]);
+  /**
+   * Where the card menu was opened from, in viewport coordinates. Captured when
+   * the menu opens (the card may move afterwards, e.g. a hand resize).
+   */
+  let menuAnchor = $state<DOMRect | null>(null);
+  function openMenuFrom(element: HTMLElement) {
+    const id = Number(element.getAttribute('data-card-id'));
+    if (!Number.isFinite(id)) return;
+    menuAnchor = element.getBoundingClientRect();
+    session.selected = id;
+    session.openCardMenu(id);
+  }
+  function cardFromEvent(event: Event): HTMLElement | null {
+    const target = event.target as HTMLElement | null;
+    return target?.closest?.('[data-card-id]') as HTMLElement | null;
+  }
+
   const rivalHand = $derived((rival?.hand ?? []).map((id) => objects[String(id)]).filter(Boolean) as GameObject[]);
   const graveyardObjects = $derived((player?.graveyard ?? []).map((id) => objects[String(id)]).filter(Boolean) as GameObject[]);
   const battlefieldObjects = $derived((snapshot?.state.battlefield ?? []).map((id) => objects[String(id)]).filter(Boolean) as GameObject[]);
@@ -275,6 +293,28 @@
      battlefield into a 70-card vertical marathon (docs/screenshots/cartas-320.png
      in 0.5.1). The cap only bites on narrow screens; the density control still
      wins everywhere else. -->
+<!-- The card menu opens from the standard context-menu gestures. A window
+     listener keeps the board itself free of mouse-only affordances: a card is
+     focusable (`role="button" tabindex="0"`), so Shift+F10 works from the
+     keyboard, and right click works for everyone else. -->
+<svelte:window
+  oncontextmenu={(event) => {
+    if (document.querySelector('dialog[open]')) return;
+    const card = cardFromEvent(event);
+    if (!card) return;
+    event.preventDefault();
+    openMenuFrom(card);
+  }}
+  onkeydown={(event) => {
+    if (!(event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) return;
+    if (document.querySelector('dialog[open]')) return;
+    const card = cardFromEvent(event);
+    if (!card) return;
+    event.preventDefault();
+    openMenuFrom(card);
+  }}
+/>
+
 <div class="app" data-board-style={session.boardStyle} data-chrome={session.boardStyle === 'arena' && snapshot && !needsHandoff ? 'arena' : undefined} style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2)); --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
   {#if session.boardStyle === 'arena'}
     <ArenaSurface color={arenaColor} />
@@ -485,6 +525,9 @@
          plain, text-first board its own tests describe. -->
     {#if session.boardStyle === 'arena' && !needsHandoff}
       <BoardOverlay />
+    {/if}
+    {#if session.cardMenu !== null}
+      <CardActionMenu objectId={session.cardMenu} anchor={menuAnchor} onclose={() => session.closeCardMenu()} />
     {/if}
     {#snippet failed(error, reset)}
       <div class="notice error" role="alert">

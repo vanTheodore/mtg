@@ -1404,6 +1404,10 @@
      the light theme's ink on a near-black plate (measured: h1 at rgb(29,35,43)
      over rgb(9,12,18)). Re-declaring the aliases here re-resolves them in this
      scope. */
+  /* Opaque layer for surfaces that float over other chrome (the card menu):
+     `--surface` is intentionally translucent over the art, and a menu that
+     lets the coach tip show through is unreadable. */
+  --chrome-solid: #0b0f15;
   --text-primary: var(--ink);
   --text-secondary: var(--ink-muted);
   --text-muted: var(--ink-muted);

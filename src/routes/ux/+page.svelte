@@ -19,19 +19,24 @@
   import HistoryPanel from '#lib/components/HistoryPanel.svelte';
   import BoardOverlay from '#lib/components/BoardOverlay.svelte';
   import Settings from '#lib/components/Settings.svelte';
+  import CardActionMenu from '#lib/components/CardActionMenu.svelte';
+  import DamageAssignment from '#lib/components/DamageAssignment.svelte';
   import { session } from '#lib/game/session.svelte.ts';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage';
   let scene = $state<Scene>('targets');
 
   const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const initial = params.get('scene');
-  if (initial === 'combat' || initial === 'idle') scene = initial;
+  if (initial === 'combat' || initial === 'idle' || initial === 'damage') scene = initial;
   onMount(() => {
     const fromUrl = new URLSearchParams(location.search).get('scene');
-    if (fromUrl === 'combat' || fromUrl === 'idle') scene = fromUrl;
+    if (fromUrl === 'combat' || fromUrl === 'idle' || fromUrl === 'damage') scene = fromUrl;
   });
+
+  /** Where the card menu opened, in viewport coordinates (fixture parity with Board). */
+  let menuAnchor = $state<DOMRect | null>(null);
 
   const MANA = { total: 0, white: 0, blue: 0, black: 0, red: 0, green: 0, colorless: 0 };
 
@@ -108,6 +113,23 @@
       };
     }
     if (scene === 'combat') return { type: 'DeclareBlockers', data: { player: 1 } };
+    if (scene === 'damage') {
+      // Shape taken from `WaitingFor::AssignCombatDamage` in the pinned engine:
+      // one attacker with trample-ish excess over a single blocker.
+      return {
+        type: 'AssignCombatDamage',
+        data: {
+          player: 0,
+          attacker_id: 100,
+          total_damage: 3,
+          blockers: [{ blocker_id: 200, lethal_minimum: 2 }],
+          assignment_modes: [],
+          trample: 'Normal',
+          defending_player: 1,
+          attack_target: { type: 'Player', data: 1 }
+        }
+      };
+    }
     return { type: 'Priority', data: { player: 0 } };
   }
 
@@ -122,14 +144,14 @@
         turn_number: 4,
         active_player: 0,
         priority_player: 0,
-        phase: scene === 'combat' ? 'DeclareBlockers' : 'PreCombatMain',
+        phase: scene === 'combat' ? 'DeclareBlockers' : scene === 'damage' ? 'CombatDamage' : 'PreCombatMain',
         waiting_for: waiting(),
         players: seats,
         battlefield: [...viewerField, ...rivalField].map((object) => object.id),
         stack: scene === 'targets' ? [{ id: 7, source_id: 300, controller: 0 }] : [],
         exile: [],
         objects: objects as Record<string, GameObject>,
-        combat: scene === 'combat'
+        combat: scene === 'combat' || scene === 'damage'
           ? {
               attackers: [
                 { object_id: 100, defending_player: 1, attack_target: { type: 'Player', data: 1 }, blocked: true },
@@ -164,9 +186,19 @@
               { type: 'ChooseTarget', data: { target: { Object: 200 } } },
               { type: 'CancelCast' }
             ]
-          : [{ type: 'PassPriority' }],
+          : scene === 'damage'
+            ? [
+                { type: 'AssignCombatDamage', data: { mode: 'Normal', assignments: [[200, 2]], trample_damage: 1, controller_damage: 0 } },
+                { type: 'AssignCombatDamage', data: { mode: 'AsThoughUnblocked', assignments: [], trample_damage: 0, controller_damage: 0 } }
+              ]
+            : [{ type: 'PassPriority' }],
         spell_costs: {},
-        by_object: {}
+        // Actions the menu must show. In the real table these arrive from
+        // `legal.by_object`; the fixture copies the shape, not the rules.
+        by_object: {
+          '100': [{ type: 'ActivateAbility', data: { object_id: 100, ability_index: 0 } }],
+          '1001': [{ type: 'CastSpell', data: { object_id: 1001 } }]
+        }
       },
       metrics: {}
     } as unknown as EngineSnapshot;
@@ -187,6 +219,30 @@
 
 <svelte:head><title>Mesa · laboratorio de interfaz</title></svelte:head>
 
+<!-- Same gestures as the real table: the lab has to test the menu the game
+     uses, not a variant of it. -->
+<svelte:window
+  oncontextmenu={(event) => {
+    if (document.querySelector('dialog[open]')) return;
+    const card = (event.target as HTMLElement | null)?.closest?.('[data-card-id]') as HTMLElement | null;
+    if (!card) return;
+    event.preventDefault();
+    menuAnchor = card.getBoundingClientRect();
+    session.selected = Number(card.getAttribute('data-card-id'));
+    session.openCardMenu(Number(card.getAttribute('data-card-id')));
+  }}
+  onkeydown={(event) => {
+    if (!(event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) return;
+    if (document.querySelector('dialog[open]')) return;
+    const card = (event.target as HTMLElement | null)?.closest?.('[data-card-id]') as HTMLElement | null;
+    if (!card) return;
+    event.preventDefault();
+    menuAnchor = card.getBoundingClientRect();
+    session.selected = Number(card.getAttribute('data-card-id'));
+    session.openCardMenu(Number(card.getAttribute('data-card-id')));
+  }}
+/>
+
 <div id="mesa-ux" class="app ux" data-board-style="arena" data-chrome="arena" style="--card-w: min(148px, calc((100vw - 6rem) / 2)); --arena-base-card-w: 124px">
   <ArenaSurface color="green" />
 
@@ -204,6 +260,7 @@
           <option value="targets">Objetivos y pila</option>
           <option value="combat">Combate y bloqueo</option>
           <option value="idle">Mesa sin líneas</option>
+          <option value="damage">Asignación de daño</option>
         </select>
       </label>
       <Settings />
@@ -233,6 +290,7 @@
 
     <div class="middle">
       <div class="center">
+        {#if scene === 'damage'}<DamageAssignment />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>
@@ -248,6 +306,9 @@
   </main>
 
   <BoardOverlay />
+  {#if session.cardMenu !== null}
+    <CardActionMenu objectId={session.cardMenu} anchor={menuAnchor} onclose={() => session.closeCardMenu()} />
+  {/if}
   <Hand objects={hand} metas={{}} title="Tu mano · Jugador 1" onselect={(id) => { session.inspect = id; }} />
 
 
