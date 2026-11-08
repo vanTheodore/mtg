@@ -253,6 +253,50 @@ test('una parada en el paso actual aparece en el estado de la mesa', async ({ pa
   await expect(dock).toContainText('Parada');
 });
 
+test('el descarte de un efecto pide exactamente las cartas que publica el motor', async ({ page }) => {
+  // `WaitingFor::DiscardChoice`: a discard effect (Mind Rot in the fixture) names
+  // the eligible cards and how many of them it takes.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=discard');
+
+  const block = page.locator('[aria-label="Descartar 2 cartas"]');
+  await expect(block).toBeVisible();
+  await expect(block).toContainText('Elige exactamente esta cantidad');
+  const confirm = block.getByRole('button', { name: /Confirmar descarte/ });
+  await expect(confirm).toBeDisabled();
+
+  const hand = page.locator('section.hand-zone [data-card-id]');
+  await expect(hand).toHaveCount(3);
+  await hand.nth(0).click();
+  await expect(block.getByRole('button', { name: /Confirmar descarte/ })).toContainText('(1/2)');
+  await expect(block.getByRole('button', { name: /Confirmar descarte/ })).toBeDisabled();
+  await hand.nth(1).click();
+  await expect(block.getByRole('button', { name: /Confirmar descarte/ })).toBeEnabled();
+  // The marked cards are the ones on the table, not a private list.
+  await expect(hand.nth(0)).toHaveAttribute('aria-pressed', 'true');
+  await expect(hand.nth(2)).toHaveAttribute('aria-pressed', 'false');
+  await expect(block).toContainText('Mountain');
+  await expect(block).toContainText('Grizzly Bears');
+  const axe = await new AxeBuilder({ page }).include('.center .prompt').analyze();
+  expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
+});
+
+test('"descartar hasta N" admite no descartar nada', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=discardUpTo');
+
+  const block = page.locator('[aria-label="Descartar hasta 2 cartas"]');
+  await expect(block).toBeVisible();
+  await expect(block).toContainText('Puedes descartar menos, incluso ninguna');
+  // CR 701.9b: zero is a legal answer, so the confirm button is live and says so.
+  const none = block.getByRole('button', { name: /No descartar/ });
+  await expect(none).toBeEnabled();
+  const hand = page.locator('section.hand-zone [data-card-id]');
+  await hand.nth(0).click();
+  await expect(block.getByRole('button', { name: /Confirmar descarte/ })).toContainText('(1/2)');
+  await expect(block.getByRole('button', { name: /Confirmar descarte/ })).toBeEnabled();
+});
+
 test('el selector de ataque se ancla al atacante y sólo ofrece los destinos del motor', async ({ page }) => {
   // The engine's per-attacker map in this fixture: 100 may aim at the seat or at
   // the rival planeswalker, 101 only at the seat.

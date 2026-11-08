@@ -25,14 +25,17 @@
   import { session } from '#lib/game/session.svelte.ts';
   import { attackTargets } from '#lib/game/interaction.ts';
   import AttackTargetPicker from '#lib/components/AttackTargetPicker.svelte';
+  import DiscardPrompt from '#lib/components/DiscardPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'discard' | 'discardUpTo';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
     { value: 'attackers', label: 'Declarar atacantes' },
     { value: 'damage', label: 'Asignación de daño' },
+    { value: 'discard', label: 'Descartar dos cartas' },
+    { value: 'discardUpTo', label: 'Descartar hasta dos' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -40,6 +43,8 @@
     targets: 'TargetSelection · pila con un hechizo',
     combat: 'DeclareBlockers · un bloqueo asignado',
     attackers: 'DeclareAttackers · un atacante con dos destinos',
+    discard: 'DiscardChoice · descartar exactamente dos',
+    discardUpTo: 'DiscardChoice · descartar hasta dos',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -94,6 +99,10 @@
     ...Array.from({ length: 2 }, (_, i) => permanent(202 + i, 1, 'Island', ['Land']))
   ];
   const viewerGrave = [pileCard(110, 0, 'Lightning Bolt', 'Graveyard'), pileCard(111, 0, 'Shock', 'Graveyard')];
+  // The object that asks for the discard, so the panel can name it. It lives in
+  // `objects` only: listing it in a zone would change the pile counts the lab
+  // asserts elsewhere.
+  const discardSource = { ...pileCard(310, 0, 'Mind Rot', 'Graveyard'), oracle_text: 'El jugador objetivo descarta dos cartas.' };
   const viewerExile = [pileCard(112, 0, 'Giant Growth', 'Exile')];
   const rivalGrave = [pileCard(210, 1, 'Counterspell', 'Graveyard')];
   const rivalExile: GameObject[] = [];
@@ -112,7 +121,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -161,6 +170,20 @@
         }
       };
     }
+    if (scene === 'discard' || scene === 'discardUpTo') {
+      // Shape taken from `WaitingFor::DiscardChoice` in the pinned engine: a
+      // discard effect names the cards it accepts and (optionally) allows fewer.
+      return {
+        type: 'DiscardChoice',
+        data: {
+          player: 0,
+          count: 2,
+          cards: hand.map((card) => card.id),
+          source_id: 310,
+          up_to: scene === 'discardUpTo'
+        }
+      };
+    }
     if (scene === 'combat') return { type: 'DeclareBlockers', data: { player: 1 } };
     if (scene === 'damage') {
       // Shape taken from `WaitingFor::AssignCombatDamage` in the pinned engine:
@@ -193,7 +216,8 @@
         turn_number: 4,
         active_player: 0,
         priority_player: 0,
-        phase: scene === 'combat' ? 'DeclareBlockers'
+        phase: scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
+          : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
           : scene === 'attackers' ? 'DeclareAttackers'
           : 'PreCombatMain',
@@ -343,6 +367,7 @@
     <div class="middle">
       <div class="center">
         {#if scene === 'damage'}<DamageAssignment />{/if}
+        {#if scene === 'discard' || scene === 'discardUpTo'}<DiscardPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>
@@ -364,7 +389,10 @@
   {#if session.attackPicker !== null}
     <AttackTargetPicker objectId={session.attackPicker.id} anchor={session.attackPicker.anchor} onclose={() => session.closeAttackPicker()} />
   {/if}
-  <Hand objects={hand} metas={{}} title="Tu mano · Jugador 1" onselect={(id) => { session.inspect = id; }} />
+  <!-- Same click contract as the real hand (`Board.svelte` leaves `Hand` its own
+       default): a card the engine is asking for is an answer to that prompt, not
+       something to inspect. Without this the discard scenes could not be used. -->
+  <Hand objects={hand} metas={{}} title="Tu mano · Jugador 1" onselect={(id) => session.selectObject(id)} />
 
 
   <footer class="metrics">

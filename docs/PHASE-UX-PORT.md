@@ -373,3 +373,43 @@ borde. Es aritmética pura y tiene **5 pruebas** de mesa en
 `bun run build` OK, `ux-lab.spec.ts` y `a11y.spec.ts` **19/19**
 y axe verde sobre el selector abierto. Captura: `docs/screenshots/ux-ataque-1440.jpg`
 y la escena nueva `/ux?scene=attackers`.
+
+## Descartes de efecto y de guardia (séptima pasada, 7 nov 2026)
+
+`WaitingFor` del pin tiene **147 variantes**; Mesa da una vista propia a 17 y el
+resto cae en la lista de acciones legales. Esta pasada cubre la familia que más
+aparece en una partida normal sin ser todavía la limpieza de fin de turno: el
+descarte que pide un **efecto** (Mind Rot, Ravenous Rats) y el que cobra la
+**guardia** (ward).
+
+Hasta ahora `discardPrompt` sólo reconocía `DiscardToHandSize` y `ConniveDiscard`;
+los otros dos acababan en «Esta decisión todavía no tiene una representación
+visual completa».
+
+- **`interaction.ts`** reconoce las cuatro variantes y publica lo que el motor ya
+  manda: `count`, `cards`, `up_to` (CR 701.9b), el nombre del objeto que pide el
+  descarte y de qué tipo es (`handSize`, `discard`, `ward`). Un coste de guardia
+  no lleva `count`: son una carta por vuelta, así que se fija en 1.
+- **`DiscardPrompt.svelte`** (extraído de `DecisionPanel`, como
+  `DamageAssignment`) dibuja las tres frases con la misma maquinaria: el título y
+  la ayuda cambian, las cartas elegidas se marcan en la mano
+  (`session.choosing`) y el botón sólo se activa cuando el motor aceptaría la
+  respuesta (`session.discardReady`). Con `up_to`, cero cartas es legal, así que
+  el botón dice **«No descartar»** hasta que se marca alguna.
+- **Nada cuenta cartas por su cuenta.** La mano no se recorre: se ofrecen las
+  cartas de `cards` y el recuento es el del motor.
+
+Laboratorio: escenas `/ux?scene=discard` (exactamente dos) y
+`/ux?scene=discardUpTo` (hasta dos), con el objeto `Mind Rot` en la instantánea
+para que el panel pueda nombrarlo.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **302** (3 nuevas de descarte en
+`game/__tests__/discard.test.ts`), `bun run build` OK, `ux-lab.spec.ts` y
+`a11y.spec.ts` **21/21** (20 del laboratorio) con axe verde sobre el bloque de
+descarte. Captura: `docs/screenshots/ux-descarte-1440.jpg`.
+
+Lo que queda de #60 sigue abierto: valores de X (`ChooseXValue`), orden de
+disparos (`OrderTriggers`), elección de modo (`ModeChoice`), búsquedas
+(`SearchChoice`, `DigChoice`), `RevealChoice` y las variantes de multijugador.
