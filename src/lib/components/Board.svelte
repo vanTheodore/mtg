@@ -2,9 +2,11 @@
   import { onMount, tick } from 'svelte';
   import ArenaSurface from './ArenaSurface.svelte';
   import PhaseStopBar from './PhaseStopBar.svelte';
+  import MobilePhaseChip from './MobilePhaseChip.svelte';
   import StatusDock from './StatusDock.svelte';
   import CoachTip from './CoachTip.svelte';
   import CardActionMenu from './CardActionMenu.svelte';
+  import AttackTargetPicker from './AttackTargetPicker.svelte';
   import Hand from './Hand.svelte';
   import Battlefield from './Battlefield.svelte';
   import DecisionPanel from './DecisionPanel.svelte';
@@ -17,6 +19,7 @@
   import HistoryPanel from './HistoryPanel.svelte';
   import DeckBuilder from './DeckBuilder.svelte';
   import { session } from '#lib/game/session.svelte.ts';
+  import { attackTargets } from '#lib/game/interaction.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
   import { loadCatalog, loadPack, type Catalog, type CatalogIndex } from '#lib/game/catalog.ts';
   import { mergeCatalogs } from '#lib/game/canonical.ts';
@@ -92,6 +95,21 @@
     session.selected = id;
     session.openCardMenu(id);
   }
+  /**
+   * A creature with more than one legal defender opens the anchored picker the
+   * moment it becomes the selection: on a table that choice belongs next to the
+   * card, not in a list three panels away. With a single defender nothing opens
+   * — `session.selectObject` already assigns it, as before.
+   */
+  $effect(() => {
+    const id = session.selected;
+    if (id === null || session.attackPicker !== null || session.cardMenu !== null) return;
+    if (session.snapshot?.state.waiting_for.type !== 'DeclareAttackers') return;
+    if (attackTargets(session.snapshot, id).length < 2) return;
+    const card = document.querySelector<HTMLElement>(`[data-card-id="${id}"]`);
+    if (card) session.openAttackPicker(id, card.getBoundingClientRect());
+  });
+
   function cardFromEvent(event: Event): HTMLElement | null {
     const target = event.target as HTMLElement | null;
     return target?.closest?.('[data-card-id]') as HTMLElement | null;
@@ -485,7 +503,10 @@
       <Battlefield objects={battlefieldObjects} {metas} owner={opponent} side="opponent" label={`Campo de batalla · Jugador ${opponent + 1}`} />
       <div class="middle">
         {#if session.boardStyle === 'arena'}
+          <!-- One preference, two shapes: twelve chips from 641 px up, one
+               line and a sheet below, where a 30 px chip is not tappable. -->
           <PhaseStopBar phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
+          <MobilePhaseChip phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
         {/if}
         <div class="center">
           <StackPanel />
@@ -528,6 +549,9 @@
     {/if}
     {#if session.cardMenu !== null}
       <CardActionMenu objectId={session.cardMenu} anchor={menuAnchor} onclose={() => session.closeCardMenu()} />
+    {/if}
+    {#if session.attackPicker !== null}
+      <AttackTargetPicker objectId={session.attackPicker.id} anchor={session.attackPicker.anchor} onclose={() => session.closeAttackPicker()} />
     {/if}
     {#snippet failed(error, reset)}
       <div class="notice error" role="alert">

@@ -12,6 +12,7 @@
    * on a focused card (the standard, keyboard-reachable context-menu gesture).
    */
   import { onMount, tick } from 'svelte';
+  import { placePopover } from '#lib/ui/anchored.ts';
   import { actionsForObject, describeAction } from '#lib/game/actions.ts';
   import { session } from '#lib/game/session.svelte.ts';
   import type { GameAction } from '#lib/engine/types.ts';
@@ -28,14 +29,26 @@
   let root = $state<HTMLElement | null>(null);
   let items = $state<HTMLButtonElement[]>([]);
 
-  /** Keep the menu inside the viewport without measuring twice in CSS. */
-  const position = $derived.by(() => {
-    if (!anchor) return { top: '1rem', left: '1rem' };
-    const width = 260;
-    const left = Math.min(Math.max(8, anchor.right - width), Math.max(8, window.innerWidth - width - 8));
-    const top = Math.min(anchor.bottom + 6, Math.max(8, window.innerHeight - 40));
-    return { top: `${top}px`, left: `${left}px` };
+  /**
+   * The menu is placed from its measured box (`placePopover`): a hand card sits
+   * along the bottom of the screen, so a fixed "below the anchor" rule sent the
+   * menu past the viewport edge.
+   */
+  let placed = $state<{ top: number; left: number } | null>(null);
+
+  $effect(() => {
+    const element = root;
+    if (!element || !anchor) return;
+    const box = element.getBoundingClientRect();
+    placed = placePopover(anchor, { width: box.width, height: box.height }, {
+      width: window.innerWidth,
+      height: window.innerHeight
+    });
   });
+
+  const style = $derived(placed === null
+    ? 'top: 0; left: 0; visibility: hidden'
+    : `top: ${placed.top}px; left: ${placed.left}px`);
 
   function focusItem(index: number) {
     const target = items[Math.max(0, Math.min(index, items.length - 1))];
@@ -80,7 +93,7 @@
   class="card-menu"
   role="menu"
   aria-label={object ? `Acciones de ${object.name}` : 'Acciones de la carta'}
-  style={`top: ${position.top}; left: ${position.left}`}
+  {style}
   bind:this={root}
   tabindex="-1"
   onkeydown={onKeydown}
