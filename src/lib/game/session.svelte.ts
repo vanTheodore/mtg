@@ -33,6 +33,12 @@ class GameSession {
   density = $state<'comfortable' | 'compact'>('comfortable');
   lastMetrics = $state<EngineSnapshot['metrics'] | null>(null);
   attacks = $state<Record<string, AttackTarget>>({});
+  /**
+   * Anchored attack-target picker (`AttackTargetPicker`): which attacker, and
+   * where its card was when the picker opened. The choices it offers are read
+   * from the engine's `valid_attack_targets_by_attacker`; nothing is invented.
+   */
+  attackPicker = $state<{ id: ObjectId; anchor: DOMRect | null } | null>(null);
   blocks = $state<Record<string, ObjectId>>({});
   history = $state<HistoryEntry[]>([]);
   lifeChanges = $state<Record<string, { amount: number; revision: number }>>({});
@@ -153,7 +159,7 @@ class GameSession {
     await this.queue.catch(() => {});
     this.status = 'loading'; this.error = null; this.snapshot = null;
     this.revealedViewer = null; this.revealedTurn = null; this.selected = null; this.inspect = null;
-    this.attacks = {}; this.blocks = {}; this.history = []; this.lifeChanges = {}; this.lastMetrics = null;
+    this.attacks = {}; this.blocks = {}; this.attackPicker = null; this.history = []; this.lifeChanges = {}; this.lastMetrics = null;
     this.choosing = []; this.autoPasses = 0; this.autoPassQueued = false; this.historyId = 0;
     try {
       const reply = await this.client.init({ protocol_version: ENGINE_PROTOCOL_VERSION, catalog, decks, seed, first_player: 0 });
@@ -182,6 +188,7 @@ class GameSession {
     this.revealedTurn = null;
     this.attacks = {};
     this.blocks = {};
+    this.attackPicker = null;
     this.choosing = [];
     this.history = [];
     this.lifeChanges = {};
@@ -206,6 +213,14 @@ class GameSession {
 
   openCardMenu(id: ObjectId) { this.cardMenu = id; }
   closeCardMenu() { this.cardMenu = null; }
+  openAttackPicker(id: ObjectId, anchor: DOMRect | null) { this.attackPicker = { id, anchor }; }
+  closeAttackPicker() {
+    const id = this.attackPicker?.id;
+    this.attackPicker = null;
+    // Dropping the selection too is what stops the picker from reopening: the
+    // table opens it when a multi-target attacker becomes the selection.
+    if (id !== undefined && this.selected === id) this.selected = null;
+  }
 
   selectObject(id: ObjectId) {
     const s = this.snapshot;

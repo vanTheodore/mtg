@@ -140,9 +140,8 @@ se borra: es el registro de que se hizo y de cuándo.
 
 1. ~~Menú de acciones de carta~~ (`BoardContextMenu.tsx`, `cardActionChoice.ts`):
    hecho en la cuarta pasada (`CardActionMenu.svelte`).
-2. **Selector de destino de ataque** (`AttackTargetPicker.tsx`): sigue pendiente.
-   Hoy el destino se elige en el panel y el borrador local sólo se dibuja como
-   línea a trazos; Phase ancla el selector al atacante.
+2. ~~Selector de destino de ataque~~ (`AttackTargetPicker.tsx`): hecho en la
+   sexta pasada (`AttackTargetPicker.svelte`), anclado a la carta del atacante.
 3. ~~Barra de fases con paradas~~ (`PhaseStopBar.tsx`): tercera pasada, más la
    ficha del teléfono de la quinta.
 4. ~~Asignación de daño de combate~~ (`DamageAssignmentModal.tsx`): cuarta
@@ -331,3 +330,46 @@ los últimos paneles: es la maqueta del laboratorio, no el cromo.
 `ux-lab.spec.ts` **17/17** más `a11y.spec.ts`, con axe verde también sobre la
 hoja abierta. Capturas: `docs/screenshots/ux-ficha-390.jpg` y
 `docs/screenshots/ux-paradas-390.jpg`.
+
+## Selector de ataque anclado a la carta (sexta pasada, 7 nov 2026)
+
+Port de `controls/AttackTargetPicker.tsx`. Hasta aquí el destino de un ataque se
+elegía en el panel de decisión, a tres paneles de la criatura; Phase lo ancla al
+atacante.
+
+- **`AttackTargetPicker.svelte`**: un `role="menu"` con un `menuitemradio` por
+  destino. La lista es `waiting_for.data.valid_attack_targets_by_attacker[id]`,
+  el mapa que el motor ya acota con CR 508.1a–d; el componente no filtra, no
+  ordena por legalidad y no añade destinos. Al elegir, `session.chooseAttackDestination`
+  vuelve a comprobar la misma lista antes de escribir el borrador, y con un solo
+  destino legal no se abre nada: la mesa lo asigna directamente, como antes.
+- **Cuándo se abre.** Un `$effect` en `Board.svelte`: cuando la criatura
+  seleccionada tiene **dos o más** destinos. Al cerrar con `Escape`, con la ✕ o
+  eligiendo, el foco vuelve a la carta. Cerrar sin elegir también suelta la
+  selección, que es lo que evita que el selector se reabra solo.
+- **Lo que no se porta.** El tablero de cubos de upstream (pilas de atacantes
+  idénticos, contadores +/−, reparto equitativo). Existe para repartir varios
+  atacantes entre varios defensores a la vez en multijugador; Mesa declara un
+  ataque por vez desde la misma lista del motor y el panel conserva la acción
+  completa.
+
+### Un fallo de colocación que ya existía
+
+Al probarlo apareció que ambos popovers —el selector nuevo y el menú de carta de
+la cuarta pasada— se colocaban con una regla fija (`top: anchor.bottom`). Con la
+criatura en la mitad inferior de la pantalla el selector abría en **y = 890 de
+900 px** y sólo se veía el título; el menú de carta tenía el mismo problema con
+las cartas de la mano, que viven al pie.
+
+`src/lib/ui/anchored.ts` (`placePopover`) resuelve la colocación con la caja ya
+medida: debajo si cabe entera, encima si no, y solapando la carta cuando ninguna
+de las dos bandas tiene sitio (teléfono en horizontal), nunca a menos de 8 px del
+borde. Es aritmética pura y tiene **5 pruebas** de mesa en
+`src/lib/ui/__tests__/anchored.test.ts`, incluido el caso medido.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **299** (5 nuevas de `anchored.ts`),
+`bun run build` OK, `ux-lab.spec.ts` y `a11y.spec.ts` **19/19**
+y axe verde sobre el selector abierto. Captura: `docs/screenshots/ux-ataque-1440.jpg`
+y la escena nueva `/ux?scene=attackers`.

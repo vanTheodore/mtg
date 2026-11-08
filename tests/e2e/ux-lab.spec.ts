@@ -253,6 +253,44 @@ test('una parada en el paso actual aparece en el estado de la mesa', async ({ pa
   await expect(dock).toContainText('Parada');
 });
 
+test('el selector de ataque se ancla al atacante y sólo ofrece los destinos del motor', async ({ page }) => {
+  // The engine's per-attacker map in this fixture: 100 may aim at the seat or at
+  // the rival planeswalker, 101 only at the seat.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/ux?scene=attackers');
+
+  const bear = page.locator('[data-card-id="100"]').first();
+  await bear.click();
+  const picker = page.getByRole('menu', { name: 'A quién ataca Grizzly Bears' });
+  await expect(picker).toBeVisible();
+  await expect(picker.getByRole('menuitemradio')).toHaveText(['Jugador 2', 'Chandra, Torch of Defiance']);
+  // The first choice takes the focus: the picker is usable without a pointer.
+  await expect(picker.getByRole('menuitemradio').first()).toBeFocused();
+
+  // Placed from its measured box: a creature in the lower half must not push the
+  // popover past the viewport (measured earlier: it opened at y 890 of 900).
+  const box = await picker.boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(8);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(900 - 8);
+
+  await picker.getByRole('menuitemradio', { name: 'Jugador 2' }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(page.locator('[data-card-id="100"]').first()).toBeFocused();
+
+  // The draft is readable afterwards, and `Escape` still returns the focus.
+  await bear.click();
+  await expect(page.getByRole('menuitemradio', { name: 'Jugador 2' })).toHaveAttribute('aria-checked', 'true');
+  const axe = await new AxeBuilder({ page }).include('.attack-picker').analyze();
+  expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu', { name: /A quién ataca/ })).toHaveCount(0);
+  await expect(page.locator('[data-card-id="100"]').first()).toBeFocused();
+
+  // A single legal defender needs no picker: the table assigns it directly.
+  await page.locator('[data-card-id="101"]').first().click();
+  await expect(page.getByRole('menu', { name: /A quién ataca/ })).toHaveCount(0);
+});
+
 test('el menú de acciones de una carta se abre con el teclado, lista lo que ofrece el motor y devuelve el foco', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/ux?scene=idle');

@@ -23,21 +23,49 @@
   import CardActionMenu from '#lib/components/CardActionMenu.svelte';
   import DamageAssignment from '#lib/components/DamageAssignment.svelte';
   import { session } from '#lib/game/session.svelte.ts';
+  import { attackTargets } from '#lib/game/interaction.ts';
+  import AttackTargetPicker from '#lib/components/AttackTargetPicker.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers';
+  const SCENES: { value: Scene; label: string }[] = [
+    { value: 'targets', label: 'Objetivos y pila' },
+    { value: 'combat', label: 'Combate declarado' },
+    { value: 'attackers', label: 'Declarar atacantes' },
+    { value: 'damage', label: 'Asignación de daño' },
+    { value: 'idle', label: 'Mesa sin líneas' }
+  ];
+  const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
+  const SCENE_SUMMARY: Record<Scene, string> = {
+    targets: 'TargetSelection · pila con un hechizo',
+    combat: 'DeclareBlockers · un bloqueo asignado',
+    attackers: 'DeclareAttackers · un atacante con dos destinos',
+    damage: 'AssignCombatDamage · un bloqueador',
+    idle: 'Priority · sin líneas'
+  };
   let scene = $state<Scene>('targets');
 
   const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const initial = params.get('scene');
-  if (initial === 'combat' || initial === 'idle' || initial === 'damage') scene = initial;
+  if (isScene(initial)) scene = initial;
   onMount(() => {
     const fromUrl = new URLSearchParams(location.search).get('scene');
-    if (fromUrl === 'combat' || fromUrl === 'idle' || fromUrl === 'damage') scene = fromUrl;
+    if (isScene(fromUrl)) scene = fromUrl;
   });
 
   /** Where the card menu opened, in viewport coordinates (fixture parity with Board). */
   let menuAnchor = $state<DOMRect | null>(null);
+
+  /** Same rule as `Board.svelte`: selecting an attacker with more than one legal
+   *  defender opens the anchored picker; a single defender assigns directly. */
+  $effect(() => {
+    const id = session.selected;
+    if (id === null || session.attackPicker !== null || session.cardMenu !== null) return;
+    if (session.snapshot?.state.waiting_for.type !== 'DeclareAttackers') return;
+    if (attackTargets(session.snapshot, id).length < 2) return;
+    const card = document.querySelector<HTMLElement>(`[data-card-id="${id}"]`);
+    if (card) session.openAttackPicker(id, card.getBoundingClientRect());
+  });
 
   const MANA = { total: 0, white: 0, blue: 0, black: 0, red: 0, green: 0, colorless: 0 };
 
@@ -58,6 +86,9 @@
     ...Array.from({ length: 3 }, (_, i) => permanent(102 + i, 0, 'Forest', ['Land'], { tapped: i === 0 }))
   ];
   const rivalField = [
+    // A planeswalker gives the picker a second kind of defender besides the
+    // seat, which is the case upstream's per-attacker map exists for.
+    permanent(205, 1, 'Chandra, Torch of Defiance', ['Planeswalker'], { counters: { loyalty: 4 } }),
     permanent(200, 1, 'Grizzly Bears', ['Creature'], { power: 2, toughness: 2, mana_cost: '{1}{G}' }),
     permanent(201, 1, 'Grizzly Bears', ['Creature'], { power: 2, toughness: 2, mana_cost: '{1}{G}' }),
     ...Array.from({ length: 2 }, (_, i) => permanent(202 + i, 1, 'Island', ['Land']))
@@ -113,6 +144,23 @@
         }
       };
     }
+    if (scene === 'attackers') {
+      // Shape taken from `WaitingFor::DeclareAttackers` in the pinned engine.
+      // The per-attacker map is the authority: 100 may aim at the seat or at the
+      // planeswalker, 101 only at the seat.
+      const seat = { type: 'Player', data: 1 };
+      const walker = { type: 'Object', data: 205 };
+      return {
+        type: 'DeclareAttackers',
+        data: {
+          player: 0,
+          valid_attacker_ids: [100, 101],
+          valid_attack_targets: [seat, walker],
+          valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
+          attacker_constraints: {}
+        }
+      };
+    }
     if (scene === 'combat') return { type: 'DeclareBlockers', data: { player: 1 } };
     if (scene === 'damage') {
       // Shape taken from `WaitingFor::AssignCombatDamage` in the pinned engine:
@@ -145,7 +193,10 @@
         turn_number: 4,
         active_player: 0,
         priority_player: 0,
-        phase: scene === 'combat' ? 'DeclareBlockers' : scene === 'damage' ? 'CombatDamage' : 'PreCombatMain',
+        phase: scene === 'combat' ? 'DeclareBlockers'
+          : scene === 'damage' ? 'CombatDamage'
+          : scene === 'attackers' ? 'DeclareAttackers'
+          : 'PreCombatMain',
         waiting_for: waiting(),
         players: seats,
         battlefield: [...viewerField, ...rivalField].map((object) => object.id),
@@ -258,10 +309,9 @@
     <div class="controls">
       <label>Escena
         <select bind:value={scene} aria-label="Escena del laboratorio">
-          <option value="targets">Objetivos y pila</option>
-          <option value="combat">Combate y bloqueo</option>
-          <option value="idle">Mesa sin líneas</option>
-          <option value="damage">Asignación de daño</option>
+          {#each SCENES as entry (entry.value)}
+            <option value={entry.value}>{entry.label}</option>
+          {/each}
         </select>
       </label>
       <Settings />
@@ -311,13 +361,16 @@
   {#if session.cardMenu !== null}
     <CardActionMenu objectId={session.cardMenu} anchor={menuAnchor} onclose={() => session.closeCardMenu()} />
   {/if}
+  {#if session.attackPicker !== null}
+    <AttackTargetPicker objectId={session.attackPicker.id} anchor={session.attackPicker.anchor} onclose={() => session.closeAttackPicker()} />
+  {/if}
   <Hand objects={hand} metas={{}} title="Tu mano · Jugador 1" onselect={(id) => { session.inspect = id; }} />
 
 
   <footer class="metrics">
     <span>Escena: {scene}</span>
     <span>revisión {snapshot().revision}</span>
-    <span>{scene === 'targets' ? 'TargetSelection · pila con un hechizo' : scene === 'combat' ? 'DeclareBlockers · un bloqueo asignado' : 'Priority · sin líneas'}</span>
+    <span>{SCENE_SUMMARY[scene]}</span>
   </footer>
 </div>
 
