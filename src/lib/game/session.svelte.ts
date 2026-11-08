@@ -291,9 +291,15 @@ class GameSession {
     if (has) this.choosing = this.choosing.filter((x) => x !== id);
     else if (this.choosing.length < prompt.count) this.choosing = [...this.choosing, id];
   }
+  /** True while the current discard answer is one the engine will accept. */
+  get discardReady() {
+    const prompt = this.discardPrompt;
+    if (!prompt) return false;
+    return prompt.upTo ? this.choosing.length <= prompt.count : this.choosing.length === prompt.count;
+  }
   confirmDiscard() {
     const prompt = this.discardPrompt;
-    if (!prompt || this.choosing.length !== prompt.count) return;
+    if (!prompt || !this.discardReady) return;
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));

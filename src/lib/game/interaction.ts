@@ -85,14 +85,44 @@ export function isHiddenObject(o?: GameObject) { return !!o && (o.face_down === 
  * it accepts, so the interface only ever offers those: it never counts the
  * hand itself and never decides what may be discarded.
  */
-export type DiscardPrompt = { count: number; cards: ObjectId[]; player: PlayerId };
+export type DiscardPrompt = {
+  count: number;
+  cards: ObjectId[];
+  player: PlayerId;
+  /** CR 701.9b: "discard up to N" accepts fewer than `count`, including zero. */
+  upTo: boolean;
+  /** Which prompt asked: the hand-size rule, a discard effect, or a ward cost. */
+  kind: 'handSize' | 'discard' | 'ward';
+  /** Name of the object that asked, when the engine identifies it. */
+  source?: string;
+};
+const DISCARD_KINDS: Record<string, DiscardPrompt['kind']> = {
+  DiscardToHandSize: 'handSize',
+  ConniveDiscard: 'handSize',
+  DiscardChoice: 'discard',
+  WardDiscardChoice: 'ward'
+};
 export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | null {
   const waiting = snapshot?.state.waiting_for;
-  if (!waiting || (waiting.type !== 'DiscardToHandSize' && waiting.type !== 'ConniveDiscard')) return null;
+  const kind = waiting ? DISCARD_KINDS[waiting.type] : undefined;
+  if (!waiting || !kind) return null;
   const data = waiting.data ?? {};
   const cards = (data.cards ?? []) as ObjectId[];
-  const count = typeof data.count === 'number' ? data.count : 0;
-  return { count, cards, player: typeof data.player === 'number' ? data.player : snapshot!.viewer };
+  // A ward cost discards one card per round-trip; the prompt carries no count.
+  const count = kind === 'ward'
+    ? 1
+    : typeof data.count === 'number' ? data.count : 0;
+  const source = data.source_id !== undefined
+    ? snapshot!.state.objects[String(data.source_id)]?.name
+    : undefined;
+  return {
+    count,
+    cards,
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    upTo: data.up_to === true,
+    kind,
+    source
+  };
 }
 /** The answer to a discard prompt: exactly the cards the interface collected. */
 export function discardSelection(cards: ObjectId[]): GameAction {

@@ -2,6 +2,7 @@
   import { session } from '#lib/game/session.svelte.ts';
   import { actionPriority, actionsForObject, decisionGuide, describeAction, isKeepHand } from '#lib/game/actions.ts';
   import DamageAssignment from './DamageAssignment.svelte';
+  import DiscardPrompt from './DiscardPrompt.svelte';
   import { manaText } from '#lib/game/cards.ts';
   import { actionObjectId, attackLabel, attackTargets, blockTargets, isManaAction, isManaPrompt, isTargetPrompt, manaActions, manualCast, targetLabel } from '#lib/game/interaction.ts';
   import type { GameAction } from '#lib/engine/types.ts';
@@ -56,7 +57,7 @@
   const pass = $derived(actions.find((a) => a.type === 'PassPriority'));
   const cancel = $derived(actions.find((a) => a.type === 'CancelCast'));
   const handled = new Set(['PassPriority', 'CancelCast', 'ChooseTarget', 'DeclareAttackers', 'DeclareBlockers', 'CastSpell', 'PlayLand', 'TapLandForMana', 'ActivateManaSource', 'MulliganDecision', 'SelectCards']);
-  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'GameOver', 'UnlessPayment']);
+  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'GameOver', 'UnlessPayment']);
   const manaExtras = new Set(['UntapLandForMana', 'BackToManaPayment', 'PayManaAbilityMana', 'ChooseManaColor']);
   const globalActions = $derived(actions.filter((a) => !handled.has(a.type) && actionObjectId(a) === undefined && !isManaAction(a) && !(manaPrompt && manaExtras.has(a.type))));
   const attackDraft = $derived(Object.entries(session.attacks));
@@ -92,12 +93,7 @@
   {#if s}
 
     {#if discard && discard.player === s.viewer}
-      <div class="prompt" aria-label="Descartar hasta siete cartas">
-        <strong>Descartar {discard.count} carta{discard.count === 1 ? '' : 's'}</strong>
-        <p>Al terminar el turno solo puedes conservar siete cartas. Selecciona las cartas de tu mano que descartas.</p>
-        <ul class="draft">{#each session.choosing as id (id)}<li>{objects[String(id)]?.name ?? `Carta ${id}`}</li>{#if !session.choosing.length}<li>Sin cartas elegidas.</li>{/if}{/each}</ul>
-        <button type="button" class="primary" disabled={session.busy || session.choosing.length !== discard.count} onclick={() => session.confirmDiscard()}>Confirmar descarte ({session.choosing.length}/{discard.count})</button>
-      </div>
+      <DiscardPrompt />
     {:else if targetPrompt}
       <div class="prompt" aria-label="Objetivos del hechizo">
         <strong>{pending?.name ?? 'Elige un objetivo'}</strong>
@@ -192,7 +188,7 @@
 
     <div class="actions confirmations">
       {#if discard && discard.player === s.viewer}
-      {#if session.choosing.length !== discard.count}<span class="muted">Elige exactamente {discard.count} carta(s).</span>{/if}
+      {#if !session.discardReady}<span class="muted">{discard.upTo ? `Puedes descartar hasta ${discard.count} carta(s).` : `Elige exactamente ${discard.count} carta(s).`}</span>{/if}
     {:else if kind === 'DeclareAttackers'}
         <button type="button" class="primary" disabled={session.busy || !canDeclare} onclick={() => session.confirmAttackers()}>{attackDraft.length ? `Confirmar ataque (${attackDraft.length})` : 'No atacar'}</button>
       {:else if kind === 'DeclareBlockers'}
