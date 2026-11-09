@@ -150,18 +150,18 @@ jobs:
         with:
           name: mtg-engine-wasm
           path: static/wasm
-      - run: bun --bun playwright test
-      # Playwright names one directory per failing test inside `test-results`.
-      # Repeating those names as check annotations keeps the failure readable
-      # without opening the 15 MB artifact: the HTML report, the traces and the
-      # job log all live behind a download, the annotations are plain JSON.
+      # The JSON report feeds the annotation step below: the directory names
+      # alone say which test broke, the message says why. `list` keeps the
+      # readable console output.
+      - run: bun --bun playwright test --reporter=list,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/report.json
+      # The HTML report, the traces and the job log live behind an artifact
+      # download that some networks cannot reach; annotations are plain JSON on
+      # the API, so every failure is repeated there with its error message.
       - name: Annotate failing Playwright tests
         if: failure()
-        run: |
-          shopt -s nullglob
-          for dir in test-results/*/; do
-            echo "::error title=Prueba de Chromium fallida::$(basename "$dir")"
-          done
+        run: bun scripts/e2e-annotations.ts
       - if: always()
         uses: actions/upload-artifact@v4
         with:
