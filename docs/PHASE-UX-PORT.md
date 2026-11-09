@@ -621,3 +621,40 @@ filtro y destino mano/cementerio) y captura
 `game/__tests__/dig.test.ts`: destinos, filtro vacío, tope por filtro, ventana
 exacta frente a «hasta N» y el `togglePick` compartido), `bun run build` OK, y en
 Chromium una prueba nueva con axe.
+
+## «Puedes…» y no volver a preguntar (decimotercera pasada, 7 nov 2026)
+
+CR 608.2d: un efecto opcional pregunta al controlador si quiere resolverlo. Es
+probablemente el prompt más repetido de una partida con permanentes: casi
+cualquier «you may» de una criatura lo abre.
+
+- **`interaction.ts`**: `optionalEffectPrompt` publica lo que el motor ya manda
+  —la fuente, el objeto afectado (`decision_subject_id`), **el texto de la
+  instrucción tal cual**— y dos capacidades que no se deducen de la carta:
+  `rememberable` (existe `may_trigger_key`, CR 603.5) y `sameCardAvailable` (el
+  motor ofrece el alcance «esta misma carta»). Las dos respuestas son acciones
+  distintas: `DecideOptionalEffect { accept }` o, si se recuerda,
+  `DecideOptionalEffectAndRemember { choice, scope }`.
+- **`OptionalEffectPrompt.svelte`**: dos botones (Sí / No) y, sólo cuando el
+  motor lo permite, las casillas «No volver a preguntar por este disparo» y
+  «Tampoco para esta misma carta». La segunda implica la primera, y desmarcar la
+  primera desmarca la segunda: el motor sólo acepta el alcance amplio con la
+  memoria activada.
+- **Las casillas se limpian con cada prompt**: recordar una respuesta no debe
+  arrastrarse al siguiente «puedes» de otra carta, y el estado se reinicia al
+  cambiar de revisión igual que el resto de selecciones.
+- `OpponentMayChoice` **no** entra en esta pasada: comparte el componente
+  upstream y la acción, pero su redacción (decide otro jugador) merece su propia
+  frase; queda anotado como pendiente.
+
+Laboratorio: `/ux?scene=optional` (Grizzly Bears, «Puedes robar una carta», con
+el alcance mismo-carta disponible) y captura
+`docs/screenshots/ux-efecto-opcional-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **342** (6 nuevas en
+`game/__tests__/optional-effect.test.ts`: capacidades del motor, alcance amplio
+sin clave, sujeto y descripción, y las dos formas de la respuesta), `bun run
+build` OK, y en Chromium una prueba nueva que comprueba el texto del motor, los
+dos botones, y la relación entre las dos casillas —con axe.

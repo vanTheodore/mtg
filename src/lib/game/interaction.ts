@@ -128,6 +128,54 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
   };
 }
 /**
+ * CR 608.2d: "you may" asks the controller whether to perform the instruction.
+ * The engine answers it with a plain accept/decline, and — when the prompt
+ * carries a `may_trigger_key` — lets the player stop being asked: for that exact
+ * instance, or (only when the engine publishes the capability) for every
+ * occurrence printed on the same card.
+ */
+export type OptionalEffectPrompt = {
+  player: PlayerId;
+  /** The ability's source. */
+  sourceId: ObjectId;
+  /** CR 608.2d: the single object the instruction acts on, when latched. */
+  subjectId?: ObjectId;
+  /** What would happen: the engine's own wording. */
+  description?: string;
+  /** The answer can be remembered for this trigger (CR 603.5). */
+  rememberable: boolean;
+  /** …and the engine offers the wider same-card scope. */
+  sameCardAvailable: boolean;
+};
+export function optionalEffectPrompt(snapshot: EngineSnapshot | null): OptionalEffectPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'OptionalEffectChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
+    subjectId: typeof data.decision_subject_id === 'number' ? (data.decision_subject_id as ObjectId) : undefined,
+    description: typeof data.description === 'string' && data.description ? data.description : undefined,
+    rememberable: data.may_trigger_key != null,
+    sameCardAvailable: data.may_trigger_key != null && data.same_card_may_trigger_choice_available === true
+  };
+}
+/** CR 608.2d: accept or decline, once. */
+export function decideOptionalEffect(accept: boolean): GameAction {
+  return { type: 'DecideOptionalEffect', data: { accept } };
+}
+/** CR 603.5: accept or decline, and stop asking within the chosen scope. */
+export function rememberOptionalEffect(accept: boolean, sameCard: boolean): GameAction {
+  return {
+    type: 'DecideOptionalEffectAndRemember',
+    data: {
+      choice: { type: accept ? 'Accept' : 'Decline' },
+      scope: { type: sameCard ? 'SameCard' : 'ExactInstance' }
+    }
+  };
+}
+
+/**
  * CR 701.20e: a "look at the top N" effect shows the cards to one player, who
  * keeps some and sends the rest somewhere. Phase publishes the cards, which of
  * them pass the effect's filter, how many may be kept and — crucially — WHERE

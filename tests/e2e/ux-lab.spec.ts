@@ -281,6 +281,36 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('un «puedes» pregunta una vez y puede dejar de preguntar', async ({ page }) => {
+  await page.goto('/ux?scene=optional');
+  const prompt = page.locator('[data-optional-effect]');
+  await expect(prompt).toBeVisible();
+  // The wording is the engine's, not a paraphrase of the card.
+  await expect(prompt).toContainText('Puedes robar una carta.');
+  await expect(prompt.locator('strong')).toHaveText('Puedes · Grizzly Bears');
+
+  // Two answers, both reachable.
+  const yes = prompt.getByRole('button', { name: 'Sí, resolverlo' });
+  const no = prompt.getByRole('button', { name: 'No' });
+  await expect(yes).toBeEnabled();
+  await expect(no).toBeEnabled();
+
+  // CR 603.5: the boxes exist because the prompt carries a memory key.
+  const remember = prompt.getByRole('checkbox', { name: /No volver a preguntar/ });
+  const sameCard = prompt.getByRole('checkbox', { name: /esta misma carta/ });
+  await expect(remember).not.toBeChecked();
+  await expect(sameCard).not.toBeChecked();
+
+  // The wider scope implies remembering, and dropping that one clears it.
+  await sameCard.check();
+  await expect(remember).toBeChecked();
+  await remember.uncheck();
+  await expect(sameCard).not.toBeChecked();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('mirar cartas dice qué se guarda y adónde va el resto', async ({ page }) => {
   await page.goto('/ux?scene=dig');
   const prompt = page.locator('[data-dig-prompt]');

@@ -31,9 +31,10 @@
   import ModeChoicePrompt from '#lib/components/ModeChoicePrompt.svelte';
   import SearchPrompt from '#lib/components/SearchPrompt.svelte';
   import DigPrompt from '#lib/components/DigPrompt.svelte';
+  import OptionalEffectPrompt from '#lib/components/OptionalEffectPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -47,6 +48,7 @@
     { value: 'modeChoice', label: 'Elegir modos' },
     { value: 'search', label: 'Buscar en la biblioteca' },
     { value: 'dig', label: 'Mirar y guardar' },
+    { value: 'optional', label: 'Efecto opcional' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -62,6 +64,7 @@
     modeChoice: 'ModeChoice · hechizo modal, dos de tres modos',
     search: 'SearchChoice · tutor de una criatura',
     dig: 'DigChoice · mirar tres, guardar una',
+    optional: 'OptionalEffectChoice · «puedes robar una carta»',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -210,6 +213,21 @@
         }
       };
     }
+    if (scene === 'optional') {
+      // Shape taken from `WaitingFor::OptionalEffectChoice` in the pinned
+      // engine: the instruction's own wording, its source and the memory key.
+      return {
+        type: 'OptionalEffectChoice',
+        data: {
+          player: 0,
+          source_id: 100,
+          decision_subject_id: 100,
+          description: 'Puedes robar una carta.',
+          may_trigger_key: { player: 0, source_id: 100, origin: { type: 'Printed', trigger_index: 0 } },
+          same_card_may_trigger_choice_available: true
+        }
+      };
+    }
     if (scene === 'dig') {
       // Shape taken from `WaitingFor::DigChoice` in the pinned engine: the cards
       // looked at, the ones that pass the filter and where each pile goes.
@@ -353,6 +371,7 @@
           : scene === 'modeChoice' ? 'PreCombatMain'
           : scene === 'search' ? 'PreCombatMain'
           : scene === 'dig' ? 'PreCombatMain'
+          : scene === 'optional' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -510,6 +529,7 @@
         {#if scene === 'modeChoice'}<ModeChoicePrompt />{/if}
         {#if scene === 'search'}<SearchPrompt />{/if}
         {#if scene === 'dig'}<DigPrompt />{/if}
+        {#if scene === 'optional'}<OptionalEffectPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

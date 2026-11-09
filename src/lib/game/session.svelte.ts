@@ -3,11 +3,13 @@ import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
 import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId } from '#lib/engine/types.ts';
 import {
   attackDeclaration, attackTargets, blockDeclaration, blockTargets, cancelCastAction, chooseXAction,
-  defaultOrder, defaultX, digPrompt as readDigPrompt, digReady as isDigReady, discardSelection,
+  decideOptionalEffect, defaultOrder, defaultX, digPrompt as readDigPrompt, digReady as isDigReady,
+  discardSelection,
   discardPrompt as readDiscardPrompt, manaActions,
   modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
   modeToggle, moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX,
-  playerTarget, searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
+  optionalEffectPrompt as readOptionalEffect, playerTarget, rememberOptionalEffect,
+  searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
   xPrompt as readXPrompt
 } from './interaction.ts';
@@ -200,6 +202,8 @@ class GameSession {
     this.modeEntry = null;
     this.searched = [];
     this.dug = [];
+    this.optionalRemember = false;
+    this.optionalSameCard = false;
     this.history = [];
     this.lifeChanges = {};
     this.lastMetrics = null;
@@ -313,6 +317,26 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 608.2d: an optional instruction the controller may decline. */
+  get optionalEffectPrompt() {
+    return readOptionalEffect(this.snapshot);
+  }
+  /** CR 603.5: the "do not ask again" boxes, reset with every new prompt. */
+  optionalRemember = $state(false);
+  optionalSameCard = $state(false);
+  decideOptional(accept: boolean) {
+    const prompt = this.optionalEffectPrompt;
+    if (!prompt) return;
+    // Read both boxes before clearing them: the dispatch below is what sends them.
+    const remembered = prompt.rememberable && this.optionalRemember;
+    const sameCard = prompt.sameCardAvailable && this.optionalSameCard;
+    this.optionalRemember = false;
+    this.optionalSameCard = false;
+    void this.dispatch(remembered
+      ? rememberOptionalEffect(accept, sameCard)
+      : decideOptionalEffect(accept));
   }
 
   /** CR 701.20e: cards looked at, of which the player keeps some. */
@@ -504,6 +528,7 @@ class GameSession {
     if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
     if (this.snapshot?.revision !== reply.revision) {
       this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = [];
+      this.optionalRemember = false; this.optionalSameCard = false;
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

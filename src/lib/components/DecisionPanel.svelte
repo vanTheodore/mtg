@@ -8,6 +8,7 @@
   import ModeChoicePrompt from './ModeChoicePrompt.svelte';
   import SearchPrompt from './SearchPrompt.svelte';
   import DigPrompt from './DigPrompt.svelte';
+  import OptionalEffectPrompt from './OptionalEffectPrompt.svelte';
   import { manaText } from '#lib/game/cards.ts';
   import { actionObjectId, attackLabel, attackTargets, blockTargets, isManaAction, isManaPrompt, isTargetPrompt, manaActions, manualCast, targetLabel } from '#lib/game/interaction.ts';
   import type { GameAction } from '#lib/engine/types.ts';
@@ -62,7 +63,7 @@
   const pass = $derived(actions.find((a) => a.type === 'PassPriority'));
   const cancel = $derived(actions.find((a) => a.type === 'CancelCast'));
   const handled = new Set(['PassPriority', 'CancelCast', 'ChooseTarget', 'DeclareAttackers', 'DeclareBlockers', 'CastSpell', 'PlayLand', 'TapLandForMana', 'ActivateManaSource', 'MulliganDecision', 'SelectCards']);
-  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'ChooseXValue', 'OrderTriggers', 'ModeChoice', 'AbilityModeChoice', 'SearchChoice', 'DigChoice', 'GameOver', 'UnlessPayment']);
+  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'ChooseXValue', 'OrderTriggers', 'ModeChoice', 'AbilityModeChoice', 'SearchChoice', 'DigChoice', 'OptionalEffectChoice', 'GameOver', 'UnlessPayment']);
   const manaExtras = new Set(['UntapLandForMana', 'BackToManaPayment', 'PayManaAbilityMana', 'ChooseManaColor']);
   const globalActions = $derived(actions.filter((a) => !handled.has(a.type) && actionObjectId(a) === undefined && !isManaAction(a) && !(manaPrompt && manaExtras.has(a.type))));
   const attackDraft = $derived(Object.entries(session.attacks));
@@ -81,6 +82,8 @@
   const search = $derived(session.searchPrompt);
   // CR 701.20e: a "look at the top N" shows the cards and where each pile goes.
   const dig = $derived(session.digPrompt);
+  // CR 608.2d: "you may …" asks the controller.
+  const optional = $derived(session.optionalEffectPrompt);
   const PHASES: Record<string, string> = { Untap: 'Enderezar', Upkeep: 'Mantenimiento', Draw: 'Robar', PreCombatMain: 'Fase principal', BeginCombat: 'Inicio de combate', DeclareAttackers: 'Ataque', DeclareBlockers: 'Bloqueo', CombatDamage: 'Daño de combate', EndCombat: 'Fin de combate', PostCombatMain: 'Fase principal posterior', End: 'Final', Cleanup: 'Limpieza' };
   function manaActionsFor(id?: number) { return manaActions(s, id); }
   function play(action: GameAction) { void session.dispatch(action); }
@@ -107,7 +110,9 @@
   </div>
   {#if s}
 
-    {#if dig && dig.player === s.viewer}
+    {#if optional && optional.player === s.viewer}
+      <OptionalEffectPrompt />
+    {:else if dig && dig.player === s.viewer}
       <DigPrompt />
     {:else if search && search.player === s.viewer}
       <SearchPrompt />
