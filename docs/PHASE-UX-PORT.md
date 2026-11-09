@@ -539,3 +539,45 @@ repeticiones, presupuesto de huellas y las dos reglas de cancelación), `bun run
 build` OK, y en Chromium una prueba nueva que recorre la ventana completa
 —deshabilitado del modo descartado, `(0/2)`, `(1/2)`, `(2/2)`, desmarcar,
 «Limpiar», «Cancelar»— y pasa axe.
+
+## Búsquedas en la biblioteca (undécima pasada, 7 nov 2026)
+
+CR 701.23: la biblioteca es una zona oculta, así que el buscador no puede pulsar
+esas cartas en la mesa. Phase publica las que aceptará y este bloque las lista;
+es el prompt de los tutores y de media docena de rampas, de los más frecuentes
+de cualquier partida.
+
+La parte que un port ingenuo aplana es **CR 701.23b/701.23d**: una búsqueda de
+*cualidad declarada* («una carta de criatura», «con nombres distintos») puede
+encontrar menos cartas de las pedidas —incluso ninguna—, mientras que una
+búsqueda de *cantidad pura* debe encontrar todas las que pueda. El motor publica
+esa distinción en tres campos (`up_to`, `allows_partial_find` y la restricción de
+selección, donde `permits_partial_find` es literalmente «no es `None`»), y la
+mesa no la vuelve a deducir.
+
+- **`interaction.ts`**: `searchPrompt` publica las cartas legales, el recuento,
+  la ventana parcial y si las encontradas se revelan; `searchReady` comprueba
+  que la respuesta está dentro de la ventana y que **sólo** contiene cartas que
+  el motor ofreció. La respuesta es `SelectCards`, la misma acción que usan los
+  descartes (`selectCardsAction` es ahora la definición única).
+- **`SearchPrompt.svelte`**: una fila por carta con nombre, línea de tipo y
+  coste; `aria-pressed` marca lo elegido y el nombre accesible de la fila es su
+  propio texto, para que un lector de pantalla oiga también el tipo y el coste
+  (axe marca `label-content-name-mismatch` si se le pone un `aria-label` que no
+  contenga el texto visible). El botón dice `Confirmar búsqueda (n/count)` y,
+  cuando la búsqueda admite menos, **«No encontrar nada»**.
+- **No se porta todavía** el buscador de filtro local sobre la biblioteca
+  completa, las pistas de orden (`ordering_hint`) ni el reparto en dos destinos
+  (`split`): esos dos últimos llegan como prompts propios después de responder,
+  así que la mesa no se los salta, simplemente aún no los dibuja.
+
+Laboratorio: `/ux?scene=search` (tutor de una criatura con cuatro cartas
+elegibles) y captura `docs/screenshots/ux-buscar-biblioteca-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **328** (6 nuevas en
+`game/__tests__/search.test.ts`: ventana exacta, las tres formas de la búsqueda
+parcial, rechazo de cartas que el motor no ofreció y la respuesta vacía), `bun
+run build` OK, y en Chromium una prueba nueva que recorre la lista, el recuento,
+la imposibilidad de elegir una segunda carta, el desmarcado y axe.

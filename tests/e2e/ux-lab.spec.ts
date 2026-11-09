@@ -281,6 +281,46 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('una búsqueda ofrece las cartas que publica el motor y no otras', async ({ page }) => {
+  await page.goto('/ux?scene=search');
+  const prompt = page.locator('[data-search-prompt]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong')).toHaveText('Buscar en la biblioteca');
+
+  // Only the cards Phase published: four, named, with their type line.
+  // The row's own text is its accessible name — overriding it would hide the
+  // type line and the cost from a screen reader.
+  const rows = prompt.locator('button.card');
+  await expect(rows).toHaveCount(4);
+  await expect(prompt).toContainText('Llanowar Elves');
+  await expect(prompt).toContainText('Elf Druid');
+  await expect(prompt).not.toContainText('Carta 999');
+
+  // A quantity search demands exactly what it asked for.
+  await expect(prompt).toContainText('Phase pide exactamente 1');
+  const confirm = prompt.getByRole('button', { name: /Confirmar búsqueda/ });
+  await expect(confirm).toHaveText('Confirmar búsqueda (0/1)');
+  await expect(confirm).toBeDisabled();
+
+  await prompt.getByRole('button', { name: /Llanowar Elves/ }).click();
+  await expect(prompt.getByRole('button', { name: /Llanowar Elves/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(confirm).toHaveText('Confirmar búsqueda (1/1)');
+  await expect(confirm).toBeEnabled();
+
+  // The window is one: a second card cannot join, and un-ticking frees it.
+  await prompt.getByRole('button', { name: /Grizzly Bears/ }).click();
+  await expect(confirm).toHaveText('Confirmar búsqueda (1/1)');
+  await prompt.getByRole('button', { name: /Llanowar Elves/ }).click();
+  await expect(confirm).toHaveText('Confirmar búsqueda (0/1)');
+  await expect(confirm).toBeDisabled();
+
+  // The found cards are revealed before the sweep continues (CR 701.23a).
+  await expect(prompt).toContainText('se revelan');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('un hechizo modal elige sus modos dentro de la ventana del motor', async ({ page }) => {
   await page.goto('/ux?scene=modeChoice');
   const prompt = page.locator('[data-mode-choice]');

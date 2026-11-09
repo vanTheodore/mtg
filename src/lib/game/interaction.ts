@@ -128,6 +128,60 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
   };
 }
 /**
+ * CR 701.23: a search looks through a hidden zone and its searcher picks from
+ * the cards Phase already deemed legal. CR 701.23b/701.23d matter here: a
+ * *stated-quality* search ("a creature card", "with different names") may find
+ * fewer cards — even none — while a pure quantity search must find as many as
+ * it can. The engine publishes that distinction; Mesa never re-derives it.
+ */
+export type SearchPrompt = {
+  player: PlayerId;
+  /** The cards Phase will accept, already filtered from the library. */
+  cards: ObjectId[];
+  /** How many cards the effect asks for. */
+  count: number;
+  /** CR 107.1c: `0..=count` is legal, so "find nothing" is a real answer. */
+  partial: boolean;
+  /** The found cards are revealed before the continuation resolves. */
+  reveal: boolean;
+  /** CR 701.23a: whose library was searched, when the engine says. */
+  owner?: PlayerId;
+};
+/**
+ * `SearchSelectionConstraint::permits_partial_find`: any constrained (stated
+ * quality) search allows a partial find, whatever `up_to` says.
+ */
+function constraintIsStated(constraint: unknown): boolean {
+  if (!constraint || typeof constraint !== 'object') return false;
+  const type = (constraint as { type?: unknown }).type;
+  return typeof type === 'string' && type !== 'None';
+}
+export function searchPrompt(snapshot: EngineSnapshot | null): SearchPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'SearchChoice') return null;
+  const data = waiting.data ?? {};
+  const cards = Array.isArray(data.cards) ? (data.cards as ObjectId[]) : [];
+  const count = typeof data.count === 'number' ? data.count : 1;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    cards,
+    count,
+    partial: data.up_to === true || data.allows_partial_find === true || constraintIsStated(data.constraint),
+    reveal: data.reveal === true,
+    owner: typeof data.library_owner === 'number' ? data.library_owner : undefined
+  };
+}
+/** Whether Phase would take this answer as it stands. */
+export function searchReady(prompt: SearchPrompt, selected: ObjectId[]): boolean {
+  if (!selected.every((id) => prompt.cards.includes(id))) return false;
+  return prompt.partial ? selected.length <= prompt.count : selected.length === prompt.count;
+}
+/** "Pick these cards" is one action for every prompt of this family. */
+export function selectCardsAction(cards: ObjectId[]): GameAction {
+  return { type: 'SelectCards', data: { cards: [...cards] } };
+}
+
+/**
  * CR 700.2: a modal spell or ability asks its controller to choose modes before
  * targets and costs. Phase publishes the window (`min_choices..max_choices`),
  * the mode texts, which modes are unavailable and — for the "up to N {P} worth
@@ -337,7 +391,7 @@ export function cancelCastAction(): GameAction {
 
 /** The answer to a discard prompt: exactly the cards the interface collected. */
 export function discardSelection(cards: ObjectId[]): GameAction {
-  return { type: 'SelectCards', data: { cards } };
+  return selectCardsAction(cards);
 }
 
 export function targetLabel(target: unknown, objects: Record<string, GameObject>): string {

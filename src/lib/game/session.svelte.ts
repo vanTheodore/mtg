@@ -6,7 +6,8 @@ import {
   defaultOrder, defaultX, discardSelection, discardPrompt as readDiscardPrompt, manaActions,
   modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
   modeToggle, moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX,
-  playerTarget, secondActivation, targetAction, triggerOrderPrompt as readTriggerOrder,
+  playerTarget, searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
+  selectCardsAction, targetAction, triggerOrderPrompt as readTriggerOrder,
   xPrompt as readXPrompt
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
@@ -196,6 +197,7 @@ class GameSession {
     this.xEntry = null;
     this.orderEntry = null;
     this.modeEntry = null;
+    this.searched = [];
     this.history = [];
     this.lifeChanges = {};
     this.lastMetrics = null;
@@ -309,6 +311,33 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 701.23: a search whose searcher must pick from the offered cards. */
+  get searchPrompt() {
+    return readSearchPrompt(this.snapshot);
+  }
+  /** The cards marked for the search. Cleared whenever the position moves on. */
+  searched = $state<ObjectId[]>([]);
+  get searchReady() {
+    const prompt = this.searchPrompt;
+    return prompt ? isSearchReady(prompt, this.searched) : false;
+  }
+  toggleSearch(id: ObjectId) {
+    const prompt = this.searchPrompt;
+    if (!prompt || !prompt.cards.includes(id)) return;
+    if (this.searched.includes(id)) {
+      this.searched = this.searched.filter((value) => value !== id);
+      return;
+    }
+    if (this.searched.length >= prompt.count) return;
+    this.searched = [...this.searched, id];
+  }
+  confirmSearch() {
+    if (!this.searchPrompt || !this.searchReady) return;
+    const cards = [...this.searched];
+    this.searched = [];
+    void this.dispatch(selectCardsAction(cards));
   }
 
   /** CR 700.2: the modal spell or ability waiting for its modes. */
@@ -454,7 +483,7 @@ class GameSession {
     const start = performance.now();
     if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
     if (this.snapshot?.revision !== reply.revision) {
-      this.attacks = {}; this.blocks = {}; this.choosing = [];
+      this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

@@ -29,9 +29,10 @@
   import ChooseXPrompt from '#lib/components/ChooseXPrompt.svelte';
   import TriggerOrderPrompt from '#lib/components/TriggerOrderPrompt.svelte';
   import ModeChoicePrompt from '#lib/components/ModeChoicePrompt.svelte';
+  import SearchPrompt from '#lib/components/SearchPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -43,6 +44,7 @@
     { value: 'chooseX', label: 'Elegir X' },
     { value: 'triggerOrder', label: 'Ordenar disparos' },
     { value: 'modeChoice', label: 'Elegir modos' },
+    { value: 'search', label: 'Buscar en la biblioteca' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -56,6 +58,7 @@
     chooseX: 'ChooseXValue · X entre 0 y 5',
     triggerOrder: 'OrderTriggers · tres disparos simultáneos',
     modeChoice: 'ModeChoice · hechizo modal, dos de tres modos',
+    search: 'SearchChoice · tutor de una criatura',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -128,6 +131,14 @@
     card_types: { core_types: ['Instant'] }, mana_cost: '{G}{W}',
     oracle_text: 'Elige dos: la criatura objetivo obtiene +2/+2; gana vigilancia; ganas 3 vidas.'
   } as GameObject;
+  // Cards only the library knows: the search prompt names them, no zone lists
+  // them, so the pile counts the rest of the lab asserts stay put.
+  const searchPool = [
+    { id: 400, card_id: 400, owner: 0, controller: 0, zone: 'Library', name: 'Llanowar Elves', card_types: { core_types: ['Creature'], subtypes: ['Elf', 'Druid'] }, mana_cost: '{G}' },
+    { id: 401, card_id: 401, owner: 0, controller: 0, zone: 'Library', name: 'Grizzly Bears', card_types: { core_types: ['Creature'], subtypes: ['Bear'] }, mana_cost: '{1}{G}' },
+    { id: 402, card_id: 402, owner: 0, controller: 0, zone: 'Library', name: 'Shock', card_types: { core_types: ['Instant'] }, mana_cost: '{R}' },
+    { id: 403, card_id: 403, owner: 0, controller: 0, zone: 'Library', name: 'Island', card_types: { core_types: ['Land'], subtypes: ['Island'] } }
+  ] as GameObject[];
   const xCost = (generic: number, red: number) => ({ type: 'Cost', generic, shards: Array.from({ length: red }, () => 'Red') });
   const viewerExile = [pileCard(112, 0, 'Giant Growth', 'Exile')];
   const rivalGrave = [pileCard(210, 1, 'Counterspell', 'Graveyard')];
@@ -147,7 +158,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -193,6 +204,23 @@
           valid_attack_targets: [seat, walker],
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
+        }
+      };
+    }
+    if (scene === 'search') {
+      // Shape taken from `WaitingFor::SearchChoice` in the pinned engine: the
+      // legal choices and the window the searcher may answer within.
+      return {
+        type: 'SearchChoice',
+        data: {
+          player: 0,
+          library_owner: 0,
+          cards: searchPool.map((card) => card.id),
+          count: 1,
+          reveal: true,
+          up_to: false,
+          allows_partial_find: false,
+          constraint: { type: 'None' }
         }
       };
     }
@@ -303,6 +331,7 @@
           : scene === 'chooseX' ? 'PreCombatMain'
           : scene === 'triggerOrder' ? 'PreCombatMain'
           : scene === 'modeChoice' ? 'PreCombatMain'
+          : scene === 'search' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -458,6 +487,7 @@
         {#if scene === 'chooseX'}<ChooseXPrompt />{/if}
         {#if scene === 'triggerOrder'}<TriggerOrderPrompt />{/if}
         {#if scene === 'modeChoice'}<ModeChoicePrompt />{/if}
+        {#if scene === 'search'}<SearchPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>
