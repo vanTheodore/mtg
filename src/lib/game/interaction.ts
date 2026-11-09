@@ -128,6 +128,45 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
   };
 }
 /**
+ * CR 603.3b: when several abilities a player controls trigger at once, that
+ * player chooses the order in which they go on the stack — and the stack
+ * resolves last-in, first-out (CR 405.3). Phase publishes the summaries and
+ * accepts a permutation of their indices; this module permutes the list and
+ * never re-derives a trigger from `state.objects`.
+ */
+export type TriggerEntry = { sourceId: ObjectId; name: string; description: string };
+export type TriggerOrderPrompt = { player: PlayerId; triggers: TriggerEntry[] };
+export function triggerOrderPrompt(snapshot: EngineSnapshot | null): TriggerOrderPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'OrderTriggers') return null;
+  const data = waiting.data ?? {};
+  const raw = Array.isArray(data.triggers) ? (data.triggers as Record<string, unknown>[]) : [];
+  const triggers = raw.map((entry) => ({
+    sourceId: typeof entry.source_id === 'number' ? (entry.source_id as ObjectId) : 0,
+    name: typeof entry.source_name === 'string' ? entry.source_name : '',
+    description: typeof entry.description === 'string' ? entry.description : ''
+  }));
+  if (!triggers.length) return null;
+  return { player: typeof data.player === 'number' ? data.player : snapshot!.viewer, triggers };
+}
+/** The order the prompt opens with: the one the engine published. */
+export function defaultOrder(count: number): number[] {
+  return Array.from({ length: count }, (_, index) => index);
+}
+/** Moves one trigger, refusing targets outside the list instead of clamping. */
+export function moveInOrder(order: number[], from: number, to: number): number[] {
+  if (from === to || from < 0 || from >= order.length || to < 0 || to >= order.length) return order;
+  const next = [...order];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+/** CR 603.3b: the permutation, top of the list resolving last. */
+export function orderTriggersAction(order: number[]): GameAction {
+  return { type: 'OrderTriggers', data: { order: [...order] } };
+}
+
+/**
  * CR 107.3a: X is announced by the spell's controller while casting it, and
  * CR 601.2f locks the total cost that X feeds. Phase publishes the window
  * (`min..max`, with `max` derived from what the player can actually pay), the

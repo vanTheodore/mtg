@@ -27,9 +27,10 @@
   import AttackTargetPicker from '#lib/components/AttackTargetPicker.svelte';
   import DiscardPrompt from '#lib/components/DiscardPrompt.svelte';
   import ChooseXPrompt from '#lib/components/ChooseXPrompt.svelte';
+  import TriggerOrderPrompt from '#lib/components/TriggerOrderPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -39,6 +40,7 @@
     { value: 'discard', label: 'Descartar dos cartas' },
     { value: 'discardUpTo', label: 'Descartar hasta dos' },
     { value: 'chooseX', label: 'Elegir X' },
+    { value: 'triggerOrder', label: 'Ordenar disparos' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -50,6 +52,7 @@
     discard: 'DiscardChoice · descartar exactamente dos',
     discardUpTo: 'DiscardChoice · descartar hasta dos',
     chooseX: 'ChooseXValue · X entre 0 y 5',
+    triggerOrder: 'OrderTriggers · tres disparos simultáneos',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -183,6 +186,21 @@
         }
       };
     }
+    if (scene === 'triggerOrder') {
+      // Shape taken from `WaitingFor::OrderTriggers` in the pinned engine:
+      // summaries the engine derived, and the indices it accepts a permutation of.
+      return {
+        type: 'OrderTriggers',
+        data: {
+          player: 0,
+          triggers: [
+            { source_id: 1000, source_name: 'Soul Warden', description: 'Ganas 1 vida.' },
+            { source_id: 1001, source_name: "Ajani's Pridemate", description: 'Pon un contador +1/+1 sobre esta criatura.' },
+            { source_id: 2000, source_name: 'Dina, Soul Steeper', description: 'Cada oponente pierde 1 vida.' }
+          ]
+        }
+      };
+    }
     if (scene === 'chooseX') {
       // Shape taken from `WaitingFor::ChooseXValue` in the pinned engine: the
       // window the caster may announce, the spell, and the cost of each value.
@@ -250,6 +268,7 @@
         priority_player: 0,
         phase: scene === 'cleanup' ? 'Cleanup'
           : scene === 'chooseX' ? 'PreCombatMain'
+          : scene === 'triggerOrder' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -403,6 +422,7 @@
         {#if scene === 'damage'}<DamageAssignment />{/if}
         {#if scene === 'cleanup' || scene === 'discard' || scene === 'discardUpTo'}<DiscardPrompt />{/if}
         {#if scene === 'chooseX'}<ChooseXPrompt />{/if}
+        {#if scene === 'triggerOrder'}<TriggerOrderPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

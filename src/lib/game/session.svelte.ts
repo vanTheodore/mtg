@@ -3,8 +3,10 @@ import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
 import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId } from '#lib/engine/types.ts';
 import {
   attackDeclaration, attackTargets, blockDeclaration, blockTargets, cancelCastAction, chooseXAction,
-  defaultX, discardSelection, discardPrompt as readDiscardPrompt, manaActions, nextBlockAssignment,
-  objectTarget, parseX, playerTarget, secondActivation, targetAction, xPrompt as readXPrompt
+  defaultOrder, defaultX, discardSelection, discardPrompt as readDiscardPrompt, manaActions,
+  moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX, playerTarget,
+  secondActivation, targetAction, triggerOrderPrompt as readTriggerOrder,
+  xPrompt as readXPrompt
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
 
@@ -191,6 +193,7 @@ class GameSession {
     this.attackPicker = null;
     this.choosing = [];
     this.xEntry = null;
+    this.orderEntry = null;
     this.history = [];
     this.lifeChanges = {};
     this.lastMetrics = null;
@@ -304,6 +307,40 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 603.3b: the player whose simultaneous triggers need an order. */
+  get triggerOrderPrompt() {
+    return readTriggerOrder(this.snapshot);
+  }
+  /**
+   * The permutation being built, keyed to the prompt it belongs to: successive
+   * CR 603.3b groups can have the same size, so a new prompt must start from
+   * the engine's own order instead of inheriting the previous arrangement.
+   */
+  private orderEntry = $state<{ key: string; order: number[] } | null>(null);
+  private get orderKey() {
+    const prompt = this.triggerOrderPrompt;
+    if (!prompt) return '';
+    const revision = this.snapshot?.revision ?? 0;
+    const ids = prompt.triggers.map((trigger) => trigger.sourceId).join(',');
+    return `${revision}:${ids}`;
+  }
+  get triggerOrder() {
+    const prompt = this.triggerOrderPrompt;
+    if (!prompt) return [];
+    return this.orderEntry?.key === this.orderKey ? this.orderEntry.order : defaultOrder(prompt.triggers.length);
+  }
+  moveTrigger(from: number, to: number) {
+    const prompt = this.triggerOrderPrompt;
+    if (!prompt) return;
+    const next = moveInOrder(this.triggerOrder, from, to);
+    if (next !== this.triggerOrder) this.orderEntry = { key: this.orderKey, order: next };
+  }
+  confirmTriggerOrder() {
+    const prompt = this.triggerOrderPrompt;
+    if (!prompt) return;
+    void this.dispatch(orderTriggersAction(this.triggerOrder));
   }
 
   /** CR 107.3a: the value of X the caster is announcing, as Phase published it. */

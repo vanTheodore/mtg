@@ -466,3 +466,39 @@ que recorre los pasos, el atajo de máximo, el rechazo de 99, la escritura de do
 dígitos sin recorte y la recuperación con las flechas del teclado, y que pasa
 axe **con la entrada rechazada a la vista** (el estado que un borde rojo no
 anuncia).
+
+## Orden de los disparos (novena pasada, 7 nov 2026)
+
+CR 603.3b: si varias habilidades de un mismo jugador se disparan a la vez, ese
+jugador elige el orden en que van a la pila, y la pila resuelve al revés de como
+se apila (CR 405.3). `OrderTriggers` es de los prompts que más aparecen en una
+partida normal con dos o tres permanentes en mesa, y no tenía vista.
+
+- **`interaction.ts`** publica los resúmenes que el motor ya derivó
+  (`source_id`, `source_name`, `description`) y tres funciones puras: el orden
+  inicial (`defaultOrder`, el que publicó Phase), el movimiento de una fila
+  (`moveInOrder`, que rechaza índices fuera de la lista en vez de recortarlos y
+  devuelve **el mismo array** cuando no hay nada que mover) y la respuesta
+  (`OrderTriggers { order }` con la permutación copiada).
+- **`TriggerOrderPrompt.svelte`**: una lista con el mismo orden que la pila —la
+  fila de arriba se resuelve **la última**—, un botón de subir y otro de bajar
+  por fila (44 px, deshabilitados en los extremos) y un único
+  «Confirmar orden». La UI nunca deduce un disparo de `state.objects`: repite
+  los resúmenes del motor.
+- **El número de cada fila es el que asignó Phase**, no la posición: con dos
+  disparos de la misma carta los nombres coinciden y el número es lo único que
+  los distingue mientras se mueven.
+- **Nada se hereda entre grupos.** La permutación se guarda con la identidad del
+  prompt (revisión y fuentes): dos grupos CR 603.3b del mismo tamaño seguidos
+  empiezan cada uno en el orden del motor, en vez de arrastrar el del anterior.
+
+Laboratorio: `/ux?scene=triggerOrder` (tres disparos: Soul Warden, Ajani's
+Pridemate y Dina) y captura `docs/screenshots/ux-orden-disparos-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **313** (5 nuevas en
+`game/__tests__/trigger-order.test.ts`), `bun run build` OK, y en Chromium una
+prueba nueva que comprueba los dos rótulos de la pila, que los extremos no se
+mueven, el intercambio de una fila con su vecina conservando su número, el mismo
+movimiento con teclado y axe sin violaciones críticas ni serias.

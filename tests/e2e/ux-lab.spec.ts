@@ -281,6 +281,43 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('los disparos simultáneos se ordenan del último al primero', async ({ page }) => {
+  await page.goto('/ux?scene=triggerOrder');
+  const prompt = page.locator('[data-trigger-order]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('.edge').first()).toHaveText('Se resuelven al final');
+  await expect(prompt.locator('.edge').last()).toHaveText('Se resuelve primero');
+  await expect(prompt.getByRole('button', { name: 'Confirmar orden' })).toBeEnabled();
+
+  // The list opens in the engine's order, one row per trigger and no extra.
+  const rows = prompt.getByRole('listitem');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText('Soul Warden');
+  await expect(rows.nth(2)).toContainText('Dina, Soul Steeper');
+  await expect(rows.nth(0)).toContainText('Ganas 1 vida.');
+
+  // Ends are pinned: nothing moves above the first row or below the last.
+  await expect(prompt.getByRole('button', { name: 'Subir Soul Warden' })).toBeDisabled();
+  await expect(prompt.getByRole('button', { name: 'Bajar Dina, Soul Steeper' })).toBeDisabled();
+
+  // Moving a row swaps it with its neighbour and leaves the rest untouched.
+  await prompt.getByRole('button', { name: "Bajar Soul Warden" }).click();
+  await expect(rows.nth(0)).toContainText("Ajani's Pridemate");
+  await expect(rows.nth(1)).toContainText('Soul Warden');
+  await expect(rows.nth(2)).toContainText('Dina, Soul Steeper');
+  // The row keeps the number the engine gave it: the player can follow it.
+  await expect(rows.nth(1).locator('.number')).toHaveText('1');
+
+  // Keyboard: the row buttons are real buttons, so Tab + Enter is enough.
+  await prompt.getByRole('button', { name: 'Bajar Soul Warden' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(rows.nth(2)).toContainText('Soul Warden');
+  await expect(prompt.getByRole('button', { name: 'Bajar Soul Warden' })).toBeDisabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('la X se anuncia dentro de la ventana que publica el motor', async ({ page }) => {
   await page.goto('/ux?scene=chooseX');
   const prompt = page.locator('[data-x-prompt]');
