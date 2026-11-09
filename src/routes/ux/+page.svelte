@@ -28,12 +28,13 @@
   import DiscardPrompt from '#lib/components/DiscardPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'discard' | 'discardUpTo';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
     { value: 'attackers', label: 'Declarar atacantes' },
     { value: 'damage', label: 'Asignación de daño' },
+    { value: 'cleanup', label: 'Limpieza: descartar' },
     { value: 'discard', label: 'Descartar dos cartas' },
     { value: 'discardUpTo', label: 'Descartar hasta dos' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -43,6 +44,7 @@
     targets: 'TargetSelection · pila con un hechizo',
     combat: 'DeclareBlockers · un bloqueo asignado',
     attackers: 'DeclareAttackers · un atacante con dos destinos',
+    cleanup: 'DiscardToHandSize · limpieza de fin de turno',
     discard: 'DiscardChoice · descartar exactamente dos',
     discardUpTo: 'DiscardChoice · descartar hasta dos',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -170,6 +172,11 @@
         }
       };
     }
+    if (scene === 'cleanup') {
+      // Shape taken from `WaitingFor::DiscardToHandSize`: only the player, how
+      // many cards are over the maximum and which ones Phase will accept.
+      return { type: 'DiscardToHandSize', data: { player: 0, count: 2, cards: hand.map((card) => card.id) } };
+    }
     if (scene === 'discard' || scene === 'discardUpTo') {
       // Shape taken from `WaitingFor::DiscardChoice` in the pinned engine: a
       // discard effect names the cards it accepts and (optionally) allows fewer.
@@ -216,7 +223,8 @@
         turn_number: 4,
         active_player: 0,
         priority_player: 0,
-        phase: scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
+        phase: scene === 'cleanup' ? 'Cleanup'
+          : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
           : scene === 'attackers' ? 'DeclareAttackers'
@@ -367,7 +375,7 @@
     <div class="middle">
       <div class="center">
         {#if scene === 'damage'}<DamageAssignment />{/if}
-        {#if scene === 'discard' || scene === 'discardUpTo'}<DiscardPrompt />{/if}
+        {#if scene === 'cleanup' || scene === 'discard' || scene === 'discardUpTo'}<DiscardPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

@@ -91,14 +91,17 @@ export type DiscardPrompt = {
   player: PlayerId;
   /** CR 701.9b: "discard up to N" accepts fewer than `count`, including zero. */
   upTo: boolean;
-  /** Which prompt asked: the hand-size rule, a discard effect, or a ward cost. */
-  kind: 'handSize' | 'discard' | 'ward';
+  /**
+   * Which prompt asked: the hand-size rule (CR 514.1), a connive (CR 701.51b),
+   * a discard effect (CR 701.9b) or a ward cost (CR 702.21b).
+   */
+  kind: 'cleanup' | 'connive' | 'discard' | 'ward';
   /** Name of the object that asked, when the engine identifies it. */
   source?: string;
 };
 const DISCARD_KINDS: Record<string, DiscardPrompt['kind']> = {
-  DiscardToHandSize: 'handSize',
-  ConniveDiscard: 'handSize',
+  DiscardToHandSize: 'cleanup',
+  ConniveDiscard: 'connive',
   DiscardChoice: 'discard',
   WardDiscardChoice: 'ward'
 };

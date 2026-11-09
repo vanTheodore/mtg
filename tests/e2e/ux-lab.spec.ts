@@ -281,6 +281,28 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('la limpieza conserva el bloque que busca la partida completa', async ({ page }) => {
+  // `ui-game.spec.ts` drives a whole game and finds this prompt by its
+  // accessible name, so the cleanup block announces the rule and not the
+  // count of that particular turn. Its count still comes from the engine.
+  await page.goto('/ux?scene=cleanup');
+  const prompt = page.locator('[aria-label="Descartar hasta siete cartas"]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong')).toHaveText('Descartar 2 cartas');
+  await expect(prompt).toHaveAttribute('data-discard', 'cleanup');
+
+  const confirm = prompt.getByRole('button', { name: /Confirmar descarte/ });
+  await expect(confirm).toHaveText('Confirmar descarte (0/2)');
+  await expect(confirm).toBeDisabled();
+
+  const hand = page.locator('.hand-zone [data-card-id]');
+  await hand.nth(0).click();
+  await hand.nth(1).click();
+  await expect(confirm).toHaveText('Confirmar descarte (2/2)');
+  await expect(confirm).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^No descartar/ })).toHaveCount(0);
+});
+
 test('"descartar hasta N" admite no descartar nada', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/ux?scene=discardUpTo');

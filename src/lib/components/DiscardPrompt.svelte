@@ -22,23 +22,40 @@
   const objects = $derived(session.snapshot?.state.objects ?? {});
   const mine = $derived(prompt !== null && prompt.player === session.snapshot?.viewer);
 
+  /**
+   * `name` is the block's accessible name and stays stable per prompt, so a
+   * test (and a screen reader) can recognise the question instead of the prose:
+   * the cleanup block always announces the same rule, even when the count that
+   * particular turn is smaller.
+   */
   const label = $derived.by(() => {
-    if (!prompt) return { title: '', hint: '' };
+    if (!prompt) return { name: '', title: '', hint: '' };
     const plural = prompt.count === 1 ? '' : 's';
-    if (prompt.kind === 'handSize') {
+    if (prompt.kind === 'cleanup') {
       return {
+        name: 'Descartar hasta siete cartas',
         title: `Descartar ${prompt.count} carta${plural}`,
         hint: 'Al terminar el turno solo puedes conservar siete cartas. Selecciona las cartas de tu mano que descartas.'
       };
     }
+    if (prompt.kind === 'connive') {
+      return {
+        name: `Descartar ${prompt.count} carta${plural} · connive`,
+        title: `Descartar ${prompt.count} carta${plural} · connive`,
+        hint: 'La habilidad hace que robes y después descartes: Phase acepta exactamente esta cantidad.'
+      };
+    }
     if (prompt.kind === 'ward') {
       return {
+        name: `Descartar 1 carta · coste de protección${prompt.source ? ` de ${prompt.source}` : ''}`,
         title: `Descartar 1 carta · coste de protección${prompt.source ? ` de ${prompt.source}` : ''}`,
         hint: 'Phase pide una carta para que el efecto no te alcance. Si no descartas, el hechizo o la habilidad se resuelve igual.'
       };
     }
+    const title = prompt.upTo ? `Descartar hasta ${prompt.count} carta${plural}` : `Descartar ${prompt.count} carta${plural}`;
     return {
-      title: prompt.upTo ? `Descartar hasta ${prompt.count} carta${plural}` : `Descartar ${prompt.count} carta${plural}`,
+      name: title,
+      title,
       hint: prompt.upTo
         ? 'Puedes descartar menos, incluso ninguna. La carta marcada en tu mano es la que entregas.'
         : 'Elige exactamente esta cantidad en tu mano. Phase comprobará el descarte al confirmar.'
@@ -47,7 +64,7 @@
 </script>
 
 {#if prompt && mine}
-  <div class="prompt" aria-label={label.title}>
+  <div class="prompt" aria-label={label.name} data-discard={prompt.kind}>
     <strong>{label.title}</strong>
     <p>{label.hint}</p>
     <ul class="draft">

@@ -399,16 +399,30 @@ visual completa».
 - **Nada cuenta cartas por su cuenta.** La mano no se recorre: se ofrecen las
   cartas de `cards` y el recuento es el del motor.
 
-Laboratorio: escenas `/ux?scene=discard` (exactamente dos) y
-`/ux?scene=discardUpTo` (hasta dos), con el objeto `Mind Rot` en la instantánea
-para que el panel pueda nombrarlo.
+El nombre accesible del bloque **no cambia con el recuento**: la limpieza se
+anuncia siempre como «Descartar hasta siete cartas» (es la regla la que se
+anuncia, no el número de ese turno) y cada variante tiene el suyo
+(`data-discard` lo expone para las pruebas). Eso importó: la prueba de partida
+completa localiza el descarte de limpieza por ese nombre, y un rótulo dinámico
+la dejó sin nada que pulsar durante 400 pasos.
+
+Laboratorio: escenas `/ux?scene=cleanup` (limpieza), `/ux?scene=discard`
+(exactamente dos) y `/ux?scene=discardUpTo` (hasta dos), con el objeto
+`Mind Rot` en la instantánea para que el panel pueda nombrarlo.
 
 ### Verificación de esta pasada
 
 `bun run check` 0 errores, `bun test src/lib` **302** (3 nuevas de descarte en
 `game/__tests__/discard.test.ts`), `bun run build` OK, `ux-lab.spec.ts` y
-`a11y.spec.ts` **21/21** (20 del laboratorio) con axe verde sobre el bloque de
+`a11y.spec.ts` **22/22** (21 del laboratorio) con axe verde sobre el bloque de
 descarte. Captura: `docs/screenshots/ux-descarte-1440.jpg`.
+
+Una lección de CI que costó dos ejecuciones: la anotación anterior listaba los
+directorios de `test-results`, y ahí también deja carpeta **cada prueba que
+pasa** si escribe evidencia (`captureViewportEvidence`). Nueve pruebas verdes se
+leían como nueve fallos y tapaban el único rojo real. Ahora `playwright test`
+emite además un informe JSON y `scripts/e2e-annotations.ts` anota cada fallo con
+su mensaje.
 
 Lo que queda de #60 sigue abierto: valores de X (`ChooseXValue`), orden de
 disparos (`OrderTriggers`), elección de modo (`ModeChoice`), búsquedas

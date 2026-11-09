@@ -36,17 +36,20 @@ test('the discard prompt repeats what Phase published, card for card', () => {
   const prompt = discardPrompt(
     withWaiting({ type: 'DiscardToHandSize', data: { player: 0, count: 2, cards: [41, 42, 43] } })
   );
-  expect(prompt).toEqual({ count: 2, cards: [41, 42, 43], player: 0, upTo: false, kind: 'handSize' });
+  expect(prompt).toEqual({ count: 2, cards: [41, 42, 43], player: 0, upTo: false, kind: 'cleanup' });
 });
 
 test('a prompt without a player belongs to the seat being shown', () => {
   const prompt = discardPrompt(withWaiting({ type: 'DiscardToHandSize', data: { count: 1, cards: [7] } }, 1));
-  expect(prompt).toEqual({ count: 1, cards: [7], player: 1, upTo: false, kind: 'handSize' });
+  expect(prompt).toEqual({ count: 1, cards: [7], player: 1, upTo: false, kind: 'cleanup' });
 });
 
-test('a connive discard is a discard', () => {
+test('a connive is its own prompt: same answer, different rule', () => {
+  // `WaitingFor::ConniveDiscard`: the discard belongs to the connive
+  // (CR 701.51b), not to the cleanup step, so the block must not promise the
+  // seven-card rule while a connive is asking.
   const prompt = discardPrompt(withWaiting({ type: 'ConniveDiscard', data: { player: 1, count: 1, cards: [9] } }, 1));
-  expect(prompt).toEqual({ count: 1, cards: [9], player: 1, upTo: false, kind: 'handSize' });
+  expect(prompt).toEqual({ count: 1, cards: [9], player: 1, upTo: false, kind: 'connive' });
 });
 
 test('there is no discard when the engine is not asking for one', () => {
