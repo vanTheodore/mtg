@@ -4,8 +4,9 @@ import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type Engi
 import {
   attackDeclaration, attackTargets, blockDeclaration, blockTargets, cancelCastAction, chooseXAction,
   defaultOrder, defaultX, discardSelection, discardPrompt as readDiscardPrompt, manaActions,
-  moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX, playerTarget,
-  secondActivation, targetAction, triggerOrderPrompt as readTriggerOrder,
+  modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
+  modeToggle, moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX,
+  playerTarget, secondActivation, targetAction, triggerOrderPrompt as readTriggerOrder,
   xPrompt as readXPrompt
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
@@ -194,6 +195,7 @@ class GameSession {
     this.choosing = [];
     this.xEntry = null;
     this.orderEntry = null;
+    this.modeEntry = null;
     this.history = [];
     this.lifeChanges = {};
     this.lastMetrics = null;
@@ -307,6 +309,53 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 700.2: the modal spell or ability waiting for its modes. */
+  get modeChoicePrompt() {
+    return readModeChoice(this.snapshot);
+  }
+  /**
+   * The modes being chosen, keyed to the prompt: two modal spells in a row (or
+   * a mode prompt re-entering for the same card) start from an empty choice,
+   * never from the previous spell's answer.
+   */
+  private modeEntry = $state<{ key: string; selected: number[] } | null>(null);
+  private get modeKey() {
+    const prompt = this.modeChoicePrompt;
+    if (!prompt) return '';
+    const revision = this.snapshot?.revision ?? 0;
+    return `${revision}:${prompt.kind}:${prompt.objectId ?? ''}:${prompt.descriptions.length}`;
+  }
+  get modes() {
+    if (!this.modeChoicePrompt) return [];
+    return this.modeEntry?.key === this.modeKey ? this.modeEntry.selected : [];
+  }
+  get modesReady() {
+    const prompt = this.modeChoicePrompt;
+    return prompt ? modeConfirmable(prompt, this.modes) : false;
+  }
+  toggleMode(index: number) {
+    const prompt = this.modeChoicePrompt;
+    if (!prompt) return;
+    // A one-of-one modal answers with the click itself, exactly like Phase's
+    // single candidate; the row never waits for a confirmation.
+    if (modeSingleChoice(prompt)) {
+      void this.dispatch(modeSelectAction([index]));
+      return;
+    }
+    const next = modeToggle(prompt, this.modes, index);
+    if (next !== this.modes) this.modeEntry = { key: this.modeKey, selected: next };
+  }
+  clearModes() {
+    if (this.modeChoicePrompt) this.modeEntry = { key: this.modeKey, selected: [] };
+  }
+  confirmModes() {
+    const prompt = this.modeChoicePrompt;
+    if (!prompt || !this.modesReady) return;
+    const indices = [...this.modes];
+    this.modeEntry = null;
+    void this.dispatch(modeSelectAction(indices));
   }
 
   /** CR 603.3b: the player whose simultaneous triggers need an order. */

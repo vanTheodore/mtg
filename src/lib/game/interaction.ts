@@ -128,6 +128,107 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
   };
 }
 /**
+ * CR 700.2: a modal spell or ability asks its controller to choose modes before
+ * targets and costs. Phase publishes the window (`min_choices..max_choices`),
+ * the mode texts, which modes are unavailable and — for the "up to N {P} worth
+ * of modes" cards (CR 700.2i) — the pawprint weight of each mode, where
+ * `max_choices` is a point BUDGET rather than a mode count.
+ *
+ * The answer is `SelectModes { indices }`, and every rule below is arithmetic
+ * over engine data: Mesa never decides which modes a card offers.
+ */
+export type ModeChoicePrompt = {
+  player: PlayerId;
+  /** A modal spell (`ModeChoice`) or a modal ability (`AbilityModeChoice`). */
+  kind: 'spell' | 'ability';
+  /** The object asking: the spell being cast, or the permanent's ability. */
+  objectId?: ObjectId;
+  min: number;
+  max: number;
+  descriptions: string[];
+  /** Modes Phase already rules out (CR 700.2a NoRepeat, unmet targets). */
+  unavailable: number[];
+  allowRepeat: boolean;
+  /** CR 700.2i: pawprint weight per mode; empty for ordinary modals. */
+  pawprints: number[];
+  /** CR 602.2b: an activated ability can be cancelled here; a trigger cannot. */
+  activated: boolean;
+};
+export function modeChoicePrompt(snapshot: EngineSnapshot | null): ModeChoicePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting) return null;
+  const isSpell = waiting.type === 'ModeChoice';
+  const isAbility = waiting.type === 'AbilityModeChoice';
+  if (!isSpell && !isAbility) return null;
+  const data = waiting.data ?? {};
+  const modal = (data.modal ?? {}) as Record<string, unknown>;
+  const number = (value: unknown, fallback = 0) => (typeof value === 'number' ? value : fallback);
+  const list = (value: unknown, fallback: number[]) => (Array.isArray(value) ? (value as number[]) : fallback);
+  const descriptions = Array.isArray(modal.mode_descriptions) ? (modal.mode_descriptions as string[]) : [];
+  const cast = data.pending_cast as { object_id?: ObjectId } | undefined;
+  const objectId = isAbility
+    ? typeof data.source_id === 'number' ? (data.source_id as ObjectId) : undefined
+    : typeof cast?.object_id === 'number' ? cast.object_id : undefined;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    kind: isAbility ? 'ability' : 'spell',
+    objectId,
+    min: number(modal.min_choices),
+    max: number(modal.max_choices),
+    descriptions,
+    unavailable: list(data.unavailable_modes, []),
+    allowRepeat: modal.allow_repeat_modes === true,
+    pawprints: list(modal.mode_pawprints, []),
+    activated: data.is_activated === true
+  };
+}
+/** CR 700.2i: with pawprints the cap is a point budget, not a mode count. */
+export function modeIsBudget(prompt: ModeChoicePrompt): boolean {
+  return prompt.pawprints.length > 0;
+}
+export function modeWeight(prompt: ModeChoicePrompt, index: number): number {
+  return prompt.pawprints[index] ?? 0;
+}
+export function modeSpent(prompt: ModeChoicePrompt, selected: number[]): number {
+  return modeIsBudget(prompt) ? selected.reduce((sum, index) => sum + modeWeight(prompt, index), 0) : 0;
+}
+/** A one-of-one modal answers with a single click; anything else builds a selection. */
+export function modeSingleChoice(prompt: ModeChoicePrompt): boolean {
+  return !modeIsBudget(prompt) && prompt.min === 1 && prompt.max === 1;
+}
+/** CR 602.2b / CR 603.3c: only an activated ability is still cancellable. */
+export function modeCanCancel(prompt: ModeChoicePrompt): boolean {
+  return prompt.kind === 'spell' || prompt.activated;
+}
+/**
+ * The mode row a click lands on: toggling, or adding while repeats are allowed.
+ * Refused choices return the SAME array, so an impossible click changes nothing.
+ */
+export function modeToggle(prompt: ModeChoicePrompt, selected: number[], index: number): number[] {
+  if (prompt.unavailable.includes(index)) return selected;
+  const budget = modeIsBudget(prompt);
+  const fits = (list: number[]) => !budget || modeSpent(prompt, list) + modeWeight(prompt, index) <= prompt.max;
+  if (prompt.allowRepeat) {
+    if (!fits(selected)) return selected;
+    if (!budget && selected.length >= prompt.max) return selected;
+    return [...selected, index].sort((a, b) => a - b);
+  }
+  if (selected.includes(index)) return selected.filter((value) => value !== index);
+  if (!fits(selected)) return selected;
+  if (!budget && selected.length >= prompt.max) return selected;
+  return [...selected, index].sort((a, b) => a - b);
+}
+/** Whether Phase would accept the selection as it stands. */
+export function modeConfirmable(prompt: ModeChoicePrompt, selected: number[]): boolean {
+  if (selected.length < prompt.min) return false;
+  return modeIsBudget(prompt) ? modeSpent(prompt, selected) <= prompt.max : selected.length <= prompt.max;
+}
+/** CR 700.2: the chosen modes, in the order the engine indexes them. */
+export function modeSelectAction(indices: number[]): GameAction {
+  return { type: 'SelectModes', data: { indices: [...indices].sort((a, b) => a - b) } };
+}
+
+/**
  * CR 603.3b: when several abilities a player controls trigger at once, that
  * player chooses the order in which they go on the stack — and the stack
  * resolves last-in, first-out (CR 405.3). Phase publishes the summaries and

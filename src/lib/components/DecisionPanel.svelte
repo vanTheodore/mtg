@@ -5,6 +5,7 @@
   import DiscardPrompt from './DiscardPrompt.svelte';
   import ChooseXPrompt from './ChooseXPrompt.svelte';
   import TriggerOrderPrompt from './TriggerOrderPrompt.svelte';
+  import ModeChoicePrompt from './ModeChoicePrompt.svelte';
   import { manaText } from '#lib/game/cards.ts';
   import { actionObjectId, attackLabel, attackTargets, blockTargets, isManaAction, isManaPrompt, isTargetPrompt, manaActions, manualCast, targetLabel } from '#lib/game/interaction.ts';
   import type { GameAction } from '#lib/engine/types.ts';
@@ -59,7 +60,7 @@
   const pass = $derived(actions.find((a) => a.type === 'PassPriority'));
   const cancel = $derived(actions.find((a) => a.type === 'CancelCast'));
   const handled = new Set(['PassPriority', 'CancelCast', 'ChooseTarget', 'DeclareAttackers', 'DeclareBlockers', 'CastSpell', 'PlayLand', 'TapLandForMana', 'ActivateManaSource', 'MulliganDecision', 'SelectCards']);
-  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'ChooseXValue', 'OrderTriggers', 'GameOver', 'UnlessPayment']);
+  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'ChooseXValue', 'OrderTriggers', 'ModeChoice', 'AbilityModeChoice', 'GameOver', 'UnlessPayment']);
   const manaExtras = new Set(['UntapLandForMana', 'BackToManaPayment', 'PayManaAbilityMana', 'ChooseManaColor']);
   const globalActions = $derived(actions.filter((a) => !handled.has(a.type) && actionObjectId(a) === undefined && !isManaAction(a) && !(manaPrompt && manaExtras.has(a.type))));
   const attackDraft = $derived(Object.entries(session.attacks));
@@ -72,6 +73,8 @@
   const chooseX = $derived(session.chooseXPrompt);
   // CR 603.3b: only the controller of the triggered abilities orders them.
   const triggerOrder = $derived(session.triggerOrderPrompt);
+  // CR 700.2: the modal's controller chooses its modes.
+  const modes = $derived(session.modeChoicePrompt);
   const PHASES: Record<string, string> = { Untap: 'Enderezar', Upkeep: 'Mantenimiento', Draw: 'Robar', PreCombatMain: 'Fase principal', BeginCombat: 'Inicio de combate', DeclareAttackers: 'Ataque', DeclareBlockers: 'Bloqueo', CombatDamage: 'Daño de combate', EndCombat: 'Fin de combate', PostCombatMain: 'Fase principal posterior', End: 'Final', Cleanup: 'Limpieza' };
   function manaActionsFor(id?: number) { return manaActions(s, id); }
   function play(action: GameAction) { void session.dispatch(action); }
@@ -98,7 +101,9 @@
   </div>
   {#if s}
 
-    {#if triggerOrder && triggerOrder.player === s.viewer}
+    {#if modes && modes.player === s.viewer}
+      <ModeChoicePrompt />
+    {:else if triggerOrder && triggerOrder.player === s.viewer}
       <TriggerOrderPrompt />
     {:else if chooseX && chooseX.player === s.viewer}
       <ChooseXPrompt />

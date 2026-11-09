@@ -28,9 +28,10 @@
   import DiscardPrompt from '#lib/components/DiscardPrompt.svelte';
   import ChooseXPrompt from '#lib/components/ChooseXPrompt.svelte';
   import TriggerOrderPrompt from '#lib/components/TriggerOrderPrompt.svelte';
+  import ModeChoicePrompt from '#lib/components/ModeChoicePrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -41,6 +42,7 @@
     { value: 'discardUpTo', label: 'Descartar hasta dos' },
     { value: 'chooseX', label: 'Elegir X' },
     { value: 'triggerOrder', label: 'Ordenar disparos' },
+    { value: 'modeChoice', label: 'Elegir modos' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -53,6 +55,7 @@
     discardUpTo: 'DiscardChoice · descartar hasta dos',
     chooseX: 'ChooseXValue · X entre 0 y 5',
     triggerOrder: 'OrderTriggers · tres disparos simultáneos',
+    modeChoice: 'ModeChoice · hechizo modal, dos de tres modos',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -118,6 +121,13 @@
     card_types: { core_types: ['Sorcery'] }, mana_cost: '{X}{R}',
     oracle_text: 'Fireball deals X damage divided as you choose among any number of targets.'
   } as GameObject;
+  // A modal card for the mode scene: Fireball is not modal, and the lab should
+  // not teach the wrong example.
+  const modeSpell = {
+    id: 321, card_id: 321, owner: 0, controller: 0, zone: 'Stack', name: 'Selesnya Charm',
+    card_types: { core_types: ['Instant'] }, mana_cost: '{G}{W}',
+    oracle_text: 'Elige dos: la criatura objetivo obtiene +2/+2; gana vigilancia; ganas 3 vidas.'
+  } as GameObject;
   const xCost = (generic: number, red: number) => ({ type: 'Cost', generic, shards: Array.from({ length: red }, () => 'Red') });
   const viewerExile = [pileCard(112, 0, 'Giant Growth', 'Exile')];
   const rivalGrave = [pileCard(210, 1, 'Counterspell', 'Graveyard')];
@@ -137,7 +147,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -183,6 +193,29 @@
           valid_attack_targets: [seat, walker],
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
+        }
+      };
+    }
+    if (scene === 'modeChoice') {
+      // Shape taken from `WaitingFor::ModeChoice` in the pinned engine: the
+      // modal window, the mode texts and the modes Phase already rules out.
+      return {
+        type: 'ModeChoice',
+        data: {
+          player: 0,
+          modal: {
+            min_choices: 2,
+            max_choices: 2,
+            mode_count: 3,
+            mode_descriptions: [
+              'La criatura objetivo obtiene +2/+2 hasta el final del turno.',
+              'La criatura objetivo gana la habilidad de vigilancia hasta el final del turno.',
+              'Ganas 3 vidas.'
+            ],
+            allow_repeat_modes: false
+          },
+          pending_cast: { object_id: 321, cost: { type: 'Cost', generic: 0, shards: ['Green', 'White'] } },
+          unavailable_modes: [2]
         }
       };
     }
@@ -269,6 +302,7 @@
         phase: scene === 'cleanup' ? 'Cleanup'
           : scene === 'chooseX' ? 'PreCombatMain'
           : scene === 'triggerOrder' ? 'PreCombatMain'
+          : scene === 'modeChoice' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -423,6 +457,7 @@
         {#if scene === 'cleanup' || scene === 'discard' || scene === 'discardUpTo'}<DiscardPrompt />{/if}
         {#if scene === 'chooseX'}<ChooseXPrompt />{/if}
         {#if scene === 'triggerOrder'}<TriggerOrderPrompt />{/if}
+        {#if scene === 'modeChoice'}<ModeChoicePrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

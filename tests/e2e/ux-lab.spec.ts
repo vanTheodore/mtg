@@ -281,6 +281,49 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('un hechizo modal elige sus modos dentro de la ventana del motor', async ({ page }) => {
+  await page.goto('/ux?scene=modeChoice');
+  const prompt = page.locator('[data-mode-choice]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toContainText('Elige 2 modos');
+  await expect(prompt).toContainText('Selesnya Charm');
+
+  const rows = prompt.getByRole('button', { name: /La criatura objetivo|Ganas 3 vidas/ });
+  await expect(rows).toHaveCount(3);
+  // CR 700.2a: the mode Phase rules out is offered but not selectable.
+  const refused = prompt.getByRole('button', { name: /Ganas 3 vidas/ });
+  await expect(refused).toBeDisabled();
+  await expect(refused).toContainText('Ya no disponible');
+
+  const confirm = prompt.getByRole('button', { name: /Confirmar modos/ });
+  await expect(confirm).toHaveText('Confirmar modos (0/2)');
+  await expect(confirm).toBeDisabled();
+
+  // Two modes fill the window; a third is refused, and each row says so.
+  await prompt.getByRole('button', { name: /\+2\/\+2/ }).click();
+  await expect(confirm).toHaveText('Confirmar modos (1/2)');
+  await expect(confirm).toBeDisabled();
+  await prompt.getByRole('button', { name: /vigilancia/ }).click();
+  await expect(confirm).toHaveText('Confirmar modos (2/2)');
+  await expect(confirm).toBeEnabled();
+  await expect(prompt.getByRole('button', { name: /\+2\/\+2/ })).toHaveAttribute('aria-pressed', 'true');
+
+  // Un-ticking frees a slot again.
+  await prompt.getByRole('button', { name: /\+2\/\+2/ }).click();
+  await expect(prompt.getByRole('button', { name: /\+2\/\+2/ })).toHaveAttribute('aria-pressed', 'false');
+  await expect(confirm).toHaveText('Confirmar modos (1/2)');
+
+  // The selection can be cleared in one press.
+  await prompt.getByRole('button', { name: 'Limpiar' }).click();
+  await expect(confirm).toHaveText('Confirmar modos (0/2)');
+
+  // A modal spell is cancellable at this step (CR 601.2b).
+  await expect(prompt.getByRole('button', { name: 'Cancelar' })).toBeVisible();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('los disparos simultáneos se ordenan del último al primero', async ({ page }) => {
   await page.goto('/ux?scene=triggerOrder');
   const prompt = page.locator('[data-trigger-order]');

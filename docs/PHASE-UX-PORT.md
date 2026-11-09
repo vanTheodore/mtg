@@ -502,3 +502,40 @@ Pridemate y Dina) y captura `docs/screenshots/ux-orden-disparos-1440.jpg`.
 prueba nueva que comprueba los dos rótulos de la pila, que los extremos no se
 mueven, el intercambio de una fila con su vecina conservando su número, el mismo
 movimiento con teclado y axe sin violaciones críticas ni serias.
+
+## Hechizos y habilidades modales (décima pasada, 7 nov 2026)
+
+CR 700.2: una carta modal pide a su controlador que elija modos antes de
+objetivos y costes. Llega como dos variantes de `WaitingFor` —`ModeChoice` para
+el hechizo, `AbilityModeChoice` para la habilidad de una permanente— y las dos
+caían en la lista genérica de acciones legales.
+
+- **`interaction.ts`** publica la ventana (`min_choices..max_choices`), los
+  textos de cada modo, los modos que Phase ya descarta (CR 700.2a `NoRepeat`,
+  objetivos insatisfechos) y el peso en huellas cuando la carta es de presupuesto
+  (CR 700.2i, donde `max_choices` es **un presupuesto de puntos y no un número
+  de modos**). La respuesta es `SelectModes { indices }`.
+- **`ModeChoicePrompt.svelte`**: una fila por modo con `aria-pressed`, el
+  recuento de veces elegido y «Ya no disponible» en las descartadas; confirmación
+  con `(n/max)` —o `(puntos/max)` en las de presupuesto—, «Limpiar» y
+  «Cancelar».
+- **Dos reglas que un port ingenuo se salta**, ambas heredadas de la app
+  upstream: un modal de uno entre uno **responde con el propio clic** (no hay
+  nada que confirmar), y **sólo una habilidad activada** se puede cancelar en
+  este paso (CR 602.2b); una habilidad disparada debe elegir modo y resolver
+  (CR 603.3c), así que ahí no hay botón de cancelar.
+- **Nada se hereda entre conjuros**: la selección se guarda con la identidad del
+  prompt (revisión, variante, objeto y número de modos), no por posición.
+
+Laboratorio: `/ux?scene=modeChoice` (Selesnya Charm, dos modos de tres, con el
+tercero descartado por el motor) y captura
+`docs/screenshots/ux-elegir-modos-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **322** (9 nuevas en
+`game/__tests__/mode-choice.test.ts`: ventana, descartados, un-entre-uno,
+repeticiones, presupuesto de huellas y las dos reglas de cancelación), `bun run
+build` OK, y en Chromium una prueba nueva que recorre la ventana completa
+—deshabilitado del modo descartado, `(0/2)`, `(1/2)`, `(2/2)`, desmarcar,
+«Limpiar», «Cancelar»— y pasa axe.
