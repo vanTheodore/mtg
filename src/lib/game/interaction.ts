@@ -127,6 +127,74 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
     source
   };
 }
+/**
+ * CR 107.3a: X is announced by the spell's controller while casting it, and
+ * CR 601.2f locks the total cost that X feeds. Phase publishes the window
+ * (`min..max`, with `max` derived from what the player can actually pay), the
+ * spell being cast and the cost preview for each value, so this module only
+ * validates and formats what the engine sent.
+ */
+export type XPrompt = {
+  player: PlayerId;
+  min: number;
+  max: number;
+  /** The spell waiting for its X, so the panel can name it. */
+  objectId?: ObjectId;
+  /** The cast's cost before the chosen X. */
+  cost?: unknown;
+  /** Total cost per value, as the engine computed it. */
+  previews: [number, unknown][];
+};
+export function xPrompt(snapshot: EngineSnapshot | null): XPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ChooseXValue') return null;
+  const data = waiting.data ?? {};
+  const cast = data.pending_cast as { object_id?: ObjectId; cost?: unknown } | undefined;
+  const previews = Array.isArray(data.x_cost_previews)
+    ? (data.x_cost_previews as [number, unknown][]).filter(
+        (entry) => Array.isArray(entry) && typeof entry[0] === 'number'
+      )
+    : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    min: typeof data.min === 'number' ? data.min : 0,
+    max: typeof data.max === 'number' ? data.max : 0,
+    objectId: typeof cast?.object_id === 'number' ? cast.object_id : undefined,
+    cost: cast?.cost,
+    previews
+  };
+}
+/** The value the box opens with: the engine's own minimum, never a guess above it. */
+export function defaultX(prompt: Pick<XPrompt, 'min' | 'max'>): number {
+  return prompt.min <= prompt.max ? Math.max(prompt.min, 0) : 0;
+}
+/**
+ * Reads an entry the way the engine will: digits only, inside the window.
+ * Out-of-range or malformed entries return `null` instead of being clamped —
+ * an X the caster never typed must never be announced (CR 107.3a).
+ */
+export function parseX(raw: string, min: number, max: number): number | null {
+  if (!/^\d+$/.test(raw)) return null;
+  const value = Number(raw);
+  return value >= min && value <= max ? value : null;
+}
+/**
+ * The cost of the announced value, or the cast's own cost when the engine
+ * published no preview for it. `null` while there is no valid value: showing
+ * the cost of an X the caster has not chosen would be inventing a number.
+ */
+export function xCost(prompt: XPrompt, value: number | null): unknown {
+  if (value === null) return null;
+  return prompt.previews.find(([x]) => x === value)?.[1] ?? prompt.cost;
+}
+/** CR 107.3a: the announced value, and nothing else. */
+export function chooseXAction(value: number): GameAction {
+  return { type: 'ChooseX', data: { value } };
+}
+export function cancelCastAction(): GameAction {
+  return { type: 'CancelCast' };
+}
+
 /** The answer to a discard prompt: exactly the cards the interface collected. */
 export function discardSelection(cards: ObjectId[]): GameAction {
   return { type: 'SelectCards', data: { cards } };

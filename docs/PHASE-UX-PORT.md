@@ -427,3 +427,42 @@ su mensaje.
 Lo que queda de #60 sigue abierto: valores de X (`ChooseXValue`), orden de
 disparos (`OrderTriggers`), elección de modo (`ModeChoice`), búsquedas
 (`SearchChoice`, `DigChoice`), `RevealChoice` y las variantes de multijugador.
+
+## La X del hechizo (octava pasada, 7 nov 2026)
+
+CR 107.3a: X la anuncia el controlador al lanzar, y CR 601.2f fija después el
+coste total que esa X alimenta. Phase publica la ventana (`min..max`, con `max`
+calculado de lo que ese jugador puede pagar de verdad), el hechizo en curso y el
+coste de cada valor; hasta ahora todo eso caía en la lista genérica de acciones
+legales.
+
+- **`interaction.ts`** publica el prompt (`player`, `min`, `max`, `objectId`,
+  `cost`, `previews`) y dos funciones puras que sostienen la corrección:
+  `parseX` (sólo dígitos, dentro de la ventana, `null` fuera) y `defaultX` (el
+  mínimo del motor, nunca por debajo de 0). La respuesta es el `ChooseX { value }`
+  desnudo que el motor ofrece para cada valor de `min..=max`.
+- **`ChooseXPrompt.svelte`**: un campo numérico con pasos − y +, atajo
+  **Máximo**, la ventana anunciada en texto («Máximo 5», «Entre 2 y 5») y el
+  coste del valor elegido, tomado de `x_cost_previews` y con el coste del
+  lanzamiento como respaldo. Una entrada fuera de rango **se rechaza, no se
+  recorta**: escribir 99 con `max = 5` antes lanzaba por 5, un valor que nadie
+  eligió. Los pasos siguen vivos con la entrada inválida porque son la única
+  salida que no exige teclear, y recuperan hacia la ventana sin perder lo escrito.
+- **Nada se hereda entre conjuros.** La entrada se guarda con la identidad del
+  prompt (revisión, objeto, ventana): un `ChooseXValue` nuevo — otro hechizo, o
+  la misma ventana con un `max` más estrecho — empieza otra vez en el mínimo del
+  motor.
+- El coste desaparece mientras no hay valor: mostrar el coste de una X que el
+  jugador no ha anunciado sería inventarse el número.
+
+Laboratorio: `/ux?scene=chooseX` (Fireball, ventana 0..5, con previsualizaciones
+en 0, 3 y 5) y captura en `docs/screenshots/ux-elegir-x-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **308** (6 nuevas en
+`game/__tests__/x.test.ts`), `bun run build` OK, y en Chromium una prueba nueva
+que recorre los pasos, el atajo de máximo, el rechazo de 99, la escritura de dos
+dígitos sin recorte y la recuperación con las flechas del teclado, y que pasa
+axe **con la entrada rechazada a la vista** (el estado que un borde rojo no
+anuncia).

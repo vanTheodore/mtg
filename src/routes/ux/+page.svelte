@@ -26,9 +26,10 @@
   import { attackTargets } from '#lib/game/interaction.ts';
   import AttackTargetPicker from '#lib/components/AttackTargetPicker.svelte';
   import DiscardPrompt from '#lib/components/DiscardPrompt.svelte';
+  import ChooseXPrompt from '#lib/components/ChooseXPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -37,6 +38,7 @@
     { value: 'cleanup', label: 'Limpieza: descartar' },
     { value: 'discard', label: 'Descartar dos cartas' },
     { value: 'discardUpTo', label: 'Descartar hasta dos' },
+    { value: 'chooseX', label: 'Elegir X' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -47,6 +49,7 @@
     cleanup: 'DiscardToHandSize · limpieza de fin de turno',
     discard: 'DiscardChoice · descartar exactamente dos',
     discardUpTo: 'DiscardChoice · descartar hasta dos',
+    chooseX: 'ChooseXValue · X entre 0 y 5',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -105,6 +108,14 @@
   // `objects` only: listing it in a zone would change the pile counts the lab
   // asserts elsewhere.
   const discardSource = { ...pileCard(310, 0, 'Mind Rot', 'Graveyard'), oracle_text: 'El jugador objetivo descarta dos cartas.' };
+  // The spell waiting for its X. It also lives only in `objects`: the prompt
+  // names it, no zone has to hold it.
+  const xSpell = {
+    id: 320, card_id: 320, owner: 0, controller: 0, zone: 'Stack', name: 'Fireball',
+    card_types: { core_types: ['Sorcery'] }, mana_cost: '{X}{R}',
+    oracle_text: 'Fireball deals X damage divided as you choose among any number of targets.'
+  } as GameObject;
+  const xCost = (generic: number, red: number) => ({ type: 'Cost', generic, shards: Array.from({ length: red }, () => 'Red') });
   const viewerExile = [pileCard(112, 0, 'Giant Growth', 'Exile')];
   const rivalGrave = [pileCard(210, 1, 'Counterspell', 'Graveyard')];
   const rivalExile: GameObject[] = [];
@@ -123,7 +134,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -169,6 +180,20 @@
           valid_attack_targets: [seat, walker],
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
+        }
+      };
+    }
+    if (scene === 'chooseX') {
+      // Shape taken from `WaitingFor::ChooseXValue` in the pinned engine: the
+      // window the caster may announce, the spell, and the cost of each value.
+      return {
+        type: 'ChooseXValue',
+        data: {
+          player: 0,
+          min: 0,
+          max: 5,
+          pending_cast: { object_id: 320, cost: xCost(1, 1) },
+          x_cost_previews: [[0, xCost(1, 1)], [3, xCost(4, 1)], [5, xCost(6, 1)]]
         }
       };
     }
@@ -224,6 +249,7 @@
         active_player: 0,
         priority_player: 0,
         phase: scene === 'cleanup' ? 'Cleanup'
+          : scene === 'chooseX' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -376,6 +402,7 @@
       <div class="center">
         {#if scene === 'damage'}<DamageAssignment />{/if}
         {#if scene === 'cleanup' || scene === 'discard' || scene === 'discardUpTo'}<DiscardPrompt />{/if}
+        {#if scene === 'chooseX'}<ChooseXPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

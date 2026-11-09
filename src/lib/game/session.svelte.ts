@@ -2,9 +2,9 @@ import { tick } from 'svelte';
 import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
 import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId } from '#lib/engine/types.ts';
 import {
-  attackDeclaration, attackTargets, blockDeclaration, blockTargets, discardSelection,
-  discardPrompt as readDiscardPrompt, manaActions, nextBlockAssignment, objectTarget,
-  playerTarget, secondActivation, targetAction
+  attackDeclaration, attackTargets, blockDeclaration, blockTargets, cancelCastAction, chooseXAction,
+  defaultX, discardSelection, discardPrompt as readDiscardPrompt, manaActions, nextBlockAssignment,
+  objectTarget, parseX, playerTarget, secondActivation, targetAction, xPrompt as readXPrompt
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
 
@@ -190,6 +190,7 @@ class GameSession {
     this.blocks = {};
     this.attackPicker = null;
     this.choosing = [];
+    this.xEntry = null;
     this.history = [];
     this.lifeChanges = {};
     this.lastMetrics = null;
@@ -303,6 +304,56 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 107.3a: the value of X the caster is announcing, as Phase published it. */
+  get chooseXPrompt() {
+    return readXPrompt(this.snapshot);
+  }
+  /**
+   * The typed entry, keyed to the prompt it belongs to. A successor prompt —
+   * another spell, a narrower window — starts from the engine's minimum again
+   * instead of inheriting a value chosen for someone else's X.
+   */
+  private xEntry = $state<{ key: string; raw: string } | null>(null);
+  private get xKey() {
+    const prompt = this.chooseXPrompt;
+    if (!prompt) return '';
+    const revision = this.snapshot?.revision ?? 0;
+    return `${revision}:${prompt.objectId ?? ''}:${prompt.min}:${prompt.max}`;
+  }
+  get xRaw() {
+    const prompt = this.chooseXPrompt;
+    if (!prompt) return '0';
+    return this.xEntry?.key === this.xKey ? this.xEntry.raw : String(defaultX(prompt));
+  }
+  setXRaw(raw: string) {
+    const prompt = this.chooseXPrompt;
+    if (prompt) this.xEntry = { key: this.xKey, raw };
+  }
+  /**
+   * Steppers RECOVER an out-of-range entry towards the window; they never
+   * clamp a submission. They step from the digits the player typed, so a
+   * refused 99 does not throw away readable input.
+   */
+  stepX(delta: number) {
+    const prompt = this.chooseXPrompt;
+    if (!prompt) return;
+    const digits = /^\d+$/.test(this.xRaw) ? Number(this.xRaw) : defaultX(prompt);
+    this.setXRaw(String(Math.min(Math.max(digits + delta, prompt.min), prompt.max)));
+  }
+  /** The announced value, or `null` while the entry is not one Phase would take. */
+  get xValue() {
+    const prompt = this.chooseXPrompt;
+    return prompt ? parseX(this.xRaw, prompt.min, prompt.max) : null;
+  }
+  confirmX() {
+    const value = this.xValue;
+    if (value === null) return;
+    void this.dispatch(chooseXAction(value));
+  }
+  cancelCast() {
+    void this.dispatch(cancelCastAction());
   }
 
   private async apply(reply: EngineReply) {

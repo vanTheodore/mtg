@@ -281,6 +281,55 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('la X se anuncia dentro de la ventana que publica el motor', async ({ page }) => {
+  await page.goto('/ux?scene=chooseX');
+  const prompt = page.locator('[data-x-prompt]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong')).toHaveText('Elegir X · Fireball');
+  // The window is Phase's; the block only repeats it.
+  await expect(prompt).toContainText('Máximo 5');
+
+  const field = prompt.getByRole('spinbutton', { name: 'Valor de X' });
+  await expect(field).toHaveValue('0');
+  await expect(prompt.getByRole('button', { name: 'Restar uno a X' })).toBeDisabled();
+  await expect(prompt.getByRole('button', { name: 'Confirmar X = 0' })).toBeEnabled();
+
+  // The steppers move inside the window, and the cost follows the value.
+  await prompt.getByRole('button', { name: 'Sumar uno a X' }).click();
+  await expect(field).toHaveValue('1');
+  await prompt.getByRole('button', { name: 'X al máximo' }).click();
+  await expect(field).toHaveValue('5');
+  await expect(prompt).toContainText('Coste con X = 5: {6}{R}');
+  await expect(prompt.getByRole('button', { name: 'Sumar uno a X' })).toBeDisabled();
+
+  // Out of range is refused, not coerced: no value, no cost, no dispatch.
+  await field.fill('99');
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  await expect(prompt.getByRole('button', { name: /^Confirmar X$/ })).toBeDisabled();
+  await expect(prompt.getByRole('status')).toHaveText('Escribe un número entre 0 y 5.');
+  await expect(prompt).not.toContainText('Coste con');
+
+  // The refused entry is also the state axe has to agree with: a red border
+  // alone would not announce anything, and an unlabelled number box would be a
+  // serious violation in its own right.
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+
+  // Typing a multi-digit entry is not clamped keystroke by keystroke.
+  await field.fill('1');
+  await field.fill('12');
+  await expect(field).toHaveValue('12');
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+
+  // Arrow keys step and recover into the window; Enter is the confirm.
+  await field.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(field).toHaveValue('5');
+  await expect(field).toHaveAttribute('aria-invalid', 'false');
+  await expect(prompt.getByRole('button', { name: 'Confirmar X = 5' })).toBeEnabled();
+  await expect(prompt.getByRole('button', { name: 'Cancelar' })).toBeVisible();
+});
+
 test('la limpieza conserva el bloque que busca la partida completa', async ({ page }) => {
   // `ui-game.spec.ts` drives a whole game and finds this prompt by its
   // accessible name, so the cleanup block announces the rule and not the
