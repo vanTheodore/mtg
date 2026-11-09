@@ -281,6 +281,41 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('mirar cartas dice qué se guarda y adónde va el resto', async ({ page }) => {
+  await page.goto('/ux?scene=dig');
+  const prompt = page.locator('[data-dig-prompt]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong').first()).toHaveText('Mira 3 cartas');
+
+  // The destination is part of the decision, not decoration.
+  await expect(prompt).toContainText('Lo que guardas va a tu mano; el resto van al cementerio.');
+
+  const rows = prompt.locator('button.card');
+  await expect(rows).toHaveCount(3);
+  // CR 701.20e: the card that does not pass the filter is shown, not keepable.
+  await expect(prompt.getByRole('button', { name: /Shock/ })).toBeDisabled();
+  await expect(prompt.getByRole('button', { name: /Shock/ })).toContainText('No encaja');
+
+  const confirm = prompt.getByRole('button', { name: /^Guardar/ });
+  await expect(confirm).toHaveText('Guardar (0/1)');
+  await expect(confirm).toBeDisabled();
+
+  await prompt.getByRole('button', { name: /Llanowar Elves/ }).click();
+  await expect(confirm).toHaveText('Guardar (1/1)');
+  await expect(confirm).toBeEnabled();
+  await expect(prompt.getByRole('button', { name: /Llanowar Elves/ })).toHaveAttribute('aria-pressed', 'true');
+
+  // One card only: a second cannot join, and untucking frees the slot.
+  await prompt.getByRole('button', { name: /Grizzly Bears/ }).click();
+  await expect(confirm).toHaveText('Guardar (1/1)');
+  await prompt.getByRole('button', { name: /Llanowar Elves/ }).click();
+  await expect(confirm).toHaveText('Guardar (0/1)');
+  await expect(confirm).toBeDisabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una búsqueda ofrece las cartas que publica el motor y no otras', async ({ page }) => {
   await page.goto('/ux?scene=search');
   const prompt = page.locator('[data-search-prompt]');

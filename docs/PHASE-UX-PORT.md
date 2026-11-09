@@ -581,3 +581,43 @@ elegibles) y captura `docs/screenshots/ux-buscar-biblioteca-1440.jpg`.
 parcial, rechazo de cartas que el motor no ofreció y la respuesta vacía), `bun
 run build` OK, y en Chromium una prueba nueva que recorre la lista, el recuento,
 la imposibilidad de elegir una segunda carta, el desmarcado y axe.
+
+## Mirar y guardar cartas (duodécima pasada, 7 nov 2026)
+
+CR 701.20e: un efecto «mira las N primeras» enseña cartas de una zona oculta a un
+jugador, que se queda con algunas y manda el resto a alguna parte. Es el prompt
+de Anticipar, Considerar y de casi todas las filtraciones de biblioteca, y caía
+en la lista genérica.
+
+Lo que hace útil la vista es que **el destino forma parte de la decisión**:
+quedarse una carta «en la parte superior de tu biblioteca» y «en tu mano» son
+decisiones distintas sobre las mismas cartas, y la app upstream lo rotula por eso
+mismo. Un port que lo omite obliga a adivinar.
+
+- **`interaction.ts`**: `digPrompt` publica las cartas vistas, el subconjunto que
+  pasa el filtro, cuántas se pueden guardar (ya recortado por el filtro) y las
+  dos frases de destino. El resto tiene tres formas, y las tres se distinguen:
+  mover a `rest_destination` (con «fondo de la biblioteca» cuando es la
+  biblioteca), **no mover nada** (`rest_remainder: StayInLibrary`, que solo se
+  serializa cuando no es el valor por defecto) y el reparto de Telling Time
+  (`rest_split_top_count`, que llega como prompt propio después).
+- **`SearchPrompt` y `DigPrompt` comparten `togglePick`**: marcar una carta de un
+  conjunto publicado, sin pasarse de la ventana y devolviendo **el mismo array**
+  cuando el clic no puede cambiar nada, para no repintar por nada.
+- **`DigPrompt.svelte`**: las cartas vistas, con las que no encajan mostradas
+  pero deshabilitadas («No encaja»), el destino de cada pila en texto y el botón
+  `Guardar (n/count)` —o «No guardar nada» cuando el efecto admite menos—. Si
+  las guardadas entran giradas o atacando, también se dice.
+- Los nombres accesibles de las filas son su propio texto, igual que en la
+  búsqueda: nada de `aria-label` que tape el coste o el tipo a un lector.
+
+Laboratorio: `/ux?scene=dig` (mirar tres, guardar una, con la tercera fuera del
+filtro y destino mano/cementerio) y captura
+`docs/screenshots/ux-mirar-guardar-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **336** (8 nuevas en
+`game/__tests__/dig.test.ts`: destinos, filtro vacío, tope por filtro, ventana
+exacta frente a «hasta N» y el `togglePick` compartido), `bun run build` OK, y en
+Chromium una prueba nueva con axe.

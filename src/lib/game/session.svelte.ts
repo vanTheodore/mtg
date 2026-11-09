@@ -3,11 +3,12 @@ import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
 import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId } from '#lib/engine/types.ts';
 import {
   attackDeclaration, attackTargets, blockDeclaration, blockTargets, cancelCastAction, chooseXAction,
-  defaultOrder, defaultX, discardSelection, discardPrompt as readDiscardPrompt, manaActions,
+  defaultOrder, defaultX, digPrompt as readDigPrompt, digReady as isDigReady, discardSelection,
+  discardPrompt as readDiscardPrompt, manaActions,
   modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
   modeToggle, moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX,
   playerTarget, searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
-  selectCardsAction, targetAction, triggerOrderPrompt as readTriggerOrder,
+  selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
   xPrompt as readXPrompt
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
@@ -198,6 +199,7 @@ class GameSession {
     this.orderEntry = null;
     this.modeEntry = null;
     this.searched = [];
+    this.dug = [];
     this.history = [];
     this.lifeChanges = {};
     this.lastMetrics = null;
@@ -313,6 +315,28 @@ class GameSession {
     void this.dispatch(discardSelection(cards));
   }
 
+  /** CR 701.20e: cards looked at, of which the player keeps some. */
+  get digPrompt() {
+    return readDigPrompt(this.snapshot);
+  }
+  dug = $state<ObjectId[]>([]);
+  get digReady() {
+    const prompt = this.digPrompt;
+    return prompt ? isDigReady(prompt, this.dug) : false;
+  }
+  toggleDig(id: ObjectId) {
+    const prompt = this.digPrompt;
+    if (!prompt) return;
+    const next = togglePick(prompt.selectable, this.dug, id, prompt.count);
+    if (next !== this.dug) this.dug = next;
+  }
+  confirmDig() {
+    if (!this.digPrompt || !this.digReady) return;
+    const cards = [...this.dug];
+    this.dug = [];
+    void this.dispatch(selectCardsAction(cards));
+  }
+
   /** CR 701.23: a search whose searcher must pick from the offered cards. */
   get searchPrompt() {
     return readSearchPrompt(this.snapshot);
@@ -325,13 +349,9 @@ class GameSession {
   }
   toggleSearch(id: ObjectId) {
     const prompt = this.searchPrompt;
-    if (!prompt || !prompt.cards.includes(id)) return;
-    if (this.searched.includes(id)) {
-      this.searched = this.searched.filter((value) => value !== id);
-      return;
-    }
-    if (this.searched.length >= prompt.count) return;
-    this.searched = [...this.searched, id];
+    if (!prompt) return;
+    const next = togglePick(prompt.cards, this.searched, id, prompt.count);
+    if (next !== this.searched) this.searched = next;
   }
   confirmSearch() {
     if (!this.searchPrompt || !this.searchReady) return;
@@ -483,7 +503,7 @@ class GameSession {
     const start = performance.now();
     if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
     if (this.snapshot?.revision !== reply.revision) {
-      this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = [];
+      this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

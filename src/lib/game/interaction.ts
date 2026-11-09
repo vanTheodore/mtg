@@ -128,6 +128,87 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
   };
 }
 /**
+ * CR 701.20e: a "look at the top N" effect shows the cards to one player, who
+ * keeps some and sends the rest somewhere. Phase publishes the cards, which of
+ * them pass the effect's filter, how many may be kept and — crucially — WHERE
+ * both piles end up, because "put it on top of your library" and "into your
+ * hand" ask for different decisions on the same cards.
+ */
+export type DigPrompt = {
+  player: PlayerId;
+  /** Every card looked at, in the order the effect found them. */
+  cards: ObjectId[];
+  /** The subset that passes the filter; the rest are shown but not keepable. */
+  selectable: ObjectId[];
+  /** How many may be kept, already capped by `selectable`. */
+  count: number;
+  /** `0..=count` is legal ("up to N"); otherwise exactly `count`. */
+  partial: boolean;
+  keptLabel: string;
+  restLabel: string;
+  enterTapped: boolean;
+  entersAttacking: boolean;
+};
+/**
+ * Where a pile lands, in words. Two maps, because the phrase differs by role:
+ * the pile the player keeps is named as a place ("tu mano"), the pile that
+ * leaves is named as a movement ("al cementerio").
+ */
+const KEPT_PLACES: Record<string, string> = {
+  Library: 'la parte superior de tu biblioteca',
+  Hand: 'tu mano',
+  Battlefield: 'el campo de batalla',
+  Graveyard: 'el cementerio',
+  Exile: 'el exilio',
+  Stack: 'la pila'
+};
+const REST_PLACES: Record<string, string> = {
+  Library: 'al fondo de tu biblioteca',
+  Hand: 'a tu mano',
+  Battlefield: 'al campo de batalla',
+  Graveyard: 'al cementerio',
+  Exile: 'al exilio',
+  Stack: 'a la pila'
+};
+const place = (map: Record<string, string>, zone: unknown) =>
+  typeof zone === 'string' ? map[zone] ?? `a ${zone.toLowerCase()}` : undefined;
+export function digPrompt(snapshot: EngineSnapshot | null): DigPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'DigChoice') return null;
+  const data = waiting.data ?? {};
+  const cards = Array.isArray(data.cards) ? (data.cards as ObjectId[]) : [];
+  const rawSelectable = Array.isArray(data.selectable_cards) ? (data.selectable_cards as ObjectId[]) : [];
+  // An empty `selectable_cards` means the engine published no filter, not that
+  // nothing may be kept: the looked-at cards are the eligible set.
+  const selectable = rawSelectable.length ? rawSelectable.filter((id) => cards.includes(id)) : [...cards];
+  const keepCount = typeof data.keep_count === 'number' ? data.keep_count : 0;
+  const topCount = typeof data.rest_split_top_count === 'number' ? data.rest_split_top_count : undefined;
+  // `rest_remainder` is serialized only when it is NOT the routing default, so
+  // its presence means the unkept cards were only looked at and never moved.
+  const stays = data.rest_remainder === 'StayInLibrary';
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    cards,
+    selectable,
+    count: Math.min(keepCount, selectable.length),
+    partial: data.up_to === true,
+    keptLabel: place(KEPT_PLACES, data.kept_destination) ?? 'donde están',
+    restLabel: stays
+      ? 'se quedan en la biblioteca'
+      : topCount !== undefined
+        ? 'se reparten entre la parte superior y el fondo de tu biblioteca'
+        : `van ${place(REST_PLACES, data.rest_destination) ?? 'al cementerio'}`,
+    enterTapped: data.enter_tapped === true,
+    entersAttacking: data.enters_attacking === true
+  };
+}
+/** Whether Phase would take this answer as it stands. */
+export function digReady(prompt: DigPrompt, selected: ObjectId[]): boolean {
+  if (!selected.every((id) => prompt.selectable.includes(id))) return false;
+  return prompt.partial ? selected.length <= prompt.count : selected.length === prompt.count;
+}
+
+/**
  * CR 701.23: a search looks through a hidden zone and its searcher picks from
  * the cards Phase already deemed legal. CR 701.23b/701.23d matter here: a
  * *stated-quality* search ("a creature card", "with different names") may find
@@ -176,6 +257,17 @@ export function searchReady(prompt: SearchPrompt, selected: ObjectId[]): boolean
   if (!selected.every((id) => prompt.cards.includes(id))) return false;
   return prompt.partial ? selected.length <= prompt.count : selected.length === prompt.count;
 }
+/**
+ * Toggles one card of a published set, never exceeding `limit`. Returns the SAME
+ * array when the click cannot change anything, so the caller can skip a render.
+ */
+export function togglePick(allowed: ObjectId[], selected: ObjectId[], id: ObjectId, limit: number): ObjectId[] {
+  if (!allowed.includes(id)) return selected;
+  if (selected.includes(id)) return selected.filter((value) => value !== id);
+  if (selected.length >= limit) return selected;
+  return [...selected, id];
+}
+
 /** "Pick these cards" is one action for every prompt of this family. */
 export function selectCardsAction(cards: ObjectId[]): GameAction {
   return { type: 'SelectCards', data: { cards: [...cards] } };

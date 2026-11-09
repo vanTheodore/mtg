@@ -30,9 +30,10 @@
   import TriggerOrderPrompt from '#lib/components/TriggerOrderPrompt.svelte';
   import ModeChoicePrompt from '#lib/components/ModeChoicePrompt.svelte';
   import SearchPrompt from '#lib/components/SearchPrompt.svelte';
+  import DigPrompt from '#lib/components/DigPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -45,6 +46,7 @@
     { value: 'triggerOrder', label: 'Ordenar disparos' },
     { value: 'modeChoice', label: 'Elegir modos' },
     { value: 'search', label: 'Buscar en la biblioteca' },
+    { value: 'dig', label: 'Mirar y guardar' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -59,6 +61,7 @@
     triggerOrder: 'OrderTriggers · tres disparos simultáneos',
     modeChoice: 'ModeChoice · hechizo modal, dos de tres modos',
     search: 'SearchChoice · tutor de una criatura',
+    dig: 'DigChoice · mirar tres, guardar una',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -207,6 +210,23 @@
         }
       };
     }
+    if (scene === 'dig') {
+      // Shape taken from `WaitingFor::DigChoice` in the pinned engine: the cards
+      // looked at, the ones that pass the filter and where each pile goes.
+      return {
+        type: 'DigChoice',
+        data: {
+          player: 0,
+          library_owner: 0,
+          cards: searchPool.slice(0, 3).map((card) => card.id),
+          keep_count: 1,
+          up_to: false,
+          selectable_cards: searchPool.slice(0, 2).map((card) => card.id),
+          kept_destination: 'Hand',
+          rest_destination: 'Graveyard'
+        }
+      };
+    }
     if (scene === 'search') {
       // Shape taken from `WaitingFor::SearchChoice` in the pinned engine: the
       // legal choices and the window the searcher may answer within.
@@ -332,6 +352,7 @@
           : scene === 'triggerOrder' ? 'PreCombatMain'
           : scene === 'modeChoice' ? 'PreCombatMain'
           : scene === 'search' ? 'PreCombatMain'
+          : scene === 'dig' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -488,6 +509,7 @@
         {#if scene === 'triggerOrder'}<TriggerOrderPrompt />{/if}
         {#if scene === 'modeChoice'}<ModeChoicePrompt />{/if}
         {#if scene === 'search'}<SearchPrompt />{/if}
+        {#if scene === 'dig'}<DigPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>
