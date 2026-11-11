@@ -1,6 +1,6 @@
 [package]
 name = "phase-engine"
-version = "0.120.0"
+version = "0.123.0"
 edition = "2021"
 license.workspace = true
 description = "A Magic: The Gathering rules engine implementing the Comprehensive Rules for native and WASM."

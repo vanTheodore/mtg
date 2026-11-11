@@ -5,8 +5,8 @@ No se debe mantener un SHA histórico duplicado en el verificador ni en otros do
 
 - Upstream: https://github.com/phase-rs/phase
 - Commit incorporado: el valor `commit` de [`PHASE-UPSTREAM-PIN.json`](PHASE-UPSTREAM-PIN.json), sin duplicar el SHA aquí.
-- Workspace: `0.120.0`
-- Actualizaciones importadas: [#6](https://github.com/vanTheodore/mtg/pull/6), [#16](https://github.com/vanTheodore/mtg/pull/16), la revisión de 11 commits hasta `d963d0a` (3 de noviembre de 2026), la de 56 commits hasta `f671692` (7 de noviembre de 2026, [`PHASE-UPSTREAM-2026-11-07-F671692.md`](PHASE-UPSTREAM-2026-11-07-F671692.md)) y la de 7 commits hasta `1038a9d` —release v0.120.0— (7 de noviembre de 2026, [`PHASE-UPSTREAM-2026-11-07-1038A9D.md`](PHASE-UPSTREAM-2026-11-07-1038A9D.md)). Véanse los informes de importación.
+- Workspace: `0.123.0`
+- Actualizaciones importadas: [#6](https://github.com/vanTheodore/mtg/pull/6), [#16](https://github.com/vanTheodore/mtg/pull/16), la revisión de 11 commits hasta `d963d0a` (3 de noviembre de 2026), la de 56 commits hasta `f671692` (7 de noviembre de 2026, [`PHASE-UPSTREAM-2026-11-07-F671692.md`](PHASE-UPSTREAM-2026-11-07-F671692.md)) la de 7 commits hasta `1038a9d` —release v0.120.0— (7 de noviembre de 2026, [`PHASE-UPSTREAM-2026-11-07-1038A9D.md`](PHASE-UPSTREAM-2026-11-07-1038A9D.md)) y la de 32 commits hasta `917542c` —releases v0.121.0 a v0.123.0— (7 de noviembre de 2026, [`PHASE-UPSTREAM-2026-11-07-917542C.md`](PHASE-UPSTREAM-2026-11-07-917542C.md)). Véanse los informes de importación.
 - Crates de reglas importados: `crates/phase-engine`, `crates/phase-ast` y `crates/phase-parser`.
 - Licencias: MIT OR Apache-2.0; `licenses/PHASE-MIT` y `licenses/PHASE-APACHE`.
 
@@ -34,7 +34,7 @@ a los componentes Svelte.
 - La toolchain compilada por CI está fijada a `nightly-2025-03-02`.
 - `Cargo.lock` es específico del workspace importado; no se actualiza
   de manera independiente de un cambio de Phase validado. En la importación
-  de `0.120.0` solo cambian las tres líneas de versión de los crates
+  de `0.123.0` solo cambian las tres líneas de versión de los crates
   importados, en el mismo commit que su `Cargo.toml`.
 - Los `Cargo.toml` de `phase-engine`, `phase-ast` y `phase-parser` llevan la
   versión literal (upstream usa `version.workspace = true`); el valor debe
