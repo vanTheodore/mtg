@@ -11,6 +11,7 @@ import {
   optionalEffectPrompt as readOptionalEffect, playerTarget, rememberOptionalEffect,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
+  payAmountKey, parseAmount, payAmountPrompt as readPayAmountPrompt, submitPayAmount,
   xPrompt as readXPrompt
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
@@ -198,6 +199,7 @@ class GameSession {
     this.attackPicker = null;
     this.choosing = [];
     this.xEntry = null;
+    this.payEntry = null;
     this.orderEntry = null;
     this.modeEntry = null;
     this.searched = [];
@@ -515,6 +517,47 @@ class GameSession {
     void this.dispatch(cancelCastAction());
   }
 
+  /**
+   * CR 107.1c + CR 118.1: an amount the engine asks for, inside a window the
+   * engine owns. The box starts at the engine's minimum and is reset per prompt
+   * (`payAmountKey`), because the engine mints consecutive prompts that share a
+   * `source_id` and differ only in `player`.
+   */
+  get payAmountPrompt() {
+    return readPayAmountPrompt(this.snapshot);
+  }
+  private payEntry = $state<{ key: string; raw: string } | null>(null);
+  private get payKey() {
+    const prompt = this.payAmountPrompt;
+    if (!prompt) return '';
+    return `${this.snapshot?.revision ?? 0}:${payAmountKey(prompt)}`;
+  }
+  get payRaw() {
+    const prompt = this.payAmountPrompt;
+    if (!prompt) return '0';
+    return this.payEntry?.key === this.payKey ? this.payEntry.raw : String(prompt.min);
+  }
+  setPayRaw(raw: string) {
+    if (this.payAmountPrompt) this.payEntry = { key: this.payKey, raw };
+  }
+  /** Steppers recover an out-of-range entry; the submission is never clamped. */
+  stepPay(delta: number) {
+    const prompt = this.payAmountPrompt;
+    if (!prompt) return;
+    const digits = /^\d+$/.test(this.payRaw) ? Number(this.payRaw) : prompt.min;
+    this.setPayRaw(String(Math.min(Math.max(digits + delta, prompt.min), prompt.max)));
+  }
+  /** The amount Phase would accept, or `null` while the entry is not one. */
+  get payValue() {
+    const prompt = this.payAmountPrompt;
+    return prompt ? parseAmount(this.payRaw, prompt.min, prompt.max) : null;
+  }
+  confirmPay() {
+    const value = this.payValue;
+    if (value === null) return;
+    void this.dispatch(submitPayAmount(value));
+  }
+
   private async apply(reply: EngineReply) {
     if (!isSnapshot(reply)) {
       this.error = reply.code === 'stale_action'
@@ -528,7 +571,7 @@ class GameSession {
     if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
     if (this.snapshot?.revision !== reply.revision) {
       this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = [];
-      this.optionalRemember = false; this.optionalSameCard = false;
+      this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null;
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

@@ -505,12 +505,142 @@ export function defaultX(prompt: Pick<XPrompt, 'min' | 'max'>): number {
 /**
  * Reads an entry the way the engine will: digits only, inside the window.
  * Out-of-range or malformed entries return `null` instead of being clamped —
- * an X the caster never typed must never be announced (CR 107.3a).
+ * a value the player never typed must never be submitted (CR 107.3a for X,
+ * CR 118.1 for an amount). The window is the engine's in both cases, so the
+ * sanitiser is shared: `Number('')`, `Number(' 7 ')`, `'1.5'`, `'1e3'`, `'+2'`
+ * and `'0x10'` all land inside a typical window and none of them is digits.
  */
-export function parseX(raw: string, min: number, max: number): number | null {
+export function parseAmount(raw: string, min: number, max: number): number | null {
   if (!/^\d+$/.test(raw)) return null;
   const value = Number(raw);
   return value >= min && value <= max ? value : null;
+}
+/** The X prompt reads the same sanitiser under the name it has always had. */
+export const parseX = parseAmount;
+
+/**
+ * CR 107.1c + CR 118.1: "pay any amount" / "choose a number" asks for an amount
+ * inside a window the engine owns. `resource` is what gets spent —and it is not
+ * always a cost: CR 732.2a's loop collapse names how many cycles to materialise,
+ * which is a count, not a payment.
+ */
+export type PayableResourceKind =
+  | { kind: 'energy' }
+  | { kind: 'mana'; composition: 'concretizeX' | 'perUnit' }
+  | { kind: 'counters' }
+  | { kind: 'life' }
+  | { kind: 'speed' }
+  | { kind: 'loop'; axis: 'tokens' | 'counters' | 'life' | 'mixed' };
+export type PayAmountPrompt = {
+  player: PlayerId;
+  sourceId: ObjectId;
+  min: number;
+  max: number;
+  /** CR 107.1c: the engine's running total when the prompt collects in steps. */
+  accumulated: number;
+  resource: PayableResourceKind;
+  /** CR 107.3a + CR 601.2b: a mana ability announcing X, not a standalone amount. */
+  pendingManaAbility: boolean;
+};
+const LOOP_AXES: Record<string, 'tokens' | 'counters' | 'life' | 'mixed'> = {
+  Tokens: 'tokens',
+  Counters: 'counters',
+  Life: 'life',
+  Mixed: 'mixed'
+};
+function payableResource(raw: unknown): PayableResourceKind {
+  const type = (raw as { type?: string } | undefined)?.type;
+  switch (type) {
+    case 'Energy':
+      return { kind: 'energy' };
+    case 'ManaGeneric':
+      return {
+        kind: 'mana',
+        // CR 107.3f vs CR 107.1c: `{X}{W}` and "pay any amount of {R}" both arrive
+        // under the legacy `ManaGeneric` tag; only `composition` tells them apart.
+        composition:
+          (raw as { composition?: string }).composition === 'PerUnit' ? 'perUnit' : 'concretizeX'
+      };
+    case 'Counters':
+      return { kind: 'counters' };
+    case 'Life':
+      return { kind: 'life' };
+    case 'Speed':
+      return { kind: 'speed' };
+    case 'LoopCollapse': {
+      const axis = (raw as { axis?: string }).axis;
+      return { kind: 'loop', axis: LOOP_AXES[axis ?? ''] ?? 'mixed' };
+    }
+    default:
+      return { kind: 'energy' };
+  }
+}
+export function payAmountPrompt(snapshot: EngineSnapshot | null): PayAmountPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'PayAmountChoice') return null;
+  const data = waiting.data ?? {};
+  const min = typeof data.min === 'number' ? Math.max(0, data.min) : 0;
+  const max = typeof data.max === 'number' ? data.max : 0;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
+    min,
+    max: Math.max(min, max),
+    accumulated: typeof data.accumulated === 'number' ? data.accumulated : 0,
+    resource: payableResource(data.resource),
+    pendingManaAbility: data.pending_mana_ability != null
+  };
+}
+/**
+ * Identity of the prompt, for resetting the box. Not just the window: the engine
+ * mints consecutive prompts with the same `source_id` that differ only in
+ * `player` (CR 732.2a collapses one loop per controller, in APNAP order), and
+ * carrying one controller's amount into the other's prompt would submit a number
+ * nobody typed. The engine's running `accumulated` moves the window too.
+ */
+export function payAmountKey(prompt: PayAmountPrompt): string {
+  return [prompt.player, prompt.sourceId, prompt.min, prompt.max, prompt.accumulated, prompt.resource.kind].join(':');
+}
+/** What the amount is spent on, in the prompt's own terms. */
+export function payAmountResource(prompt: PayAmountPrompt): string {
+  switch (prompt.resource.kind) {
+    case 'energy':
+      return 'energía';
+    case 'mana':
+      return prompt.resource.composition === 'perUnit' ? 'maná por unidad' : 'maná';
+    case 'counters':
+      return 'contadores';
+    case 'life':
+      return 'vida';
+    case 'speed':
+      return 'velocidad';
+    case 'loop':
+      return prompt.resource.axis === 'tokens'
+        ? 'fichas'
+        : prompt.resource.axis === 'counters'
+          ? 'contadores'
+          : prompt.resource.axis === 'life'
+            ? 'vida'
+            : 'ciclos';
+  }
+}
+/**
+ * The button's own words. A loop collapse is not a payment (nothing is spent):
+ * CR 732.2a collapses N cycles into N materialisations, so the label counts what
+ * will exist. Everything else says what it costs, with the amount and resource.
+ */
+export function payAmountLabel(prompt: PayAmountPrompt, amount: number | null): string {
+  const value = amount === null ? '?' : String(amount);
+  if (prompt.resource.kind === 'loop') {
+    const axis = prompt.resource.axis;
+    const one = axis === 'tokens' ? 'ficha' : axis === 'counters' ? 'contador' : axis === 'life' ? 'punto de vida' : 'ciclo';
+    const many = axis === 'tokens' ? 'fichas' : axis === 'counters' ? 'contadores' : axis === 'life' ? 'puntos de vida' : 'ciclos';
+    return amount === 1 ? `Aplicar 1 ciclo · 1 ${one}` : `Aplicar ${value} · ${value} ${many}`;
+  }
+  return `Pagar ${value} ${payAmountResource(prompt)}`;
+}
+export function submitPayAmount(amount: number): GameAction {
+  return { type: 'SubmitPayAmount', data: { amount } };
 }
 /**
  * The cost of the announced value, or the cast's own cost when the engine

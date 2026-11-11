@@ -32,9 +32,10 @@
   import SearchPrompt from '#lib/components/SearchPrompt.svelte';
   import DigPrompt from '#lib/components/DigPrompt.svelte';
   import OptionalEffectPrompt from '#lib/components/OptionalEffectPrompt.svelte';
+  import PayAmountPrompt from '#lib/components/PayAmountPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -49,6 +50,7 @@
     { value: 'search', label: 'Buscar en la biblioteca' },
     { value: 'dig', label: 'Mirar y guardar' },
     { value: 'optional', label: 'Efecto opcional' },
+    { value: 'pay', label: 'Pagar una cantidad' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -65,6 +67,7 @@
     search: 'SearchChoice · tutor de una criatura',
     dig: 'DigChoice · mirar tres, guardar una',
     optional: 'OptionalEffectChoice · «puedes robar una carta»',
+    pay: 'PayAmountChoice · ventana de vida 1–4',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -210,6 +213,21 @@
           valid_attack_targets: [seat, walker],
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
+        }
+      };
+    }
+    if (scene === 'pay') {
+      // Shape taken from `WaitingFor::PayAmountChoice` in the pinned engine:
+      // `resource: Life` (CR 119.4), a window the engine owns and the source.
+      return {
+        type: 'PayAmountChoice',
+        data: {
+          player: 0,
+          resource: { type: 'Life' },
+          min: 1,
+          max: 4,
+          accumulated: 0,
+          source_id: 100
         }
       };
     }
@@ -372,6 +390,7 @@
           : scene === 'search' ? 'PreCombatMain'
           : scene === 'dig' ? 'PreCombatMain'
           : scene === 'optional' ? 'PreCombatMain'
+          : scene === 'pay' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -530,6 +549,7 @@
         {#if scene === 'search'}<SearchPrompt />{/if}
         {#if scene === 'dig'}<DigPrompt />{/if}
         {#if scene === 'optional'}<OptionalEffectPrompt />{/if}
+        {#if scene === 'pay'}<PayAmountPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

@@ -281,6 +281,40 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('una cantidad se escribe dentro de la ventana del motor y no se recorta', async ({ page }) => {
+  await page.goto('/ux?scene=pay');
+  const prompt = page.locator('[data-pay-amount]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong')).toHaveText('Elige una cantidad · Grizzly Bears');
+  await expect(prompt).toContainText('Entre 1 y 4');
+
+  const field = prompt.getByRole('spinbutton', { name: 'Cantidad' });
+  const commit = prompt.getByRole('button', { name: /^Pagar/ });
+  // The box opens at the engine's minimum, and that is already committable.
+  await expect(field).toHaveValue('1');
+  await expect(commit).toHaveText('Pagar 1 vida');
+  await expect(commit).toBeEnabled();
+
+  // Over the window: the entry is refused, not clamped to 4.
+  await field.fill('9');
+  await expect(field).toHaveAttribute('aria-invalid', 'true');
+  await expect(prompt).toContainText('Escribe un número entre 1 y 4.');
+  await expect(prompt.getByRole('button', { name: /^Pagar/ })).toBeDisabled();
+  // The steppers stay usable while the entry is refused and recover into range.
+  await prompt.getByRole('button', { name: 'Restar uno a la cantidad' }).click();
+  await expect(field).toHaveValue('4');
+  await expect(commit).toHaveText('Pagar 4 vida');
+
+  await prompt.getByRole('button', { name: 'Cantidad al máximo' }).click();
+  await expect(field).toHaveValue('4');
+  await field.fill('2');
+  await expect(commit).toHaveText('Pagar 2 vida');
+  await commit.click();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('un «puedes» pregunta una vez y puede dejar de preguntar', async ({ page }) => {
   await page.goto('/ux?scene=optional');
   const prompt = page.locator('[data-optional-effect]');

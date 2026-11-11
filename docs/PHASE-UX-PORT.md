@@ -661,3 +661,44 @@ el alcance mismo-carta disponible) y captura
 sin clave, sujeto y descripción, y las dos formas de la respuesta), `bun run
 build` OK, y en Chromium una prueba nueva que comprueba el texto del motor, los
 dos botones, y la relación entre las dos casillas —con axe.
+
+## Pagar una cantidad (decimoquinta pasada, 7 nov 2026)
+
+CR 107.1c + CR 118.1: «paga cualquier cantidad de vida», «elige un número»,
+«paga X maná» — la misma ventana numérica que X, con un recurso distinto y una
+trampa: **no todo lo que pide un número es un coste**. CR 732.2a pide cuántos
+ciclos de un bucle se materializan, y ahí no se gasta nada.
+
+- **`interaction.ts`**: `payAmountPrompt` lee la ventana del motor, el recurso y
+  la fuente. El recurso no es un enum plano: `ManaGeneric` es una etiqueta de
+  cable *congelada* que cubre dos composiciones distintas (`{X}{W}` frente a
+  «paga cualquier cantidad de {R}»), así que se lee `composition`; y
+  `LoopCollapse` trae el eje que dice qué se materializa (fichas, contadores,
+  vida o mezcla).
+- **La identidad del prompt incluye al jugador**: el motor emite prompts
+  consecutivos con el mismo `source_id` que sólo cambian de asiento (un bucle por
+  controlador, en orden APNAP), y `accumulated` mueve la ventana. Sin eso, el
+  segundo jugador hereda la cantidad escrita para el primero.
+- **`AmountField.svelte`**: el control de cantidad deja de estar dentro del
+  prompt de X y pasa a ser compartido — ventana por props (ningún límite propio),
+  `parseAmount` como único saneador, *steppers* vivos mientras la entrada se
+  rechaza y recuperación desde los dígitos escritos. `parseX` queda como alias
+  del mismo saneador para no tocar el prompt de X.
+- **`PayAmountPrompt.svelte`**: `Pagar N vida` en los pagos; en un colapso de
+  bucle el botón dice `Aplicar 2 · 2 contadores` y el bloque avisa de que no se
+  gasta nada. Una entrada fuera de ventana deshabilita la confirmación: no se
+  recorta.
+- Nombre accesible del botón de máximo: «Cantidad al máximo» (contiene el texto
+  visible «Máximo»; axe lo exige).
+
+Laboratorio: `/ux?scene=pay` (ventana de vida 1–4) y captura
+`docs/screenshots/ux-pagar-cantidad-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **351** (9 nuevas en
+`game/__tests__/pay-amount.test.ts`: recursos y composición de maná, el eje del
+bucle, la etiqueta que no dice «pagar» cuando no se paga, la identidad por
+asiento y la lista de entradas que no son dígitos), `bun run build` OK, y en
+Chromium una prueba nueva que escribe fuera de ventana y comprueba que la
+confirmación se deshabilita en vez de recortar —con axe.
