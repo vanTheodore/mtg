@@ -39,12 +39,16 @@ if (!existsSync(path)) {
   process.exit(0);
 }
 
-const lines = readFileSync(path, 'utf8').split('\n');
+// Cargo colourises its errors when it thinks it is writing to a terminal, and
+// the escape sequences land *before* the word `error`, so a `^error` match
+// silently finds nothing. Strip them first — the log is a plain-text artifact.
+const ANSI = /\u001b\[[0-9;]*[A-Za-z]/g;
+const lines = readFileSync(path, 'utf8').replace(ANSI, '').split('\n');
 let emitted = 0;
 
 for (let index = 0; index < lines.length && emitted < MAX_ANNOTATIONS; index += 1) {
   const line = lines[index];
-  if (!/^error(\[E\d+\])?:/.test(line)) continue;
+  if (!/^\s*error(\[E\d+\])?:/.test(line)) continue;
 
   // Cargo prints the source location a couple of lines below the heading:
   //   `  --> src/foo.rs:12:5`
