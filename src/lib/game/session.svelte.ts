@@ -9,7 +9,8 @@ import {
   modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
   modeToggle, moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX,
   optionalEffectPrompt as readOptionalEffect, playerTarget, rememberOptionalEffect,
-  choosePair, pairPrompt as readPairPrompt, payUnlessCost, revealAction, revealPrompt as readRevealPrompt,
+  choosePair, chooseTokenHost, pairPrompt as readPairPrompt,
+  tokenHostPrompt as readTokenHost, payUnlessCost, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -207,7 +208,8 @@ class GameSession {
     this.searched = [];
     this.dug = [];
     this.revealPick = null;
-    this.pairPick = null;
+    this.pairPick = null; this.hostPick = null;
+    this.hostPick = null;
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -323,6 +325,30 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** Alchemy batch entry: which of the stamped creatures receives the token. */
+  get tokenHostPrompt() {
+    return readTokenHost(this.snapshot);
+  }
+  /** Index into `hosts`, because a `TargetRef` is an object, not a key. */
+  hostPick = $state<number | null>(null);
+  toggleHost(index: number) {
+    if (!this.tokenHostPrompt) return;
+    this.hostPick = this.hostPick === index ? null : index;
+  }
+  get hostReady() {
+    const prompt = this.tokenHostPrompt;
+    return prompt !== null && this.hostPick !== null && prompt.hosts[this.hostPick] !== undefined;
+  }
+  confirmHost() {
+    const prompt = this.tokenHostPrompt;
+    const index = this.hostPick;
+    if (!prompt || index === null) return;
+    const host = prompt.hosts[index];
+    if (!host) return;
+    this.hostPick = null;
+    void this.dispatch(chooseTokenHost(host));
   }
 
   /** CR 702.95a: which creature becomes the soulbond partner, or none. */

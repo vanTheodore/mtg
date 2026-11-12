@@ -36,9 +36,10 @@
   import RevealPrompt from '#lib/components/RevealPrompt.svelte';
   import UnlessPrompt from '#lib/components/UnlessPrompt.svelte';
   import PairPrompt from '#lib/components/PairPrompt.svelte';
+  import TokenHostPrompt from '#lib/components/TokenHostPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -58,6 +59,7 @@
     { value: 'reveal', label: 'Revelar una carta' },
     { value: 'unless', label: 'Pagar o aceptar' },
     { value: 'pair', label: 'Emparejar (soulbond)' },
+    { value: 'host', label: 'Destinatario de una ficha' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -79,6 +81,7 @@
     reveal: 'RevealChoice · revelar una tierra o no revelar',
     unless: 'UnlessPayment · pagar {3} o contrahechizo',
     pair: 'PairChoice · emparejar con otra criatura o no emparejar',
+    host: 'ChooseTokenHost · una ficha elige entre dos criaturas',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -226,6 +229,20 @@
           valid_attack_targets: [seat, walker],
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
+        }
+      };
+    }
+    if (scene === 'host') {
+      // Shape taken from `WaitingFor::ChooseTokenHost` in the pinned engine: the
+      // stamped entrants as `TargetRef`, already filtered by the engine.
+      return {
+        type: 'ChooseTokenHost',
+        data: {
+          player: 0,
+          source_id: 100,
+          // `TargetRef` has no tag wrapper: the key itself is the discriminant.
+          legal_targets: [{ Object: 101 }, { Object: 105 }],
+          pending_ability: { ability: {} }
         }
       };
     }
@@ -455,6 +472,7 @@
           : scene === 'reveal' ? 'PreCombatMain'
           : scene === 'unless' ? 'PreCombatMain'
           : scene === 'pair' ? 'PreCombatMain'
+          : scene === 'host' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -618,6 +636,7 @@
         {#if scene === 'reveal'}<RevealPrompt />{/if}
         {#if scene === 'unless'}<UnlessPrompt />{/if}
         {#if scene === 'pair'}<PairPrompt />{/if}
+        {#if scene === 'host'}<TokenHostPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

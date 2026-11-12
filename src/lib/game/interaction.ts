@@ -129,6 +129,36 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
   };
 }
 /**
+ * Digital-only Alchemy (no CR entry): a batch token entry ("one or more
+ * creatures enter … attached to one of them") stamped several hosts, and the
+ * controller picks which one. The engine's own note is explicit that this is a
+ * choice and NOT a target — hexproof, shroud and protection do not filter the
+ * list — so the block only names what Phase published and answers with the
+ * `ChooseTarget` the engine offers.
+ */
+export type TokenHostPrompt = {
+  player: PlayerId;
+  /** The ability's source, for the block's title. */
+  sourceId: ObjectId;
+  /** Still-legal hosts, already filtered by the engine. */
+  hosts: TargetRef[];
+};
+export function tokenHostPrompt(snapshot: EngineSnapshot | null): TokenHostPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ChooseTokenHost') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
+    hosts: Array.isArray(data.legal_targets) ? (data.legal_targets as TargetRef[]) : []
+  };
+}
+/** The chosen host, as the `ChooseTarget` the engine listed. */
+export function chooseTokenHost(host: TargetRef): GameAction {
+  return { type: 'ChooseTarget', data: { target: host } };
+}
+
+/**
  * CR 702.95a + CR 608.2d: soulbond asks whose partner the creature becomes. The
  * listed objects are legal choices, not targets, and the pairing is optional
  * ("you may pair it with another unpaired creature you control"), so the empty

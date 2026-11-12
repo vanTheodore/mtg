@@ -845,3 +845,35 @@ Laboratorio: `/ux?scene=pair` y captura `docs/screenshots/ux-emparejar-1440.jpg`
 la lista vacía como prompt válido y las dos formas de la acción), `bun run build`
 OK, y en Chromium una prueba nueva que elige, cambia de pareja y la suelta —con
 axe.
+
+## El destinatario de una ficha (vigésima pasada, 7 nov 2026)
+
+`ChooseTokenHost` es Alchemy digital, sin entrada en el CR: una entrada por lotes
+(«una o más criaturas entran … anexadas a una de ellas») marca a todas las
+candidatas y el controlador elige cuál recibe la ficha.
+
+El propio comentario del motor es explícito y es lo que la vista tiene que
+respetar: **es una elección, no un objetivo**, así que hexproof, velo y
+protección nunca filtraron `legal_targets`. Un bloque que dijera «elige el
+objetivo» estaría prometiendo una interacción que la regla no tiene.
+
+- **`interaction.ts`**: `tokenHostPrompt` publica los destinatarios tal cual los
+  dejó el motor, con el `TargetRef` del cable (`{ Object }` / `{ Player }`, sin
+  envoltorio de etiqueta). `chooseTokenHost(host)` es el `ChooseTarget` que el
+  motor ofrece.
+- **`TokenHostPrompt.svelte`**: título con la fuente, la frase que separa
+  elección de objetivo, la lista con `targetLabel` (jugadores incluidos, porque
+  el motor también puede ofrecer uno) y confirmación con el nombre elegido. Sin
+  destinatarios lo dice en vez de quedarse vacío.
+- La selección se guarda por **índice**, no por objeto: un `TargetRef` no es una
+  clave, y dos referencias distintas pueden apuntar al mismo objeto.
+
+Laboratorio: `/ux?scene=host` y captura
+`docs/screenshots/ux-destinatario-ficha-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **375** (5 nuevas en
+`game/__tests__/token-host.test.ts`: la lista publicada, un jugador como
+destinatario, la lista ausente, la acción y el caso de otra decisión), `bun run
+build` OK, y en Chromium una prueba nueva que cambia de destinatario —con axe.

@@ -281,6 +281,27 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('la ficha elige destinatario entre las criaturas que entraron', async ({ page }) => {
+  await page.goto('/ux?scene=host');
+  const prompt = page.locator('[data-token-host]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong')).toHaveText('¿Dónde entra la ficha? · Grizzly Bears');
+  // The engine's own note: a choice, not a target, so nothing is filtered out.
+  await expect(prompt).toContainText('Es una elección, no un objetivo');
+  await expect(prompt.locator('button.row')).toHaveCount(2);
+
+  const confirm = prompt.getByRole('button', { name: /^Confirmar destinatario$|^Poner la ficha en/ });
+  await expect(confirm).toBeDisabled();
+  await prompt.getByRole('button', { name: 'Savannah Lions' }).click();
+  await expect(confirm).toHaveText('Poner la ficha en Savannah Lions');
+  await prompt.getByRole('button', { name: 'Elvish Mystic' }).click();
+  await expect(confirm).toHaveText('Poner la ficha en Elvish Mystic');
+  await expect(prompt.getByRole('button', { name: 'Savannah Lions' })).toHaveAttribute('aria-pressed', 'false');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('emparejar ofrece pareja y también no emparejar', async ({ page }) => {
   await page.goto('/ux?scene=pair');
   const prompt = page.locator('[data-pair-prompt]');
