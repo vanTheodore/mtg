@@ -14,6 +14,11 @@
   import { session } from '#lib/game/session.svelte.ts';
 
   const prompt = $derived(session.optionalEffectPrompt);
+  // CR 608.2d: the same action answers two different questions. When the seat
+  // asked does not control the source, the block has to say so — otherwise a
+  // player reads "puedes" as their own trigger and looks for their permanent.
+  const theirs = $derived(prompt?.asked === 'opponent');
+  const others = $derived(prompt?.remaining.length ?? 0);
   const mine = $derived(prompt !== null && prompt.player === session.snapshot?.viewer);
   const objects = $derived(session.snapshot?.state.objects ?? {});
   const source = $derived(prompt ? objects[String(prompt.sourceId)]?.name : undefined);
@@ -24,12 +29,18 @@
 
 {#if prompt && mine}
   <div class="prompt" aria-label="Efecto opcional" data-optional-effect>
-    <strong>Puedes{source ? ` · ${source}` : ''}</strong>
+    <strong>{theirs ? 'Otro jugador te pregunta' : 'Puedes'}{source ? ` · ${source}` : ''}</strong>
     <p class="hint">
       {prompt.description ?? 'Phase pregunta si quieres resolver este efecto.'}
     </p>
     {#if subject && subject !== source}
       <p class="hint">Afecta a {subject}.</p>
+    {/if}
+    {#if theirs}
+      <p class="hint">
+        La fuente no es tuya: la decisión sí. Phase pregunta a cada jugador en
+        orden de turno{#if others > 0}, y después {others === 1 ? 'queda 1 jugador' : `quedan ${others} jugadores`}{/if}.
+      </p>
     {/if}
     <div class="row">
       <button type="button" class="primary" disabled={session.busy} onclick={() => session.decideOptional(true)}>Sí, resolverlo</button>

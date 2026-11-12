@@ -133,6 +133,12 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
  * carries a `may_trigger_key` — lets the player stop being asked: for that exact
  * instance, or (only when the engine publishes the capability) for every
  * occurrence printed on the same card.
+ *
+ * The same action also answers `OpponentMayChoice`, and that is a different
+ * question: the seat being asked does NOT control the source, and the engine
+ * publishes the opponents still to come (`remaining`, APNAP order). Nothing can
+ * be remembered there — the payload carries no `may_trigger_key` —, so the two
+ * capabilities below are false by construction, not by omission.
  */
 export type OptionalEffectPrompt = {
   player: PlayerId;
@@ -146,18 +152,30 @@ export type OptionalEffectPrompt = {
   rememberable: boolean;
   /** …and the engine offers the wider same-card scope. */
   sameCardAvailable: boolean;
+  /** Whose decision this is: the source's controller, or another player. */
+  asked: 'controller' | 'opponent';
+  /** Seats that still have to answer this same question after `player`. */
+  remaining: PlayerId[];
 };
 export function optionalEffectPrompt(snapshot: EngineSnapshot | null): OptionalEffectPrompt | null {
   const waiting = snapshot?.state.waiting_for;
-  if (!waiting || waiting.type !== 'OptionalEffectChoice') return null;
+  if (!waiting) return null;
+  const opponent = waiting.type === 'OpponentMayChoice';
+  if (waiting.type !== 'OptionalEffectChoice' && !opponent) return null;
   const data = waiting.data ?? {};
+  const keyed = !opponent && data.may_trigger_key != null;
+  const remaining = Array.isArray(data.remaining)
+    ? (data.remaining as unknown[]).filter((seat): seat is PlayerId => typeof seat === 'number')
+    : [];
   return {
     player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
     sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
     subjectId: typeof data.decision_subject_id === 'number' ? (data.decision_subject_id as ObjectId) : undefined,
     description: typeof data.description === 'string' && data.description ? data.description : undefined,
-    rememberable: data.may_trigger_key != null,
-    sameCardAvailable: data.may_trigger_key != null && data.same_card_may_trigger_choice_available === true
+    rememberable: keyed,
+    sameCardAvailable: keyed && data.same_card_may_trigger_choice_available === true,
+    asked: opponent ? 'opponent' : 'controller',
+    remaining
   };
 }
 /** CR 608.2d: accept or decline, once. */

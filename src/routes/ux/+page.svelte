@@ -35,7 +35,7 @@
   import PayAmountPrompt from '#lib/components/PayAmountPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -51,6 +51,7 @@
     { value: 'dig', label: 'Mirar y guardar' },
     { value: 'optional', label: 'Efecto opcional' },
     { value: 'pay', label: 'Pagar una cantidad' },
+    { value: 'opponent', label: 'Decide un oponente' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -68,6 +69,7 @@
     dig: 'DigChoice · mirar tres, guardar una',
     optional: 'OptionalEffectChoice · «puedes robar una carta»',
     pay: 'PayAmountChoice · ventana de vida 1–4',
+    opponent: 'OpponentMayChoice · deciden los oponentes en orden de turno',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -213,6 +215,20 @@
           valid_attack_targets: [seat, walker],
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
+        }
+      };
+    }
+    if (scene === 'opponent') {
+      // Shape taken from `WaitingFor::OpponentMayChoice` in the pinned engine:
+      // the seat being asked, the source it does not control and who is left.
+      return {
+        type: 'OpponentMayChoice',
+        data: {
+          player: 0,
+          source_id: 205,
+          decision_subject_id: 205,
+          description: 'Puedes sacrificar una tierra.',
+          remaining: [1]
         }
       };
     }
@@ -391,6 +407,7 @@
           : scene === 'dig' ? 'PreCombatMain'
           : scene === 'optional' ? 'PreCombatMain'
           : scene === 'pay' ? 'PreCombatMain'
+          : scene === 'opponent' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -550,6 +567,7 @@
         {#if scene === 'dig'}<DigPrompt />{/if}
         {#if scene === 'optional'}<OptionalEffectPrompt />{/if}
         {#if scene === 'pay'}<PayAmountPrompt />{/if}
+        {#if scene === 'opponent'}<OptionalEffectPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

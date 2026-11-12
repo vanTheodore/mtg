@@ -702,3 +702,40 @@ bucle, la etiqueta que no dice «pagar» cuando no se paga, la identidad por
 asiento y la lista de entradas que no son dígitos), `bun run build` OK, y en
 Chromium una prueba nueva que escribe fuera de ventana y comprueba que la
 confirmación se deshabilita en vez de recortar —con axe.
+
+## La misma pregunta, otro jugador (decimosexta pasada, 7 nov 2026)
+
+`OpponentMayChoice` comparte acción con «puedes» (`DecideOptionalEffect`) y la app
+upstream los dibuja con el mismo modal y el mismo texto. Pero no son la misma
+pregunta: en un `OpponentMayChoice` el asiento que responde **no controla la
+fuente**, y el motor publica además los oponentes que faltan (`remaining`, en
+orden APNAP).
+
+Portar el modal tal cual dejaría a un jugador leyendo «puedes» y buscando su
+propia permanente mientras la fuente es del rival. Y mostrar el mismo bloque con
+el mismo título para dos situaciones distintas es justo lo que hace ilegible un
+tablero compartido.
+
+- **`interaction.ts`**: `optionalEffectPrompt` cubre los dos tipos y añade
+  `asked: 'controller' | 'opponent'` y `remaining`. Las dos capacidades de
+  memoria (CR 603.5) son **falsas por construcción** en `OpponentMayChoice`: el
+  payload no trae `may_trigger_key`, y una bandera suelta
+  (`same_card_may_trigger_choice_available`) no la resucita — hay prueba de esa
+  combinación.
+- **`OptionalEffectPrompt.svelte`**: el título pasa a «Otro jugador te pregunta ·
+  {fuente}» y una línea dice lo que de verdad importa: «La fuente no es tuya: la
+  decisión sí», más a quién le toca después según `remaining` (singular y plural).
+- Sin casillas de «no volver a preguntar»: no hay nada que recordar. Los dos
+  botones son los mismos.
+
+Laboratorio: `/ux?scene=opponent` (el visor responde por el Chandra del rival y
+queda 1 jugador) y captura `docs/screenshots/ux-decidir-oponente-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **353** (2 nuevas en
+`game/__tests__/optional-effect.test.ts`: la pregunta del oponente con su
+`remaining` y el último de la ronda; más la lista de `remaining` sucia, que se
+filtra en vez de pintar `undefined`), `bun run build` OK, y en Chromium una
+prueba nueva que comprueba el título, la frase de propiedad, el aviso de quién
+falta y la ausencia de casillas —con axe.

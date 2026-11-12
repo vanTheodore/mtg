@@ -281,6 +281,27 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('un «puedes» de otro jugador dice de quién es la fuente y a quién le toca', async ({ page }) => {
+  await page.goto('/ux?scene=opponent');
+  const prompt = page.locator('[data-optional-effect]');
+  await expect(prompt).toBeVisible();
+  // CR 608.2d: the same action, the other question. Naming the source is not
+  // enough — the block has to say the source is not yours.
+  await expect(prompt.locator('strong')).toHaveText('Otro jugador te pregunta · Chandra, Torch of Defiance');
+  await expect(prompt).toContainText('Puedes sacrificar una tierra.');
+  await expect(prompt).toContainText('La fuente no es tuya: la decisión sí.');
+  // The engine publishes who is left (APNAP order), so the block can say it.
+  await expect(prompt).toContainText('después queda 1 jugador');
+
+  // CR 603.5 does not apply here: no key, so no memory boxes.
+  await expect(prompt.getByRole('checkbox')).toHaveCount(0);
+  await expect(prompt.getByRole('button', { name: 'Sí, resolverlo' })).toBeEnabled();
+  await expect(prompt.getByRole('button', { name: 'No' })).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una cantidad se escribe dentro de la ventana del motor y no se recorta', async ({ page }) => {
   await page.goto('/ux?scene=pay');
   const prompt = page.locator('[data-pay-amount]');

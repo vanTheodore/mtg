@@ -47,7 +47,9 @@ test('the prompt repeats the wording and the two engine capabilities', () => {
       subjectId: undefined,
       description: 'Puedes robar una carta.',
       rememberable: true,
-      sameCardAvailable: true
+      sameCardAvailable: true,
+      asked: 'controller',
+      remaining: []
     });
 });
 
@@ -75,8 +77,40 @@ test('the subject and the description travel when the engine publishes them', ()
   expect(optionalEffectPrompt(withWaiting(optional({ description: '' })))!.description).toBeUndefined();
 });
 
+test('an opponent is asked too, and the engine says who comes next', () => {
+  const waiting = {
+    type: 'OpponentMayChoice',
+    data: { player: 1, source_id: 100, description: 'Puedes sacrificar una tierra.', remaining: [2, 3] }
+  };
+  const prompt = optionalEffectPrompt(withWaiting(waiting, 1))!;
+  // CR 608.2d: the seat answering does not control the source.
+  expect(prompt.asked).toBe('opponent');
+  expect(prompt.player).toBe(1);
+  expect(prompt.description).toBe('Puedes sacrificar una tierra.');
+  expect(prompt.remaining).toEqual([2, 3]);
+  // Nothing can be remembered: the payload has no `may_trigger_key`.
+  expect(prompt.rememberable).toBe(false);
+  expect(prompt.sameCardAvailable).toBe(false);
+  // …and the capability flag alone does not make it rememberable.
+  const flagged = optionalEffectPrompt(
+    withWaiting({ ...waiting, data: { ...waiting.data, same_card_may_trigger_choice_available: true } }, 1)
+  )!;
+  expect(flagged.rememberable).toBe(false);
+  expect(flagged.sameCardAvailable).toBe(false);
+});
+
+test('the last opponent to answer has nobody left behind them', () => {
+  const prompt = optionalEffectPrompt(withWaiting({ type: 'OpponentMayChoice', data: { player: 2, source_id: 100 } }, 2))!;
+  expect(prompt.remaining).toEqual([]);
+  // Non-numeric entries are dropped rather than rendered as `undefined`.
+  const noisy = optionalEffectPrompt(
+    withWaiting({ type: 'OpponentMayChoice', data: { player: 2, source_id: 100, remaining: [3, null, 'x'] } }, 2)
+  )!;
+  expect(noisy.remaining).toEqual([3]);
+});
+
 test('there is no optional prompt for another decision', () => {
-  expect(optionalEffectPrompt(withWaiting({ type: 'OpponentMayChoice', data: { player: 0 } }))).toBeNull();
+  expect(optionalEffectPrompt(withWaiting({ type: 'ModeChoice', data: { player: 0 } }))).toBeNull();
   expect(optionalEffectPrompt(null)).toBeNull();
 });
 
