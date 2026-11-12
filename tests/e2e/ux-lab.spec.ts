@@ -281,6 +281,27 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('el tributo lo decide un oponente, y las dos respuestas se distinguen', async ({ page }) => {
+  await page.goto('/ux?scene=tribute');
+  const prompt = page.locator('[data-tribute]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong')).toHaveText('Tributo · Fanatic of Xenagos');
+  // The rule the block has to carry: the controller does not choose.
+  await expect(prompt).toContainText('un oponente suyo decide si se paga');
+  await expect(prompt).toContainText('El controlador no elige');
+  // The count is the engine's, and it says what paying means.
+  await expect(prompt.locator('[data-tribute-count]')).toHaveText(
+    'Pagar el tributo es poner 1 contador +1/+1 sobre Fanatic of Xenagos.'
+  );
+  await expect(prompt.getByRole('button', { name: 'Pagar el tributo: 1 contador +1/+1' })).toBeEnabled();
+  await expect(prompt.getByRole('button', { name: 'No pagar' })).toBeEnabled();
+  // Declining is a distinct outcome, not "nothing happens".
+  await expect(prompt.locator('[data-tribute-decline-hint]')).toContainText('CR 702.104b');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el coste disyuntivo pregunta cuál se paga, y deja no pagar', async ({ page }) => {
   await page.goto('/ux?scene=branches');
   const prompt = page.locator('[data-unless-branch]');

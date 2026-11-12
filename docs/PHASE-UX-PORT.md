@@ -921,3 +921,33 @@ Laboratorio: `/ux?scene=branches` y captura
 coste-objeto se reescribió porque ahora ese coste sí se nombra), `bun run build`
 OK, y en Chromium una prueba nueva que elige rama y comprueba que «No pagar»
 sigue disponible —con axe.
+
+## El tributo lo paga un oponente (vigesimosegunda pasada, 7 nov 2026)
+
+`TributeChoice` es CR 702.104a: la criatura con tributo entra y **un oponente**
+decide si se le ponen los contadores. El motor publica quién decide (`player`), la
+criatura (`source_id`) y cuántos +1/+1 vale el tributo (`count`). La respuesta es
+`DecideOptionalEffect`, la misma acción que «puedes», pero la pregunta no es del
+controlador.
+
+Por eso el bloque dice tres cosas que la acción no dice:
+
+1. **quién decide**: un oponente del controlador, no el controlador (un jugador
+   que lee «puedes» buscaría su propio permanente);
+2. **qué significa pagar**: poner *n* contadores +1/+1 sobre la criatura, con el
+   número del motor y ningún cálculo propio;
+3. **qué significa no pagar**: cuenta como tributo no pagado y se dispara lo que
+   la carta diga para ese caso (CR 702.104b). No es «no pasa nada».
+
+Con `count` en cero no se inventa la cifra: el bloque lo dice y el botón de pagar
+queda deshabilitado, mientras «No pagar» sigue siendo una respuesta legal.
+
+Laboratorio: `/ux?scene=tribute` (Fanatic of Xenagos, tributo 1) y captura
+`docs/screenshots/ux-tributo-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **385** (4 nuevas en
+`game/__tests__/tribute.test.ts`), `bun run build` OK, y en Chromium una prueba
+nueva que comprueba el nombre de la criatura, la cuenta del motor y que las dos
+respuestas están separadas —con axe.

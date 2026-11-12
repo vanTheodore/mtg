@@ -38,9 +38,10 @@
   import PairPrompt from '#lib/components/PairPrompt.svelte';
   import TokenHostPrompt from '#lib/components/TokenHostPrompt.svelte';
   import UnlessBranchPrompt from '#lib/components/UnlessBranchPrompt.svelte';
+  import TributePrompt from '#lib/components/TributePrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -62,6 +63,7 @@
     { value: 'pair', label: 'Emparejar (soulbond)' },
     { value: 'host', label: 'Destinatario de una ficha' },
     { value: 'branches', label: 'Pagar uno de dos costes' },
+    { value: 'tribute', label: 'Tributo: lo paga un oponente' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -85,6 +87,7 @@
     pair: 'PairChoice · emparejar con otra criatura o no emparejar',
     host: 'ChooseTokenHost · una ficha elige entre dos criaturas',
     branches: 'UnlessPaymentChooseCost · sacrificar o descartar',
+    tribute: 'TributeChoice · un oponente decide si se paga',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -152,6 +155,15 @@
     card_types: { core_types: ['Sorcery'] }, mana_cost: '{X}{R}',
     oracle_text: 'Fireball deals X damage divided as you choose among any number of targets.'
   } as GameObject;
+  // The Tribute creature. Like the spell waiting for its X it lives only in
+  // `objects`: the prompt names it, no zone has to hold it, and the pile and
+  // battlefield counts the rest of the lab asserts stay put.
+  const tributeCreature = {
+    id: 330, card_id: 330, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Fanatic of Xenagos', card_types: { core_types: ['Creature'], subtypes: ['Minotaur'] },
+    mana_cost: '{1}{R}{G}', power: 3, toughness: 3,
+    oracle_text: 'Tribute 1 (As this creature enters, an opponent of your choice may put a +1/+1 counter on it.)'
+  } as GameObject;
   // A modal card for the mode scene: Fireball is not modal, and the lab should
   // not teach the wrong example.
   const modeSpell = {
@@ -186,7 +198,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -234,6 +246,11 @@
           attacker_constraints: {}
         }
       };
+    }
+    if (scene === 'tribute') {
+      // Shape taken from `WaitingFor::TributeChoice`: the deciding seat, the
+      // entering creature and how many +1/+1 counters the tribute is worth.
+      return { type: 'TributeChoice', data: { player: 0, source_id: 330, count: 1 } };
     }
     if (scene === 'branches') {
       // Shape taken from `WaitingFor::UnlessPaymentChooseCost`: the punisher class
@@ -501,6 +518,7 @@
           : scene === 'pair' ? 'PreCombatMain'
           : scene === 'host' ? 'PreCombatMain'
           : scene === 'branches' ? 'PreCombatMain'
+          : scene === 'tribute' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -666,6 +684,7 @@
         {#if scene === 'pair'}<PairPrompt />{/if}
         {#if scene === 'host'}<TokenHostPrompt />{/if}
         {#if scene === 'branches'}<UnlessBranchPrompt />{/if}
+        {#if scene === 'tribute'}<TributePrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

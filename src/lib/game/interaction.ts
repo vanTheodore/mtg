@@ -405,6 +405,32 @@ export function revealAction(card: ObjectId | null): GameAction {
 }
 
 /**
+ * CR 702.104a: a Tribute creature enters and **an opponent** decides whether to
+ * put the counters on it. The engine names the decider (`player`), the creature
+ * (`source_id`) and how many +1/+1 counters the tribute is worth (`count`).
+ *
+ * It answers with the same `DecideOptionalEffect` as "you may", but the question
+ * is not the controller's: paying the tribute helps the creature, and declining
+ * is what turns on the card's "if tribute wasn't paid" ability (CR 702.104b), so
+ * the block has to say both things in its own words.
+ */
+export type TributePrompt = { player: PlayerId; sourceId: ObjectId; count: number };
+export function tributePrompt(snapshot: EngineSnapshot | null): TributePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'TributeChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
+    count: typeof data.count === 'number' && data.count > 0 ? data.count : 0
+  };
+}
+/** CR 702.104a: pay the tribute (counters) or decline it. */
+export function decideTribute(pay: boolean): GameAction {
+  return { type: 'DecideOptionalEffect', data: { accept: pay } };
+}
+
+/**
  * CR 608.2d: "you may" asks the controller whether to perform the instruction.
  * The engine answers it with a plain accept/decline, and — when the prompt
  * carries a `may_trigger_key` — lets the player stop being asked: for that exact

@@ -3,7 +3,7 @@ import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
 import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId } from '#lib/engine/types.ts';
 import {
   attackDeclaration, attackTargets, blockDeclaration, blockTargets, cancelCastAction, chooseXAction,
-  decideOptionalEffect, defaultOrder, defaultX, digPrompt as readDigPrompt, digReady as isDigReady,
+  decideOptionalEffect, decideTribute, defaultOrder, defaultX, digPrompt as readDigPrompt, digReady as isDigReady,
   discardSelection,
   discardPrompt as readDiscardPrompt, manaActions,
   modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
@@ -11,7 +11,7 @@ import {
   optionalEffectPrompt as readOptionalEffect, playerTarget, rememberOptionalEffect,
   choosePair, chooseTokenHost, chooseUnlessCostBranch, pairPrompt as readPairPrompt,
   unlessBranchPrompt as readUnlessBranch,
-  tokenHostPrompt as readTokenHost, payUnlessCost, revealAction, revealPrompt as readRevealPrompt,
+  tokenHostPrompt as readTokenHost, tributePrompt as readTribute, payUnlessCost, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -327,6 +327,14 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 702.104a: an opponent decides whether the tribute is paid. */
+  get tributePrompt() {
+    return readTribute(this.snapshot);
+  }
+  decideTribute(pay: boolean) {
+    void this.dispatch(decideTribute(pay));
   }
 
   /** CR 118.12a: which sub-cost of a disjunctive unless-cost to pay. */
