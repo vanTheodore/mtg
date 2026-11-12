@@ -727,6 +727,8 @@ tablero compartido.
   decisión sí», más a quién le toca después según `remaining` (singular y plural).
 - Sin casillas de «no volver a preguntar»: no hay nada que recordar. Los dos
   botones son los mismos.
+- `OpponentMayChoice` entra en el recuento de variantes representadas, porque a
+  partir de ahora tiene frase propia y no cae en la lista genérica.
 
 Laboratorio: `/ux?scene=opponent` (el visor responde por el Chandra del rival y
 queda 1 jugador) y captura `docs/screenshots/ux-decidir-oponente-1440.jpg`.
