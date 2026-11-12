@@ -816,3 +816,32 @@ vida en singular, importe dinámico que no se imprime, coste de objeto admitido
 como tal y la lista de asientos del variante multijugador), `bun run build` OK, y
 en Chromium una prueba nueva que comprueba coste, consecuencia y que «no pagar»
 es un botón —con axe.
+
+## Emparejar (decimonovena pasada, 7 nov 2026)
+
+CR 702.95a + CR 608.2d: soulbond pregunta con quién se empareja la criatura que
+entra. Los objetos de la lista son **elecciones legales, no objetivos**, y
+emparejar es opcional: el motor ofrece `ChoosePair { partner: None }` como
+respuesta.
+
+- **`interaction.ts`**: `pairPrompt` publica la criatura que se empareja y los
+  candidatos que el motor acepta. `choosePair(partner | null)` es la respuesta,
+  con la negativa incluida.
+- **`PairPrompt.svelte`**: nombre de la criatura que entra, la lista de parejas
+  legales, `Emparejar con {nombre}` y `No emparejar`. Una sola pareja: marcar
+  otra sustituye a la primera y volver a pulsar la elegida la suelta.
+- Sin candidatos no es un bloque vacío: dice que no hay ninguna criatura legal
+  con la que emparejar, y la negativa sigue disponible.
+- La escena añade una tercera criatura al campo del visor (`Elvish Mystic`) para
+  que «¿con cuál?» tenga dos respuestas de verdad en vez de una lista de un solo
+  elemento.
+
+Laboratorio: `/ux?scene=pair` y captura `docs/screenshots/ux-emparejar-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **370** (4 nuevas en
+`game/__tests__/pair.test.ts`: el contrato, los candidatos sucios filtrados,
+la lista vacía como prompt válido y las dos formas de la acción), `bun run build`
+OK, y en Chromium una prueba nueva que elige, cambia de pareja y la suelta —con
+axe.

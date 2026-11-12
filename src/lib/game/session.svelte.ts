@@ -9,7 +9,7 @@ import {
   modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
   modeToggle, moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX,
   optionalEffectPrompt as readOptionalEffect, playerTarget, rememberOptionalEffect,
-  payUnlessCost, revealAction, revealPrompt as readRevealPrompt,
+  choosePair, pairPrompt as readPairPrompt, payUnlessCost, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -207,6 +207,7 @@ class GameSession {
     this.searched = [];
     this.dug = [];
     this.revealPick = null;
+    this.pairPick = null;
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -322,6 +323,32 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 702.95a: which creature becomes the soulbond partner, or none. */
+  get pairPrompt() {
+    return readPairPrompt(this.snapshot);
+  }
+  pairPick = $state<ObjectId | null>(null);
+  get pairReady() {
+    const prompt = this.pairPrompt;
+    return prompt !== null && prompt.choices.includes(this.pairPick ?? -1);
+  }
+  togglePair(id: ObjectId) {
+    if (!this.pairPrompt) return;
+    this.pairPick = this.pairPick === id ? null : id;
+  }
+  confirmPair() {
+    if (!this.pairReady) return;
+    const partner = this.pairPick;
+    this.pairPick = null;
+    void this.dispatch(choosePair(partner));
+  }
+  /** CR 608.2d: the pairing is optional, so declining is an answer. */
+  declinePair() {
+    if (!this.pairPrompt) return;
+    this.pairPick = null;
+    void this.dispatch(choosePair(null));
   }
 
   /** CR 118.12: pay the unless-cost, or let the effect happen. */
@@ -611,7 +638,7 @@ class GameSession {
     if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
     if (this.snapshot?.revision !== reply.revision) {
       this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = [];
-      this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null;
+      this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.pairPick = null;
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

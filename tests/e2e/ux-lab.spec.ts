@@ -281,6 +281,34 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('emparejar ofrece pareja y también no emparejar', async ({ page }) => {
+  await page.goto('/ux?scene=pair');
+  const prompt = page.locator('[data-pair-prompt]');
+  await expect(prompt).toBeVisible();
+  // CR 702.95a: the block names the creature that is pairing.
+  await expect(prompt.locator('strong')).toHaveText('Emparejar · Grizzly Bears');
+  await expect(prompt.locator('button.card')).toHaveCount(2);
+
+  const confirm = prompt.getByRole('button', { name: /^Confirmar pareja$|^Emparejar con/ });
+  const decline = prompt.getByRole('button', { name: 'No emparejar' });
+  // CR 608.2d: nothing picked yet is not a dead end — declining is an answer.
+  await expect(confirm).toBeDisabled();
+  await expect(decline).toBeEnabled();
+
+  // One partner only: a second pick replaces the first.
+  await prompt.getByRole('button', { name: /^Savannah Lions/ }).click();
+  await expect(confirm).toHaveText('Emparejar con Savannah Lions');
+  await prompt.getByRole('button', { name: /^Elvish Mystic/ }).click();
+  await expect(confirm).toHaveText('Emparejar con Elvish Mystic');
+  await expect(prompt.getByRole('button', { name: /^Savannah Lions/ })).toHaveAttribute('aria-pressed', 'false');
+  // Clicking the picked one again releases it.
+  await prompt.getByRole('button', { name: /^Elvish Mystic/ }).click();
+  await expect(confirm).toBeDisabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('un «a menos que pagues» dice el coste y lo que pasa si no pagas', async ({ page }) => {
   await page.goto('/ux?scene=unless');
   const prompt = page.locator('[data-unless-prompt]');

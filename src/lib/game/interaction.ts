@@ -129,6 +129,35 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
   };
 }
 /**
+ * CR 702.95a + CR 608.2d: soulbond asks whose partner the creature becomes. The
+ * listed objects are legal choices, not targets, and the pairing is optional
+ * ("you may pair it with another unpaired creature you control"), so the empty
+ * answer is a real one — the engine offers `ChoosePair { partner: None }`.
+ */
+export type PairPrompt = {
+  player: PlayerId;
+  /** The creature entering the pairing. */
+  sourceId: ObjectId;
+  choices: ObjectId[];
+};
+export function pairPrompt(snapshot: EngineSnapshot | null): PairPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'PairChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
+    choices: Array.isArray(data.choices)
+      ? (data.choices as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+      : []
+  };
+}
+/** CR 702.95a: the partner, or none at all. */
+export function choosePair(partner: ObjectId | null): GameAction {
+  return { type: 'ChoosePair', data: { partner } };
+}
+
+/**
  * CR 118.12: "counter it unless its controller pays {3}" — the payer chooses to
  * pay or to let the effect happen. Two things the prompt has to carry, and both
  * come from the engine:

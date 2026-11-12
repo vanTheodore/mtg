@@ -35,9 +35,10 @@
   import PayAmountPrompt from '#lib/components/PayAmountPrompt.svelte';
   import RevealPrompt from '#lib/components/RevealPrompt.svelte';
   import UnlessPrompt from '#lib/components/UnlessPrompt.svelte';
+  import PairPrompt from '#lib/components/PairPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -56,6 +57,7 @@
     { value: 'opponent', label: 'Decide un oponente' },
     { value: 'reveal', label: 'Revelar una carta' },
     { value: 'unless', label: 'Pagar o aceptar' },
+    { value: 'pair', label: 'Emparejar (soulbond)' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -76,6 +78,7 @@
     opponent: 'OpponentMayChoice · deciden los oponentes en orden de turno',
     reveal: 'RevealChoice · revelar una tierra o no revelar',
     unless: 'UnlessPayment · pagar {3} o contrahechizo',
+    pair: 'PairChoice · emparejar con otra criatura o no emparejar',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -119,6 +122,8 @@
   const viewerField = [
     permanent(100, 0, 'Grizzly Bears', ['Creature'], { power: 2, toughness: 2, mana_cost: '{1}{G}', summoning_sick: false }),
     permanent(101, 0, 'Savannah Lions', ['Creature'], { power: 2, toughness: 1, mana_cost: '{W}' }),
+    // A third creature so a scene can ask «with which one?» and have two answers.
+    permanent(105, 0, 'Elvish Mystic', ['Creature'], { power: 1, toughness: 1, mana_cost: '{G}' }),
     ...Array.from({ length: 3 }, (_, i) => permanent(102 + i, 0, 'Forest', ['Land'], { tapped: i === 0 }))
   ];
   const rivalField = [
@@ -222,6 +227,14 @@
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
         }
+      };
+    }
+    if (scene === 'pair') {
+      // Shape taken from `WaitingFor::PairChoice` in the pinned engine (CR
+      // 702.95a): the entering creature and the unpaired creatures it may join.
+      return {
+        type: 'PairChoice',
+        data: { player: 0, source_id: 100, choices: [101, 105] }
       };
     }
     if (scene === 'unless') {
@@ -441,6 +454,7 @@
           : scene === 'opponent' ? 'PreCombatMain'
           : scene === 'reveal' ? 'PreCombatMain'
           : scene === 'unless' ? 'PreCombatMain'
+          : scene === 'pair' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -603,6 +617,7 @@
         {#if scene === 'opponent'}<OptionalEffectPrompt />{/if}
         {#if scene === 'reveal'}<RevealPrompt />{/if}
         {#if scene === 'unless'}<UnlessPrompt />{/if}
+        {#if scene === 'pair'}<PairPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>
