@@ -1,4 +1,5 @@
 import type { AttackTarget, EngineSnapshot, GameAction, GameObject, ObjectId, PlayerId, TargetRef } from '#lib/engine/types.ts';
+import { manaText } from './cards.ts';
 
 /** Presentation of Phase's legal-action DTO. This module never evaluates rules. */
 export type NormalizedTarget = { kind: 'player'; id: PlayerId } | { kind: 'object'; id: ObjectId };
@@ -127,6 +128,74 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
     source
   };
 }
+/**
+ * CR 118.12: "counter it unless its controller pays {3}" — the payer chooses to
+ * pay or to let the effect happen. Two things the prompt has to carry, and both
+ * come from the engine:
+ *   - the cost, which is an `AbilityCost` and is NOT always mana (life is the
+ *     other common one; the rest are object costs the table cannot price);
+ *   - what happens on decline, in the engine's own wording, because "no pago"
+ *     is a real answer with a consequence.
+ * CR 118.12a adds the multi-player variant: `remaining` lists the seats still
+ * to be polled, and the first one willing to pay stops the effect.
+ */
+export type UnlessCostText =
+  | { kind: 'mana'; text: string }
+  | { kind: 'life'; amount: number }
+  | { kind: 'other' };
+export type UnlessPrompt = {
+  player: PlayerId;
+  cost: UnlessCostText;
+  /** What happens to whoever declines: the engine's own wording. */
+  effect?: string;
+  /** CR 118.12a: seats still to be asked after `player`. */
+  remaining: PlayerId[];
+};
+function unlessCostText(raw: unknown): UnlessCostText {
+  const cost = (raw ?? {}) as Record<string, unknown>;
+  const type = typeof cost.type === 'string' ? cost.type : '';
+  if (type === 'Mana') {
+    const text = manaText(cost.cost);
+    if (text) return { kind: 'mana', text };
+  }
+  if (type === 'PayLife') {
+    const amount = cost.amount as { type?: string; value?: number } | undefined;
+    // CR 119.4: only a fixed amount can be named; anything dynamic stays unnamed
+    // rather than printed as a wrong number.
+    if (amount?.type === 'Fixed' && typeof amount.value === 'number') {
+      return { kind: 'life', amount: amount.value };
+    }
+  }
+  return { kind: 'other' };
+}
+export function unlessPrompt(snapshot: EngineSnapshot | null): UnlessPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'UnlessPayment') return null;
+  const data = waiting.data ?? {};
+  const remaining = Array.isArray(data.remaining)
+    ? (data.remaining as unknown[]).filter((seat): seat is PlayerId => typeof seat === 'number')
+    : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    cost: unlessCostText(data.cost),
+    effect:
+      typeof data.effect_description === 'string' && data.effect_description
+        ? data.effect_description
+        : undefined,
+    remaining
+  };
+}
+/** What the cost is called in a sentence, or `null` when it cannot be named. */
+export function unlessCostLabel(cost: UnlessCostText): string | null {
+  if (cost.kind === 'mana') return cost.text;
+  if (cost.kind === 'life') return `${cost.amount} ${cost.amount === 1 ? 'vida' : 'vidas'}`;
+  return null;
+}
+/** CR 118.12: pay, or let it happen. */
+export function payUnlessCost(pay: boolean): GameAction {
+  return { type: 'PayUnlessCost', data: { pay } };
+}
+
 /**
  * CR 701.20a: revealing a card from a hidden zone. Phase publishes the cards the
  * player may pick from (already filtered by the effect) and whether the reveal

@@ -9,7 +9,8 @@ import {
   modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
   modeToggle, moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX,
   optionalEffectPrompt as readOptionalEffect, playerTarget, rememberOptionalEffect,
-  revealAction, revealPrompt as readRevealPrompt,
+  payUnlessCost, revealAction, revealPrompt as readRevealPrompt,
+  unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
   payAmountKey, parseAmount, payAmountPrompt as readPayAmountPrompt, submitPayAmount,
@@ -321,6 +322,15 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 118.12: pay the unless-cost, or let the effect happen. */
+  get unlessPrompt() {
+    return readUnless(this.snapshot);
+  }
+  decideUnless(pay: boolean) {
+    if (!this.unlessPrompt) return;
+    void this.dispatch(payUnlessCost(pay));
   }
 
   /** CR 701.20a: which card the player shows, or none. */

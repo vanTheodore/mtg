@@ -775,3 +775,44 @@ captura `docs/screenshots/ux-revelar-carta-1440.jpg`.
 negativa, elección posterior que se salta, tarjetas no numéricas filtradas y las
 dos formas de la acción), `bun run build` OK, y en Chromium una prueba nueva que
 marca dos cartas y comprueba que la segunda sustituye a la primera —con axe.
+
+## Pagar o aceptar (decimoctava pasada, 7 nov 2026)
+
+CR 118.12: «contrarresta ese hechizo a menos que su controlador pague {3}». Es
+Mana Leak, No More Lies, Daze, y también los «a menos que pagues N vidas».
+
+Hasta ahora `UnlessPayment` contaba como representada porque caía en el bloque
+de **pago de maná**: el jugador veía «Pago pendiente» y una lista de fuentes que
+tocar, sin ver ni el coste ni lo que pasaba si no pagaba. Elegir no pagar era,
+literalmente, no encontrar el botón.
+
+- **`interaction.ts`**: `unlessPrompt` publica el coste y la consecuencia. El
+  coste es un `AbilityCost`, **no un número**: `Mana` se rotula con el
+  `manaText` de siempre; `PayLife` sólo se nombra cuando el motor fija la
+  cantidad (`Fixed`), porque un importe dinámico impreso como número sería un
+  dato inventado; cualquier otro coste (sacrificar, descartar…) se admite como
+  `other` y el bloque dice que la mesa no puede describirlo con palabras —el
+  motor sí comprueba si puedes pagarlo—. La consecuencia es
+  `effect_description`, el texto del propio motor.
+- **`UnlessPrompt.svelte`**: «Paga {3}», «Si no pagas: contrarrestar el
+  hechizo», y dos botones: `Pagar {3}` y `No pagar`. En el variante CR 118.12a
+  («a menos que cualquier jugador pague») añade a quién se le pregunta después y
+  que el primero que pague lo detiene.
+- El bloque va **antes** del de maná, que sigue siendo el que permite tocar
+  tierras para pagar. `UnlessPayment` sigue en `isManaPrompt`, porque las
+  acciones de maná son parte legítima de la respuesta.
+- El recuento de variantes representadas **no cambia** (27): la variante ya
+  contaba. Lo que cambia es que ahora tiene bloque propio en vez de heredar el
+  genérico.
+
+Laboratorio: `/ux?scene=unless` (coste `{3}`, consecuencia «contrarrestar el
+hechizo») y captura `docs/screenshots/ux-pagar-o-aceptar-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **366** (7 nuevas en
+`game/__tests__/unless.test.ts`: maná con genérico y con símbolos, vida fija,
+vida en singular, importe dinámico que no se imprime, coste de objeto admitido
+como tal y la lista de asientos del variante multijugador), `bun run build` OK, y
+en Chromium una prueba nueva que comprueba coste, consecuencia y que «no pagar»
+es un botón —con axe.

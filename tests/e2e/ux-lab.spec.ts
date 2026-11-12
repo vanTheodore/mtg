@@ -281,6 +281,24 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('un «a menos que pagues» dice el coste y lo que pasa si no pagas', async ({ page }) => {
+  await page.goto('/ux?scene=unless');
+  const prompt = page.locator('[data-unless-prompt]');
+  await expect(prompt).toBeVisible();
+  // CR 118.12: the cost and the consequence are the engine's, not the UI's.
+  await expect(prompt.locator('strong')).toHaveText('Paga {3}');
+  await expect(prompt).toContainText('Si no pagas: contrarrestar el hechizo.');
+  // No multi-player poll here, so no count of remaining seats.
+  await expect(prompt).not.toContainText('se le pregunta');
+
+  // Declining is a real answer with its own button, not a missing action.
+  await expect(prompt.getByRole('button', { name: 'Pagar {3}' })).toBeEnabled();
+  await expect(prompt.getByRole('button', { name: 'No pagar' })).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('revelar es una carta sola y la negativa tiene su propio botón', async ({ page }) => {
   await page.goto('/ux?scene=reveal');
   const prompt = page.locator('[data-reveal-prompt]');

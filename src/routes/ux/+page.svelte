@@ -34,9 +34,10 @@
   import OptionalEffectPrompt from '#lib/components/OptionalEffectPrompt.svelte';
   import PayAmountPrompt from '#lib/components/PayAmountPrompt.svelte';
   import RevealPrompt from '#lib/components/RevealPrompt.svelte';
+  import UnlessPrompt from '#lib/components/UnlessPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -54,6 +55,7 @@
     { value: 'pay', label: 'Pagar una cantidad' },
     { value: 'opponent', label: 'Decide un oponente' },
     { value: 'reveal', label: 'Revelar una carta' },
+    { value: 'unless', label: 'Pagar o aceptar' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -73,6 +75,7 @@
     pay: 'PayAmountChoice · ventana de vida 1–4',
     opponent: 'OpponentMayChoice · deciden los oponentes en orden de turno',
     reveal: 'RevealChoice · revelar una tierra o no revelar',
+    unless: 'UnlessPayment · pagar {3} o contrahechizo',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -218,6 +221,21 @@
           valid_attack_targets: [seat, walker],
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
+        }
+      };
+    }
+    if (scene === 'unless') {
+      // Shape taken from `WaitingFor::UnlessPayment` in the pinned engine: an
+      // `AbilityCost` (here `Mana {3}`, the Mana Leak pattern) and the effect the
+      // engine will run if the payer declines.
+      return {
+        type: 'UnlessPayment',
+        data: {
+          player: 0,
+          cost: { type: 'Mana', cost: { generic: 3, shards: [] } },
+          pending_effect: { ability: { kind: 'Spell' } },
+          effect_description: 'contrarrestar el hechizo',
+          remaining: []
         }
       };
     }
@@ -422,6 +440,7 @@
           : scene === 'pay' ? 'PreCombatMain'
           : scene === 'opponent' ? 'PreCombatMain'
           : scene === 'reveal' ? 'PreCombatMain'
+          : scene === 'unless' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -583,6 +602,7 @@
         {#if scene === 'pay'}<PayAmountPrompt />{/if}
         {#if scene === 'opponent'}<OptionalEffectPrompt />{/if}
         {#if scene === 'reveal'}<RevealPrompt />{/if}
+        {#if scene === 'unless'}<UnlessPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

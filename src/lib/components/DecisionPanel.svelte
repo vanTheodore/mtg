@@ -11,6 +11,7 @@
   import OptionalEffectPrompt from './OptionalEffectPrompt.svelte';
   import PayAmountPrompt from './PayAmountPrompt.svelte';
   import RevealPrompt from './RevealPrompt.svelte';
+  import UnlessPrompt from './UnlessPrompt.svelte';
   import { manaText } from '#lib/game/cards.ts';
   import { actionObjectId, attackLabel, attackTargets, blockTargets, isManaAction, isManaPrompt, isTargetPrompt, manaActions, manualCast, targetLabel } from '#lib/game/interaction.ts';
   import type { GameAction } from '#lib/engine/types.ts';
@@ -90,6 +91,9 @@
   const pay = $derived(session.payAmountPrompt);
   // CR 701.20a: which card is shown, if any.
   const reveal = $derived(session.revealPrompt);
+  // CR 118.12: pay or let the effect happen. Ahead of the mana block, which
+  // still owns the tapping needed to pay.
+  const unless = $derived(session.unlessPrompt);
   const PHASES: Record<string, string> = { Untap: 'Enderezar', Upkeep: 'Mantenimiento', Draw: 'Robar', PreCombatMain: 'Fase principal', BeginCombat: 'Inicio de combate', DeclareAttackers: 'Ataque', DeclareBlockers: 'Bloqueo', CombatDamage: 'Daño de combate', EndCombat: 'Fin de combate', PostCombatMain: 'Fase principal posterior', End: 'Final', Cleanup: 'Limpieza' };
   function manaActionsFor(id?: number) { return manaActions(s, id); }
   function play(action: GameAction) { void session.dispatch(action); }
@@ -116,7 +120,9 @@
   </div>
   {#if s}
 
-    {#if reveal && reveal.player === s.viewer}
+    {#if unless && unless.player === s.viewer}
+      <UnlessPrompt />
+    {:else if reveal && reveal.player === s.viewer}
       <RevealPrompt />
     {:else if pay && pay.player === s.viewer}
       <PayAmountPrompt />
