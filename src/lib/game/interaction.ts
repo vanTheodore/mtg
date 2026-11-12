@@ -201,6 +201,10 @@ export function choosePair(partner: ObjectId | null): GameAction {
 export type UnlessCostText =
   | { kind: 'mana'; text: string }
   | { kind: 'life'; amount: number }
+  /** CR 701.21: an object given up, named by kind and count only. */
+  | { kind: 'permanent'; count: number; noun?: string }
+  | { kind: 'cards'; verb: 'descartar' | 'exiliar'; count: number }
+  | { kind: 'tap' }
   | { kind: 'other' };
 export type UnlessPrompt = {
   player: PlayerId;
@@ -225,7 +229,56 @@ function unlessCostText(raw: unknown): UnlessCostText {
       return { kind: 'life', amount: amount.value };
     }
   }
+  // CR 701.21: `Sacrifice(SacrificeCost)` is flattened onto the tag, so the
+  // count and the filter sit next to `type`.
+  if (type === 'Sacrifice') {
+    const count = fixedCount(cost.count) ?? 1;
+    return { kind: 'permanent', count, noun: filterNoun(cost.target) };
+  }
+  if (type === 'Discard' || type === 'Exile') {
+    const count = fixedCount(cost.count) ?? 1;
+    return { kind: 'cards', verb: type === 'Discard' ? 'descartar' : 'exiliar', count };
+  }
+  if (type === 'Tap') return { kind: 'tap' };
   return { kind: 'other' };
+}
+
+/** CR 107.3: only a fixed amount can be printed as a number. */
+function fixedCount(raw: unknown): number | undefined {
+  const quantity = raw as { type?: string; value?: number } | undefined;
+  if (quantity && typeof quantity === 'object' && typeof quantity.value === 'number') {
+    return quantity.value;
+  }
+  if (typeof raw === 'number') return raw;
+  return undefined;
+}
+
+/**
+ * CR 701.21: *which* permanents a sacrifice cost accepts is a decided rule, but
+ * only the two axes a player reads at a glance are named here — the core type
+ * and whose permanent it is. Anything further (a colour, a supertype, a
+ * counter) is left to Phase, which is what actually filters the choice; the
+ * prompt says so instead of printing a rule the table only half understands.
+ */
+const CORE_TYPE_ES: Record<string, string> = {
+  Creature: 'criatura',
+  Artifact: 'artefacto',
+  Enchantment: 'encantamiento',
+  Land: 'tierra',
+  Permanent: 'permanente',
+  Planeswalker: 'planeswalker',
+  Instant: 'instantáneo',
+  Sorcery: 'conjuro',
+  Battle: 'batalla'
+};
+function filterNoun(raw: unknown): string | undefined {
+  const filter = raw as { type?: string; type_filters?: unknown; controller?: unknown } | undefined;
+  if (!filter || filter.type !== 'Typed') return undefined;
+  const types = Array.isArray(filter.type_filters) ? filter.type_filters.filter((t): t is string => typeof t === 'string') : [];
+  const only = types.length === 1 ? CORE_TYPE_ES[types[0]] : undefined;
+  const owns = filter.controller === 'You';
+  if (!only) return owns ? 'que controlas' : undefined;
+  return owns ? `${only} que controlas` : only;
 }
 export function unlessPrompt(snapshot: EngineSnapshot | null): UnlessPrompt | null {
   const waiting = snapshot?.state.waiting_for;
@@ -248,7 +301,64 @@ export function unlessPrompt(snapshot: EngineSnapshot | null): UnlessPrompt | nu
 export function unlessCostLabel(cost: UnlessCostText): string | null {
   if (cost.kind === 'mana') return cost.text;
   if (cost.kind === 'life') return `${cost.amount} ${cost.amount === 1 ? 'vida' : 'vidas'}`;
+  if (cost.kind === 'permanent') {
+    if (cost.count < 1) return null;
+    const noun = cost.noun ?? (cost.count === 1 ? 'permanente' : 'permanentes');
+    return `Sacrificar ${cost.count} ${noun}`;
+  }
+  if (cost.kind === 'cards') {
+    if (cost.count < 1) return null;
+    return `${cost.verb === 'descartar' ? 'Descartar' : 'Exiliar'} ${cost.count} ${cost.count === 1 ? 'carta' : 'cartas'}`;
+  }
+  if (cost.kind === 'tap') return 'Girar un permanente';
   return null;
+}
+
+/**
+ * CR 118.12a: the disjunctive unless-cost — "unless they X or Y". The engine
+ * publishes the sub-costs in their own order and accepts either branch or a
+ * decline (which runs the effect). This is *not* `UnlessPayment`: there the
+ * question is pay-or-not for one cost, here it is **which** cost, so the two
+ * prompts cannot share a sentence.
+ *
+ * The engine can also queue several disjunctions in a row (per-age-counter
+ * cumulative upkeep): `remaining_choices` says how many more are coming and
+ * `chosen` what was already picked, so the block can count them without
+ * inventing an order of its own.
+ */
+export type UnlessCostBranch = { index: number; label: string | null };
+export type UnlessBranchPrompt = {
+  player: PlayerId;
+  branches: UnlessCostBranch[];
+  /** What happens to whoever declines: the engine's own wording. */
+  effect?: string;
+  /** CR 702.24a: disjunctions still to be answered after this one. */
+  remainingChoices: number;
+  /** How many branches were already picked in this sequence. */
+  chosen: number;
+};
+export function unlessBranchPrompt(snapshot: EngineSnapshot | null): UnlessBranchPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'UnlessPaymentChooseCost') return null;
+  const data = waiting.data ?? {};
+  const costs = Array.isArray(data.costs) ? (data.costs as unknown[]) : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    branches: costs.map((cost, index) => ({ index, label: unlessCostLabel(unlessCostText(cost)) })),
+    effect:
+      typeof data.effect_description === 'string' && data.effect_description
+        ? data.effect_description
+        : undefined,
+    remainingChoices: Array.isArray(data.remaining_choices) ? data.remaining_choices.length : 0,
+    chosen: Array.isArray(data.chosen) ? data.chosen.length : 0
+  };
+}
+/** CR 118.12a: one branch by position, or the decline. */
+export function chooseUnlessCostBranch(index: number | null): GameAction {
+  return {
+    type: 'ChooseUnlessCostBranch',
+    data: { choice: index === null ? { type: 'Decline' } : { type: 'Pay', data: { index } } }
+  };
 }
 /** CR 118.12: pay, or let it happen. */
 export function payUnlessCost(pay: boolean): GameAction {

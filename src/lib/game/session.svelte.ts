@@ -9,7 +9,8 @@ import {
   modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
   modeToggle, moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX,
   optionalEffectPrompt as readOptionalEffect, playerTarget, rememberOptionalEffect,
-  choosePair, chooseTokenHost, pairPrompt as readPairPrompt,
+  choosePair, chooseTokenHost, chooseUnlessCostBranch, pairPrompt as readPairPrompt,
+  unlessBranchPrompt as readUnlessBranch,
   tokenHostPrompt as readTokenHost, payUnlessCost, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
@@ -208,8 +209,9 @@ class GameSession {
     this.searched = [];
     this.dug = [];
     this.revealPick = null;
-    this.pairPick = null; this.hostPick = null;
+    this.pairPick = null;
     this.hostPick = null;
+    this.branchPick = null;
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -325,6 +327,26 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 118.12a: which sub-cost of a disjunctive unless-cost to pay. */
+  get unlessBranchPrompt() {
+    return readUnlessBranch(this.snapshot);
+  }
+  /** Position in `costs`; the engine identifies a branch by index, not by shape. */
+  branchPick = $state<number | null>(null);
+  pickBranch(index: number) {
+    this.branchPick = this.branchPick === index ? null : index;
+  }
+  confirmBranch() {
+    const index = this.branchPick;
+    if (index === null || !this.unlessBranchPrompt) return;
+    this.branchPick = null;
+    void this.dispatch(chooseUnlessCostBranch(index));
+  }
+  declineBranch() {
+    this.branchPick = null;
+    void this.dispatch(chooseUnlessCostBranch(null));
   }
 
   /** Alchemy batch entry: which of the stamped creatures receives the token. */

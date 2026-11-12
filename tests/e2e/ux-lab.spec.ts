@@ -281,6 +281,27 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('el coste disyuntivo pregunta cuál se paga, y deja no pagar', async ({ page }) => {
+  await page.goto('/ux?scene=branches');
+  const prompt = page.locator('[data-unless-branch]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong')).toHaveText('¿Qué pagas?');
+  // Each branch is named by the engine's own kind and count.
+  await expect(prompt.getByRole('button', { name: 'Sacrificar 1 permanente' })).toBeVisible();
+  await expect(prompt.getByRole('button', { name: 'Descartar 1 carta' })).toBeVisible();
+  // The consequence of not paying is the engine's sentence.
+  await expect(prompt).toContainText('pierde 3 vidas');
+
+  const pay = prompt.getByRole('button', { name: /^Pagar/ });
+  await expect(pay).toBeDisabled();
+  await prompt.getByRole('button', { name: 'Descartar 1 carta' }).click();
+  await expect(pay).toHaveText('Pagar: Descartar 1 carta');
+  await expect(prompt.getByRole('button', { name: 'No pagar' })).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('la ficha elige destinatario entre las criaturas que entraron', async ({ page }) => {
   await page.goto('/ux?scene=host');
   const prompt = page.locator('[data-token-host]');

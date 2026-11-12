@@ -37,9 +37,10 @@
   import UnlessPrompt from '#lib/components/UnlessPrompt.svelte';
   import PairPrompt from '#lib/components/PairPrompt.svelte';
   import TokenHostPrompt from '#lib/components/TokenHostPrompt.svelte';
+  import UnlessBranchPrompt from '#lib/components/UnlessBranchPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -60,6 +61,7 @@
     { value: 'unless', label: 'Pagar o aceptar' },
     { value: 'pair', label: 'Emparejar (soulbond)' },
     { value: 'host', label: 'Destinatario de una ficha' },
+    { value: 'branches', label: 'Pagar uno de dos costes' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -82,6 +84,7 @@
     unless: 'UnlessPayment · pagar {3} o contrahechizo',
     pair: 'PairChoice · emparejar con otra criatura o no emparejar',
     host: 'ChooseTokenHost · una ficha elige entre dos criaturas',
+    branches: 'UnlessPaymentChooseCost · sacrificar o descartar',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -229,6 +232,30 @@
           valid_attack_targets: [seat, walker],
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
+        }
+      };
+    }
+    if (scene === 'branches') {
+      // Shape taken from `WaitingFor::UnlessPaymentChooseCost`: the punisher class
+      // the engine documents with Tergrid's Lantern ("loses N life unless they
+      // sacrifice a nonland permanent or discard a card"). `SacrificeCost` is
+      // flattened onto the tag, so `count` and `target` sit next to `type`.
+      return {
+        type: 'UnlessPaymentChooseCost',
+        data: {
+          player: 0,
+          costs: [
+            {
+              type: 'Sacrifice',
+              target: { type: 'Typed', type_filters: ['Permanent'] },
+              count: 1
+            },
+            { type: 'Discard', count: { type: 'Fixed', value: 1 }, filter: null }
+          ],
+          pending_ability: { ability: {} },
+          effect_description: 'pierde 3 vidas',
+          remaining_choices: [],
+          chosen: []
         }
       };
     }
@@ -473,6 +500,7 @@
           : scene === 'unless' ? 'PreCombatMain'
           : scene === 'pair' ? 'PreCombatMain'
           : scene === 'host' ? 'PreCombatMain'
+          : scene === 'branches' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -637,6 +665,7 @@
         {#if scene === 'unless'}<UnlessPrompt />{/if}
         {#if scene === 'pair'}<PairPrompt />{/if}
         {#if scene === 'host'}<TokenHostPrompt />{/if}
+        {#if scene === 'branches'}<UnlessBranchPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

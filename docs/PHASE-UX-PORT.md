@@ -877,3 +877,47 @@ Laboratorio: `/ux?scene=host` y captura
 `game/__tests__/token-host.test.ts`: la lista publicada, un jugador como
 destinatario, la lista ausente, la acción y el caso de otra decisión), `bun run
 build` OK, y en Chromium una prueba nueva que cambia de destinatario —con axe.
+
+## El coste disyuntivo: cuál se paga (vigesimoprimera pasada, 7 nov 2026)
+
+`UnlessPaymentChooseCost` es CR 118.12a: «a menos que sacrifique un permanente que
+no sea tierra de su elección **o** descarte una carta». El motor documenta la
+clase con Tergrid's Lantern y reenvía el coste elegido al camino de un solo coste,
+como si el «o» nunca hubiera existido.
+
+No es `UnlessPayment`. Allí la pregunta es **si** se paga un coste único; aquí es
+**cuál** de varios, y la negativa es una tercera respuesta que aplica el efecto.
+Por eso el bloque no reutiliza aquella frase: cada rama es una respuesta y el
+`effect_description` del motor se cita como lo que pasa si no se paga ninguna.
+
+Nombrar las ramas exigió extender el vocabulario de costes (todas como
+`AbilityCost`, con la etiqueta `type`):
+
+| Forma | Cómo se nombra |
+|---|---|
+| `Mana` | el texto de maná de siempre |
+| `PayLife` | «N vidas», sólo con cantidad fija (CR 119.4) |
+| `Sacrifice` | «Sacrificar N permanente(s)»; `count` del motor y, si el filtro es `Typed` con un único tipo y `controller: You`, el sustantivo en español |
+| `Discard` / `Exile` | «Descartar/Exiliar N carta(s)» |
+| `Tap` | «Girar un permanente» |
+| cualquier otra | sin nombre: la lista muestra «Opción *n* · la mesa no nombra este coste» |
+
+Lo que no se nombra no se inventa: un filtro con propiedades que la mesa no sabe
+resumir pierde el sustantivo y se queda en el tipo, y Phase sigue filtrando la
+elección real. El índice es el que publicó el motor, así que la opción sin nombre
+se puede elegir igual.
+
+`remaining_choices`/`chosen` cuentan las disyunciones encadenadas (mantenimiento
+acumulativo, una por contador de edad): cuando hay cola el bloque dice «Elección
+*k* de *n*», con la cuenta del motor y ningún orden propio.
+
+Laboratorio: `/ux?scene=branches` y captura
+`docs/screenshots/ux-pagar-uno-de-dos-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **381** (6 nuevas en
+`game/__tests__/unless-branch.test.ts`; la prueba de `unless.test.ts` sobre un
+coste-objeto se reescribió porque ahora ese coste sí se nombra), `bun run build`
+OK, y en Chromium una prueba nueva que elige rama y comprueba que «No pagar»
+sigue disponible —con axe.

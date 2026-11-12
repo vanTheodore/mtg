@@ -79,10 +79,18 @@ test('paying life is named only when the engine fixed the amount', () => {
   expect(unlessCostLabel(dynamic.cost)).toBeNull();
 });
 
-test('an object cost is admitted, not invented', () => {
-  const prompt = unlessPrompt(withWaiting(unless({ cost: { type: 'Sacrifice', filter: {} } })))!;
-  expect(prompt.cost).toEqual({ kind: 'other' });
-  expect(unlessCostLabel(prompt.cost)).toBeNull();
+test('an object cost is named by kind and count, never by guesswork', () => {
+  // CR 701.21: the count is the engine's; a filter the table cannot summarise
+  // is dropped, not printed as a rule it only half knows.
+  const prompt = unlessPrompt(
+    withWaiting(unless({ cost: { type: 'Sacrifice', target: { type: 'Typed', type_filters: ['Permanent'] }, count: 1 } }))
+  )!;
+  expect(prompt.cost).toEqual({ kind: 'permanent', count: 1, noun: 'permanente' });
+  expect(unlessCostLabel(prompt.cost)).toBe('Sacrificar 1 permanente');
+  // A cost with no shape the table knows stays unnamed rather than approximated.
+  const odd = unlessPrompt(withWaiting(unless({ cost: { type: 'CollectEvidence', amount: 6 } })))!;
+  expect(odd.cost).toEqual({ kind: 'other' });
+  expect(unlessCostLabel(odd.cost)).toBeNull();
   // A mana cost the engine did not fill in is no cost text either.
   const empty = unlessPrompt(withWaiting(unless({ cost: { type: 'Mana', cost: {} } })))!;
   expect(empty.cost).toEqual({ kind: 'other' });
