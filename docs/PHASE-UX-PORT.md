@@ -741,3 +741,37 @@ queda 1 jugador) y captura `docs/screenshots/ux-decidir-oponente-1440.jpg`.
 filtra en vez de pintar `undefined`), `bun run build` OK, y en Chromium una
 prueba nueva que comprueba el título, la frase de propiedad, el aviso de quién
 falta y la ausencia de casillas —con axe.
+
+## Revelar una carta (decimoséptima pasada, 7 nov 2026)
+
+CR 701.20a: enseñar una carta de una zona oculta. Es el patrón de las tierras
+que entran giradas («puedes revelar una tierra; si no, entra girada»: Port Town,
+Gilt-Leaf Palace) y también el de «elige una carta de la mano del oponente».
+
+Dos cosas que un modal genérico se salta:
+
+- **La negativa es una respuesta.** En una revelación opcional, la selección
+  vacía no es «aún no he elegido»: es «no revelo», y dispara la otra rama de la
+  carta. Por eso tiene botón propio (`No revelar`), no es simplemente no pulsar.
+- **La misma negativa significa dos cosas.** El motor lo dice con
+  `decline_runs_continuation`: en una revelación desde la mano, la vacía ejecuta
+  la rama de rechazo de la carta; en una elección opcional posterior, se salta la
+  elección siguiente. El bloque avisa de lo segundo («se salta la elección que
+  venía después») en vez de callarlo, porque el jugador no puede deducirlo del
+  texto de la carta.
+- **Una sola carta, siempre.** Marcar otra sustituye a la primera en vez de
+  sumarse: el motor pide una, y un multiselección prometería algo que la
+  respuesta no puede expresar. Volver a pulsar la elegida la suelta.
+- La revelación **forzada** (mano del oponente) no ofrece negativa y el título lo
+  dice: «Mano del oponente».
+
+Laboratorio: `/ux?scene=reveal` (tres cartas de la mano, negativa disponible) y
+captura `docs/screenshots/ux-revelar-carta-1440.jpg`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **359** (6 nuevas en
+`game/__tests__/reveal.test.ts`: opcional con su rama de rechazo, forzada sin
+negativa, elección posterior que se salta, tarjetas no numéricas filtradas y las
+dos formas de la acción), `bun run build` OK, y en Chromium una prueba nueva que
+marca dos cartas y comprueba que la segunda sustituye a la primera —con axe.

@@ -33,9 +33,10 @@
   import DigPrompt from '#lib/components/DigPrompt.svelte';
   import OptionalEffectPrompt from '#lib/components/OptionalEffectPrompt.svelte';
   import PayAmountPrompt from '#lib/components/PayAmountPrompt.svelte';
+  import RevealPrompt from '#lib/components/RevealPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -52,6 +53,7 @@
     { value: 'optional', label: 'Efecto opcional' },
     { value: 'pay', label: 'Pagar una cantidad' },
     { value: 'opponent', label: 'Decide un oponente' },
+    { value: 'reveal', label: 'Revelar una carta' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -70,6 +72,7 @@
     optional: 'OptionalEffectChoice · «puedes robar una carta»',
     pay: 'PayAmountChoice · ventana de vida 1–4',
     opponent: 'OpponentMayChoice · deciden los oponentes en orden de turno',
+    reveal: 'RevealChoice · revelar una tierra o no revelar',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -216,6 +219,16 @@
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
         }
+      };
+    }
+    if (scene === 'reveal') {
+      // Shape taken from `WaitingFor::RevealChoice` in the pinned engine: the
+      // reveal-land pattern, where declining is a real answer (CR 701.20a).
+      return {
+        type: 'RevealChoice',
+        // The reveal-land pattern reads a card from the hand, so the fixture uses
+        // the hand's own objects rather than the library pool.
+        data: { player: 0, cards: [1000, 1001, 1002], optional: true, decline_runs_continuation: true }
       };
     }
     if (scene === 'opponent') {
@@ -408,6 +421,7 @@
           : scene === 'optional' ? 'PreCombatMain'
           : scene === 'pay' ? 'PreCombatMain'
           : scene === 'opponent' ? 'PreCombatMain'
+          : scene === 'reveal' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -568,6 +582,7 @@
         {#if scene === 'optional'}<OptionalEffectPrompt />{/if}
         {#if scene === 'pay'}<PayAmountPrompt />{/if}
         {#if scene === 'opponent'}<OptionalEffectPrompt />{/if}
+        {#if scene === 'reveal'}<RevealPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

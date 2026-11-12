@@ -9,6 +9,7 @@ import {
   modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
   modeToggle, moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX,
   optionalEffectPrompt as readOptionalEffect, playerTarget, rememberOptionalEffect,
+  revealAction, revealPrompt as readRevealPrompt,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
   payAmountKey, parseAmount, payAmountPrompt as readPayAmountPrompt, submitPayAmount,
@@ -204,6 +205,7 @@ class GameSession {
     this.modeEntry = null;
     this.searched = [];
     this.dug = [];
+    this.revealPick = null;
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -319,6 +321,34 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 701.20a: which card the player shows, or none. */
+  get revealPrompt() {
+    return readRevealPrompt(this.snapshot);
+  }
+  /** The single card marked for the reveal. One pick, so a plain id or nothing. */
+  revealPick = $state<ObjectId | null>(null);
+  get revealReady() {
+    const prompt = this.revealPrompt;
+    return prompt !== null && prompt.cards.includes(this.revealPick ?? -1);
+  }
+  toggleReveal(id: ObjectId) {
+    if (!this.revealPrompt) return;
+    this.revealPick = this.revealPick === id ? null : id;
+  }
+  confirmReveal() {
+    if (!this.revealReady) return;
+    const card = this.revealPick;
+    this.revealPick = null;
+    void this.dispatch(revealAction(card));
+  }
+  /** CR 701.20a: revealing nothing — only when the engine offered the decline. */
+  declineReveal() {
+    const prompt = this.revealPrompt;
+    if (!prompt?.optional) return;
+    this.revealPick = null;
+    void this.dispatch(revealAction(null));
   }
 
   /** CR 608.2d: an optional instruction the controller may decline. */
@@ -571,7 +601,7 @@ class GameSession {
     if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
     if (this.snapshot?.revision !== reply.revision) {
       this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = [];
-      this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null;
+      this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null;
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

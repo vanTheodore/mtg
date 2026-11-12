@@ -128,6 +128,45 @@ export function discardPrompt(snapshot: EngineSnapshot | null): DiscardPrompt | 
   };
 }
 /**
+ * CR 701.20a: revealing a card from a hidden zone. Phase publishes the cards the
+ * player may pick from (already filtered by the effect) and whether the reveal
+ * is optional — the reveal-land pattern, where declining is a real answer that
+ * runs the card's other branch.
+ *
+ * Exactly one card is chosen; an empty selection is the decline. The engine also
+ * says what an empty selection *means* (`decline_runs_continuation`): a
+ * reveal-from-hand effect runs its decline branch, while an optional follow-up
+ * choice simply skips what came next. Same gesture, different consequence, so
+ * the prompt carries both flags.
+ */
+export type RevealPrompt = {
+  player: PlayerId;
+  cards: ObjectId[];
+  /** CR 701.20a: the player may decline by revealing nothing. */
+  optional: boolean;
+  /** Declining runs the effect's other branch instead of skipping the follow-up. */
+  declineRunsContinuation: boolean;
+};
+export function revealPrompt(snapshot: EngineSnapshot | null): RevealPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'RevealChoice') return null;
+  const data = waiting.data ?? {};
+  const cards = Array.isArray(data.cards)
+    ? (data.cards as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+    : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    cards,
+    optional: data.optional === true,
+    declineRunsContinuation: data.decline_runs_continuation === true
+  };
+}
+/** One card, or none when the reveal is optional. */
+export function revealAction(card: ObjectId | null): GameAction {
+  return selectCardsAction(card === null ? [] : [card]);
+}
+
+/**
  * CR 608.2d: "you may" asks the controller whether to perform the instruction.
  * The engine answers it with a plain accept/decline, and — when the prompt
  * carries a `may_trigger_key` — lets the player stop being asked: for that exact

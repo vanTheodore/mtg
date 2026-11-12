@@ -281,6 +281,36 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('revelar es una carta sola y la negativa tiene su propio botón', async ({ page }) => {
+  await page.goto('/ux?scene=reveal');
+  const prompt = page.locator('[data-reveal-prompt]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong')).toHaveText('Revelar de la mano');
+  await expect(prompt).toContainText('Elige una carta para revelar, o no reveles.');
+
+  const rows = prompt.locator('button.card');
+  await expect(rows).toHaveCount(3);
+  const confirm = prompt.getByRole('button', { name: /^Confirmar$|^Revelar/ });
+  // Nothing picked: the reveal cannot be confirmed, but declining is available.
+  await expect(confirm).toBeDisabled();
+  await expect(prompt.getByRole('button', { name: 'No revelar' })).toBeEnabled();
+
+  // One card only: a second pick replaces the first, it does not add to it.
+  // `^` keeps the rows apart from the confirm button, which reads «Revelar X».
+  await prompt.getByRole('button', { name: /^Mountain/ }).click();
+  await expect(confirm).toHaveText('Revelar Mountain');
+  await prompt.getByRole('button', { name: /^Shock/ }).click();
+  await expect(confirm).toHaveText('Revelar Shock');
+  await expect(prompt.getByRole('button', { name: /^Mountain/ })).toHaveAttribute('aria-pressed', 'false');
+  await expect(prompt.getByRole('button', { name: /^Shock/ })).toHaveAttribute('aria-pressed', 'true');
+  // Clicking the picked card again clears it.
+  await prompt.getByRole('button', { name: /^Shock/ }).click();
+  await expect(confirm).toBeDisabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('un «puedes» de otro jugador dice de quién es la fuente y a quién le toca', async ({ page }) => {
   await page.goto('/ux?scene=opponent');
   const prompt = page.locator('[data-optional-effect]');
