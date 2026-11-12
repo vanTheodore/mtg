@@ -31,10 +31,10 @@ Commit de referencia del port: `f67169218fa9f5dec439b9024906b891a926210e`
 (v0.119.0), licencias MIT OR Apache-2.0. La atribución queda también en el
 encabezado de cada archivo portado.
 
-El motor está en `917542cd` (v0.123.0, ver
-[`PHASE-UPSTREAM-2026-11-07-917542C.md`](PHASE-UPSTREAM-2026-11-07-917542C.md)),
+El motor está en `3c8d9bca` (v0.123.0, ver
+[`PHASE-UPSTREAM-2026-11-07-3C8D9BC.md`](PHASE-UPSTREAM-2026-11-07-3C8D9BC.md)),
 pero la geometría que se portó —`stack/StackTargetArcs.tsx`, `targeting/arcPath.ts`,
-las líneas de ataque y bloqueo— **no cambió en esos 32 commits**, así que el port
+las líneas de ataque y bloqueo— **no cambió en esos 44 commits**, así que el port
 sigue siendo fiel al componente original. Del cliente upstream sí cambió el fondo
 del asiento (`board/ArenaBackground.tsx`, ahora con importación diferida y su
 manejo del fallo): no es geometría ni la portamos, porque Mesa pinta sus propias
