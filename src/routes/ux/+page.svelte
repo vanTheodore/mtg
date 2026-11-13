@@ -56,9 +56,10 @@
   import CopyChosenPrompt from '#lib/components/CopyChosenPrompt.svelte';
   import KeepPowerPrompt from '#lib/components/KeepPowerPrompt.svelte';
   import KeepExactPrompt from '#lib/components/KeepExactPrompt.svelte';
+  import RemoveCountersPrompt from '#lib/components/RemoveCountersPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -110,6 +111,8 @@
     { value: 'keepPowerForAll', label: 'Conservar por fuerza: todos' },
     { value: 'keepExact', label: 'Conservar exactos' },
     { value: 'keepExactVow', label: 'Conservar exactos con voto' },
+    { value: 'removeCounters', label: 'Quitar contadores' },
+    { value: 'removeCountersCapped', label: 'Quitar contadores con tope' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -163,6 +166,8 @@
     keepPowerForAll: 'KeepWithinTotalPowerChoice · CR 101.4, por todos',
     keepExact: 'KeepExactPermanentsChoice · CR 701.21a, exactamente tres',
     keepExactVow: 'KeepExactPermanentsChoice · CR 122.1, contador de voto',
+    removeCounters: 'RemoveCountersChoice · CR 107.1c, cualquier número',
+    removeCountersCapped: 'RemoveCountersChoice · CR 608.2d, hasta N en total',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -333,6 +338,35 @@
     card_types: { core_types: ['Sorcery'] },
     oracle_text: "Each player puts a vow counter on a creature they control and sacrifices the rest. Each of those creatures can't attack you or planeswalkers you control for as long as it has a vow counter on it."
   } as GameObject;
+  // CR 107.1c + CR 608.2d: the two shapes of "remove counters", with the verbatim
+  // text each one comes from in `tests/integration/rhys_evermore_remove_counters.rs`.
+  // `Rhys, the Evermore` removes *any number* (no cap); `Hex Parasite` removes
+  // *up to X*, so its cap is the announced X and the engine already bounded it by
+  // what the source carries. Both live only in `objects`, and the bearers carry the
+  // counters the engine's own tests give them: three +1/+1 and two charge for Rhys,
+  // two +1/+1 and one charge for Hex Parasite.
+  const rhysEvermore = {
+    id: 376, card_id: 376, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Rhys, the Evermore',
+    card_types: { core_types: ['Creature'], subtypes: ['Elf', 'Warrior'] },
+    oracle_text: '{W}, {T}: Remove any number of counters from target creature you control. Activate only as a sorcery.'
+  } as GameObject;
+  const hexParasite = {
+    id: 377, card_id: 377, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Hex Parasite',
+    card_types: { core_types: ['Creature'], subtypes: ['Insect'] },
+    oracle_text: '{X}{B/P}: Remove up to X counters from target permanent. For each counter removed this way, this creature gets +1/+0 until end of turn. ({B/P} can be paid with either {B} or 2 life.)'
+  } as GameObject;
+  const counterBearer = {
+    id: 378, card_id: 378, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Counter Bearer', card_types: { core_types: ['Creature'] },
+    power: 2, toughness: 2, counters: { P1P1: 3, charge: 2 }
+  } as GameObject;
+  const rivalCounterBearer = {
+    id: 379, card_id: 379, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Counter Bearer', card_types: { core_types: ['Creature'] },
+    power: 2, toughness: 2, counters: { P1P1: 2, charge: 1 }
+  } as GameObject;
   // CR 707.2: the phenomenon whose body is one `EachPlayerCopyChosen` — the
   // verbatim text is the one in `oracle_effect/tests.rs`
   // (`each_player_copy_chosen_human_time_lord_trigger`).
@@ -403,7 +437,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -513,13 +547,30 @@
           target_player: 0,
           eligible: vow ? [100, 101, 105] : [100, 101, 105, 102, 340],
           required_count: vow ? 1 : 3,
-          keeper_counter: vow ? [{ Generic: 'vow' }, 1] : null,
+          keeper_counter: vow ? ['vow', 1] : null,
           chooser_scope: 'EachPlayerSelf',
           source_id: vow ? 375 : 374,
           source_controller: 0,
           remaining_players: [1],
           all_kept: [],
           scoped_players: [0, 1]
+        }
+      };
+    }
+    if (scene === 'removeCounters' || scene === 'removeCountersCapped') {
+      // `RemoveCountersChoice`: the pool is the counters actually on the source, and
+      // `max_total` is the only thing the text may cap. `pending_effect` is omitted
+      // on purpose: it is the engine's own bookkeeping — this fixture never runs it,
+      // and the block does not read it, so writing one here would be an invention.
+      const capped = scene === 'removeCountersCapped';
+      return {
+        type: 'RemoveCountersChoice',
+        data: {
+          player: 0,
+          source_id: capped ? 379 : 378,
+          counter_type: null,
+          available: capped ? [['P1P1', 2], ['charge', 1]] : [['P1P1', 3], ['charge', 2]],
+          max_total: capped ? 2 : null
         }
       };
     }
@@ -1021,7 +1072,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1230,6 +1281,7 @@
         {#if scene === 'copyChosen' || scene === 'copyChosenNeighbor'}<CopyChosenPrompt />{/if}
         {#if scene === 'keepPower' || scene === 'keepPowerForAll'}<KeepPowerPrompt />{/if}
         {#if scene === 'keepExact' || scene === 'keepExactVow'}<KeepExactPrompt />{/if}
+        {#if scene === 'removeCounters' || scene === 'removeCountersCapped'}<RemoveCountersPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

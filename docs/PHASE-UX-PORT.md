@@ -1751,3 +1751,73 @@ asiento, la respuesta con el conjunto elegido y el caso ajeno); build OK; y en
 Chromium dos pruebas nuevas —el número del motor con el candidato de más apagado, la
 cuenta que cierra y reabre, y el botón que no admite cero; y la variante con voto, con
 el contador anunciado antes del sacrificio— más las dos escenas en la prueba de temas.
+
+## Quitar contadores: dos techos que no son el mismo (trigésima novena pasada, 7 nov 2026)
+
+`RemoveCountersChoice` es CR 107.1c + CR 608.2d, y llega con dos formas que la misma
+ventana tiene que servir sin confundirlas: **«quita cualquier número de contadores»**
+(`Rhys, the Evermore`; `Tetravus`) y **«quita hasta N contadores»** (`Hex Parasite`,
+donde N es la X anunciada, CR 107.3a).
+
+**Los dos techos son del motor, y son distintos.** El primero es por tipo: lo que el
+origen lleva de verdad, que el payload publica como `available`. El segundo es global:
+`max_total`, que el motor ya acotó a lo que hay (CR 608.2d) y que `None` deja
+**abierto** cuando el texto no limita nada. El bloque no convierte ese `None` en un
+número: dice «Sin tope: el texto no limita cuántos, sólo los que hay (CR 107.1c)», y
+cuando sí hay tope lo cuenta hacia atrás —«Tope 2 en total · quedan 1»—. Es la
+diferencia práctica con la vista de **mover** contadores, que sólo tiene el techo por
+tipo porque mover no gasta presupuesto: aquí los tipos **comparten** el presupuesto, y
+por eso agotarlo apaga los `+` de todos los tipos a la vez, incluido el que todavía
+tiene contadores. Bajar uno reabre todos.
+
+**Se elige con pasos, no escribiendo.** Cada fila es `− N de M +`: no hay campo de
+texto que pueda quedar por encima del techo, y el motor —que rechaza un cero, un tipo
+repetido, más de lo que hay y un total por encima del tope— no tiene que rechazar
+nada de lo que la pantalla deja construir.
+
+**Cero es legal** (CR 107.1c: «any number» incluye cero), así que el botón no queda
+gris a la espera: dice «No quitar ninguno» y confirma. En la forma con tope el cero
+también vale —`Hex Parasite` puede anunciar X y no quitar nada—, y el bloque lo trata
+igual.
+
+Dos detalles del contrato que se respetan sin adornarlos:
+
+- `counter_type` llega puesto cuando el texto nombra el tipo (`Tetravus`: «+1/+1») y el
+  motor ya filtró `available` a ese tipo. El bloque **no vuelve a filtrar**: muestra lo
+  que llega.
+- Los nombres de contador son cadenas planas en el cable (`P1P1`, `charge`, `vow`),
+  porque el propio `HashMap<CounterType, u32>` del objeto se serializa así. La tabla de
+  vocabulario ganó `charge → carga`, que era la única grafía que faltaba de un contador
+  que ya estaba en ella; lo que no está en la tabla sigue mostrándose con la palabra del
+  motor.
+
+Objetos del laboratorio, con el texto literal de
+`tests/integration/rhys_evermore_remove_counters.rs` y los contadores que ese test da a
+cada portador: `Rhys, the Evermore` sobre un portador propio con tres +1/+1 y dos carga
+(sin tope) y `Hex Parasite` sobre uno rival con dos +1/+1 y una carga (tope 2). El
+fixture **omite `pending_effect`** a propósito: es contabilidad del motor, esta vista no
+lo lee y escribir uno sería inventarlo.
+
+Laboratorio: `/ux?scene=removeCounters` y `/ux?scene=removeCountersCapped`, capturas
+`docs/screenshots/ux-quitar-contadores-1440.jpg` y
+`docs/screenshots/ux-quitar-contadores-tope-1440.jpg`, más sus pares de tema.
+
+### Corrección de la pasada 38
+
+Al leer el contrato de esta vista salió una errata en la escena anterior: el
+`keeper_counter` se escribió como `[{ "Generic": "vow" }, 1]`, pero `CounterType`
+serializa como **cadena plana** —`["vow", 1]`—, que es lo que el motor escribe. La
+escena ya usa la forma del motor; el bloque renderizaba lo mismo por las dos, así que
+las capturas de la pasada 38 siguen siendo válidas y la prueba que las acompaña no
+cambia.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **496** (9 nuevas en
+`game/__tests__/remove-counters.test.ts`: el pozo con el tope resuelto, el «hasta N»
+con su cero —que no es «sin tope»—, el tipo que el efecto nombra, los nombres planos y
+envueltos, la basura podada —incluida la cadena vacía—, el tipo que no es contador, los
+valores por defecto, la respuesta con los nombres de campo del motor y el caso ajeno);
+build OK; y en Chromium dos pruebas nuevas —la forma sin tope con su único límite por
+tipo y el cero legal; y la del tope, con el presupuesto compartido que apaga todos los
+tipos y se reabre al bajar uno— más las dos escenas en la prueba de temas.

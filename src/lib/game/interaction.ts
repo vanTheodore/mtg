@@ -1038,6 +1038,65 @@ export function moveCountersAction(selections: CounterMoveSelection[]): GameActi
 }
 
 /**
+ * CR 107.1c + CR 608.2d: "remove any number of counters" (Rhys, the Evermore;
+ * Tetravus) and "remove up to N counters" (Hex Parasite's announced X).
+ *
+ * A different question again from moving counters: they leave the source and
+ * nothing arrives anywhere. The engine publishes the **budget** — the per-type
+ * counts actually on the source — and, when the text caps the removal, `max_total`
+ * across every kind, already bounded by what is there. `None` is the uncapped
+ * "any number", so the block says "sin tope" instead of inventing one.
+ *
+ * Its validator refuses a zero count, a repeated type, more of a type than the
+ * source has, and a total over the cap; the empty selection is legal, because zero
+ * counters is a legal number of counters (CR 107.1c). `counter_type` narrows the
+ * pool to one kind when the effect names it, and the engine has already done that
+ * filtering: the block never re-filters what arrives.
+ */
+export type RemoveCountersPrompt = {
+  player: PlayerId;
+  sourceId: ObjectId;
+  /** Set when the effect names the kind it removes (Tetravus: +1/+1 counters). */
+  counterType: string | null;
+  available: CounterOffer[];
+  /** CR 608.2d: the most counters in total; `null` is the uncapped "any number". */
+  maxTotal: number | null;
+};
+export function removeCountersPrompt(snapshot: EngineSnapshot | null): RemoveCountersPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'RemoveCountersChoice') return null;
+  const data = waiting.data ?? {};
+  // Counters are flat strings on the wire (`P1P1`, `charge`, `vow`); the object
+  // shape is tolerated by `counterTypeName` because older payloads wrote it.
+  const available: CounterOffer[] = Array.isArray(data.available)
+    ? (data.available as unknown[])
+        .map((entry) => {
+          if (!Array.isArray(entry) || typeof entry[1] !== 'number') return null;
+          // An empty name is not a counter name, so it is dropped like junk.
+          const type = counterTypeName(entry[0]);
+          return type ? { type, count: entry[1] as number } : null;
+        })
+        .filter((entry): entry is CounterOffer => entry !== null)
+    : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
+    counterType: counterTypeName(data.counter_type),
+    available,
+    maxTotal: typeof data.max_total === 'number' ? Math.max(0, data.max_total) : null
+  };
+}
+export type CounterRemovalSelection = { counterType: string; count: number };
+export function removeCountersAction(selections: CounterRemovalSelection[]): GameAction {
+  return {
+    type: 'ChooseCountersToRemove',
+    data: {
+      selections: selections.map(({ counterType, count }) => ({ counter_type: counterType, count }))
+    }
+  };
+}
+
+/**
  * CR 601.2d + CR 608.2d: a division. The engine publishes the amount, the legal
  * recipients (`TargetRef`s, so players count too) and **when** the division is
  * chosen:
@@ -1944,7 +2003,7 @@ export function permanentStates(o: GameObject, combat?: string): string[] {
  */
 const COUNTERS: Record<string, string> = {
   PlusOnePlusOne: '+1/+1', MinusOneMinusOne: '−1/−1', Loyalty: 'lealtad', Defense: 'defensa', Charge: 'carga', Flying: 'vuelo', Shield: 'escudo', Stun: 'aturdimiento', Finality: 'finalidad',
-  P1P1: '+1/+1', M1M1: '−1/−1', loyalty: 'lealtad', defense: 'defensa', stun: 'aturdimiento', lore: 'relato', time: 'tiempo', shield: 'escudo', finality: 'finalidad',
+  P1P1: '+1/+1', M1M1: '−1/−1', loyalty: 'lealtad', defense: 'defensa', stun: 'aturdimiento', charge: 'carga', lore: 'relato', time: 'tiempo', shield: 'escudo', finality: 'finalidad',
   flying: 'vuelo', trample: 'arrollar', deathtouch: 'toque mortal', lifelink: 'vínculo vital', vigilance: 'vigilancia', haste: 'prisa', reach: 'alcance', menace: 'amenaza', hexproof: 'antimaleficio', indestructible: 'indestructible'
 };
 export function counterLabel(kind: string) { return COUNTERS[kind] ?? kind; }

@@ -149,6 +149,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'EachPlayerCopyChosenSelection': return 'Elige en orden: la primera criatura se copia, la segunda escala la copia.';
     case 'KeepWithinTotalPowerChoice': return 'Conserva criaturas hasta un tope de fuerza: el resto se sacrifica.';
     case 'KeepExactPermanentsChoice': return 'Conserva exactamente los permanentes que pide el motor: el resto se sacrifica.';
+    case 'RemoveCountersChoice': return 'Quita contadores de un permanente hasta el tope que publique el motor.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

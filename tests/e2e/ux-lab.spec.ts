@@ -851,6 +851,75 @@ test('conservar exactos con voto: el contador se anuncia antes del sacrificio', 
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('quitar contadores: sin tope, el único límite es lo que hay de cada tipo', async ({ page }) => {
+  await page.goto('/ux?scene=removeCounters');
+  const block = page.locator('[data-remove-counters]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Quitar contadores · Counter Bearer');
+  await expect(block).toHaveAttribute('data-remove-cap', 'none');
+  // CR 107.1c: "any number" — no cap is published, and the block does not invent one.
+  await expect(block.locator('[data-remove-cap-line]')).toHaveText(
+    'Sin tope: el texto no limita cuántos, sólo los que hay (CR 107.1c).'
+  );
+  await expect(block).toContainText('En el origen hay 3 de +1/+1 · 2 de carga.');
+  await expect(block.locator('[data-remove-total]')).toHaveText('Quitas 0');
+
+  const confirm = block.locator('button.primary');
+  // Zero counters is a legal choice, and the button says it instead of looking broken.
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('No quitar ninguno');
+  await expect(block.getByRole('button', { name: 'Quitar uno menos de +1/+1' })).toBeDisabled();
+
+  const more = (type: string) => block.getByRole('button', { name: `Quitar uno más de ${type}` });
+  await more('+1/+1').click();
+  await expect(block.locator('[data-remove-count="P1P1"]')).toHaveText('1 de 3');
+  await expect(block.locator('[data-remove-total]')).toHaveText('Quitas 1');
+  await expect(confirm).toHaveText('Quitar 1 contador: 1 +1/+1');
+  await more('+1/+1').click();
+  await more('+1/+1').click();
+  // The per-kind ceiling is what the source actually carries.
+  await expect(more('+1/+1')).toBeDisabled();
+  await more('carga').click();
+  await expect(block.locator('[data-remove-total]')).toHaveText('Quitas 4');
+  await expect(confirm).toHaveText('Quitar 4 contadores: 3 +1/+1 · 1 carga');
+
+  await block.getByRole('button', { name: 'Quitar uno menos de +1/+1' }).click();
+  await expect(block.locator('[data-remove-total]')).toHaveText('Quitas 3');
+  await expect(more('+1/+1')).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('quitar contadores con tope: el presupuesto es uno y lo comparten todos los tipos', async ({ page }) => {
+  await page.goto('/ux?scene=removeCountersCapped');
+  const block = page.locator('[data-remove-counters]');
+  await expect(block).toBeVisible();
+  // CR 608.2d + CR 107.3a: Hex Parasite's announced X bounds the total, not each kind.
+  await expect(block).toHaveAttribute('data-remove-cap', '2');
+  await expect(block.locator('[data-remove-cap-line]')).toHaveText('Tope 2 en total · quedan 2');
+  await expect(block.locator('[data-remove-total]')).toHaveText('Quitas 0 de 2');
+
+  const more = (type: string) => block.getByRole('button', { name: `Quitar uno más de ${type}` });
+  await more('+1/+1').click();
+  await expect(block.locator('[data-remove-cap-line]')).toHaveText('Tope 2 en total · quedan 1');
+  await more('+1/+1').click();
+  // The budget is spent, so no kind can add — even the one that still has counters.
+  await expect(block.locator('[data-remove-cap-line]')).toHaveText('Tope 2 en total · quedan 0');
+  await expect(more('carga')).toBeDisabled();
+  await expect(more('+1/+1')).toBeDisabled();
+  await expect(block.locator('button.primary')).toHaveText('Quitar 2 contadores: 2 +1/+1');
+
+  // Freeing one budget point reopens every kind that still carries counters.
+  await block.getByRole('button', { name: 'Quitar uno menos de +1/+1' }).click();
+  await expect(more('carga')).toBeEnabled();
+  await more('carga').click();
+  await expect(block.locator('button.primary')).toHaveText('Quitar 2 contadores: 1 +1/+1 · 1 carga');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

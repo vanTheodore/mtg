@@ -48,6 +48,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `keepPowerForAll` | `KeepWithinTotalPowerChoice` (todos) | [claro](conservar-fuerza-todos-claro.jpg) | [oscuro](conservar-fuerza-todos-oscuro.jpg) |
 | `keepExact` | `KeepExactPermanentsChoice` (propio) | [claro](conservar-exactos-claro.jpg) | [oscuro](conservar-exactos-oscuro.jpg) |
 | `keepExactVow` | `KeepExactPermanentsChoice` (con voto) | [claro](conservar-exactos-voto-claro.jpg) | [oscuro](conservar-exactos-voto-oscuro.jpg) |
+| `removeCounters` | `RemoveCountersChoice` (sin tope) | [claro](quitar-contadores-claro.jpg) | [oscuro](quitar-contadores-oscuro.jpg) |
+| `removeCountersCapped` | `RemoveCountersChoice` (hasta N) | [claro](quitar-contadores-tope-claro.jpg) | [oscuro](quitar-contadores-tope-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

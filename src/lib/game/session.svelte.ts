@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -221,6 +221,7 @@ class GameSession {
     this.multiPick = [];
     this.splitAmount = {};
     this.movePick = {};
+    this.removePick = {};
     this.retargetPick = {};
     this.choosePick = [];
     this.proliferatePick = [];
@@ -421,6 +422,64 @@ class GameSession {
     const selections = this.moveSelections;
     this.movePick = {};
     void this.dispatch(moveCountersAction(selections));
+  }
+
+  /** CR 107.1c + CR 608.2d: counters leaving the source, one amount per kind. */
+  get removeCountersPrompt() {
+    return readRemoveCounters(this.snapshot);
+  }
+  /** Amounts keyed by counter type; the validator forbids repeated kinds. */
+  removePick = $state<Record<string, number>>({});
+  removeAmount(type: string): number {
+    return this.removePick[type] ?? 0;
+  }
+  get removeTotal(): number {
+    return Object.values(this.removePick).reduce((sum, count) => sum + count, 0);
+  }
+  /** CR 608.2d: what is left of "up to N"; `null` is the uncapped "any number". */
+  get removeBudget(): number | null {
+    const prompt = this.removeCountersPrompt;
+    if (!prompt || prompt.maxTotal === null) return null;
+    return Math.max(0, prompt.maxTotal - this.removeTotal);
+  }
+  /** The per-kind ceiling the engine published: what is actually on the source. */
+  removeAvailable(type: string): number {
+    return this.removeCountersPrompt?.available.find((entry) => entry.type === type)?.count ?? 0;
+  }
+  setRemove(type: string, amount: number) {
+    const prompt = this.removeCountersPrompt;
+    if (!prompt) return;
+    const offer = prompt.available.find((entry) => entry.type === type);
+    if (!offer) return;
+    const current = this.removeAmount(type);
+    // Two ceilings, both the engine's: the counters of that kind, and — when the
+    // text says "up to N" — the budget still free after the other kinds.
+    const budget = this.removeBudget;
+    const ceiling = budget === null ? offer.count : Math.min(offer.count, current + budget);
+    const clamped = Math.max(0, Math.min(Math.trunc(amount), ceiling));
+    this.removePick = { ...this.removePick, [type]: clamped };
+  }
+  /** Steps one kind by ±1 so the block never asks the player for a number. */
+  stepRemove(type: string, delta: number) {
+    this.setRemove(type, this.removeAmount(type) + delta);
+  }
+  get removeSelections(): CounterRemovalSelection[] {
+    const prompt = this.removeCountersPrompt;
+    if (!prompt) return [];
+    return prompt.available
+      .map((offer) => ({ counterType: offer.type, count: this.removeAmount(offer.type) }))
+      .filter((entry) => entry.count > 0);
+  }
+  get removeReady(): boolean {
+    // CR 107.1c: zero is a legal number of counters, so the empty set confirms.
+    return this.removeCountersPrompt !== null;
+  }
+  confirmRemoveCounters() {
+    const prompt = this.removeCountersPrompt;
+    if (!prompt) return;
+    const selections = this.removeSelections;
+    this.removePick = {};
+    void this.dispatch(removeCountersAction(selections));
   }
 
   /** CR 115.7: repointing a spell (or ability) that is already on the stack. */
@@ -1264,6 +1323,7 @@ class GameSession {
       this.multiPick = [];
       this.splitAmount = {};
       this.movePick = {};
+      this.removePick = {};
       this.retargetPick = {};
       this.choosePick = [];
       this.proliferatePick = [];
