@@ -40,6 +40,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `proliferate` | `ProliferateChoice` | [claro](proliferar-claro.jpg) | [oscuro](proliferar-oscuro.jpg) |
 | `timeTravelRemove` | `TimeTravelChoice` (quitar) | [claro](viaje-quitar-claro.jpg) | [oscuro](viaje-quitar-oscuro.jpg) |
 | `timeTravelAdd` | `TimeTravelChoice` (poner) | [claro](viaje-poner-claro.jpg) | [oscuro](viaje-poner-oscuro.jpg) |
+| `category` | `CategoryChoice` (cada uno) | [claro](conservar-tipos-claro.jpg) | [oscuro](conservar-tipos-oscuro.jpg) |
+| `categoryForAll` | `CategoryChoice` (por todos) | [claro](conservar-por-todos-claro.jpg) | [oscuro](conservar-por-todos-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

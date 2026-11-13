@@ -537,6 +537,64 @@ export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | 
   };
 }
 /**
+ * CR 101.4 + CR 701.21a: "each player chooses one permanent of each of those types
+ * from among the permanents they control, then sacrifices the rest" — Cataclysm,
+ * Cataclysmic Gearhulk (each player for their own) and Tragic Arrogance (the
+ * controller for everyone).
+ *
+ * The payload is one list of candidates **per category**, aligned with
+ * `categories`, and the answer is one slot per category: exactly one pick when the
+ * category has candidates, `null` when it has none — the engine rejects a choice
+ * for an empty category and a missing one for a full category. The same permanent
+ * may fill two categories (an artifact creature legally satisfies both); the
+ * protected set is deduped by the engine, not by the screen.
+ *
+ * `remaining_players` is APNAP order: the prompt can come back once per player.
+ */
+export type CategoryPrompt = {
+  player: PlayerId;
+  /** Whose permanents this round draws from — differs from `player` when the
+   *  controller chooses for everyone (CR 101.4). */
+  targetPlayer: PlayerId;
+  sourceId: ObjectId | null;
+  /** `forAll`: the spell's controller picks for every player. */
+  chooserScope: 'self' | 'forAll';
+  categories: { category: string; eligible: ObjectId[] }[];
+  /** Still to choose after this one, in APNM order. */
+  remainingPlayers: PlayerId[];
+  /** Permanents already protected by earlier players in the same resolution. */
+  keptBefore: ObjectId[];
+};
+export function categoryPrompt(snapshot: EngineSnapshot | null): CategoryPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'CategoryChoice') return null;
+  const data = waiting.data ?? {};
+  const categories = Array.isArray(data.categories)
+    ? (data.categories as unknown[]).filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  const rawEligible = Array.isArray(data.eligible_per_category)
+    ? (data.eligible_per_category as unknown[])
+    : [];
+  const ids = (value: unknown): ObjectId[] =>
+    Array.isArray(value) ? (value as unknown[]).filter((id): id is ObjectId => typeof id === 'number') : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    targetPlayer: typeof data.target_player === 'number' ? data.target_player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+    chooserScope: data.chooser_scope === 'ControllerForAll' ? 'forAll' : 'self',
+    // A category the payload forgot keeps its slot with no candidates rather than
+    // shifting every later category onto the wrong list.
+    categories: categories.map((category, index) => ({ category, eligible: ids(rawEligible[index]) })),
+    remainingPlayers: ids(data.remaining_players),
+    keptBefore: ids(data.all_kept)
+  };
+}
+/** CR 101.4: exactly one slot per category, `null` where the engine offered none. */
+export function categoryAction(choices: (ObjectId | null)[]): GameAction {
+  return { type: 'SelectCategoryPermanents', data: { choices: choices.map((choice) => choice ?? null) } };
+}
+
+/**
  * CR 608.2c + CR 115.10a: `ChooseObjectsIntoTrackedSet` and the described damage
  * recipient. Neither is a *target*: the prompt names a set of battlefield
  * permanents (plus, for a damage recipient, the seats) and the engine publishes a

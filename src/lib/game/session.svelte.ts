@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -225,6 +225,7 @@ class GameSession {
     this.choosePick = [];
     this.proliferatePick = [];
     this.timeTravelPick = [];
+    this.categoryPick = {};
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -584,6 +585,50 @@ class GameSession {
     // The next phase (or priority) arrives with the new snapshot, which clears the picks.
     this.timeTravelPick = [];
     void this.dispatch(selectTargetsAction(targets));
+  }
+
+  /** CR 101.4: one permanent per type category kept, the rest sacrificed. */
+  get categoryPrompt() {
+    return readCategory(this.snapshot);
+  }
+  /** Category index → the permanent kept for it; absent means "nothing to keep". */
+  categoryPick = $state<Record<number, ObjectId>>({});
+  categoryPicked(index: number): ObjectId | undefined {
+    return this.categoryPick[index];
+  }
+  setCategoryPick(index: number, id: ObjectId | null) {
+    const prompt = this.categoryPrompt;
+    if (!prompt) return;
+    const next = { ...this.categoryPick };
+    if (id === null) {
+      delete next[index];
+      this.categoryPick = next;
+      return;
+    }
+    // Each slot admits exactly what its own category published, and one pick.
+    if (!prompt.categories[index]?.eligible.includes(id)) return;
+    this.categoryPick = { ...next, [index]: id };
+  }
+  /** One slot per category, in the prompt's order; `null` where it offered none. */
+  get categoryChoices(): (ObjectId | null)[] {
+    const prompt = this.categoryPrompt;
+    if (!prompt) return [];
+    return prompt.categories.map((_, index) => this.categoryPick[index] ?? null);
+  }
+  /** Distinct permanents kept: two categories can name the same artifact creature. */
+  get categoryKeptCount(): number {
+    return new Set(Object.values(this.categoryPick)).size;
+  }
+  get categoryReady(): boolean {
+    const prompt = this.categoryPrompt;
+    if (!prompt) return false;
+    return prompt.categories.every(({ eligible }, index) => !eligible.length || this.categoryPick[index] !== undefined);
+  }
+  confirmCategory() {
+    if (!this.categoryReady) return;
+    const choices = this.categoryChoices;
+    this.categoryPick = {};
+    void this.dispatch(categoryAction(choices));
   }
 
   /** CR 601.2d / CR 608.2d: how much of an amount each recipient gets. */
@@ -1098,6 +1143,7 @@ class GameSession {
       this.choosePick = [];
       this.proliferatePick = [];
       this.timeTravelPick = [];
+      this.categoryPick = {};
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

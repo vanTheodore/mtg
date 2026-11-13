@@ -55,7 +55,9 @@ const SCENES = [
   { scene: 'chooseObjectsRecipient', slug: 'elegir-receptor', block: '[data-choose-objects]' },
   { scene: 'proliferate', slug: 'proliferar', block: '[data-proliferate]' },
   { scene: 'timeTravelRemove', slug: 'viaje-quitar', block: '[data-time-travel]' },
-  { scene: 'timeTravelAdd', slug: 'viaje-poner', block: '[data-time-travel]' }
+  { scene: 'timeTravelAdd', slug: 'viaje-poner', block: '[data-time-travel]' },
+  { scene: 'category', slug: 'conservar-tipos', block: '[data-category-choice]' },
+  { scene: 'categoryForAll', slug: 'conservar-por-todos', block: '[data-category-choice]' }
 ] as const;
 
 const THEMES = [

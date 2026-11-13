@@ -1533,3 +1533,52 @@ compartida y el caso ajeno); build OK; y en Chromium dos pruebas nuevas —proli
 con el recuento que sigue a los toggles y la respuesta vacía; el viaje en el tiempo
 con el verbo de cada mitad, el `−`/`+` de la fila y la ausencia del objeto ya
 restado— más las tres escenas en la prueba de temas.
+
+## Conservar un permanente de cada tipo (trigésima quinta pasada, 13 nov 2026)
+
+`CategoryChoice` es CR 101.4 + CR 701.21a: «each player chooses one permanent of
+each of those types from among the permanents they control, then sacrifices the
+rest». Es la primera vista del port con **una ranura por categoría** en vez de una
+lista de la que elegir libremente, y ahí está toda su dificultad.
+
+El motor publica una lista de candidatos **por categoría** (`eligible_per_category`,
+alineada con `categories`) y espera una respuesta con **una entrada por categoría**:
+una elección donde hay candidatos y `null` donde no los hay. Rechaza las dos
+formas de equivocarse —elegir en una categoría vacía y dejar hueco en una llena—,
+así que la ranura vacía no es un descuido de la pantalla: es lo que dice la carga.
+El bloque la rotula («sin candidatos» / «Nada que conservar de este tipo») en vez de
+esconderla, y el botón no se habilita hasta que cada categoría con candidatos tiene
+la suya.
+
+**Una carta puede cubrir dos ranuras.** Un artefacto que también es criatura
+satisface Artifact y Creature a la vez; el motor dedupe el conjunto protegido, no la
+pantalla. El bloque lo dice y cuenta los distintos: el botón anuncia «Conservar N y
+sacrificar el resto» con N = permanentes distintos, no con N = ranuras rellenas.
+
+**Quién elige.** `chooser_scope` cambia el sujeto de la frase y por eso la cabecera
+lo dice con nombre propio: `EachPlayerSelf` («eliges de entre los permanentes del
+Jugador n») o `ControllerForAll` («eliges tú por todos los jugadores del efecto, y
+ahora te toca el Jugador n»). `remaining_players` es el orden APNAP: cuando queda
+alguien, el botón lo anuncia («después elige el Jugador 2») para que la respuesta no
+parezca definitiva.
+
+Objetos del laboratorio: `Cataclysm` (una ranura por tipo, con Encantamiento vacío y
+el Jugador 2 por venir) y `Tragic Arrogance` (elige por el rival: sus dos Grizzly
+Bears y su Chandra). Los tipos se leen en castellano con el traductor que ya tenía
+la mesa (`coreTypeLabel`), y lo que no está en el mapa conserva la palabra del
+motor.
+
+Laboratorio: `/ux?scene=category` y `/ux?scene=categoryForAll`, capturas
+`docs/screenshots/ux-conservar-tipos-1440.jpg` y
+`docs/screenshots/ux-conservar-por-todos-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **463** (7 nuevas en
+`game/__tests__/category-choice.test.ts`: las listas por categoría, la categoría que
+falta en la carga sin corrimiento, la basura podada por categoría, los dos
+`chooser_scope` con su jugador y su orden APNAP, la forma de la respuesta con sus
+`null`, el traductor de tipos y el caso ajeno); build OK; y en Chromium dos pruebas
+nuevas —las cuatro ranuras con la vacía, el reemplazo dentro de una categoría y el
+«después elige el Jugador 2»; y la variante que elige de la mesa del rival, con dos
+homónimos separados por id— más las dos escenas en la prueba de temas.

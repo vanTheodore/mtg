@@ -52,9 +52,10 @@
   import ChooseObjectsPrompt from '#lib/components/ChooseObjectsPrompt.svelte';
   import ProliferatePrompt from '#lib/components/ProliferatePrompt.svelte';
   import TimeTravelPrompt from '#lib/components/TimeTravelPrompt.svelte';
+  import CategoryPrompt from '#lib/components/CategoryPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -98,6 +99,8 @@
     { value: 'proliferate', label: 'Proliferar' },
     { value: 'timeTravelRemove', label: 'Viaje en el tiempo: quitar' },
     { value: 'timeTravelAdd', label: 'Viaje en el tiempo: poner' },
+    { value: 'category', label: 'Conservar uno de cada tipo' },
+    { value: 'categoryForAll', label: 'Conservar por todos' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -143,6 +146,8 @@
     proliferate: 'ProliferateChoice · CR 701.34a, otra de cada clase',
     timeTravelRemove: 'TimeTravelChoice · CR 701.56a, primera mitad: quitar',
     timeTravelAdd: 'TimeTravelChoice · CR 701.56a, segunda mitad: poner',
+    category: 'CategoryChoice · CR 101.4, un permanente por tipo',
+    categoryForAll: 'CategoryChoice · CR 101.4, elige por los demás',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -289,6 +294,18 @@
     counters: { P1P1: 3 },
     oracle_text: 'Whenever a player casts a spell, you may put a +1/+1 counter on this creature.\nAt the beginning of your upkeep, you may move any number of +1/+1 counters from this creature onto other creatures.'
   } as GameObject;
+  // CR 101.4: the two shapes of the category choice. `Cataclysm` keeps one of each
+  // type per player; `Tragic Arrogance` has the controller choose for everyone.
+  // Both live only in `objects` (they are the source of the effect, not a
+  // battlefield row), and carry only what the engine's own comments state.
+  const cataclysm = {
+    id: 370, card_id: 370, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Cataclysm', card_types: { core_types: ['Sorcery'] }
+  } as GameObject;
+  const tragicArrogance = {
+    id: 371, card_id: 371, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Tragic Arrogance', card_types: { core_types: ['Sorcery'] }
+  } as GameObject;
   // CR 701.56a: the two halves of time travel need objects with time counters.
   // `Ancestral Vision` and `Lotus Bloom` are the canonical suspend cards, and they
   // live only in `objects` (their `zone` is Exile but they are not in `state.exile`),
@@ -339,7 +356,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -413,6 +430,35 @@
               contributions: [2, 2, 1]
             }
           };
+    }
+    if (scene === 'category' || scene === 'categoryForAll') {
+      // `CategoryChoice`: one candidate list per category, aligned with
+      // `categories`. `Cataclysm` is the \"each player for their own\" shape and
+      // `Tragic Arrogance` the \"controller chooses for all\" one; the engine names
+      // both in `effects/choose_and_sacrifice_rest.rs`. The artifact is
+      // `Bonesplitter` and the lands are the fixture's Forests, so every candidate
+      // is an object the lab already has — and one category (Enchantment) has none,
+      // which is exactly when the engine expects a `null` slot.
+      const forAll = scene === 'categoryForAll';
+      return {
+        type: 'CategoryChoice',
+        data: {
+          player: 0,
+          target_player: forAll ? 1 : 0,
+          categories: forAll
+            ? ['Artifact', 'Creature', 'Enchantment', 'Planeswalker']
+            : ['Artifact', 'Creature', 'Enchantment', 'Land'],
+          chooser_scope: forAll ? 'ControllerForAll' : 'EachPlayerSelf',
+          source_controller: 0,
+          eligible_per_category: forAll
+            ? [[341], [200, 201], [], [205]]
+            : [[341], [100, 101, 105], [], [102, 103, 104]],
+          source_id: forAll ? 371 : 370,
+          remaining_players: forAll ? [] : [1],
+          all_kept: [],
+          scoped_players: [0, 1]
+        }
+      };
     }
     if (scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd') {
       // `ProliferateChoice`: everything that already carries a counter — permanents
@@ -859,7 +905,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1064,6 +1110,7 @@
         {#if scene === 'chooseObjects' || scene === 'chooseObjectsRecipient'}<ChooseObjectsPrompt />{/if}
         {#if scene === 'proliferate'}<ProliferatePrompt />{/if}
         {#if scene === 'timeTravelRemove' || scene === 'timeTravelAdd'}<TimeTravelPrompt />{/if}
+        {#if scene === 'category' || scene === 'categoryForAll'}<CategoryPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

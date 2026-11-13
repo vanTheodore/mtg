@@ -595,6 +595,74 @@ test('viaje en el tiempo: la misma lista, primero quitar y después poner', asyn
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('conservar uno de cada tipo: una ranura por categoría, y vacía si no hay candidatos', async ({ page }) => {
+  await page.goto('/ux?scene=category');
+  const block = page.locator('[data-category-choice]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toContainText('Cataclysm');
+  // CR 101.4: keep one permanent of each type, sacrifice the rest.
+  await expect(block).toContainText('CR 101.4');
+  await expect(block.locator('[data-category-group]')).toHaveCount(4);
+  // An empty category is not a missing pick: the engine wants a null there.
+  await expect(block.locator('[data-category-empty]')).toContainText('Sin candidatos en un tipo');
+  const enchantment = block.locator('[data-category-group="Enchantment"]');
+  await expect(enchantment).toContainText('Nada que conservar de este tipo.');
+  await expect(enchantment.locator('[data-category-pick]')).toHaveCount(0);
+
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeDisabled();
+  await expect(confirm).toHaveText('Elige uno de cada tipo con candidatos');
+
+  // Three categories have candidates, so three picks unlock the answer.
+  await block.locator('[data-category-group="Artifact"]').getByRole('button', { name: 'Bonesplitter' }).click();
+  await expect(confirm).toBeDisabled();
+  const creature = block.locator('[data-category-group="Creature"]');
+  await creature.getByRole('button', { name: 'Savannah Lions' }).click();
+  await expect(confirm).toBeDisabled();
+  // One pick per category: a second one replaces, it does not add.
+  await creature.getByRole('button', { name: 'Elvish Mystic' }).click();
+  await expect(creature.locator('button[aria-pressed="true"]')).toHaveCount(1);
+  await expect(creature.getByRole('button', { name: 'Elvish Mystic' })).toHaveAttribute('aria-pressed', 'true');
+
+  await block.locator('[data-category-group="Land"]').getByRole('button', { name: 'Forest (Jugador 1) · #102' }).click();
+  await expect(confirm).toBeEnabled();
+  // The prompt comes back once per player in APNAP order.
+  await expect(confirm).toHaveText('Conservar 3 y sacrificar el resto · después elige el Jugador 2');
+
+  // Releasing a pick closes the answer again.
+  await block.locator('[data-category-group="Land"]').getByRole('button', { name: 'Forest (Jugador 1) · #102' }).click();
+  await expect(confirm).toBeDisabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('conservar por todos: el mismo bloque elige de la mesa del rival', async ({ page }) => {
+  await page.goto('/ux?scene=categoryForAll');
+  const block = page.locator('[data-category-choice]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toContainText('Tragic Arrogance');
+  // CR 101.4: `ControllerForAll` — the caster picks for every player.
+  await expect(block).toContainText('Eliges tú por todos los jugadores');
+  await expect(block).toContainText('Jugador 2');
+  await expect(block.locator('[data-category-group]')).toHaveCount(4);
+
+  // Two same-name permanents on the same side, so the id is what separates them.
+  const creature = block.locator('[data-category-group="Creature"]');
+  await expect(creature.getByRole('button', { name: 'Grizzly Bears (Jugador 2) · #200' })).toHaveCount(1);
+  await creature.getByRole('button', { name: 'Grizzly Bears (Jugador 2) · #200' }).click();
+  await block.locator('[data-category-group="Artifact"]').getByRole('button', { name: 'Bonesplitter' }).click();
+  await block.locator('[data-category-group="Planeswalker"]').getByRole('button', { name: 'Chandra, Torch of Defiance' }).click();
+
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeEnabled();
+  // No other player is left to choose: this was the only round.
+  await expect(confirm).toHaveText('Conservar 3 y sacrificar el resto');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');
