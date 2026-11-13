@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -226,6 +226,7 @@ class GameSession {
     this.proliferatePick = [];
     this.timeTravelPick = [];
     this.categoryPick = {};
+    this.copyChosenPick = [];
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -629,6 +630,39 @@ class GameSession {
     const choices = this.categoryChoices;
     this.categoryPick = {};
     void this.dispatch(categoryAction(choices));
+  }
+
+  /** CR 707.2: an ordered pick — the first is copied, the second scales the copy. */
+  get copyChosenPrompt() {
+    return readCopyChosen(this.snapshot);
+  }
+  /** Object ids in the order the player picked them; order is the rule. */
+  copyChosenPick = $state<ObjectId[]>([]);
+  copyChosenRank(id: ObjectId): number {
+    return this.copyChosenPick.indexOf(id);
+  }
+  toggleCopyChosen(id: ObjectId) {
+    const prompt = this.copyChosenPrompt;
+    if (!prompt) return;
+    if (this.copyChosenPick.includes(id)) {
+      // Removing an earlier pick re-ranks the ones after it, which is the point.
+      this.copyChosenPick = this.copyChosenPick.filter((entry) => entry !== id);
+      return;
+    }
+    if (this.copyChosenPick.length >= prompt.max) return;
+    if (!prompt.eligible.includes(id)) return;
+    this.copyChosenPick = [...this.copyChosenPick, id];
+  }
+  get copyChosenReady(): boolean {
+    const prompt = this.copyChosenPrompt;
+    if (!prompt) return false;
+    return this.copyChosenPick.length >= prompt.min && this.copyChosenPick.length <= prompt.max;
+  }
+  confirmCopyChosen() {
+    if (!this.copyChosenReady) return;
+    const ids = this.copyChosenPick;
+    this.copyChosenPick = [];
+    void this.dispatch(copyChosenAction(ids));
   }
 
   /** CR 601.2d / CR 608.2d: how much of an amount each recipient gets. */
@@ -1144,6 +1178,7 @@ class GameSession {
       this.proliferatePick = [];
       this.timeTravelPick = [];
       this.categoryPick = {};
+      this.copyChosenPick = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

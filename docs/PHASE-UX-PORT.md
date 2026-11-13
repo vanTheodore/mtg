@@ -1582,3 +1582,60 @@ falta en la carga sin corrimiento, la basura podada por categoría, los dos
 nuevas —las cuatro ranuras con la vacía, el reemplazo dentro de una categoría y el
 «después elige el Jugador 2»; y la variante que elige de la mesa del rival, con dos
 homónimos separados por id— más las dos escenas en la prueba de temas.
+
+## Copiar la elegida: el orden es la regla (trigésima sexta pasada, 13 nov 2026)
+
+`EachPlayerCopyChosenSelection` es CR 707.2 + CR 101.4, con la fenomenal
+`Human—Time Lord Meta-Crisis` como caso real: «each player chooses one or two
+creatures they control. Each player creates a token that's a copy of the **first**
+creature they chose… Then each player who chose a second creature puts a number of
++1/+1 counters on the token they created equal to the power of the second creature
+they chose».
+
+**Es la primera vista del port donde el orden de la elección cambia el resultado**,
+y eso decidió el diseño: la respuesta es una lista **ordenada** en la que el índice
+0 se copia y el 1 sólo se lee para los contadores. Un conjunto de botones con
+`aria-pressed` habría sido más corto y habría mentido —los dos elegidos no son
+intercambiables—, así que el bloque numera la elección tal como se hace («1º · se
+copia», «2º · escala la copia»), pone el ordinal también en el chip y deja que
+quitar el primero **renumere** los demás. Rehacer el orden sin rehacer los clics es
+la única forma honesta de corregirlo.
+
+Lo demás lo dice el contrato, no la pantalla:
+
+- `min`/`max` son la ventana (1..2 aquí), y al llegar a `max` se apagan los chips;
+- `choose_scope` cambia de quién es el pozo —el tuyo o el de tu vecino de izquierda
+  o derecha (CR 102.1)—, y la cabecera lo nombra;
+- `scale` trae el tipo de contador y la propiedad que se lee, así que la línea de
+  escalado se compone de los datos (`+1/+1` y `fuerza`) en vez de suponer «+1/+1
+  por la fuerza de la carta que copias»;
+- `all_choices` son las elecciones de los jugadores anteriores en orden APNAP y
+  **nada se aplica hasta que elija el último**, así que el bloque las enseña y lo
+  recuerda en la misma línea.
+
+**Un arreglo de infraestructura que pidió el catálogo:** la prueba de temas recorre
+las escenas dentro de un `test` por tema, y con 31 escenas pasó el límite de 120 s
+del proyecto. No se recortó la prueba: se le dio a ese fichero su propio
+presupuesto (300 s) con el motivo escrito al lado, porque su coste crece con el
+catálogo y el límite global es para un test corto.
+
+Objetos del laboratorio: `Human—Time Lord Meta-Crisis` como fuente, con las tres
+criaturas del jugador 1 para la forma propia y las dos del rival —homónimas, con el
+id separándolas— para la del vecino, que además trae la elección previa del
+Jugador 2.
+
+Laboratorio: `/ux?scene=copyChosen` y `/ux?scene=copyChosenNeighbor`, capturas
+`docs/screenshots/ux-copiar-elegida-1440.jpg` y
+`docs/screenshots/ux-copiar-vecino-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **471** (8 nuevas en
+`game/__tests__/copy-chosen.test.ts`: la ventana con la cláusula de escalado y la
+fuente, los objetos como único pozo, los tres `choose_scope`, la cláusula opcional
+con sus dos mitades juntas, las elecciones previas en APNAP sin rondas vacías, la
+respuesta que conserva el orden —y que se distingue si se invierte—, la propiedad
+traducida y el caso ajeno); build OK; y en Chromium dos pruebas nuevas —los dos
+puestos numerados, el `max` que cierra la lista y el renumerado al quitar el
+primero; y la variante del vecino con su pozo ajeno y la elección previa— más las
+dos escenas en la prueba de temas.

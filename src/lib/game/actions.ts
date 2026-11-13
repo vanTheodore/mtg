@@ -146,6 +146,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'ProliferateChoice': return 'Elige quién ya lleva contadores: cada uno recibe otro de cada clase.';
     case 'TimeTravelChoice': return 'Quita o pon contadores de tiempo: primero una mitad, después la otra.';
     case 'CategoryChoice': return 'Conserva un permanente de cada tipo: el resto se sacrifica.';
+    case 'EachPlayerCopyChosenSelection': return 'Elige en orden: la primera criatura se copia, la segunda escala la copia.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

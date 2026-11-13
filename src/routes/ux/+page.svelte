@@ -53,9 +53,10 @@
   import ProliferatePrompt from '#lib/components/ProliferatePrompt.svelte';
   import TimeTravelPrompt from '#lib/components/TimeTravelPrompt.svelte';
   import CategoryPrompt from '#lib/components/CategoryPrompt.svelte';
+  import CopyChosenPrompt from '#lib/components/CopyChosenPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -101,6 +102,8 @@
     { value: 'timeTravelAdd', label: 'Viaje en el tiempo: poner' },
     { value: 'category', label: 'Conservar uno de cada tipo' },
     { value: 'categoryForAll', label: 'Conservar por todos' },
+    { value: 'copyChosen', label: 'Copiar la elegida' },
+    { value: 'copyChosenNeighbor', label: 'Copiar del vecino' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -148,6 +151,8 @@
     timeTravelAdd: 'TimeTravelChoice · CR 701.56a, segunda mitad: poner',
     category: 'CategoryChoice · CR 101.4, un permanente por tipo',
     categoryForAll: 'CategoryChoice · CR 101.4, elige por los demás',
+    copyChosen: 'EachPlayerCopyChosenSelection · CR 707.2, el orden manda',
+    copyChosenNeighbor: 'EachPlayerCopyChosenSelection · CR 102.1, del vecino',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -294,6 +299,14 @@
     counters: { P1P1: 3 },
     oracle_text: 'Whenever a player casts a spell, you may put a +1/+1 counter on this creature.\nAt the beginning of your upkeep, you may move any number of +1/+1 counters from this creature onto other creatures.'
   } as GameObject;
+  // CR 707.2: the phenomenon whose body is one `EachPlayerCopyChosen` — the
+  // verbatim text is the one in `oracle_effect/tests.rs`
+  // (`each_player_copy_chosen_human_time_lord_trigger`).
+  const metaCrisis = {
+    id: 372, card_id: 372, owner: 0, controller: 0, zone: 'Command',
+    name: 'Human—Time Lord Meta-Crisis',
+    card_types: { core_types: ['Phenomenon'] }
+  } as GameObject;
   // CR 101.4: the two shapes of the category choice. `Cataclysm` keeps one of each
   // type per player; `Tragic Arrogance` has the controller choose for everyone.
   // Both live only in `objects` (they are the source of the effect, not a
@@ -356,7 +369,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -430,6 +443,30 @@
               contributions: [2, 2, 1]
             }
           };
+    }
+    if (scene === 'copyChosen' || scene === 'copyChosenNeighbor') {
+      // `EachPlayerCopyChosenSelection`: min 1, max 2, and the order decides what
+      // is copied and what only scales the copy. The neighbour shape changes whose
+      // battlefield the pool comes from (CR 102.1) and carries what the earlier
+      // player already chose, because nothing is applied until the set is complete.
+      const neighbor = scene === 'copyChosenNeighbor';
+      return {
+        type: 'EachPlayerCopyChosenSelection',
+        data: {
+          player: 0,
+          eligible: neighbor ? [{ Object: 200 }, { Object: 201 }] : [{ Object: 100 }, { Object: 101 }, { Object: 105 }],
+          min: 1,
+          max: 2,
+          copy_modifications: [],
+          scale: { counter_type: 'P1P1', scale_property: 'Power' },
+          choose_scope: neighbor ? { type: 'Neighbor', direction: 'Left' } : { type: 'Chooser' },
+          source_id: 372,
+          source_controller: 1,
+          remaining_players: neighbor ? [] : [1],
+          all_choices: neighbor ? [{ player: 1, chosen: [101] }] : [],
+          scoped_players: neighbor ? [1, 0] : [0, 1]
+        }
+      };
     }
     if (scene === 'category' || scene === 'categoryForAll') {
       // `CategoryChoice`: one candidate list per category, aligned with
@@ -905,7 +942,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1111,6 +1148,7 @@
         {#if scene === 'proliferate'}<ProliferatePrompt />{/if}
         {#if scene === 'timeTravelRemove' || scene === 'timeTravelAdd'}<TimeTravelPrompt />{/if}
         {#if scene === 'category' || scene === 'categoryForAll'}<CategoryPrompt />{/if}
+        {#if scene === 'copyChosen' || scene === 'copyChosenNeighbor'}<CopyChosenPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

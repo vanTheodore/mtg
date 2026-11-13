@@ -537,6 +537,85 @@ export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | 
   };
 }
 /**
+ * CR 707.2 + CR 101.4: `EachPlayerCopyChosen` — "each player chooses one or two
+ * creatures they control; each player creates a token that's a copy of the **first**
+ * creature they chose … then each player who chose a second creature puts counters
+ * on the token equal to the power of the second" (Human—Time Lord Meta-Crisis).
+ *
+ * **The order is the rule.** The answer is an ordered `SelectTargets`: index 0 is
+ * what gets copied, index 1 (when `max` allows a second pick) is only read for the
+ * scaling clause. Picks must be distinct, objects only, `min..=max` of them, and
+ * still live-eligible when submitted.
+ *
+ * `choose_scope` says whose battlefield the pool came from — the chooser's own, or
+ * their seat-neighbour's (CR 102.1 + CR 103.1) — and `all_choices` carries what the
+ * earlier players in APNAP order already chose, because nothing happens until the
+ * whole set is collected.
+ */
+export type CopyChosenScale = { counterType: string; property: string };
+export type CopyChosenPrompt = {
+  player: PlayerId;
+  eligible: ObjectId[];
+  min: number;
+  max: number;
+  /** Whose permanents this chooser draws from. */
+  scope: 'own' | 'left' | 'right';
+  scale: CopyChosenScale | null;
+  sourceId: ObjectId | null;
+  remainingPlayers: PlayerId[];
+  /** Choices already made, in APNAP order; the effect waits for the complete set. */
+  earlier: { player: PlayerId; chosen: ObjectId[] }[];
+};
+/** CR 208.1: the property the scaling clause reads off the second pick. */
+export function objectPropertyLabel(property: string): string {
+  const known: Record<string, string> = {
+    Power: 'fuerza',
+    Toughness: 'resistencia',
+    ManaValue: 'valor de maná'
+  };
+  return known[property] ?? property;
+}
+export function copyChosenPrompt(snapshot: EngineSnapshot | null): CopyChosenPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'EachPlayerCopyChosenSelection') return null;
+  const data = waiting.data ?? {};
+  const ids = (value: unknown): ObjectId[] =>
+    Array.isArray(value) ? (value as unknown[]).filter((id): id is ObjectId => typeof id === 'number') : [];
+  const scope = data.choose_scope as { type?: string; direction?: string } | undefined;
+  const rawScale = data.scale as { counter_type?: unknown; scale_property?: unknown } | undefined;
+  const rawChoices = Array.isArray(data.all_choices) ? (data.all_choices as unknown[]) : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    // The engine rejects a non-object pick outright, so the list is objects only.
+    eligible: Array.isArray(data.eligible)
+      ? (data.eligible as unknown[])
+          .map((entry) => parseTarget(entry))
+          .filter((entry): entry is NormalizedTarget => !!entry && entry.kind === 'object')
+          .map((entry) => entry.id)
+      : [],
+    min: typeof data.min === 'number' ? Math.max(0, data.min) : 1,
+    max: typeof data.max === 'number' ? Math.max(1, data.max) : 1,
+    scope: scope?.type === 'Neighbor' ? (scope.direction === 'Right' ? 'right' : 'left') : 'own',
+    scale:
+      rawScale && typeof rawScale.counter_type === 'string' && typeof rawScale.scale_property === 'string'
+        ? { counterType: rawScale.counter_type as string, property: rawScale.scale_property as string }
+        : null,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+    remainingPlayers: ids(data.remaining_players),
+    earlier: rawChoices
+      .map((entry) => {
+        const record = entry as { player?: unknown; chosen?: unknown };
+        return { player: typeof record.player === 'number' ? record.player : 0, chosen: ids(record.chosen) };
+      })
+      .filter((entry) => entry.chosen.length > 0)
+  };
+}
+/** CR 707.2: the picks go in the order they were made — that order is the rule. */
+export function copyChosenAction(ids: ObjectId[]): GameAction {
+  return selectTargetsAction(ids.map((id) => objectTarget(id)));
+}
+
+/**
  * CR 101.4 + CR 701.21a: "each player chooses one permanent of each of those types
  * from among the permanents they control, then sacrifices the rest" — Cataclysm,
  * Cataclysmic Gearhulk (each player for their own) and Tragic Arrogance (the

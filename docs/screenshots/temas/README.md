@@ -42,6 +42,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `timeTravelAdd` | `TimeTravelChoice` (poner) | [claro](viaje-poner-claro.jpg) | [oscuro](viaje-poner-oscuro.jpg) |
 | `category` | `CategoryChoice` (cada uno) | [claro](conservar-tipos-claro.jpg) | [oscuro](conservar-tipos-oscuro.jpg) |
 | `categoryForAll` | `CategoryChoice` (por todos) | [claro](conservar-por-todos-claro.jpg) | [oscuro](conservar-por-todos-oscuro.jpg) |
+| `copyChosen` | `EachPlayerCopyChosenSelection` (propio) | [claro](copiar-elegida-claro.jpg) | [oscuro](copiar-elegida-oscuro.jpg) |
+| `copyChosenNeighbor` | `EachPlayerCopyChosenSelection` (vecino) | [claro](copiar-vecino-claro.jpg) | [oscuro](copiar-vecino-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

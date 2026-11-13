@@ -23,6 +23,12 @@ import { fileURLToPath } from 'node:url';
  * oscuro. Las capturas de este fichero existen para revisar el tema, así que se
  * toman donde el tema manda.
  */
+// Este fichero recorre **todas** las escenas dentro de un solo `test` por tema
+// (dos capturas y dos auditorías por escena), así que su presupuesto es el del
+// recorrido entero y crece con el catálogo; el límite del proyecto es para un test
+// corto. Cuando la lista crezca otra vez, este número es el que hay que mirar.
+test.describe.configure({ timeout: 300_000 });
+
 const shotsDir = fileURLToPath(new URL('../../docs/screenshots/temas/', import.meta.url));
 
 /** Las escenas que esta rama añadió, con el nombre que llevará el fichero. */
@@ -57,7 +63,9 @@ const SCENES = [
   { scene: 'timeTravelRemove', slug: 'viaje-quitar', block: '[data-time-travel]' },
   { scene: 'timeTravelAdd', slug: 'viaje-poner', block: '[data-time-travel]' },
   { scene: 'category', slug: 'conservar-tipos', block: '[data-category-choice]' },
-  { scene: 'categoryForAll', slug: 'conservar-por-todos', block: '[data-category-choice]' }
+  { scene: 'categoryForAll', slug: 'conservar-por-todos', block: '[data-category-choice]' },
+  { scene: 'copyChosen', slug: 'copiar-elegida', block: '[data-copy-chosen]' },
+  { scene: 'copyChosenNeighbor', slug: 'copiar-vecino', block: '[data-copy-chosen]' }
 ] as const;
 
 const THEMES = [

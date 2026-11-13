@@ -663,6 +663,71 @@ test('conservar por todos: el mismo bloque elige de la mesa del rival', async ({
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('copiar la elegida: el orden es la regla, y se ve en la lista', async ({ page }) => {
+  await page.goto('/ux?scene=copyChosen');
+  const block = page.locator('[data-copy-chosen]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Copiar una criatura elegida');
+  // CR 707.2: index 0 is copied, the second pick only scales the copy.
+  await expect(block).toContainText('CR 707.2');
+  await expect(block).toContainText('El orden es la regla');
+  await expect(block.locator('[data-copy-chosen-scale]')).toContainText('contadores de +1/+1 como fuerza');
+  await expect(block).toContainText('CR 208.1');
+
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeDisabled();
+  await expect(confirm).toHaveText('Elige la criatura que se copia');
+  await expect(block.locator('.pick')).toHaveCount(0);
+
+  // The first pick is the one copied.
+  await block.locator('[data-copy-chosen-pick="101"]').click();
+  await expect(block.locator('.pick')).toHaveCount(1);
+  await expect(block.locator('.pick').first()).toContainText('1º');
+  await expect(block.locator('.pick').first()).toContainText('Savannah Lions');
+  await expect(block.locator('.pick').first()).toContainText('se copia');
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Copiar 1 criatura');
+
+  // The second only scales, and reaching `max` closes the list.
+  await block.locator('[data-copy-chosen-pick="100"]').click();
+  await expect(block.locator('.pick')).toHaveCount(2);
+  await expect(block.locator('.pick').nth(1)).toContainText('2º');
+  await expect(block.locator('.pick').nth(1)).toContainText('escala la copia');
+  await expect(confirm).toHaveText('Copiar la 1ª y escalar con la 2ª');
+  await expect(block.locator('[data-copy-chosen-pick="105"]')).toBeDisabled();
+
+  // Removing the first re-ranks the rest: the only honest way to fix an order.
+  await block.locator('[data-copy-chosen-pick="101"]').click();
+  await expect(block.locator('.pick')).toHaveCount(1);
+  await expect(block.locator('.pick').first()).toContainText('Grizzly Bears');
+  await expect(block.locator('.pick').first()).toContainText('se copia');
+  await expect(confirm).toHaveText('Copiar 1 criatura');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('copiar del vecino: el pozo es su mesa y la elección espera a todos', async ({ page }) => {
+  await page.goto('/ux?scene=copyChosenNeighbor');
+  const block = page.locator('[data-copy-chosen]');
+  await expect(block).toBeVisible();
+  // CR 102.1: the pool comes from the seat-neighbour's battlefield.
+  await expect(block).toContainText('vecino de la izquierda');
+  await expect(block).toContainText('CR 102.1');
+  // CR 101.4: nothing is applied until the whole APNAP set is collected.
+  await expect(block.locator('[data-copy-chosen-earlier]')).toContainText('Jugador 2: Savannah Lions');
+  await expect(block).toContainText('CR 101.4');
+  await expect(block).toHaveAttribute('data-copy-chosen-scope', 'left');
+
+  // Two same-name permanents on the same side: the id separates them.
+  await expect(block.locator('[data-copy-chosen-pick="200"]')).toContainText('Grizzly Bears (Jugador 2) · #200');
+  await block.locator('[data-copy-chosen-pick="200"]').click();
+  await expect(block.locator('button.primary')).toHaveText('Copiar 1 criatura');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');
