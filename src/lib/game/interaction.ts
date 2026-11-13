@@ -590,9 +590,65 @@ export function chooseObjectsPrompt(snapshot: EngineSnapshot | null): ChooseObje
     triggered: !!data.trigger_event
   };
 }
-/** CR 608.2c: one `SelectTargets` answer, distinct, in the chosen order. */
-export function chooseObjectsAction(targets: TargetRef[]): GameAction {
+/**
+ * The answer every "choose any number of these" prompt shares: one `SelectTargets`
+ * carrying the picks, in the order they were made. Distinctness and the window are
+ * the engine's to enforce; the UI only ever sends what it offered.
+ */
+export function selectTargetsAction(targets: TargetRef[]): GameAction {
   return { type: 'SelectTargets', data: { targets: targets.map((target) => ({ ...target })) } };
+}
+/** CR 608.2c: the same answer, named for the prompt that introduced it. */
+export const chooseObjectsAction = selectTargetsAction;
+
+/** `{Player: n}` / `{Object: n}` entries, junk dropped rather than guessed at. */
+function parseTargetList(value: unknown): TargetRef[] {
+  return Array.isArray(value)
+    ? (value as unknown[])
+        .map((entry) => parseTarget(entry))
+        .filter((entry): entry is NormalizedTarget => !!entry)
+        .map((entry) => (entry.kind === 'player' ? playerTarget(entry.id) : objectTarget(entry.id)))
+    : [];
+}
+
+/**
+ * CR 701.34a: proliferate — "choose any number of permanents and/or players, then
+ * give each another counter of each kind already there". The prompt is that
+ * choice and nothing else: the engine publishes exactly what has a counter
+ * (permanents, plus players with poison or energy), so there is no window — any
+ * number, including none, and no duplicates.
+ */
+export type ProliferatePrompt = { player: PlayerId; eligible: TargetRef[] };
+export function proliferatePrompt(snapshot: EngineSnapshot | null): ProliferatePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ProliferateChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    eligible: parseTargetList(data.eligible)
+  };
+}
+
+/**
+ * CR 701.56a: time travel — for each chosen object, put **or** remove a time
+ * counter. The engine models the "or" as two phases over the same answer: it
+ * offers the remove phase first (advancing suspended cards toward casting) and
+ * then the add phase over the objects still eligible, **excluding** the ones just
+ * chosen to remove — so each object gets at most one of the two.
+ *
+ * The phase is the whole screen: the same list, opposite verb. The block names it
+ * instead of asking the player to remember which half they are in.
+ */
+export type TimeTravelPrompt = { player: PlayerId; eligible: TargetRef[]; phase: 'remove' | 'add' };
+export function timeTravelPrompt(snapshot: EngineSnapshot | null): TimeTravelPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'TimeTravelChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    eligible: parseTargetList(data.eligible),
+    phase: (data.phase as { type?: string } | undefined)?.type === 'Add' ? 'add' : 'remove'
+  };
 }
 
 /**

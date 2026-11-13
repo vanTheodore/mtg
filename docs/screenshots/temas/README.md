@@ -37,6 +37,9 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `retargetSingle` | `RetargetChoice` (uno) | [claro](cambiar-objetivo-claro.jpg) | [oscuro](cambiar-objetivo-oscuro.jpg) |
 | `chooseObjects` | `ChooseObjectsSelection` (cualquiera) | [claro](elegir-permanentes-claro.jpg) | [oscuro](elegir-permanentes-oscuro.jpg) |
 | `chooseObjectsRecipient` | `ChooseObjectsSelection` (receptor) | [claro](elegir-receptor-claro.jpg) | [oscuro](elegir-receptor-oscuro.jpg) |
+| `proliferate` | `ProliferateChoice` | [claro](proliferar-claro.jpg) | [oscuro](proliferar-oscuro.jpg) |
+| `timeTravelRemove` | `TimeTravelChoice` (quitar) | [claro](viaje-quitar-claro.jpg) | [oscuro](viaje-quitar-oscuro.jpg) |
+| `timeTravelAdd` | `TimeTravelChoice` (poner) | [claro](viaje-poner-claro.jpg) | [oscuro](viaje-poner-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

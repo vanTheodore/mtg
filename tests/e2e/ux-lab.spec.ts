@@ -529,6 +529,72 @@ test('el receptor del daño: una elección que puede ser un jugador, y no es un 
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('proliferar: cualquiera que ya lleve contadores, y ninguno también vale', async ({ page }) => {
+  await page.goto('/ux?scene=proliferate');
+  const block = page.locator('[data-proliferate]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Proliferar');
+  // CR 701.34a: another counter of each kind already there.
+  await expect(block).toContainText('CR 701.34a');
+  await expect(block.locator('[data-proliferate-count]')).toHaveText('Elegidos 0 de 4');
+  // A player is a legal pick here — poison and energy are counters too.
+  await expect(block.locator('.kind', { hasText: 'Jugador' })).toHaveCount(2);
+
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Confirmar sin proliferar nada');
+
+  await block.getByRole('button', { name: /^Chandra, Torch of Defiance/ }).click();
+  await expect(block.locator('[data-proliferate-count]')).toHaveText('Elegidos 1 de 4');
+  await expect(confirm).toHaveText('Proliferar 1 elegido');
+  await block.getByRole('button', { name: /^Jugador 2/ }).click();
+  await expect(block.locator('[data-proliferate-count]')).toHaveText('Elegidos 2 de 4');
+  await expect(confirm).toHaveText('Proliferar 2 elegidos');
+  // Untoggling is the undo, and the answer stays legal at zero.
+  await block.getByRole('button', { name: /^Chandra, Torch of Defiance/ }).click();
+  await block.getByRole('button', { name: /^Jugador 2/ }).click();
+  await expect(confirm).toHaveText('Confirmar sin proliferar nada');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('viaje en el tiempo: la misma lista, primero quitar y después poner', async ({ page }) => {
+  await page.goto('/ux?scene=timeTravelRemove');
+  const block = page.locator('[data-time-travel]');
+  await expect(block).toBeVisible();
+  // CR 701.56a: the phase is the screen — same rows, opposite verb.
+  await expect(block.locator('strong')).toHaveText('Viaje en el tiempo · quitar contadores');
+  await expect(block).toContainText('CR 701.56a');
+  await expect(block).toHaveAttribute('data-time-travel-phase', 'remove');
+  await expect(block.locator('[data-time-travel-count]')).toHaveText('Elegidos 0 de 2');
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Confirmar sin quitar ninguno');
+
+  await block.getByRole('button', { name: /^Ancestral Vision/ }).click();
+  await expect(confirm).toHaveText('Quitar un contador a 1 elegido');
+  await expect(block.getByRole('button', { name: /^Ancestral Vision/ }).locator('.tick')).toHaveText('−');
+  // Suspended cards live in exile: the row says where the object is.
+  await expect(block.locator('.zone', { hasText: 'Exilio' })).toHaveCount(2);
+
+  // The add half is the same list without the object just chosen.
+  await page.goto('/ux?scene=timeTravelAdd');
+  const add = page.locator('[data-time-travel]');
+  await expect(add.locator('strong')).toHaveText('Viaje en el tiempo · poner contadores');
+  await expect(add).toHaveAttribute('data-time-travel-phase', 'add');
+  await expect(add.locator('[data-time-travel-count]')).toHaveText('Elegidos 0 de 1');
+  await expect(add).toContainText('no las dos cosas');
+  await expect(add.getByRole('button', { name: /^Ancestral Vision/ })).toHaveCount(0);
+  await expect(add.locator('button.primary')).toHaveText('Confirmar sin poner ninguno');
+  await add.getByRole('button', { name: /^Lotus Bloom/ }).click();
+  await expect(add.locator('button.primary')).toHaveText('Poner un contador en 1 elegido');
+  await expect(add.getByRole('button', { name: /^Lotus Bloom/ }).locator('.tick')).toHaveText('+');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

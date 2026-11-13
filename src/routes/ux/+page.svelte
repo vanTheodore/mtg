@@ -50,9 +50,11 @@
   import MoveCountersPrompt from '#lib/components/MoveCountersPrompt.svelte';
   import RetargetPrompt from '#lib/components/RetargetPrompt.svelte';
   import ChooseObjectsPrompt from '#lib/components/ChooseObjectsPrompt.svelte';
+  import ProliferatePrompt from '#lib/components/ProliferatePrompt.svelte';
+  import TimeTravelPrompt from '#lib/components/TimeTravelPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -93,6 +95,9 @@
     { value: 'retargetSingle', label: 'Cambiar objetivos: uno' },
     { value: 'chooseObjects', label: 'Elegir permanentes: cualquiera' },
     { value: 'chooseObjectsRecipient', label: 'Elegir receptor del daño' },
+    { value: 'proliferate', label: 'Proliferar' },
+    { value: 'timeTravelRemove', label: 'Viaje en el tiempo: quitar' },
+    { value: 'timeTravelAdd', label: 'Viaje en el tiempo: poner' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -135,6 +140,9 @@
     retargetSingle: 'RetargetChoice · CR 115.7a, «change the target»',
     chooseObjects: 'ChooseObjectsSelection · CR 608.2c, «esos» es el conjunto',
     chooseObjectsRecipient: 'ChooseObjectsSelection · CR 115.10a, sin objetivo',
+    proliferate: 'ProliferateChoice · CR 701.34a, otra de cada clase',
+    timeTravelRemove: 'TimeTravelChoice · CR 701.56a, primera mitad: quitar',
+    timeTravelAdd: 'TimeTravelChoice · CR 701.56a, segunda mitad: poner',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -276,7 +284,26 @@
     id: 344, card_id: 344, owner: 0, controller: 0, zone: 'Battlefield',
     name: 'Forgotten Ancient',
     card_types: { core_types: ['Creature'], subtypes: ['Elemental'] },
+    // CR 701.34a: a permanent that already carries a counter is what proliferate
+    // can pick — the same three +1/+1 the move-counter scene moves.
+    counters: { P1P1: 3 },
     oracle_text: 'Whenever a player casts a spell, you may put a +1/+1 counter on this creature.\nAt the beginning of your upkeep, you may move any number of +1/+1 counters from this creature onto other creatures.'
+  } as GameObject;
+  // CR 701.56a: the two halves of time travel need objects with time counters.
+  // `Ancestral Vision` and `Lotus Bloom` are the canonical suspend cards, and they
+  // live only in `objects` (their `zone` is Exile but they are not in `state.exile`),
+  // so no pile count the rest of the lab asserts moves.
+  const suspendedVision = {
+    id: 360, card_id: 360, owner: 0, controller: 0, zone: 'Exile',
+    name: 'Ancestral Vision',
+    card_types: { core_types: ['Sorcery'] },
+    counters: { time: 4 }
+  } as GameObject;
+  const suspendedLotus = {
+    id: 361, card_id: 361, owner: 0, controller: 0, zone: 'Exile',
+    name: 'Lotus Bloom',
+    card_types: { core_types: ['Artifact'] },
+    counters: { time: 3 }
   } as GameObject;
   // A modal card for the mode scene: Fireball is not modal, and the lab should
   // not teach the wrong example.
@@ -312,7 +339,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -386,6 +413,33 @@
               contributions: [2, 2, 1]
             }
           };
+    }
+    if (scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd') {
+      // `ProliferateChoice`: everything that already carries a counter — permanents
+      // and, for poison or energy, the seats. `Steady Progress` ("Proliferate.") is
+      // the card whose own text the engine quotes. `TimeTravelChoice` is the same
+      // gesture in two halves; `Ancestral Vision` and `Lotus Bloom` are suspended
+      // cards with time counters, which is the common case the engine names.
+      if (scene === 'proliferate') {
+        return {
+          type: 'ProliferateChoice',
+          data: {
+            player: 0,
+            eligible: [{ Object: 205 }, { Object: 344 }, { Player: 0 }, { Player: 1 }]
+          }
+        };
+      }
+      const adding = scene === 'timeTravelAdd';
+      return {
+        type: 'TimeTravelChoice',
+        data: {
+          player: 0,
+          // After the remove half the just-chosen object is gone from the list:
+          // each object gets at most one of add/remove (CR 701.56a).
+          eligible: adding ? [{ Object: 361 }] : [{ Object: 360 }, { Object: 361 }],
+          phase: { type: adding ? 'Add' : 'Remove' }
+        }
+      };
     }
     if (scene === 'chooseObjects' || scene === 'chooseObjectsRecipient') {
       // `ChooseObjectsSelection`: the eligible set and the window the engine
@@ -805,7 +859,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1008,6 +1062,8 @@
         {#if scene === 'moveCounters'}<MoveCountersPrompt />{/if}
         {#if scene === 'retarget' || scene === 'retargetSingle'}<RetargetPrompt />{/if}
         {#if scene === 'chooseObjects' || scene === 'chooseObjectsRecipient'}<ChooseObjectsPrompt />{/if}
+        {#if scene === 'proliferate'}<ProliferatePrompt />{/if}
+        {#if scene === 'timeTravelRemove' || scene === 'timeTravelAdd'}<TimeTravelPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

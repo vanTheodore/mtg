@@ -52,7 +52,10 @@ const SCENES = [
   { scene: 'retarget', slug: 'cambiar-objetivos', block: '[data-retarget]' },
   { scene: 'retargetSingle', slug: 'cambiar-objetivo', block: '[data-retarget]' },
   { scene: 'chooseObjects', slug: 'elegir-permanentes', block: '[data-choose-objects]' },
-  { scene: 'chooseObjectsRecipient', slug: 'elegir-receptor', block: '[data-choose-objects]' }
+  { scene: 'chooseObjectsRecipient', slug: 'elegir-receptor', block: '[data-choose-objects]' },
+  { scene: 'proliferate', slug: 'proliferar', block: '[data-proliferate]' },
+  { scene: 'timeTravelRemove', slug: 'viaje-quitar', block: '[data-time-travel]' },
+  { scene: 'timeTravelAdd', slug: 'viaje-poner', block: '[data-time-travel]' }
 ] as const;
 
 const THEMES = [

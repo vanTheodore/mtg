@@ -1480,3 +1480,56 @@ respuesta —incluida la vacía— y el caso ajeno); build OK; y en Chromium dos
 pruebas nuevas —el recuento que sigue a los toggles y la respuesta vacía; el
 receptor con las filas apagadas al alcanzar `max` y reabiertas al soltar— más las
 dos escenas en la prueba de temas.
+
+## Proliferar y viajar en el tiempo: el mismo gesto, dos reglas (trigésima cuarta pasada, 13 nov 2026)
+
+Dos variantes que comparten la forma —«elige cualquier número de estos», respondida
+con un `SelectTargets`— y no comparten la regla:
+
+| | Qué publica el motor | Qué hace el motor con lo elegido |
+|---|---|---|
+| `ProliferateChoice` (CR 701.34a) | lo que ya lleva contadores, permanentes **y** jugadores | a cada uno, otro contador de cada clase que ya tenga |
+| `TimeTravelChoice` (CR 701.56a) | permanentes con contador de tiempo y cartas suspendidas en el exilio | a cada uno, **o** un contador de tiempo, **o** quitárselo |
+
+**Proliferar no tiene ventana.** No hay mínimo ni máximo que respetar: el motor
+publica exactamente lo que cualifica y el bloque lo ofrece tal cual. Que un jugador
+aparezca en la lista es la parte que sorprende, y el texto lo explica en vez de
+dejarlo a la deducción: elegir un jugador es elegir su veneno o su energía, porque
+son contadores. Sin picks el botón sigue habilitado («Confirmar sin proliferar
+nada»).
+
+**El viaje en el tiempo son dos pantallas, no una.** El motor modela el «o» del
+texto como dos fases sobre la misma respuesta: primero la de quitar (la habitual,
+acercar cartas suspendidas a lanzarse) y después la de poner, sobre los objetos que
+siguen elegibles **sin** los que acabas de restar — así cada objeto recibe o pierde,
+no las dos cosas. La fase es el dato que cambia la pantalla: las mismas filas, el
+verbo contrario, y el bloque lo rotula («quitar contadores» / «poner contadores»)
+en la cabecera, en la regla y en el botón, con `−` o `+` en la fila elegida. Pedir
+al jugador que recuerde en qué mitad está sería la forma más barata de equivocarse.
+
+**Una respuesta, tres prompts.** `SelectTargets` ya era la respuesta de
+`ChooseObjectsSelection`; se extrajo a `selectTargetsAction` y los tres la usan, en
+vez de tres constructores idénticos. Lo que cambia entre ellos no es la forma de
+responder, es lo que el motor hará después.
+
+Objetos del laboratorio: `Steady Progress` («Proliferate.») para el conjunto que ya
+lleva contadores —Chandra con 4 de lealtad, Forgotten Ancient con 3 de +1/+1 y los
+dos asientos, que llevan veneno y energía—; `Ancestral Vision` y `Lotus Bloom`, las
+cartas suspendidas canónicas, para las dos mitades del viaje. Las suspendidas viven
+solo en `objects` (su zona es Exilio pero no están en `state.exile`), así que no
+mueven ningún recuento de pila que el resto del laboratorio afirme.
+
+Laboratorio: `/ux?scene=proliferate`, `/ux?scene=timeTravelRemove` y
+`/ux?scene=timeTravelAdd`; capturas `docs/screenshots/ux-proliferar-1440.jpg`,
+`ux-viaje-quitar-1440.jpg` y `ux-viaje-poner-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **456** (6 nuevas en
+`game/__tests__/proliferate-time-travel.test.ts`: el conjunto de proliferar con sus
+asientos, la basura podada con el asiento del visor por defecto, la fase del viaje
+en las dos mitades, la fase ausente o desconocida que cae en quitar, la respuesta
+compartida y el caso ajeno); build OK; y en Chromium dos pruebas nuevas —proliferar
+con el recuento que sigue a los toggles y la respuesta vacía; el viaje en el tiempo
+con el verbo de cada mitad, el `−`/`+` de la fila y la ausencia del objeto ya
+restado— más las tres escenas en la prueba de temas.

@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -223,6 +223,8 @@ class GameSession {
     this.movePick = {};
     this.retargetPick = {};
     this.choosePick = [];
+    this.proliferatePick = [];
+    this.timeTravelPick = [];
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -513,6 +515,75 @@ class GameSession {
     const targets = this.chooseSelected;
     this.choosePick = [];
     void this.dispatch(chooseObjectsAction(targets));
+  }
+
+  /** CR 701.34a: any number of the objects that already have a counter. */
+  get proliferatePrompt() {
+    return readProliferate(this.snapshot);
+  }
+  proliferatePick = $state<string[]>([]);
+  proliferateIsPicked(target: TargetRef): boolean {
+    return this.proliferatePick.includes(splitKey(target));
+  }
+  get proliferateSelected(): TargetRef[] {
+    const prompt = this.proliferatePrompt;
+    if (!prompt) return [];
+    return this.proliferatePick
+      .map((key) => prompt.eligible.find((target) => splitKey(target) === key))
+      .filter((target): target is TargetRef => !!target);
+  }
+  toggleProliferate(target: TargetRef) {
+    const prompt = this.proliferatePrompt;
+    if (!prompt) return;
+    const key = splitKey(target);
+    if (this.proliferatePick.includes(key)) {
+      this.proliferatePick = this.proliferatePick.filter((entry) => entry !== key);
+      return;
+    }
+    if (!prompt.eligible.some((entry) => splitKey(entry) === key)) return;
+    this.proliferatePick = [...this.proliferatePick, key];
+  }
+  confirmProliferate() {
+    const prompt = this.proliferatePrompt;
+    if (!prompt) return;
+    const targets = this.proliferateSelected;
+    this.proliferatePick = [];
+    void this.dispatch(selectTargetsAction(targets));
+  }
+
+  /** CR 701.56a: the same list twice — first which to remove from, then which to add to. */
+  get timeTravelPrompt() {
+    return readTimeTravel(this.snapshot);
+  }
+  timeTravelPick = $state<string[]>([]);
+  timeTravelIsPicked(target: TargetRef): boolean {
+    return this.timeTravelPick.includes(splitKey(target));
+  }
+  get timeTravelSelected(): TargetRef[] {
+    const prompt = this.timeTravelPrompt;
+    if (!prompt) return [];
+    return this.timeTravelPick
+      .map((key) => prompt.eligible.find((target) => splitKey(target) === key))
+      .filter((target): target is TargetRef => !!target);
+  }
+  toggleTimeTravel(target: TargetRef) {
+    const prompt = this.timeTravelPrompt;
+    if (!prompt) return;
+    const key = splitKey(target);
+    if (this.timeTravelPick.includes(key)) {
+      this.timeTravelPick = this.timeTravelPick.filter((entry) => entry !== key);
+      return;
+    }
+    if (!prompt.eligible.some((entry) => splitKey(entry) === key)) return;
+    this.timeTravelPick = [...this.timeTravelPick, key];
+  }
+  confirmTimeTravel() {
+    const prompt = this.timeTravelPrompt;
+    if (!prompt) return;
+    const targets = this.timeTravelSelected;
+    // The next phase (or priority) arrives with the new snapshot, which clears the picks.
+    this.timeTravelPick = [];
+    void this.dispatch(selectTargetsAction(targets));
   }
 
   /** CR 601.2d / CR 608.2d: how much of an amount each recipient gets. */
@@ -1025,6 +1096,8 @@ class GameSession {
       this.movePick = {};
       this.retargetPick = {};
       this.choosePick = [];
+      this.proliferatePick = [];
+      this.timeTravelPick = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

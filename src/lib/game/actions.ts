@@ -143,6 +143,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'MoveCountersDistribution': return 'Elige cuántos contadores se mueven y a qué permanentes.';
     case 'RetargetChoice': return 'Cambia los objetivos de un hechizo que ya está en la pila.';
     case 'ChooseObjectsSelection': return 'Elige los permanentes que el efecto tratará como «esos»; no son objetivos.';
+    case 'ProliferateChoice': return 'Elige quién ya lleva contadores: cada uno recibe otro de cada clase.';
+    case 'TimeTravelChoice': return 'Quita o pon contadores de tiempo: primero una mitad, después la otra.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';
