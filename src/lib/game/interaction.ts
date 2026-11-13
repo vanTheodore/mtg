@@ -537,6 +537,53 @@ export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | 
   };
 }
 /**
+ * CR 107.1c + CR 701.21a: "each player chooses any number of creatures they
+ * control with total power 4 or less, then sacrifices all other creatures they
+ * control" (Slaughter the Strong).
+ *
+ * The window is not a count but a **sum**: any number of eligible creatures whose
+ * combined power stays within `cap`, and the rest are sacrificed. Zero is legal
+ * ("any number" may be fewer — and zero — which the engine test states outright),
+ * and choosing nothing sacrifices everything, so the button says so.
+ *
+ * `cap` is the engine's resolved number (CR 608.2h), so the screen never recomputes
+ * it; the powers are the ones published on the objects, and when one is missing the
+ * sum is reported as incomplete instead of guessed.
+ */
+export type KeepPowerPrompt = {
+  player: PlayerId;
+  targetPlayer: PlayerId;
+  eligible: ObjectId[];
+  /** CR 208.3: maximum combined power of the kept subset. */
+  cap: number;
+  chooserScope: 'self' | 'forAll';
+  sourceId: ObjectId | null;
+  remainingPlayers: PlayerId[];
+  keptBefore: ObjectId[];
+};
+export function keepPowerPrompt(snapshot: EngineSnapshot | null): KeepPowerPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'KeepWithinTotalPowerChoice') return null;
+  const data = waiting.data ?? {};
+  const ids = (value: unknown): ObjectId[] =>
+    Array.isArray(value) ? (value as unknown[]).filter((id): id is ObjectId => typeof id === 'number') : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    targetPlayer: typeof data.target_player === 'number' ? data.target_player : snapshot!.viewer,
+    eligible: ids(data.eligible),
+    cap: typeof data.cap === 'number' ? data.cap : 0,
+    chooserScope: data.chooser_scope === 'ControllerForAll' ? 'forAll' : 'self',
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+    remainingPlayers: ids(data.remaining_players),
+    keptBefore: ids(data.all_kept)
+  };
+}
+/** CR 107.1c: the subset to keep; the engine sums its power against the cap. */
+export function keepPowerAction(ids: ObjectId[]): GameAction {
+  return { type: 'ChooseKeptCreatures', data: { kept: [...ids] } };
+}
+
+/**
  * CR 707.2 + CR 101.4: `EachPlayerCopyChosen` — "each player chooses one or two
  * creatures they control; each player creates a token that's a copy of the **first**
  * creature they chose … then each player who chose a second creature puts counters

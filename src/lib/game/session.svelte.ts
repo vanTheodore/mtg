@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -227,6 +227,7 @@ class GameSession {
     this.timeTravelPick = [];
     this.categoryPick = {};
     this.copyChosenPick = [];
+    this.keepPowerPick = [];
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -663,6 +664,59 @@ class GameSession {
     const ids = this.copyChosenPick;
     this.copyChosenPick = [];
     void this.dispatch(copyChosenAction(ids));
+  }
+
+  /** CR 107.1c: keep a subset whose combined power fits the cap. */
+  get keepPowerPrompt() {
+    return readKeepPower(this.snapshot);
+  }
+  /** CR 208.3: the power the engine publishes for that creature, if it does. */
+  powerOf(id: ObjectId): number | undefined {
+    const value = (this.snapshot?.state.objects[String(id)] as { power?: unknown } | undefined)?.power;
+    return typeof value === 'number' ? value : undefined;
+  }
+  keepPowerPick = $state<ObjectId[]>([]);
+  keepPowerIsPicked(id: ObjectId): boolean {
+    return this.keepPowerPick.includes(id);
+  }
+  /** Sum of the picked powers; `null` when any of them is unpublished. */
+  get keepPowerTotal(): number | null {
+    let total = 0;
+    for (const id of this.keepPowerPick) {
+      const power = this.powerOf(id);
+      if (power === undefined) return null;
+      total += power;
+    }
+    return total;
+  }
+  /** True when that creature still fits under the cap (CR 208.3). */
+  keepPowerFits(id: ObjectId): boolean {
+    const prompt = this.keepPowerPrompt;
+    if (!prompt) return false;
+    const total = this.keepPowerTotal;
+    const power = this.powerOf(id);
+    // Without a published power the screen cannot promise it fits; it lets the
+    // engine be the one to refuse.
+    if (total === null || power === undefined) return true;
+    return total + power <= prompt.cap;
+  }
+  toggleKeepPower(id: ObjectId) {
+    const prompt = this.keepPowerPrompt;
+    if (!prompt) return;
+    if (this.keepPowerPick.includes(id)) {
+      this.keepPowerPick = this.keepPowerPick.filter((entry) => entry !== id);
+      return;
+    }
+    if (!prompt.eligible.includes(id) || !this.keepPowerFits(id)) return;
+    this.keepPowerPick = [...this.keepPowerPick, id];
+  }
+  /** Zero is a legal answer, and it sacrifices everything: nothing blocks here. */
+  confirmKeepPower() {
+    const prompt = this.keepPowerPrompt;
+    if (!prompt) return;
+    const kept = this.keepPowerPick;
+    this.keepPowerPick = [];
+    void this.dispatch(keepPowerAction(kept));
   }
 
   /** CR 601.2d / CR 608.2d: how much of an amount each recipient gets. */
@@ -1179,6 +1233,7 @@ class GameSession {
       this.timeTravelPick = [];
       this.categoryPick = {};
       this.copyChosenPick = [];
+      this.keepPowerPick = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

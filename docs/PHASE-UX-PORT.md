@@ -1639,3 +1639,50 @@ traducida y el caso ajeno); build OK; y en Chromium dos pruebas nuevas —los do
 puestos numerados, el `max` que cierra la lista y el renumerado al quitar el
 primero; y la variante del vecino con su pozo ajeno y la elección previa— más las
 dos escenas en la prueba de temas.
+
+## Conservar por fuerza total: la ventana es una suma (trigésima séptima pasada, 13 nov 2026)
+
+`KeepWithinTotalPowerChoice` es CR 107.1c + CR 701.21a, con `Slaughter the Strong`
+como caso real: «each player chooses any number of creatures they control with
+total power 4 or less, then sacrifices all other creatures they control».
+
+**Es la primera ventana del port que no cuenta, sino que suma.** Todo lo anterior
+—el reparto, los contadores, los tipos, la copia— se medía en unidades; aquí el
+número que decide es la **suma de la fuerza** del subconjunto elegido frente a un
+tope que el motor ya resolvió (CR 608.2h) y que la pantalla no recalcula. De ahí que
+el bloque sea, en el fondo, un total corriente: «Fuerza elegida 3 de 4 · quedan 1»,
+con las criaturas que desbordarían el tope **apagadas** en vez de aceptadas y
+rechazadas después, y con la suma reabriendo esas filas en cuanto se suelta una.
+
+**La fuerza es un dato publicado, no una suposición.** Se lee del objeto
+(`power`). Cuando falta —un objeto que el motor no completó— el bloque no inventa un
+cero: marca el total como desconocido, avisa de que sólo cuenta lo publicado y deja
+que el motor haga la cuenta final, que es suya.
+
+**Cero es una respuesta legal**, y aquí es la más cara: «any number» admite cero, y
+confirmar sin conservar ninguna sacrifica todo. El botón lo dice con esas palabras
+(«Confirmar sin conservar ninguna»), porque un botón gris habría escondido la
+consecuencia en vez de anunciarla.
+
+`chooser_scope` vuelve a cambiar el sujeto —«eliges de entre las criaturas del
+Jugador n» o «eliges tú por todos los jugadores del efecto»— y `remaining_players`
+se anuncia al final del botón, como en las dos pasadas anteriores.
+
+Objetos del laboratorio: las tres criaturas del jugador 1 (2, 2 y 1 de fuerza, suma
+5 frente al tope 4, así que la tercera sólo cabe si se suelta una) para la forma
+propia, y las dos del rival (2 y 2, tope 3) para la que elige por todos.
+
+Laboratorio: `/ux?scene=keepPower` y `/ux?scene=keepPowerForAll`, capturas
+`docs/screenshots/ux-conservar-fuerza-1440.jpg` y
+`docs/screenshots/ux-conservar-fuerza-todos-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **477** (6 nuevas en
+`game/__tests__/keep-power.test.ts`: el pozo con su tope resuelto, la forma que
+elige por todos con sus elecciones previas, la basura podada con el tope ausente en
+cero —no adivinado—, los valores por defecto del asiento, la respuesta con el
+subconjunto y el caso ajeno); build OK; y en Chromium dos pruebas nuevas —el total
+que sube y baja, la criatura que desborda apagada y reabierta, y el rótulo del cero;
+y la variante que elige por el rival con su tope de 3— más las dos escenas en la
+prueba de temas.

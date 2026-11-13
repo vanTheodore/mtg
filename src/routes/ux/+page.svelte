@@ -54,9 +54,10 @@
   import TimeTravelPrompt from '#lib/components/TimeTravelPrompt.svelte';
   import CategoryPrompt from '#lib/components/CategoryPrompt.svelte';
   import CopyChosenPrompt from '#lib/components/CopyChosenPrompt.svelte';
+  import KeepPowerPrompt from '#lib/components/KeepPowerPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -104,6 +105,8 @@
     { value: 'categoryForAll', label: 'Conservar por todos' },
     { value: 'copyChosen', label: 'Copiar la elegida' },
     { value: 'copyChosenNeighbor', label: 'Copiar del vecino' },
+    { value: 'keepPower', label: 'Conservar por fuerza' },
+    { value: 'keepPowerForAll', label: 'Conservar por fuerza: todos' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -153,6 +156,8 @@
     categoryForAll: 'CategoryChoice · CR 101.4, elige por los demás',
     copyChosen: 'EachPlayerCopyChosenSelection · CR 707.2, el orden manda',
     copyChosenNeighbor: 'EachPlayerCopyChosenSelection · CR 102.1, del vecino',
+    keepPower: 'KeepWithinTotalPowerChoice · CR 107.1c, tope de fuerza',
+    keepPowerForAll: 'KeepWithinTotalPowerChoice · CR 101.4, por todos',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -299,6 +304,14 @@
     counters: { P1P1: 3 },
     oracle_text: 'Whenever a player casts a spell, you may put a +1/+1 counter on this creature.\nAt the beginning of your upkeep, you may move any number of +1/+1 counters from this creature onto other creatures.'
   } as GameObject;
+  // CR 107.1c: the card the engine tests for the total-power keep window, with its
+  // verbatim text (`tests/integration/slaughter_the_strong_total_power_4380.rs`).
+  const slaughterTheStrong = {
+    id: 373, card_id: 373, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Slaughter the Strong',
+    card_types: { core_types: ['Sorcery'] },
+    oracle_text: 'Each player chooses any number of creatures they control with total power 4 or less, then sacrifices all other creatures they control.'
+  } as GameObject;
   // CR 707.2: the phenomenon whose body is one `EachPlayerCopyChosen` — the
   // verbatim text is the one in `oracle_effect/tests.rs`
   // (`each_player_copy_chosen_human_time_lord_trigger`).
@@ -369,7 +382,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -443,6 +456,28 @@
               contributions: [2, 2, 1]
             }
           };
+    }
+    if (scene === 'keepPower' || scene === 'keepPowerForAll') {
+      // `KeepWithinTotalPowerChoice`: the window is a sum of power, not a count.
+      // `Slaughter the Strong` is the card the engine tests for it. The eligible
+      // creatures carry their published power, so a pick that would overflow the cap
+      // is the one the block must disable: 2 + 2 + 1 = 5 over a cap of 4.
+      const forAll = scene === 'keepPowerForAll';
+      return {
+        type: 'KeepWithinTotalPowerChoice',
+        data: {
+          player: 0,
+          target_player: forAll ? 1 : 0,
+          eligible: forAll ? [200, 201] : [100, 101, 105],
+          cap: forAll ? 3 : 4,
+          chooser_scope: forAll ? 'ControllerForAll' : 'EachPlayerSelf',
+          source_id: 373,
+          source_controller: 0,
+          remaining_players: forAll ? [] : [1],
+          all_kept: [],
+          scoped_players: [0, 1]
+        }
+      };
     }
     if (scene === 'copyChosen' || scene === 'copyChosenNeighbor') {
       // `EachPlayerCopyChosenSelection`: min 1, max 2, and the order decides what
@@ -942,7 +977,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1149,6 +1184,7 @@
         {#if scene === 'timeTravelRemove' || scene === 'timeTravelAdd'}<TimeTravelPrompt />{/if}
         {#if scene === 'category' || scene === 'categoryForAll'}<CategoryPrompt />{/if}
         {#if scene === 'copyChosen' || scene === 'copyChosenNeighbor'}<CopyChosenPrompt />{/if}
+        {#if scene === 'keepPower' || scene === 'keepPowerForAll'}<KeepPowerPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

@@ -65,7 +65,9 @@ const SCENES = [
   { scene: 'category', slug: 'conservar-tipos', block: '[data-category-choice]' },
   { scene: 'categoryForAll', slug: 'conservar-por-todos', block: '[data-category-choice]' },
   { scene: 'copyChosen', slug: 'copiar-elegida', block: '[data-copy-chosen]' },
-  { scene: 'copyChosenNeighbor', slug: 'copiar-vecino', block: '[data-copy-chosen]' }
+  { scene: 'copyChosenNeighbor', slug: 'copiar-vecino', block: '[data-copy-chosen]' },
+  { scene: 'keepPower', slug: 'conservar-fuerza', block: '[data-keep-power]' },
+  { scene: 'keepPowerForAll', slug: 'conservar-fuerza-todos', block: '[data-keep-power]' }
 ] as const;
 
 const THEMES = [

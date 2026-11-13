@@ -44,6 +44,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `categoryForAll` | `CategoryChoice` (por todos) | [claro](conservar-por-todos-claro.jpg) | [oscuro](conservar-por-todos-oscuro.jpg) |
 | `copyChosen` | `EachPlayerCopyChosenSelection` (propio) | [claro](copiar-elegida-claro.jpg) | [oscuro](copiar-elegida-oscuro.jpg) |
 | `copyChosenNeighbor` | `EachPlayerCopyChosenSelection` (vecino) | [claro](copiar-vecino-claro.jpg) | [oscuro](copiar-vecino-oscuro.jpg) |
+| `keepPower` | `KeepWithinTotalPowerChoice` (propio) | [claro](conservar-fuerza-claro.jpg) | [oscuro](conservar-fuerza-oscuro.jpg) |
+| `keepPowerForAll` | `KeepWithinTotalPowerChoice` (todos) | [claro](conservar-fuerza-todos-claro.jpg) | [oscuro](conservar-fuerza-todos-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

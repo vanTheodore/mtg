@@ -728,6 +728,61 @@ test('copiar del vecino: el pozo es su mesa y la elección espera a todos', asyn
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('conservar por fuerza: lo que se mide es la suma, no cuántas', async ({ page }) => {
+  await page.goto('/ux?scene=keepPower');
+  const block = page.locator('[data-keep-power]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Conservar criaturas · hasta 4 de fuerza');
+  // CR 107.1c: the window is combined power.
+  await expect(block).toContainText('CR 107.1c');
+  const total = block.locator('[data-keep-power-total]');
+  await expect(total).toHaveText('Fuerza elegida 0 de 4 · quedan 4');
+
+  const confirm = block.locator('button.primary');
+  // Zero is legal, and it sacrifices everything: the button says so.
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Confirmar sin conservar ninguna');
+
+  await block.locator('[data-keep-power-object="100"]').click();
+  await expect(total).toHaveText('Fuerza elegida 2 de 4 · quedan 2');
+  await block.locator('[data-keep-power-object="101"]').click();
+  await expect(total).toHaveText('Fuerza elegida 4 de 4 · quedan 0');
+  // 2 + 2 + 1 would be 5: the creature that overflows is the one that closes.
+  await expect(block.locator('[data-keep-power-object="105"]')).toBeDisabled();
+  await expect(confirm).toHaveText('Conservar 2 criaturas (suma 4) y sacrificar el resto · después elige el Jugador 2');
+
+  // Freeing one power point reopens the creature that only costs one.
+  await block.locator('[data-keep-power-object="100"]').click();
+  await expect(total).toHaveText('Fuerza elegida 2 de 4 · quedan 2');
+  await expect(block.locator('[data-keep-power-object="105"]')).toBeEnabled();
+  await block.locator('[data-keep-power-object="105"]').click();
+  await expect(total).toHaveText('Fuerza elegida 3 de 4 · quedan 1');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('conservar por fuerza para todos: el tope se aplica a la mesa del rival', async ({ page }) => {
+  await page.goto('/ux?scene=keepPowerForAll');
+  const block = page.locator('[data-keep-power]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Conservar criaturas · hasta 3 de fuerza');
+  // CR 101.4: one player keeps for everyone in scope.
+  await expect(block).toContainText('Eliges tú por todos los jugadores');
+  await expect(block).toContainText('Jugador 2');
+  await expect(block).toHaveAttribute('data-keep-power-cap', '3');
+
+  await block.locator('[data-keep-power-object="200"]').click();
+  await expect(block.locator('[data-keep-power-total]')).toHaveText('Fuerza elegida 2 de 3 · quedan 1');
+  // The second one costs 2 and only 1 is left, so it cannot be kept.
+  await expect(block.locator('[data-keep-power-object="201"]')).toBeDisabled();
+  // No other player is left to choose.
+  await expect(block.locator('button.primary')).toHaveText('Conservar 1 criatura (suma 2) y sacrificar el resto');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');
