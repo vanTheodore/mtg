@@ -30,6 +30,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `station` | `StationTarget` | [claro](estacion-claro.jpg) | [oscuro](estacion-oscuro.jpg) |
 | `multiTarget` | `MultiTargetSelection` (hasta dos) | [claro](objetivos-multiples-claro.jpg) | [oscuro](objetivos-multiples-oscuro.jpg) |
 | `multiTargetExact` | `MultiTargetSelection` (cuenta fija) | [claro](objetivos-fijos-claro.jpg) | [oscuro](objetivos-fijos-oscuro.jpg) |
+| `distribute` | `DistributeAmong` (CR 608.2d) | [claro](reparto-claro.jpg) | [oscuro](reparto-oscuro.jpg) |
+| `distributeAnnounced` | `DistributeAmong` (CR 601.2d) | [claro](reparto-anunciado-claro.jpg) | [oscuro](reparto-anunciado-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

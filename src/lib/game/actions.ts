@@ -139,6 +139,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'ChooseReplacement': return 'Varios efectos de reemplazo aplican; elige el orden.';
     case 'StationTarget': return 'Gira una criatura tuya: la nave carga con su fuerza.';
     case 'MultiTargetSelection': return 'Elige los objetivos del hechizo o habilidad.';
+    case 'DistributeAmong': return 'Reparte la cantidad entre los objetivos: no puede sobrar ni faltar.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

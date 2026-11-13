@@ -356,6 +356,56 @@ test('tripular y montar suman la aportación que publica el motor, no el poder i
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
+  await page.goto('/ux?scene=distribute');
+  const block = page.locator('[data-distribute]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Reparto de 5 puntos de daño');
+  // CR 608.2d: candidates may be left out, but everything is divided.
+  await expect(block).toContainText('puedes dejar fuera a los demás');
+  await expect(block).toContainText('CR 608.2d');
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeDisabled();
+  await expect(confirm).toHaveText('Reparto incompleto');
+  await expect(block.locator('[data-distribute-total]')).toContainText('Repartido 0 de 5 · falta 5');
+
+  // Three to one target, two to another: the sum is what unlocks the answer.
+  for (let i = 0; i < 3; i += 1) await block.getByRole('button', { name: 'Añadir uno a Grizzly Bears (Jugador 1)' }).click();
+  await expect(block.locator('[data-distribute-total]')).toContainText('Repartido 3 de 5 · falta 2');
+  await expect(confirm).toBeDisabled();
+  for (let i = 0; i < 2; i += 1) await block.getByRole('button', { name: 'Añadir uno a Savannah Lions' }).click();
+  await expect(block.locator('[data-distribute-total]')).toContainText('Repartido 5 de 5');
+  await expect(confirm).toBeEnabled();
+  // Two permanents share the name, so the row names its controller.
+  await expect(confirm).toHaveText('Repartir: Grizzly Bears (Jugador 1) 3 · Savannah Lions 2');
+  // Nobody can hand out more than is left.
+  await expect(block.getByRole('button', { name: 'Añadir uno a Grizzly Bears (Jugador 1)' })).toBeDisabled();
+  // Taking one back is possible and takes the answer back with it.
+  await block.getByRole('button', { name: 'Quitar uno a Grizzly Bears (Jugador 1)' }).click();
+  await expect(confirm).toBeDisabled();
+  await expect(block.locator('[data-distribute-total]')).toContainText('falta 1');
+
+  // Announce-time division: every target must receive at least one (CR 601.2d).
+  await page.goto('/ux?scene=distributeAnnounced');
+  const announced = page.locator('[data-distribute]');
+  await expect(announced.locator('strong')).toHaveText('Reparto de 4 puntos de daño');
+  await expect(announced).toContainText('cada uno recibe al menos 1');
+  await expect(announced).toContainText('CR 601.2d');
+  const all = announced.locator('button.primary');
+  for (let i = 0; i < 4; i += 1) await announced.getByRole('button', { name: 'Añadir uno a Grizzly Bears' }).click();
+  await expect(announced.locator('[data-distribute-total]')).toContainText('1 objetivo sin nada');
+  await expect(all).toBeDisabled();
+  await all.scrollIntoViewIfNeeded();
+  await expect(all).toHaveText('Reparto inválido');
+  await announced.getByRole('button', { name: 'Quitar uno a Grizzly Bears' }).click();
+  await announced.getByRole('button', { name: 'Añadir uno a Savannah Lions' }).click();
+  await expect(announced.locator('[data-distribute-total]')).toContainText('Repartido 4 de 4');
+  await expect(all).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('los objetivos múltiples respetan la ventana del motor', async ({ page }) => {
   await page.goto('/ux?scene=multiTarget');
   const block = page.locator('[data-multi-target]');

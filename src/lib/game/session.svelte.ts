@@ -1,6 +1,6 @@
 import { tick } from 'svelte';
 import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
-import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId } from '#lib/engine/types.ts';
+import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId, type TargetRef } from '#lib/engine/types.ts';
 import {
   attackDeclaration, attackTargets, blockDeclaration, blockTargets, cancelCastAction, chooseXAction,
   decideOptionalEffect, decideTribute, defaultOrder, defaultX, digPrompt as readDigPrompt, digReady as isDigReady,
@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -219,6 +219,7 @@ class GameSession {
     this.scryKeep = [];
     this.tapPick = [];
     this.multiPick = [];
+    this.splitAmount = {};
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -364,6 +365,52 @@ class GameSession {
     const ids = this.tapPick;
     this.tapPick = [];
     void this.dispatch(tapPowerAction(prompt, ids));
+  }
+
+  /** CR 601.2d / CR 608.2d: how much of an amount each recipient gets. */
+  get distributePrompt() {
+    return readDistribute(this.snapshot);
+  }
+  /** Portions by `TargetRef` key; a recipient absent from the map gets zero. */
+  splitAmount = $state<Record<string, number>>({});
+  get splitEntries(): [TargetRef, number][] {
+    const prompt = this.distributePrompt;
+    if (!prompt) return [];
+    return prompt.targets
+      .filter((target) => (this.splitAmount[splitKey(target)] ?? 0) > 0)
+      .map((target) => [target, this.splitAmount[splitKey(target)] ?? 0]);
+  }
+  get splitTotal(): number {
+    return this.splitEntries.reduce((sum, [, amount]) => sum + amount, 0);
+  }
+  setSplit(target: TargetRef, amount: number) {
+    const prompt = this.distributePrompt;
+    if (!prompt) return;
+    // The window is the engine's: never below zero, never above what is left —
+    // the validator requires the portions to sum to exactly `total`.
+    const clamped = Math.max(0, Math.min(Math.trunc(amount), prompt.total));
+    this.splitAmount = { ...this.splitAmount, [splitKey(target)]: clamped };
+  }
+  get splitReady(): boolean {
+    const prompt = this.distributePrompt;
+    if (!prompt) return false;
+    if (prompt.unit === 'even') return evenSplit(prompt.total, prompt.targets.length) !== null;
+    if (this.splitTotal !== prompt.total) return false;
+    // CR 601.2d: an announce-time division names every target with at least one.
+    if (prompt.scope === 'announced') {
+      return prompt.targets.every((target) => (this.splitAmount[splitKey(target)] ?? 0) >= 1);
+    }
+    return true;
+  }
+  confirmSplit() {
+    const prompt = this.distributePrompt;
+    if (!prompt || !this.splitReady) return;
+    const entries: [TargetRef, number][] =
+      prompt.unit === 'even'
+        ? (evenSplit(prompt.total, prompt.targets.length) ?? []).map((amount, index) => [prompt.targets[index], amount])
+        : this.splitEntries;
+    this.splitAmount = {};
+    void this.dispatch(distributeAction(entries));
   }
 
   /** CR 601.2c: the set of targets a multi-target spell or ability asks for. */
@@ -826,6 +873,7 @@ class GameSession {
       this.scryKeep = [];
       this.tapPick = [];
       this.multiPick = [];
+      this.splitAmount = {};
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

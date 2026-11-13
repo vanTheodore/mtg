@@ -1261,3 +1261,53 @@ respuesta vacía y el caso ajeno); build OK; y en Chromium una prueba nueva que
 recorre las dos ventanas —confirmar sin objetivos, llegar al máximo y ver el
 tercero deshabilitado, y que con un objetivo de dos el botón diga «Falta 1
 objetivo»— con axe, más las dos escenas en la prueba de temas.
+
+## El reparto: ni sobra ni falta (trigésima pasada, 13 nov 2026)
+
+`DistributeAmong` divide una cantidad —daño, contadores o vidas— entre
+destinatarios, y el motor publica tres cosas: el total, los receptores legales
+(`TargetRef`, así que también cuenta un jugador) y **cuándo** se elige el reparto.
+
+| `scope` | Regla | Qué puede hacer el jugador |
+|---|---|---|
+| `announced` (CR 601.2d) | se elige al lanzar y **cada objetivo recibe al menos 1** | repartir entre todos, sin dejar ninguno a cero |
+| `resolution` (CR 608.2d) | se elige al aplicarse el efecto | repartir entre los candidatos que quiera; el resto se queda fuera |
+
+Un único validador (`validate_distribution`) comprueba que la suma sea **exactamente**
+el total, que ninguna porción sea cero, que ningún receptor se repita y —sólo en
+`announced`— que estén todos. El bloque dice esas reglas y no las adelanta: deja
+componer y Phase decide; cuando la suma no cuadra, el botón lo nombra («Reparto
+incompleto», «1 objetivo sin nada») en vez de ofrecer algo que el motor rechazaría.
+
+**Lo que se puede quitar.** Los botones + se deshabilitan al llegar al total, así
+que pasarse no es posible por construcción; el − sólo está activo con algo puesto.
+El contador dice en todo momento cuánto queda, de modo que el jugador sabe si le
+falta o le sobra antes de intentarlo.
+
+**`EvenSplitDamage` no es una elección.** Cuando el motor reparte por igual
+(`total / n`, resto al último), no hay nada que decidir: el bloque lo dice y no
+pinta flechas que no cambiarían nada. Si el total no llega para uno por
+destinatario, el reparto automático sería ilegal y el bloque no ofrece confirmar.
+
+**Dos permanentes con el mismo nombre.** La escena tiene dos «Grizzly Bears», uno
+por lado, y ambos son receptores legales: una fila con sólo el nombre sería
+indistinguible de la otra, así que el bloque añade el controlador cuando el nombre
+se repite —dato del motor, no una suposición—. Lo cazó la prueba de Chromium
+(strict mode: dos botones con el mismo nombre accesible).
+
+Laboratorio: `/ux?scene=distribute` (5 de daño entre tres candidatos, CR 608.2d) y
+`/ux?scene=distributeAnnounced` (4 entre dos objetivos anunciados, CR 601.2d).
+Capturas `docs/screenshots/ux-reparto-1440.jpg` y
+`ux-reparto-anunciado-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **428** (8 nuevas
+en `game/__tests__/distribute.test.ts`: el reparto al resolver con candidatos
+fuera, el `scope` ausente como anunciado, las unidades —contadores, vidas, reparto
+por igual—, la poda de basura, la clave por tipo de receptor, la forma de la
+acción, la regla del reparto por igual y el caso ajeno); `bun run engine:verify`
+verde con el pin nuevo; build OK; y en Chromium una prueba nueva que compone 3+2,
+comprueba que sobra/falta, que no se puede pasar del total, que quitar una porción
+vuelve a bloquear, y que en anunciado un objetivo sin nada se nombra y bloquea
+—con axe—, más las dos escenas en la prueba de temas.

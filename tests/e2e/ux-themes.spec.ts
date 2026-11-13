@@ -45,7 +45,9 @@ const SCENES = [
   { scene: 'equip', slug: 'equipar', block: '[data-equip-prompt]' },
   { scene: 'station', slug: 'estacion', block: '[data-station-prompt]' },
   { scene: 'multiTarget', slug: 'objetivos-multiples', block: '[data-multi-target]' },
-  { scene: 'multiTargetExact', slug: 'objetivos-fijos', block: '[data-multi-target]' }
+  { scene: 'multiTargetExact', slug: 'objetivos-fijos', block: '[data-multi-target]' },
+  { scene: 'distribute', slug: 'reparto', block: '[data-distribute]' },
+  { scene: 'distributeAnnounced', slug: 'reparto-anunciado', block: '[data-distribute]' }
 ] as const;
 
 const THEMES = [

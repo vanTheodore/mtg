@@ -537,6 +537,82 @@ export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | 
   };
 }
 /**
+ * CR 601.2d + CR 608.2d: a division. The engine publishes the amount, the legal
+ * recipients (`TargetRef`s, so players count too) and **when** the division is
+ * chosen:
+ *
+ *   - `announced` — chosen while the spell is cast (CR 601.2d): every target must
+ *     receive at least one, so the whole amount is divided among *all* of them.
+ *   - `resolution` — chosen as the effect applies (CR 608.2d): the chooser may
+ *     leave candidates out, and each one that is named receives at least one.
+ *
+ * `EvenSplitDamage` is the exception the wire can carry: the engine computes
+ * `total / num_targets` itself, so there is no division for the player to choose
+ * and the block only says so.
+ *
+ * The single validator (`validate_distribution`) checks the sum, that no entry is
+ * zero, that no recipient repeats, and — for `announced` — that every target is
+ * named. The view states those rules and Phase remains the one that enforces them.
+ */
+export type DistributeUnit = 'damage' | 'even' | 'counters' | 'life';
+export type DistributePrompt = {
+  player: PlayerId;
+  total: number;
+  unit: DistributeUnit;
+  /** `Counters(<type>)` carries what is being placed; the rest carry nothing. */
+  counterType: string | null;
+  scope: 'announced' | 'resolution';
+  targets: TargetRef[];
+};
+export function distributePrompt(snapshot: EngineSnapshot | null): DistributePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'DistributeAmong') return null;
+  const data = waiting.data ?? {};
+  const rawUnit = data.unit as { type?: string; data?: unknown } | undefined;
+  const unit: DistributeUnit =
+    rawUnit?.type === 'EvenSplitDamage'
+      ? 'even'
+      : rawUnit?.type === 'Counters'
+        ? 'counters'
+        : rawUnit?.type === 'Life'
+          ? 'life'
+          : 'damage';
+  const rawScope = data.scope as { type?: string } | undefined;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    total: typeof data.total === 'number' ? data.total : 0,
+    unit,
+    counterType: unit === 'counters' && typeof rawUnit?.data === 'string' ? rawUnit.data : null,
+    scope: rawScope?.type === 'ResolutionCandidates' ? 'resolution' : 'announced',
+    targets: Array.isArray(data.targets)
+      ? (data.targets as unknown[]).map((t) => parseTarget(t)).filter((t): t is NormalizedTarget => !!t)
+          .map((t) => (t.kind === 'player' ? playerTarget(t.id) : objectTarget(t.id)))
+      : []
+  };
+}
+/** A stable key for the split map: a `TargetRef` is not a key of its own. */
+export function targetKey(target: unknown): string {
+  const t = parseTarget(target);
+  return t ? `${t.kind}:${t.id}` : 'none';
+}
+export function distributeAction(distribution: [TargetRef, number][]): GameAction {
+  return { type: 'DistributeAmong', data: { distribution: distribution.map(([target, amount]) => [target, amount]) } };
+}
+/**
+ * The even split the engine documents for `EvenSplitDamage`: `total / n` rounded
+ * down per target, with the remainder on the last one — and only when every
+ * recipient still gets at least one, which the validator requires.
+ */
+export function evenSplit(total: number, count: number): number[] | null {
+  if (count <= 0) return total === 0 ? [] : null;
+  const base = Math.floor(total / count);
+  if (base < 1) return null;
+  const parts = Array.from({ length: count }, () => base);
+  parts[count - 1] += total - base * count;
+  return parts;
+}
+
+/**
  * CR 601.2c: a spell or ability with more than one instance of the word "target"
  * ("any number of targets", "up to two target creatures") asks for **a set**, not
  * a sum and not a single pick. The engine publishes the legal targets and a

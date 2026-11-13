@@ -46,9 +46,10 @@
   import EquipPrompt from '#lib/components/EquipPrompt.svelte';
   import StationPrompt from '#lib/components/StationPrompt.svelte';
   import MultiTargetPrompt from '#lib/components/MultiTargetPrompt.svelte';
+  import DistributePrompt from '#lib/components/DistributePrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -82,6 +83,8 @@
     { value: 'station', label: 'Estación (station)' },
     { value: 'multiTarget', label: 'Objetivos: hasta dos' },
     { value: 'multiTargetExact', label: 'Objetivos: exactamente dos' },
+    { value: 'distribute', label: 'Reparto: 5 entre candidatos' },
+    { value: 'distributeAnnounced', label: 'Reparto: todos los objetivos' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -117,6 +120,8 @@
     station: 'StationTarget · CR 702.184a, una criatura, un número',
     multiTarget: 'MultiTargetSelection · CR 601.2c, hasta dos de tres',
     multiTargetExact: 'MultiTargetSelection · CR 601.2c, cuenta fija',
+    distribute: 'DistributeAmong · CR 608.2d, se puede dejar fuera',
+    distributeAnnounced: 'DistributeAmong · CR 601.2d, todos reciben',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -360,6 +365,22 @@
               contributions: [2, 2, 1]
             }
           };
+    }
+    if (scene === 'distribute' || scene === 'distributeAnnounced') {
+      // `DistributeAmong`: the amount, the recipients and when the division is
+      // chosen. At resolution (CR 608.2d) candidates may be left out; announced
+      // (CR 601.2d) every target must receive at least one.
+      const announced = scene === 'distributeAnnounced';
+      return {
+        type: 'DistributeAmong',
+        data: {
+          player: 0,
+          total: announced ? 4 : 5,
+          targets: announced ? [{ Object: 100 }, { Object: 101 }] : [{ Object: 100 }, { Object: 101 }, { Object: 200 }],
+          unit: { type: 'Damage' },
+          ...(announced ? {} : { scope: { type: 'ResolutionCandidates', data: { pending_effect: { ability: {} } } } })
+        }
+      };
     }
     if (scene === 'multiTarget' || scene === 'multiTargetExact') {
       // `MultiTargetSelection`: the legal targets and the window the engine
@@ -691,7 +712,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -886,6 +907,7 @@
         {#if scene === 'equip'}<EquipPrompt />{/if}
         {#if scene === 'station'}<StationPrompt />{/if}
         {#if scene === 'multiTarget' || scene === 'multiTargetExact'}<MultiTargetPrompt />{/if}
+        {#if scene === 'distribute' || scene === 'distributeAnnounced'}<DistributePrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>
