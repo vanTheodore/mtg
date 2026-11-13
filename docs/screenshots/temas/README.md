@@ -28,6 +28,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `saddle` | `SaddleMount` | [claro](montar-claro.jpg) | [oscuro](montar-oscuro.jpg) |
 | `equip` | `EquipTarget` | [claro](equipar-claro.jpg) | [oscuro](equipar-oscuro.jpg) |
 | `station` | `StationTarget` | [claro](estacion-claro.jpg) | [oscuro](estacion-oscuro.jpg) |
+| `multiTarget` | `MultiTargetSelection` (hasta dos) | [claro](objetivos-multiples-claro.jpg) | [oscuro](objetivos-multiples-oscuro.jpg) |
+| `multiTargetExact` | `MultiTargetSelection` (cuenta fija) | [claro](objetivos-fijos-claro.jpg) | [oscuro](objetivos-fijos-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

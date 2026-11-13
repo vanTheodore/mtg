@@ -1204,3 +1204,60 @@ el prompt no invente aportación, la poda de basura, la acción y el caso ajeno)
 build OK; y en Chromium una prueba nueva que comprueba que es una criatura y no
 una suma, que no hay contador prometido, que los candidatos son los de Phase y
 que se puede cancelar —con axe—, más la escena en la prueba de temas.
+
+## Objetivos múltiples: la ventana es la regla (vigesimonovena pasada, 7 nov 2026)
+
+CR 601.2c: un hechizo o habilidad con más de una instancia de «objetivo» —«any
+number of targets», «up to two target creatures», «dos criaturas objetivo»— pide
+un **conjunto**, y el motor publica la ventana en la que ese conjunto es legal:
+`min_targets..=max_targets`. No hay suma ni objetivo único: hay un rango, y el
+rango *es* la regla.
+
+| Texto de la carta | Ventana que llega |
+|---|---|
+| «any number of targets» | `min = 0`, `max` = los objetivos legales |
+| «up to two target creatures» | `min = 0`, `max = 2` |
+| «two target creature cards» | `min = max = 2` |
+
+**Cero es una respuesta cuando el texto dice «up to».** Por eso el bloque no
+deshabilita el botón con la lista vacía si `min` es 0: la etiqueta es «Confirmar
+sin objetivos» y el motor la acepta. Cuando el mínimo no se alcanza, el botón no
+ofrece nada: dice «Falta 1 objetivo» / «Faltan 2 objetivos» en vez de nombrar un
+conjunto que Phase rechazaría.
+
+**Por encima del máximo la fila deja de aceptar.** El motor rechaza el objetivo de
+más (`"Must select between N and M targets"`), así que en vez de componer una
+selección inválida la mesa la corta: con dos elegidos de dos, el tercero queda
+deshabilitado y los elegidos se pueden soltar. CR 115.3 prohíbe nombrar dos veces
+el mismo objetivo para una misma instancia de «objetivo»: cada permanente se
+ofrece una vez y se alterna, así que duplicar es imposible por construcción.
+
+**El conjunto no tiene orden.** `SelectCards` lleva el conjunto y la regla no lo
+secuencia, así que la etiqueta de confirmación lista los nombres en el orden del
+motor y no en el de los clics: dos jugadores que marquen lo mismo en distinto
+orden leen lo mismo.
+
+El nombre del hechizo que pregunta sale de `pending_ability.source_id`, que el
+motor documenta como atribución; si no viene, el bloque no se inventa un nombre y
+se queda en «Objetivos».
+
+Objetos del laboratorio: `Frost Breath` («Tap up to two target creatures…», que el
+motor cita en `tests/integration/added_untap_step_is_not_a_turn_start.rs`) con
+tres candidatas y ventana 0..2, y `Grusilda, Monster Masher` («Put two target
+creature cards from graveyards…», citada en
+`tests/integration/combined_creature_coverage_honesty.rs`) con dos cartas de
+criatura en el cementerio y cuenta fija 2.
+
+Laboratorio: `/ux?scene=multiTarget` y `/ux?scene=multiTargetExact`; capturas
+`docs/screenshots/ux-objetivos-multiples-1440.jpg` y
+`ux-objetivos-fijos-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **420** (6
+nuevas en `game/__tests__/multi-target.test.ts`: la ventana publicada, la cuenta
+fija y el mínimo, el máximo ausente que se lee del conjunto, la poda de basura, la
+respuesta vacía y el caso ajeno); build OK; y en Chromium una prueba nueva que
+recorre las dos ventanas —confirmar sin objetivos, llegar al máximo y ver el
+tercero deshabilitado, y que con un objetivo de dos el botón diga «Falta 1
+objetivo»— con axe, más las dos escenas en la prueba de temas.

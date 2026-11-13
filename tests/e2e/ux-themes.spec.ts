@@ -43,7 +43,9 @@ const SCENES = [
   { scene: 'crew', slug: 'tripular', block: '[data-tap-power]' },
   { scene: 'saddle', slug: 'montar', block: '[data-tap-power]' },
   { scene: 'equip', slug: 'equipar', block: '[data-equip-prompt]' },
-  { scene: 'station', slug: 'estacion', block: '[data-station-prompt]' }
+  { scene: 'station', slug: 'estacion', block: '[data-station-prompt]' },
+  { scene: 'multiTarget', slug: 'objetivos-multiples', block: '[data-multi-target]' },
+  { scene: 'multiTargetExact', slug: 'objetivos-fijos', block: '[data-multi-target]' }
 ] as const;
 
 const THEMES = [

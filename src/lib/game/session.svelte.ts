@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -218,6 +218,7 @@ class GameSession {
     this.branchPick = null;
     this.scryKeep = [];
     this.tapPick = [];
+    this.multiPick = [];
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -363,6 +364,36 @@ class GameSession {
     const ids = this.tapPick;
     this.tapPick = [];
     void this.dispatch(tapPowerAction(prompt, ids));
+  }
+
+  /** CR 601.2c: the set of targets a multi-target spell or ability asks for. */
+  get multiTargetPrompt() {
+    return readMultiTarget(this.snapshot);
+  }
+  multiPick = $state<ObjectId[]>([]);
+  toggleMultiPick(id: ObjectId) {
+    const prompt = this.multiTargetPrompt;
+    const picked = this.multiPick;
+    if (!prompt) return;
+    if (picked.includes(id)) {
+      this.multiPick = picked.filter((card) => card !== id);
+      return;
+    }
+    // CR 601.2c: the window is the engine's; above it the extra target is not a
+    // choice the engine would take, so the row stops accepting one.
+    if (picked.length >= prompt.max) return;
+    this.multiPick = [...picked, id];
+  }
+  get multiReady(): boolean {
+    const prompt = this.multiTargetPrompt;
+    if (!prompt) return false;
+    return this.multiPick.length >= prompt.min && this.multiPick.length <= prompt.max;
+  }
+  confirmMultiPick() {
+    if (!this.multiReady) return;
+    const ids = this.multiPick;
+    this.multiPick = [];
+    void this.dispatch(multiTargetAction(ids));
   }
 
   /** CR 702.184a: which single creature pays the station cost. */
@@ -794,6 +825,7 @@ class GameSession {
       this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.pairPick = null;
       this.scryKeep = [];
       this.tapPick = [];
+      this.multiPick = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

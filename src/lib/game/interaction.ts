@@ -536,6 +536,46 @@ export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | 
       : []
   };
 }
+/**
+ * CR 601.2c: a spell or ability with more than one instance of the word "target"
+ * ("any number of targets", "up to two target creatures") asks for **a set**, not
+ * a sum and not a single pick. The engine publishes the legal targets and a
+ * window — `min_targets..=max_targets` — and answers `SelectCards`.
+ *
+ * The window is the whole gate: `min` is 0 when the text says "up to", and
+ * `min == max` when the count is fixed. The engine also refuses the same target
+ * twice (CR 115.3), so the view offers each one once and toggles it.
+ *
+ * `pending_ability.source_id` is attribution only, but it is enough to name the
+ * spell that is asking; when it is missing the block does not invent a name.
+ */
+export type MultiTargetPrompt = {
+  player: PlayerId;
+  /** The spell or ability asking, when the engine attributed it. */
+  sourceId: ObjectId | null;
+  min: number;
+  max: number;
+  targets: ObjectId[];
+};
+export function multiTargetPrompt(snapshot: EngineSnapshot | null): MultiTargetPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'MultiTargetSelection') return null;
+  const data = waiting.data ?? {};
+  const ability = data.pending_ability as { source_id?: unknown } | undefined;
+  const sourceId = typeof ability?.source_id === 'number' ? (ability.source_id as ObjectId) : null;
+  const targets = Array.isArray(data.legal_targets)
+    ? (data.legal_targets as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+    : [];
+  const min = typeof data.min_targets === 'number' ? data.min_targets : 0;
+  // A missing maximum is the number of legal targets: "any number" can never need
+  // more than the set it may pick from.
+  const max = typeof data.max_targets === 'number' ? data.max_targets : targets.length;
+  return { player: typeof data.player === 'number' ? data.player : snapshot!.viewer, sourceId, min, max, targets };
+}
+export function multiTargetAction(targets: ObjectId[]): GameAction {
+  return selectCardsAction(targets);
+}
+
 export function stationAction(spacecraftId: ObjectId, creatureId: ObjectId): GameAction {
   return { type: 'ActivateStation', data: { spacecraft_id: spacecraftId, creature_id: creatureId } };
 }

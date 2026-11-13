@@ -356,6 +356,56 @@ test('tripular y montar suman la aportación que publica el motor, no el poder i
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('los objetivos múltiples respetan la ventana del motor', async ({ page }) => {
+  await page.goto('/ux?scene=multiTarget');
+  const block = page.locator('[data-multi-target]');
+  await expect(block).toBeVisible();
+  // The spell that asks is named from the ability's attribution, not guessed.
+  await expect(block.locator('strong')).toHaveText('Objetivos · Frost Breath');
+  // "Up to two" starts at zero: declining is a legal submission.
+  await expect(block).toContainText('Elige hasta 2 objetivos');
+  await expect(block).toContainText('ninguno es una respuesta legal');
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Confirmar sin objetivos');
+
+  // One target, then the second: the count is the engine's window.
+  await block.getByRole('button', { name: 'Grizzly Bears', exact: true }).click();
+  await expect(block.locator('[data-multi-count]')).toContainText('Elegidos 1 de 2');
+  await expect(confirm).toHaveText('Confirmar 1 objetivo: Grizzly Bears');
+  await block.getByRole('button', { name: 'Savannah Lions', exact: true }).click();
+  await expect(block.locator('[data-multi-count]')).toContainText('el máximo');
+  // The set follows the engine's list, not the click order.
+  await expect(confirm).toHaveText('Confirmar 2 objetivos: Grizzly Bears + Savannah Lions');
+  // At the maximum the rest stops accepting; the picked ones still toggle off.
+  const third = block.getByRole('button', { name: 'Elvish Mystic', exact: true });
+  await expect(third).toBeDisabled();
+  await block.getByRole('button', { name: 'Grizzly Bears', exact: true }).click();
+  await expect(third).toBeEnabled();
+  await expect(block.locator('[data-multi-count]')).toContainText('Elegidos 1 de 2');
+
+  // A fixed count is the other half of the rule: one short is not an answer.
+  await page.goto('/ux?scene=multiTargetExact');
+  const exact = page.locator('[data-multi-target]');
+  await expect(exact.locator('strong')).toHaveText('Objetivos · Grusilda, Monster Masher');
+  await expect(exact).toContainText('Elige exactamente 2 objetivos');
+  const fixed = exact.locator('button.primary');
+  await expect(fixed).toBeDisabled();
+  await expect(fixed).toHaveText('Faltan 2 objetivos');
+  await expect(exact.locator('[data-multi-count]')).toContainText('faltan 2');
+  await exact.getByRole('button', { name: 'Llanowar Elves', exact: true }).click();
+  await expect(fixed).toBeDisabled();
+  // A short set is not offered: the button names what is missing.
+  await expect(fixed).toHaveText('Falta 1 objetivo');
+  await expect(exact.locator('[data-multi-count]')).toContainText('faltan 1');
+  await exact.getByRole('button', { name: 'Grizzly Bears', exact: true }).click();
+  await expect(fixed).toBeEnabled();
+  await expect(fixed).toHaveText('Confirmar 2 objetivos: Llanowar Elves + Grizzly Bears');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('la estación gira una criatura, no suma varias, y deja cancelar', async ({ page }) => {
   await page.goto('/ux?scene=station');
   const station = page.locator('[data-station-prompt]');

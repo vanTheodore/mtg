@@ -45,9 +45,10 @@
   import TapPowerPrompt from '#lib/components/TapPowerPrompt.svelte';
   import EquipPrompt from '#lib/components/EquipPrompt.svelte';
   import StationPrompt from '#lib/components/StationPrompt.svelte';
+  import MultiTargetPrompt from '#lib/components/MultiTargetPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -79,6 +80,8 @@
     { value: 'saddle', label: 'Montar (saddle)' },
     { value: 'equip', label: 'Equipar' },
     { value: 'station', label: 'Estación (station)' },
+    { value: 'multiTarget', label: 'Objetivos: hasta dos' },
+    { value: 'multiTargetExact', label: 'Objetivos: exactamente dos' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -112,6 +115,8 @@
     saddle: 'SaddleMount · CR 702.171a, montar no es tripular',
     equip: 'EquipTarget · CR 702.6a, elegir a quién se anexa',
     station: 'StationTarget · CR 702.184a, una criatura, un número',
+    multiTarget: 'MultiTargetSelection · CR 601.2c, hasta dos de tres',
+    multiTargetExact: 'MultiTargetSelection · CR 601.2c, cuenta fija',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -222,6 +227,31 @@
     card_types: { core_types: ['Artifact'], subtypes: ['Spacecraft'] },
     oracle_text: 'Station (Tap another creature you control: Put charge counters equal to its power on this Spacecraft. Station only as a sorcery. It\'s an artifact creature at 8+.)\n1+ | Whenever an opponent discards a card, they lose 3 life.\n8+ | Flying, deathtouch\nWhenever this Spacecraft attacks, each opponent discards a card. Each opponent who can\'t loses 3 life.'
   } as GameObject;
+  // CR 601.2c: two multi-target prompts, each with a card the engine quotes
+  // verbatim in its own tests. `Frost Breath` says "up to two", so the window is
+  // 0..2 and declining is legal; `Grusilda, Monster Masher` says "two", so the
+  // count is fixed. They live only in `objects`, like the spell waiting for its X.
+  const frostBreath = {
+    id: 350, card_id: 350, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Frost Breath', card_types: { core_types: ['Instant'], subtypes: ['Spell'] },
+    oracle_text: 'Tap up to two target creatures. Those creatures don\'t untap during their controller\'s next untap step.'
+  } as GameObject;
+  const grusilda = {
+    id: 351, card_id: 351, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Grusilda, Monster Masher',
+    card_types: { core_types: ['Creature'], subtypes: ['Zombie', 'Wizard'] },
+    oracle_text: '{3}{B}{R}, {T}: Put two target creature cards from graveyards onto the battlefield combined into one creature under your control. (Its power is equal to their total power, its toughness is equal to their total toughness, and it has their names, mana costs, types, text boxes, etc.)'
+  } as GameObject;
+  // The two creature cards her ability can name: graveyard-only in `objects`, so
+  // no pile count the rest of the lab asserts moves.
+  const graveElves = {
+    id: 352, card_id: 352, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Llanowar Elves', card_types: { core_types: ['Creature'], subtypes: ['Elf', 'Druid'] }
+  } as GameObject;
+  const graveBears = {
+    id: 353, card_id: 353, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Grizzly Bears', card_types: { core_types: ['Creature'], subtypes: ['Bear'] }
+  } as GameObject;
   // A modal card for the mode scene: Fireball is not modal, and the lab should
   // not teach the wrong example.
   const modeSpell = {
@@ -256,7 +286,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -330,6 +360,22 @@
               contributions: [2, 2, 1]
             }
           };
+    }
+    if (scene === 'multiTarget' || scene === 'multiTargetExact') {
+      // `MultiTargetSelection`: the legal targets and the window the engine
+      // enforces. `pending_ability.source_id` is attribution only, and it is what
+      // lets the block name the spell.
+      const upToTwo = scene === 'multiTarget';
+      return {
+        type: 'MultiTargetSelection',
+        data: {
+          player: 0,
+          legal_targets: upToTwo ? [100, 101, 105] : [352, 353],
+          min_targets: upToTwo ? 0 : 2,
+          max_targets: 2,
+          pending_ability: { ability: {}, source_id: upToTwo ? 350 : 351 }
+        }
+      };
     }
     if (scene === 'station') {
       // `StationTarget`: the Spacecraft and the untapped creatures the engine
@@ -645,7 +691,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -839,6 +885,7 @@
         {#if scene === 'crew' || scene === 'saddle'}<TapPowerPrompt />{/if}
         {#if scene === 'equip'}<EquipPrompt />{/if}
         {#if scene === 'station'}<StationPrompt />{/if}
+        {#if scene === 'multiTarget' || scene === 'multiTargetExact'}<MultiTargetPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>
