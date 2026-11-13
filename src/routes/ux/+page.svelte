@@ -44,9 +44,10 @@
   import ScryPrompt from '#lib/components/ScryPrompt.svelte';
   import TapPowerPrompt from '#lib/components/TapPowerPrompt.svelte';
   import EquipPrompt from '#lib/components/EquipPrompt.svelte';
+  import StationPrompt from '#lib/components/StationPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -77,6 +78,7 @@
     { value: 'crew', label: 'Tripular (crew)' },
     { value: 'saddle', label: 'Montar (saddle)' },
     { value: 'equip', label: 'Equipar' },
+    { value: 'station', label: 'Estación (station)' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -109,6 +111,7 @@
     crew: 'CrewVehicle · CR 702.122a, girar criaturas por su aportación',
     saddle: 'SaddleMount · CR 702.171a, montar no es tripular',
     equip: 'EquipTarget · CR 702.6a, elegir a quién se anexa',
+    station: 'StationTarget · CR 702.184a, una criatura, un número',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -209,6 +212,16 @@
     name: 'Ornery Tumblewagg', card_types: { core_types: ['Creature'], subtypes: ['Mount'] },
     oracle_text: 'At the beginning of combat on your turn, put a +1/+1 counter on target creature.\nWhenever this creature attacks while saddled, double the number of +1/+1 counters on target creature.\nSaddle 2 (Tap any number of other creatures you control with total power 2 or more: This Mount becomes saddled until end of turn. Saddle only as a sorcery.)'
   } as GameObject;
+  // CR 702.184a: the Spacecraft, with the Station text the engine quotes verbatim
+  // in `tests/integration/stack_entry_node_reach.rs`. Its thresholds («1+», «8+»)
+  // are the card's, which is why the pick matters: the tapped creature's power is
+  // how many charge counters arrive.
+  const entropicBattlecruiser = {
+    id: 343, card_id: 343, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Entropic Battlecruiser',
+    card_types: { core_types: ['Artifact'], subtypes: ['Spacecraft'] },
+    oracle_text: 'Station (Tap another creature you control: Put charge counters equal to its power on this Spacecraft. Station only as a sorcery. It\'s an artifact creature at 8+.)\n1+ | Whenever an opponent discards a card, they lose 3 life.\n8+ | Flying, deathtouch\nWhenever this Spacecraft attacks, each opponent discards a card. Each opponent who can\'t loses 3 life.'
+  } as GameObject;
   // A modal card for the mode scene: Fireball is not modal, and the lab should
   // not teach the wrong example.
   const modeSpell = {
@@ -243,7 +256,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -317,6 +330,12 @@
               contributions: [2, 2, 1]
             }
           };
+    }
+    if (scene === 'station') {
+      // `StationTarget`: the Spacecraft and the untapped creatures the engine
+      // will accept — one pick, no contributions list, because the number is the
+      // chosen creature's power and arrives with the resolution.
+      return { type: 'StationTarget', data: { player: 0, spacecraft_id: 343, eligible_creatures: [100, 101, 105] } };
     }
     if (scene === 'equip') {
       // `EquipTarget`: the equipment and the permanents it may attach to.
@@ -626,7 +645,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -819,6 +838,7 @@
         {#if scene === 'scry' || scene === 'surveil'}<ScryPrompt />{/if}
         {#if scene === 'crew' || scene === 'saddle'}<TapPowerPrompt />{/if}
         {#if scene === 'equip'}<EquipPrompt />{/if}
+        {#if scene === 'station'}<StationPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -363,6 +363,16 @@ class GameSession {
     const ids = this.tapPick;
     this.tapPick = [];
     void this.dispatch(tapPowerAction(prompt, ids));
+  }
+
+  /** CR 702.184a: which single creature pays the station cost. */
+  get stationPrompt() {
+    return readStation(this.snapshot);
+  }
+  stationTo(creatureId: ObjectId) {
+    const prompt = this.stationPrompt;
+    if (!prompt) return;
+    void this.dispatch(stationAction(prompt.spacecraftId, creatureId));
   }
 
   /** CR 702.6a: which permanent the equipment attaches to. */

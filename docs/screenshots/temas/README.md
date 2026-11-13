@@ -27,6 +27,7 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `crew` | `CrewVehicle` | [claro](tripular-claro.jpg) | [oscuro](tripular-oscuro.jpg) |
 | `saddle` | `SaddleMount` | [claro](montar-claro.jpg) | [oscuro](montar-oscuro.jpg) |
 | `equip` | `EquipTarget` | [claro](equipar-claro.jpg) | [oscuro](equipar-oscuro.jpg) |
+| `station` | `StationTarget` | [claro](estacion-claro.jpg) | [oscuro](estacion-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

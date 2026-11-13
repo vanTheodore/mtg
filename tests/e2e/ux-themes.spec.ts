@@ -42,7 +42,8 @@ const SCENES = [
   { scene: 'surveil', slug: 'vigilar', block: '[data-scry-prompt]' },
   { scene: 'crew', slug: 'tripular', block: '[data-tap-power]' },
   { scene: 'saddle', slug: 'montar', block: '[data-tap-power]' },
-  { scene: 'equip', slug: 'equipar', block: '[data-equip-prompt]' }
+  { scene: 'equip', slug: 'equipar', block: '[data-equip-prompt]' },
+  { scene: 'station', slug: 'estacion', block: '[data-station-prompt]' }
 ] as const;
 
 const THEMES = [

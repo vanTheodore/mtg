@@ -1159,3 +1159,48 @@ caso ajeno); build OK; y en Chromium dos pruebas nuevas: tripular no deja
 confirmar hasta llegar al umbral y montar dice que es otra acción, y equipar
 ofrece exactamente los permanentes de Phase —las dos con axe—, más las tres
 filas nuevas en la prueba de temas.
+
+## La estación: una criatura, un número (vigesimoctava pasada, 7 nov 2026)
+
+`StationTarget` es CR 702.184a y se parece a `CrewVehicle` lo justo para
+confundirlos. La diferencia no es de forma, es de regla:
+
+| | Qué se gira | Qué se gana |
+|---|---|---|
+| Tripular / Montar | **varias** criaturas cuya aportación **sume** N | el Vehículo o la Montura se convierte / se ensilla |
+| Estación | **exactamente una** criatura | contadores de carga iguales a **su fuerza** |
+
+Por eso el bloque no reutiliza la suma: una cifra por criatura elegida sería una
+mentira. Lo que la elección decide es **cuánto carga la nave**, y eso tiene
+consecuencia visible en la propia carta: `Entropic Battlecruiser` tiene umbrales
+(«1+», «8+»), así que girar una 2/2 o una 5/5 no es lo mismo.
+
+**Ningún contador se anuncia por adelantado.** El prompt publica sólo
+`eligible_creatures` —criaturas desenderezadas que controlas, nunca la propia
+nave—, y CR 702.184c permite que una estática module la aportación («como si su
+fuerza fuera N mayor»). El bloque lo dice así: los contadores son la fuerza *tal
+como la calcula el motor*, y puede no ser la impresa. Ni siquiera repite la
+fuerza de la ficha: no sería el número que llega.
+
+**Cancelar es una respuesta legal aquí.** CR 602.2b: el coste de girar no se paga
+hasta el anuncio, así que el motor acepta `CancelCast` mientras el prompt está
+abierto y no hay nada que deshacer. Eso lo distingue de la guardia, donde la
+negativa no existe porque pagar ya estaba decidido; el bloque ofrece el botón y
+explica que todavía no se ha pagado nada.
+
+Objeto del laboratorio: `Entropic Battlecruiser`, con el texto de Station que el
+motor cita literalmente en
+`tests/integration/stack_entry_node_reach.rs` y sin coste ni P/T que ese literal
+no traiga.
+
+Laboratorio: `/ux?scene=station` (tres criaturas candidatas) y captura
+`docs/screenshots/ux-estacion-1440.jpg`, más el par de temas.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **414** (5
+nuevas en `game/__tests__/station.test.ts`: el Spacecraft con sus candidatas, que
+el prompt no invente aportación, la poda de basura, la acción y el caso ajeno);
+build OK; y en Chromium una prueba nueva que comprueba que es una criatura y no
+una suma, que no hay contador prometido, que los candidatos son los de Phase y
+que se puede cancelar —con axe—, más la escena en la prueba de temas.

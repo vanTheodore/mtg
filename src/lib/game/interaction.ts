@@ -507,6 +507,39 @@ export function equipPrompt(snapshot: EngineSnapshot | null): EquipPrompt | null
       : []
   };
 }
+/**
+ * CR 702.184a: station. One untapped creature is tapped — **exactly one**, so
+ * this is not the crew sum of the block above — and its power, as the engine
+ * computes it (CR 702.184c lets a static make it "as though its power were N
+ * greater"), becomes the number of charge counters the Spacecraft gets when the
+ * ability resolves. The pick is therefore a quantity, not just a permission:
+ * which creature you tap is how much the ship charges.
+ *
+ * The prompt publishes only the candidates (`eligible_creatures`: untapped
+ * creatures you control, never the Spacecraft itself), so this view shows no
+ * count of its own — the engine's number arrives with the resolution, and the
+ * card's printed power is not necessarily it.
+ *
+ * `CancelCast` is a legal answer while the prompt is open: the tap cost is not
+ * paid until the announcement (CR 602.2b), so backing out undoes nothing.
+ */
+export type StationPrompt = { player: PlayerId; spacecraftId: ObjectId; creatures: ObjectId[] };
+export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'StationTarget') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    spacecraftId: typeof data.spacecraft_id === 'number' ? (data.spacecraft_id as ObjectId) : 0,
+    creatures: Array.isArray(data.eligible_creatures)
+      ? (data.eligible_creatures as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+      : []
+  };
+}
+export function stationAction(spacecraftId: ObjectId, creatureId: ObjectId): GameAction {
+  return { type: 'ActivateStation', data: { spacecraft_id: spacecraftId, creature_id: creatureId } };
+}
+
 export function equipAction(equipmentId: ObjectId, targetId: ObjectId): GameAction {
   return { type: 'Equip', data: { equipment_id: equipmentId, target_id: targetId } };
 }

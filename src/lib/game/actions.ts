@@ -137,6 +137,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'ManaPayment': case 'ManaAbilityManaPayment': case 'ManaSourceSelection': return 'Produce maná con las fuentes resaltadas y confirma el pago.';
     case 'PayManaAbilityMana': case 'ChooseManaColor': return 'Elige qué maná producir o gastar.';
     case 'ChooseReplacement': return 'Varios efectos de reemplazo aplican; elige el orden.';
+    case 'StationTarget': return 'Gira una criatura tuya: la nave carga con su fuerza.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

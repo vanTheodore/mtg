@@ -356,6 +356,27 @@ test('tripular y montar suman la aportación que publica el motor, no el poder i
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('la estación gira una criatura, no suma varias, y deja cancelar', async ({ page }) => {
+  await page.goto('/ux?scene=station');
+  const station = page.locator('[data-station-prompt]');
+  await expect(station).toBeVisible();
+  await expect(station.locator('strong')).toHaveText('Estación · Entropic Battlecruiser');
+  // The distinction with crew: one creature, and its power is the count.
+  await expect(station).toContainText('Es una criatura, no una suma');
+  await expect(station).toContainText('CR 702.184a');
+  // No invented counter count: the printed power is not the engine's number.
+  await expect(station).toContainText('puede no ser la fuerza impresa');
+  // Exactly the candidates Phase published, one answer each.
+  await expect(station.locator('button.row')).toHaveCount(3);
+  await expect(station.getByRole('button', { name: 'Savannah Lions' })).toBeEnabled();
+  // Backing out is legal while the prompt is open: nothing has been paid yet.
+  await expect(station.getByRole('button', { name: 'Cancelar: no girar nada' })).toBeEnabled();
+  await expect(station).toContainText('CR 602.2b');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('equipar ofrece exactamente los permanentes que acepta Phase', async ({ page }) => {
   await page.goto('/ux?scene=equip');
   const equip = page.locator('[data-equip-prompt]');
