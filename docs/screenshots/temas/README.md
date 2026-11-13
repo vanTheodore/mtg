@@ -50,6 +50,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `keepExactVow` | `KeepExactPermanentsChoice` (con voto) | [claro](conservar-exactos-voto-claro.jpg) | [oscuro](conservar-exactos-voto-oscuro.jpg) |
 | `removeCounters` | `RemoveCountersChoice` (sin tope) | [claro](quitar-contadores-claro.jpg) | [oscuro](quitar-contadores-oscuro.jpg) |
 | `removeCountersCapped` | `RemoveCountersChoice` (hasta N) | [claro](quitar-contadores-tope-claro.jpg) | [oscuro](quitar-contadores-tope-oscuro.jpg) |
+| `copyRetarget` | `CopyRetarget` (cambiar) | [claro](objetivos-copia-claro.jpg) | [oscuro](objetivos-copia-oscuro.jpg) |
+| `copyAnnounce` | `CopyRetarget` (anunciar) | [claro](copia-anuncia-claro.jpg) | [oscuro](copia-anuncia-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

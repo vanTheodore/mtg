@@ -1821,3 +1821,59 @@ valores por defecto, la respuesta con los nombres de campo del motor y el caso a
 build OK; y en Chromium dos pruebas nuevas —la forma sin tope con su único límite por
 tipo y el cero legal; y la del tope, con el presupuesto compartido que apaga todos los
 tipos y se reabre al bajar uno— más las dos escenas en la prueba de temas.
+
+## Los objetivos de una copia: el motor pregunta ranura a ranura (cuadragésima pasada, 7 nov 2026)
+
+`CopyRetarget` es CR 707.10c —«you may choose new targets for the copy»— y, en la
+misma variante, CR 722.3c + CR 702.192a: la copia que **se lanza** anuncia sus propios
+objetivos (CR 601.2c + CR 707.12). Es la primera vista del port que no es una pregunta
+suelta sino un **recorrido**: el motor pregunta una ranura, recibe la respuesta, avanza
+a la siguiente y vuelve a preguntar hasta cerrar. Por eso el bloque no es una lista de
+objetivos: es el **estado del recorrido**.
+
+**Lo que se ve es el recorrido, no una foto.** El payload trae `current_slot`, el
+prefijo ya decidido (`picks`) y las ranuras con su objetivo actual. El bloque rotula
+«Objetivo 2 de 2», lista lo ya decidido —incluido «se queda como estaba», porque un
+`None` en el prefijo significa *sin cambios*, no *sin objetivo*— y ofrece sólo lo que
+la ranura actual admite.
+
+**Ninguna regla se recalcula aquí.** Las tres puertas son del motor y llegan resueltas
+en cada paso: `can_keep` (dejar esa ranura como está, CR 707.10c), `can_decline` (una
+ranura opcional que se declina, CR 115.6, sólo en el recorrido de anuncio) y
+`can_keep_rest` (dejar todo lo que queda, que el motor expone como su propia acción
+`KeepAllCopyTargets`). La pantalla las pinta; si una no viene, no aparece.
+
+**Por qué este bloque no guarda estado propio.** Todas las demás ventanas de esta rama
+tienen una selección en `session.svelte.ts` porque la respuesta se compone antes de
+enviarse. Esta no: el motor avanza el recorrido tras **cada** acción y reemite la
+pregunta con el prefijo actualizado, así que una copia local sería un segundo
+contable de algo que el motor ya cuenta. La sesión sólo expone las tres respuestas
+—`answerCopySlot(t | null)`, `keepRemainingCopyTargets()` y `chooseCopyAnnouncer(p)`—,
+y por eso no hay `reset` nuevo en los puntos de siempre.
+
+**Un recorrido puede abrirse sin ranura.** Si el hechizo copiado tiene objetivos «de
+elección de un oponente», el recorrido empieza eligiendo **qué oponente** los anuncia
+(CR 601.2c + CR 115.1, CR 707.12): entonces `target_slots` viene vacío y la pregunta es
+otra. El bloque lo dice con esas palabras y ofrece los asientos que el motor publica,
+en vez de quedarse con una lista de objetivos vacía.
+
+Objetos del laboratorio: la copia de `Shock` que hace `Twincast` —la carta con la que
+el motor prueba la cláusula sin rider— para la forma de cambiar objetivos, y la copia
+de `Frost Breath` que lanza `Mizzix's Mastery` para la de anunciar: «up to two», ya
+pasada la primera ranura, con la segunda declinable.
+
+Laboratorio: `/ux?scene=copyRetarget` y `/ux?scene=copyAnnounce`, capturas
+`docs/screenshots/ux-objetivos-copia-1440.jpg` y
+`docs/screenshots/ux-copia-anuncia-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **506** (10 nuevas en
+`game/__tests__/copy-retarget.test.ts`: la ranura con sus permisos y el prefijo, el
+recorrido de anuncio sin nada que conservar, el prefijo con una ranura conservada, el
+modo y la ranura por defecto, la elección de oponente como pregunta aparte, las ranuras
+basura podadas, el controlador que sólo aparece cuando responde otro asiento, los
+valores por defecto, las tres acciones del motor y el caso ajeno); build OK; y en
+Chromium dos pruebas nuevas —la forma de cambiar objetivos con sus alternativas y las
+tres puertas; y la de anunciar, con el prefijo visible, la ranura opcional y la
+ausencia de «conservar»— más las dos escenas en la prueba de temas.

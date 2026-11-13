@@ -57,9 +57,10 @@
   import KeepPowerPrompt from '#lib/components/KeepPowerPrompt.svelte';
   import KeepExactPrompt from '#lib/components/KeepExactPrompt.svelte';
   import RemoveCountersPrompt from '#lib/components/RemoveCountersPrompt.svelte';
+  import CopyRetargetPrompt from '#lib/components/CopyRetargetPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -113,6 +114,8 @@
     { value: 'keepExactVow', label: 'Conservar exactos con voto' },
     { value: 'removeCounters', label: 'Quitar contadores' },
     { value: 'removeCountersCapped', label: 'Quitar contadores con tope' },
+    { value: 'copyRetarget', label: 'Objetivos de la copia' },
+    { value: 'copyAnnounce', label: 'La copia anuncia objetivos' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -168,6 +171,8 @@
     keepExactVow: 'KeepExactPermanentsChoice · CR 122.1, contador de voto',
     removeCounters: 'RemoveCountersChoice · CR 107.1c, cualquier número',
     removeCountersCapped: 'RemoveCountersChoice · CR 608.2d, hasta N en total',
+    copyRetarget: 'CopyRetarget · CR 707.10c, objetivos nuevos',
+    copyAnnounce: 'CopyRetarget · CR 707.12, la copia anuncia',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -322,6 +327,31 @@
     card_types: { core_types: ['Sorcery'] },
     oracle_text: 'Each player chooses any number of creatures they control with total power 4 or less, then sacrifices all other creatures they control.'
   } as GameObject;
+  // CR 707.10c + CR 707.12: one walk, two operations. `Twincast` is the engine's
+  // no-rider control for the copy-retarget clause, and `Mizzix's Mastery` is the
+  // real way a copied spell reaches the announcement walk (its copy of `Frost
+  // Breath` is announced slot by slot). The copies themselves are the objects on
+  // the stack: a copy keeps the printed name and text of what it copies.
+  const twincast = {
+    id: 382, card_id: 382, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Twincast', card_types: { core_types: ['Instant'] },
+    oracle_text: 'Copy target instant or sorcery spell. You may choose new targets for the copy.'
+  } as GameObject;
+  const shockCopy = {
+    id: 380, card_id: 380, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Shock', card_types: { core_types: ['Instant'] },
+    oracle_text: 'Shock deals 2 damage to any target.'
+  } as GameObject;
+  const mizzixsMastery = {
+    id: 384, card_id: 384, owner: 0, controller: 0, zone: 'Stack',
+    name: "Mizzix's Mastery", card_types: { core_types: ['Sorcery'] },
+    oracle_text: "Exile target card that's an instant or sorcery from your graveyard. For each card exiled this way, copy it, and you may cast the copy without paying its mana cost. Exile Mizzix's Mastery."
+  } as GameObject;
+  const frostBreathCopy = {
+    id: 383, card_id: 383, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Frost Breath', card_types: { core_types: ['Instant'] },
+    oracle_text: "Tap up to two target creatures. Those creatures don't untap during their controller's next untap step."
+  } as GameObject;
   // CR 701.21a + CR 122.1: the two cards the engine tests for the exact keeper.
   // Verbatim text from `tests/integration/promise_of_loyalty.rs`: `Razia's
   // Purification` fixes the number at three, and `Promise of Loyalty` owes the kept
@@ -437,7 +467,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -571,6 +601,59 @@
           counter_type: null,
           available: capped ? [['P1P1', 2], ['charge', 1]] : [['P1P1', 3], ['charge', 2]],
           max_total: capped ? 2 : null
+        }
+      };
+    }
+    if (scene === 'copyRetarget' || scene === 'copyAnnounce') {
+      // `CopyRetarget`: the engine walks the slots one answer at a time, so the
+      // fixture shows a walk mid-step. The retarget shape keeps its announced
+      // target and offers new ones (with `can_keep_rest`); the announcement shape
+      // is the copy `Mizzix's Mastery` casts, already past its first (optional)
+      // slot, which may be declined (CR 115.6) and has nothing to keep (CR 707.12).
+      if (scene === 'copyAnnounce') {
+        return {
+          type: 'CopyRetarget',
+          data: {
+            player: 0,
+            copy_id: 383,
+            target_slots: [
+              {
+                current: null,
+                legal_alternatives: [{ Object: 200 }, { Object: 201 }],
+                can_keep: false,
+                can_decline: true
+              },
+              {
+                current: null,
+                legal_alternatives: [{ Object: 100 }, { Object: 101 }],
+                can_keep: false,
+                can_decline: true
+              }
+            ],
+            current_slot: 1,
+            picks: [{ Object: 200 }],
+            can_keep_rest: false,
+            mode: 'Announce'
+          }
+        };
+      }
+      return {
+        type: 'CopyRetarget',
+        data: {
+          player: 0,
+          copy_id: 380,
+          target_slots: [
+            {
+              current: { Object: 200 },
+              legal_alternatives: [{ Object: 100 }, { Object: 101 }, { Player: 1 }],
+              can_keep: true,
+              can_decline: false
+            }
+          ],
+          current_slot: 0,
+          picks: [],
+          can_keep_rest: true,
+          mode: 'Retarget'
         }
       };
     }
@@ -1072,7 +1155,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1282,6 +1365,7 @@
         {#if scene === 'keepPower' || scene === 'keepPowerForAll'}<KeepPowerPrompt />{/if}
         {#if scene === 'keepExact' || scene === 'keepExactVow'}<KeepExactPrompt />{/if}
         {#if scene === 'removeCounters' || scene === 'removeCountersCapped'}<RemoveCountersPrompt />{/if}
+        {#if scene === 'copyRetarget' || scene === 'copyAnnounce'}<CopyRetargetPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

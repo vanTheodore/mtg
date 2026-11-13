@@ -920,6 +920,62 @@ test('quitar contadores con tope: el presupuesto es uno y lo comparten todos los
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('objetivos de la copia: la ranura actual admite objetivo nuevo o dejarlo como está', async ({ page }) => {
+  await page.goto('/ux?scene=copyRetarget');
+  const block = page.locator('[data-copy-retarget]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Copia · Cambiar objetivos · Shock');
+  await expect(block).toHaveAttribute('data-copy-mode', 'retarget');
+  await expect(block).toHaveAttribute('data-copy-slot', '0');
+  await expect(block).toHaveAttribute('data-copy-slots', '1');
+  // CR 707.10c: the walk is one position, and what it holds may stay.
+  await expect(block.locator('[data-copy-progress]')).toHaveText('Objetivo 1 de 1');
+  await expect(block.locator('[data-copy-current]')).toHaveText(
+    'Ahora apunta a Grizzly Bears (Jugador 2), y puede quedarse así (CR 707.10c).'
+  );
+  // No decided prefix yet, so no progress list is invented.
+  await expect(block.locator('[data-copy-picks]')).toHaveCount(0);
+  // The alternatives are the engine's list, plus the option to keep the current one.
+  await expect(block.locator('[data-copy-candidate]')).toHaveCount(3);
+  await expect(block.locator('[data-copy-candidate="2"]')).toHaveText('Jugador 2');
+  await expect(block.locator('[data-copy-keep]')).toHaveText('Dejarlo en Grizzly Bears (Jugador 2)');
+  // CR 707.10c: keeping the whole rest is offered, and only because the engine says so.
+  await expect(block).toHaveAttribute('data-copy-keep-rest', 'true');
+  await expect(block.locator('[data-copy-keep-rest]')).toHaveText('Dejar el resto como está');
+  // An announcement-only permission has no business here.
+  await expect(block.locator('[data-copy-decline]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la copia anuncia: nada que conservar, la ranura opcional se declina y lo elegido se ve', async ({ page }) => {
+  await page.goto('/ux?scene=copyAnnounce');
+  const block = page.locator('[data-copy-retarget]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Copia · Anunciar objetivos · Frost Breath');
+  await expect(block).toHaveAttribute('data-copy-mode', 'announce');
+  await expect(block).toHaveAttribute('data-copy-slot', '1');
+  await expect(block).toHaveAttribute('data-copy-slots', '2');
+  // CR 707.12: a freshly cast copy announces its own targets.
+  await expect(block).toContainText('no hereda los del hechizo original');
+  await expect(block.locator('[data-copy-progress]')).toHaveText('Objetivo 2 de 2');
+  // The decided prefix is visible, with the label the block gives that target.
+  await expect(block.locator('[data-copy-picks] li')).toHaveText('Objetivo 1: Grizzly Bears (Jugador 2) · #200');
+  // CR 115.6: "up to two" makes this slot declinable, and the block says it in words.
+  await expect(block.locator('[data-copy-current]')).toHaveText(
+    'Esta ranura es opcional: puedes no elegir objetivo (CR 115.6).'
+  );
+  await expect(block.locator('[data-copy-decline]')).toHaveText('No elegir objetivo para esta ranura');
+  // Nothing to keep in an announcement, and no "keep the rest" either.
+  await expect(block.locator('[data-copy-keep]')).toHaveCount(0);
+  await expect(block).toHaveAttribute('data-copy-keep-rest', 'false');
+  await expect(block.locator('[data-copy-keep-rest]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

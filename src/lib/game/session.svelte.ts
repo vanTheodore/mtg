@@ -1,6 +1,6 @@
 import { tick } from 'svelte';
 import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
-import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId, type TargetRef } from '#lib/engine/types.ts';
+import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId, type PlayerId, type TargetRef } from '#lib/engine/types.ts';
 import {
   attackDeclaration, attackTargets, blockDeclaration, blockTargets, cancelCastAction, chooseXAction,
   decideOptionalEffect, decideTribute, defaultOrder, defaultX, digPrompt as readDigPrompt, digReady as isDigReady,
@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -480,6 +480,28 @@ class GameSession {
     const selections = this.removeSelections;
     this.removePick = {};
     void this.dispatch(removeCountersAction(selections));
+  }
+
+  /**
+   * CR 707.10c: the copy target walk. The engine answers **one slot per action**
+   * and re-prompts (or finishes), so there is no partial answer to cache here: the
+   * decided prefix is `picks`, which arrives in the payload. Caching a local copy
+   * would be a second bookkeeper for something the engine already narrates.
+   */
+  get copyRetargetPrompt() {
+    return readCopyRetarget(this.snapshot);
+  }
+  /** `null` keeps the position's announced target (CR 707.10c). */
+  answerCopySlot(target: TargetRef | null) {
+    void this.dispatch(chooseCopyTargetAction(target));
+  }
+  /** CR 707.10c: legal only while the engine says `can_keep_rest`. */
+  keepRemainingCopyTargets() {
+    void this.dispatch(keepCopyTargetsAction());
+  }
+  /** CR 601.2c + CR 115.1: which opponent announces the next target group. */
+  chooseCopyAnnouncer(player: PlayerId) {
+    void this.dispatch(chooseCopyAnnouncerAction(player));
   }
 
   /** CR 115.7: repointing a spell (or ability) that is already on the stack. */

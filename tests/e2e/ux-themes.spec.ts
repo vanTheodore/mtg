@@ -71,7 +71,9 @@ const SCENES = [
   { scene: 'keepExact', slug: 'conservar-exactos', block: '[data-keep-exact]' },
   { scene: 'keepExactVow', slug: 'conservar-exactos-voto', block: '[data-keep-exact]' },
   { scene: 'removeCounters', slug: 'quitar-contadores', block: '[data-remove-counters]' },
-  { scene: 'removeCountersCapped', slug: 'quitar-contadores-tope', block: '[data-remove-counters]' }
+  { scene: 'removeCountersCapped', slug: 'quitar-contadores-tope', block: '[data-remove-counters]' },
+  { scene: 'copyRetarget', slug: 'objetivos-copia', block: '[data-copy-retarget]' },
+  { scene: 'copyAnnounce', slug: 'copia-anuncia', block: '[data-copy-retarget]' }
 ] as const;
 
 const THEMES = [

@@ -1038,6 +1038,109 @@ export function moveCountersAction(selections: CounterMoveSelection[]): GameActi
 }
 
 /**
+ * CR 707.10c + CR 722.3c + CR 702.192a: the copy target walk, which the engine
+ * runs **one slot at a time**. One variant serves two operations, and the screen
+ * says which one it is:
+ *
+ *   - `retarget` — a copy that already holds targets; its controller may choose new
+ *     ones and may leave any of them unchanged (CR 707.10c).
+ *   - `announce` — a freshly cast copy announces its targets (CR 601.2c). Nothing
+ *     can be kept; a slot may only be declined when the text says "up to N"
+ *     (CR 115.6).
+ *
+ * Every permission in this prompt is engine-derived at each step: `can_keep` per
+ * slot, `can_keep_rest` for the whole walk, `can_decline` for optional slots, and
+ * the legal alternatives. The screen renders them and never recomputes a legality
+ * rule of its own; `picks` is the decided prefix, so progress is visible without
+ * caching a half-answer (the engine re-prompts after every slot).
+ *
+ * A walk may open with an announcing-opponent election instead of a slot
+ * (CR 601.2c + CR 115.1, CR 707.12): then `target_slots` is empty and the
+ * question is which opponent announces that target group.
+ */
+export type CopySlot = {
+  current: TargetRef | null;
+  /** CR 707.10c: what this position could become, as the engine lists it. */
+  alternatives: TargetRef[];
+  /** CR 707.10c: keeping the announced target still completes legally. */
+  canKeep: boolean;
+  /** CR 115.6: declining an optional slot still completes (announcement walk). */
+  canDecline: boolean;
+};
+export type CopyRetargetPrompt = {
+  player: PlayerId;
+  /** CR 112.2: the copy's controller, when a different seat answers this prompt. */
+  controller: PlayerId | null;
+  copyId: ObjectId;
+  slots: CopySlot[];
+  mode: 'retarget' | 'announce';
+  /** Position awaiting an answer; `picks.length` when the payload says so. */
+  currentSlot: number;
+  /** The decided prefix, index-aligned with `slots`. */
+  picks: (TargetRef | null)[];
+  /** CR 707.10c: keeping every remaining position completes a legal final set. */
+  canKeepRest: boolean;
+  /** CR 601.2c + CR 115.1: set while no slot is answered. */
+  announcer: { candidates: PlayerId[]; choiceIndex: number; choiceCount: number } | null;
+};
+export function copyRetargetPrompt(snapshot: EngineSnapshot | null): CopyRetargetPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'CopyRetarget') return null;
+  const data = waiting.data ?? {};
+  /** A target as the wire wrote it, back into the `{Player}` / `{Object}` shape. */
+  const copyTargetOf = (value: unknown): TargetRef | null => {
+    const parsed = parseTarget(value);
+    if (!parsed) return null;
+    return parsed.kind === 'player' ? playerTarget(parsed.id) : objectTarget(parsed.id);
+  };
+  const slots: CopySlot[] = Array.isArray(data.target_slots)
+    ? (data.target_slots as unknown[]).map((entry) => {
+        const slot = (entry ?? {}) as Record<string, unknown>;
+        return {
+          current: copyTargetOf(slot.current),
+          alternatives: parseTargetList(slot.legal_alternatives),
+          canKeep: slot.can_keep === true,
+          canDecline: slot.can_decline === true
+        };
+      })
+    : [];
+  const rawPicks = Array.isArray(data.picks) ? (data.picks as unknown[]) : [];
+  const election = data.announcer_election as Record<string, unknown> | null | undefined;
+  const candidateIds = (value: unknown): PlayerId[] =>
+    Array.isArray(value) ? (value as unknown[]).filter((id): id is PlayerId => typeof id === 'number') : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    controller: typeof data.controller === 'number' ? data.controller : null,
+    copyId: typeof data.copy_id === 'number' ? (data.copy_id as ObjectId) : 0,
+    slots,
+    mode: data.mode === 'Announce' ? 'announce' : 'retarget',
+    currentSlot:
+      typeof data.current_slot === 'number' ? Math.max(0, data.current_slot) : rawPicks.length,
+    picks: rawPicks.map((pick) => copyTargetOf(pick)),
+    canKeepRest: data.can_keep_rest === true,
+    announcer: election
+      ? {
+          candidates: candidateIds(election.candidates),
+          choiceIndex: typeof election.choice_index === 'number' ? election.choice_index : 1,
+          choiceCount: typeof election.choice_count === 'number' ? election.choice_count : 1
+        }
+      : null
+  };
+}
+/** One slot's answer: `null` keeps the announced target (CR 707.10c). */
+export function chooseCopyTargetAction(target: TargetRef | null): GameAction {
+  return { type: 'ChooseTarget', data: { target } };
+}
+/** CR 707.10c: keep every remaining position, which the engine gates itself. */
+export function keepCopyTargetsAction(): GameAction {
+  return { type: 'KeepAllCopyTargets' };
+}
+/** CR 601.2c + CR 115.1: which opponent announces the next target group. */
+export function chooseCopyAnnouncerAction(player: PlayerId): GameAction {
+  return { type: 'ChooseAnnouncingOpponent', data: { opponent: player } };
+}
+
+/**
  * CR 107.1c + CR 608.2d: "remove any number of counters" (Rhys, the Evermore;
  * Tetravus) and "remove up to N counters" (Hex Parasite's announced X).
  *
