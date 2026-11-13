@@ -281,6 +281,32 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('la guardia pide el permanente, no pregunta otra vez si se paga', async ({ page }) => {
+  await page.goto('/ux?scene=ward');
+  const prompt = page.locator('[data-ward-sacrifice]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong')).toHaveText('Guardia · sacrificar');
+  // The pay decision is already made: there is no "no pago" among the options.
+  await expect(prompt.getByRole('button', { name: 'No pagar' })).toHaveCount(0);
+  await expect(prompt).toContainText('Ya pagas la guardia');
+  // Exactly the permanents Phase listed, nothing else.
+  await expect(prompt.locator('button.row')).toHaveCount(2);
+  await expect(prompt.getByRole('button', { name: 'Savannah Lions' })).toBeVisible();
+  await expect(prompt.getByRole('button', { name: 'Elvish Mystic' })).toBeVisible();
+
+  await page.goto('/ux?scene=wardPower');
+  const threshold = page.locator('[data-ward-sacrifice]');
+  await expect(threshold.locator('[data-ward-threshold]')).toHaveText(
+    'El coste pide permanentes cuyo poder total llegue a 3. Phase propone un conjunto; la mesa no arma otro (CR 118.12a).'
+  );
+  // One set, with its total shown for the player's benefit.
+  await expect(threshold.locator('button.row')).toHaveCount(1);
+  await expect(threshold.getByRole('button', { name: /^Grizzly Bears \+ Elvish Mystic/ })).toContainText('poder total 3');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el tributo lo decide un oponente, y las dos respuestas se distinguen', async ({ page }) => {
   await page.goto('/ux?scene=tribute');
   const prompt = page.locator('[data-tribute]');

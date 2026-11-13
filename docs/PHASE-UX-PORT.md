@@ -951,3 +951,65 @@ Laboratorio: `/ux?scene=tribute` (Fanatic of Xenagos, tributo 1) y captura
 `game/__tests__/tribute.test.ts`), `bun run build` OK, y en Chromium una prueba
 nueva que comprueba el nombre de la criatura, la cuenta del motor y que las dos
 respuestas están separadas —con axe.
+
+## La guardia, con el permanente a la vista (vigesimotercera pasada, 7 nov 2026)
+
+`WardSacrificeChoice` es CR 702.21a/b: pagar una guardia sacrificando permanentes.
+Dos cosas que el bloque no puede equivocar:
+
+- **No hay «no pago» aquí.** El prompt se alcanza *después* de que el pagador
+  aceptara la guardia, y el motor acepta exactamente un permanente por vuelta (o
+  un conjunto cuyo poder total llegue al umbral). Ofrecer un botón de negativa
+  sería ofrecer una acción que el motor rechaza, así que el bloque no lo tiene:
+  dice que la decisión de pagar ya está tomada.
+- **Las opciones son los candidatos `SelectCards` de Phase**, en su orden. La
+  mesa no arma conjuntos: no puede saber qué combinaciones aceptará el motor más
+  allá de la que publicó. Con umbral hay un único conjunto —el testigo del
+  motor— y el bloque lo nombra con su poder total, calculado sólo para mostrar y
+  sólo cuando todos los poderes se conocen.
+
+Laboratorio: `/ux?scene=ward` (un permanente por vuelta) y
+`/ux?scene=wardPower` (poder total mínimo), capturas
+`docs/screenshots/ux-guardia-1440.jpg` y las de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores, `bun test src/lib` **391** (6 nuevas en
+`game/__tests__/ward.test.ts`), `bun run build` OK, y en Chromium una prueba
+nueva que comprueba que no hay negativa, que sólo están los permanentes que
+publicó Phase y que el conjunto con umbral se muestra con su total —con axe.
+
+## Las capturas en los dos temas (vigesimocuarta pasada, 7 nov 2026)
+
+El laboratorio no podía enseñar el tema: pintaba con `data-chrome="arena"`, y
+`arena.css` fija ahí su propia paleta **a propósito** (el cromo va sobre el arte,
+para que el tablero se lea igual con el sistema en claro o en oscuro). Con eso,
+una captura «clara» y una «oscura» salían idénticas —medido: mismo md5—.
+
+Arreglo en dos partes:
+
+1. **El laboratorio obedece el mismo interruptor que `Board.svelte`**:
+   `data-board-style={session.boardStyle}` y `data-chrome="arena"` sólo cuando el
+   estilo es arena, con el arte de fondo también condicionado. Así `/ux` puede
+   mostrar el cromo clásico, que es el que resuelve los tokens del tema.
+2. **`tests/e2e/ux-themes.spec.ts`**: recorre las diez escenas de esta rama en
+   claro y oscuro, comprueba que `data-theme` cambió de verdad, audita con axe en
+   **los dos** temas y deja las capturas en `docs/screenshots/temas/`, con un
+   índice en `docs/screenshots/temas/README.md`. Una prueba extra compara `--ink`
+   entre temas para que una captura no pueda repetir la paleta anterior.
+
+El tema se cambia por el camino del producto: `localStorage['mesa:theme']`, que es
+lo que escribe el ajuste y lo que lee `session.setTheme`.
+
+Un detalle que salió al añadir la escena de la guardia: el selector de escena es un
+`<select>` nativo, que se dimensiona por su opción más larga, y dos etiquetas nuevas
+metieron **30 px** de desbordamiento horizontal a 320 px (medido; lo cazó la prueba
+de `ux-lab`). No se arregló acortando la etiqueta —que también— sino con
+`min-width: 0` en la cadena flex y `max-width: 100%` en el `select`: una etiqueta
+larga no puede volver a decidir el ancho del cromo.
+
+### Verificación
+
+`bun test src/lib` **391**, `bun run check` 0 errores, build OK, y en Chromium
+`ux-themes` **3/3** (20 capturas, 20 auditorías axe) además de `ux-lab` (36),
+`a11y` y `arena-quality-gate`.

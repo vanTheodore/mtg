@@ -405,6 +405,62 @@ export function revealAction(card: ObjectId | null): GameAction {
 }
 
 /**
+ * CR 702.21a/b: paying a ward cost by sacrificing. This prompt is reached only
+ * **after** the payer said yes to the ward, so there is no "no pago" among the
+ * options: the engine accepts exactly one permanent per round-trip, or — when
+ * the cost asks for permanents whose total power reaches a threshold — one set
+ * it has already found.
+ *
+ * The options are Phase's own `SelectCards` candidates, in the engine's order.
+ * The table does not build a set of its own: it cannot know which combinations
+ * the engine will accept beyond the one it published.
+ */
+export type WardSacrificeOption = { cards: ObjectId[]; power: number | null };
+export type WardSacrificePrompt = {
+  player: PlayerId;
+  options: WardSacrificeOption[];
+  /** Sacrifices still owed after this one (`remaining` in the engine). */
+  remaining: number;
+  /** CR 118.12a: total power the chosen set must reach, when the cost says so. */
+  minTotalPower?: number;
+};
+export function wardSacrificePrompt(snapshot: EngineSnapshot | null): WardSacrificePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'WardSacrificeChoice') return null;
+  const data = waiting.data ?? {};
+  const objects = snapshot!.state.objects;
+  const powerOf = (id: ObjectId) => {
+    const power = objects[String(id)]?.power;
+    return typeof power === 'number' ? power : null;
+  };
+  const options: WardSacrificeOption[] = [];
+  for (const action of snapshot!.legal.actions) {
+    if (action.type !== 'SelectCards') continue;
+    const cards = Array.isArray(action.data?.cards)
+      ? (action.data.cards as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+      : [];
+    const powers = cards.map(powerOf);
+    options.push({
+      cards,
+      // CR 208.1: the total is for display only, and only when every power is known.
+      power: powers.length && powers.every((value) => value !== null)
+        ? powers.reduce<number>((sum, value) => sum + (value ?? 0), 0)
+        : null
+    });
+  }
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    options,
+    remaining: typeof data.remaining === 'number' ? data.remaining : 1,
+    minTotalPower: typeof data.min_total_power === 'number' ? data.min_total_power : undefined
+  };
+}
+/** CR 702.21b: the selected permanents, exactly as the engine listed them. */
+export function wardSacrificeAction(cards: ObjectId[]): GameAction {
+  return selectCardsAction(cards);
+}
+
+/**
  * CR 702.104a: a Tribute creature enters and **an opponent** decides whether to
  * put the counters on it. The engine names the decider (`player`), the creature
  * (`source_id`) and how many +1/+1 counters the tribute is worth (`count`).

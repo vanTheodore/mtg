@@ -11,7 +11,8 @@ import {
   optionalEffectPrompt as readOptionalEffect, playerTarget, rememberOptionalEffect,
   choosePair, chooseTokenHost, chooseUnlessCostBranch, pairPrompt as readPairPrompt,
   unlessBranchPrompt as readUnlessBranch,
-  tokenHostPrompt as readTokenHost, tributePrompt as readTribute, payUnlessCost, revealAction, revealPrompt as readRevealPrompt,
+  tokenHostPrompt as readTokenHost, tributePrompt as readTribute, payUnlessCost,
+  wardSacrificePrompt as readWardSacrifice, wardSacrificeAction, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -327,6 +328,14 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 702.21b: which permanents pay the ward cost. */
+  get wardSacrificePrompt() {
+    return readWardSacrifice(this.snapshot);
+  }
+  payWard(cards: ObjectId[]) {
+    void this.dispatch(wardSacrificeAction(cards));
   }
 
   /** CR 702.104a: an opponent decides whether the tribute is paid. */

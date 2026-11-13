@@ -1,0 +1,32 @@
+# Las vistas de Phase en los dos temas
+
+Capturas de `tests/e2e/ux-themes.spec.ts`, que recorre cada escena del
+laboratorio (`/ux`) en tema claro y oscuro y audita las dos con axe.
+
+El cromo de la mesa viene de `arena.css`, que **a propósito** no sigue el tema:
+va sobre el arte, con su propia paleta, para que el tablero se lea igual con el
+sistema en claro o en oscuro. Estas capturas se toman con el cromo clásico
+(`mesa:boardStyle = classic`), que es el que resuelve los tokens del tema; el
+laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
+
+| Escena | Bloque | Claro | Oscuro |
+|---|---|---|---|
+| `pay` | `PayAmountChoice` | [claro](cargo-con-importe-claro.jpg) | [oscuro](cargo-con-importe-oscuro.jpg) |
+| `opponent` | `OpponentMayChoice` | [claro](puede-un-oponente-claro.jpg) | [oscuro](puede-un-oponente-oscuro.jpg) |
+| `reveal` | `RevealChoice` | [claro](ensenar-una-carta-claro.jpg) | [oscuro](ensenar-una-carta-oscuro.jpg) |
+| `unless` | `UnlessPayment` | [claro](pagar-o-aceptar-claro.jpg) | [oscuro](pagar-o-aceptar-oscuro.jpg) |
+| `pair` | `PairChoice` | [claro](emparejar-claro.jpg) | [oscuro](emparejar-oscuro.jpg) |
+| `host` | `ChooseTokenHost` | [claro](destinatario-ficha-claro.jpg) | [oscuro](destinatario-ficha-oscuro.jpg) |
+| `branches` | `UnlessPaymentChooseCost` | [claro](pagar-uno-de-dos-claro.jpg) | [oscuro](pagar-uno-de-dos-oscuro.jpg) |
+| `tribute` | `TributeChoice` | [claro](tributo-claro.jpg) | [oscuro](tributo-oscuro.jpg) |
+| `ward` | `WardSacrificeChoice` | [claro](guardia-claro.jpg) | [oscuro](guardia-oscuro.jpg) |
+| `wardPower` | `WardSacrificeChoice` (umbral) | [claro](guardia-poder-claro.jpg) | [oscuro](guardia-poder-oscuro.jpg) |
+
+Para regenerarlas, con un Chromium disponible para Playwright:
+
+```sh
+bun x playwright test tests/e2e/ux-themes.spec.ts
+```
+
+La prueba falla si un bloque no aparece en su escena, si `data-theme` no cambió
+o si axe encuentra algo crítico o serio en cualquiera de los dos temas.

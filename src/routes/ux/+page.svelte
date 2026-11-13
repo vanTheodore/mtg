@@ -39,9 +39,10 @@
   import TokenHostPrompt from '#lib/components/TokenHostPrompt.svelte';
   import UnlessBranchPrompt from '#lib/components/UnlessBranchPrompt.svelte';
   import TributePrompt from '#lib/components/TributePrompt.svelte';
+  import WardSacrificePrompt from '#lib/components/WardSacrificePrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -64,6 +65,8 @@
     { value: 'host', label: 'Destinatario de una ficha' },
     { value: 'branches', label: 'Pagar uno de dos costes' },
     { value: 'tribute', label: 'Tributo: lo paga un oponente' },
+    { value: 'ward', label: 'Guardia: un permanente' },
+    { value: 'wardPower', label: 'Guardia: poder total' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -88,6 +91,8 @@
     host: 'ChooseTokenHost · una ficha elige entre dos criaturas',
     branches: 'UnlessPaymentChooseCost · sacrificar o descartar',
     tribute: 'TributeChoice · un oponente decide si se paga',
+    ward: 'WardSacrificeChoice · CR 702.21b, un permanente por vuelta',
+    wardPower: 'WardSacrificeChoice · CR 118.12a, poder total mínimo',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -244,6 +249,21 @@
           valid_attack_targets: [seat, walker],
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
+        }
+      };
+    }
+    if (scene === 'ward' || scene === 'wardPower') {
+      // Shape taken from `WaitingFor::WardSacrificeChoice`. Without a threshold
+      // Phase lists one candidate per permanent; with one it lists the single
+      // set it found, and the legal list below mirrors that.
+      return {
+        type: 'WardSacrificeChoice',
+        data: {
+          player: 0,
+          permanents: scene === 'ward' ? [101, 105] : [100, 101, 105],
+          remaining: 1,
+          min_total_power: scene === 'wardPower' ? 3 : null,
+          pending_effect: { ability: {} }
         }
       };
     }
@@ -519,6 +539,7 @@
           : scene === 'host' ? 'PreCombatMain'
           : scene === 'branches' ? 'PreCombatMain'
           : scene === 'tribute' ? 'PreCombatMain'
+          : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -570,7 +591,14 @@
                 { type: 'AssignCombatDamage', data: { mode: 'Normal', assignments: [[200, 2]], trample_damage: 1, controller_damage: 0 } },
                 { type: 'AssignCombatDamage', data: { mode: 'AsThoughUnblocked', assignments: [], trample_damage: 0, controller_damage: 0 } }
               ]
-            : [{ type: 'PassPriority' }],
+            : scene === 'ward'
+              ? [
+                  { type: 'SelectCards', data: { cards: [101] } },
+                  { type: 'SelectCards', data: { cards: [105] } }
+                ]
+              : scene === 'wardPower'
+                ? [{ type: 'SelectCards', data: { cards: [100, 105] } }]
+                : [{ type: 'PassPriority' }],
         spell_costs: {},
         // Actions the menu must show. In the real table these arrive from
         // `legal.by_object`; the fixture copies the shape, not the rules.
@@ -622,8 +650,22 @@
   }}
 />
 
-<div id="mesa-ux" class="app ux" data-board-style="arena" data-chrome="arena" style="--card-w: min(148px, calc((100vw - 6rem) / 2)); --arena-base-card-w: 124px">
-  <ArenaSurface color="green" />
+<!--
+  The same two switches as `Board.svelte`: the board style and — only while the
+  arena chrome is on — `data-chrome="arena"`, which `arena.css` uses to keep the
+  chrome dark over the art on purpose. Without this the laboratory could not
+  show the classic chrome, and the classic chrome is the one that follows the
+  global theme, so a light/dark review had nothing to review.
+-->
+<div
+  id="mesa-ux"
+  class="app ux"
+  data-board-style={session.boardStyle}
+  data-chrome={session.boardStyle === 'arena' ? 'arena' : undefined}
+  style="--card-w: min(148px, calc((100vw - 6rem) / 2)); --arena-base-card-w: 124px">
+  {#if session.boardStyle === 'arena'}
+    <ArenaSurface color="green" />
+  {/if}
 
   <header class="topbar">
     <div class="brand">
@@ -685,6 +727,7 @@
         {#if scene === 'host'}<TokenHostPrompt />{/if}
         {#if scene === 'branches'}<UnlessBranchPrompt />{/if}
         {#if scene === 'tribute'}<TributePrompt />{/if}
+        {#if scene === 'ward' || scene === 'wardPower'}<WardSacrificePrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>
@@ -755,9 +798,15 @@
   h1 { margin: 0; font-size: 1.15rem; }
   .brand p { margin: 0; font-size: .74rem; color: var(--ink-muted); max-width: 46ch; }
   .brand a { color: var(--focus); }
-  .controls { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
-  .controls label { display: flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--ink-muted); }
-  .controls select { background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: .25rem .4rem; }
+  /* A long scene label is an option, not a layout decision: a native select
+     sizes itself to its widest option, so an option added later could widen the
+     chrome past the window (measured: 30 px of overflow at 320 px the first time
+     a label grew). `min-width: 0` lets the flex chain shrink and the select
+     ellipsise instead. */
+  .brand { min-width: 0; }
+  .controls { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; min-width: 0; max-width: 100%; }
+  .controls label { display: flex; align-items: center; gap: .4rem; min-width: 0; font-size: .78rem; color: var(--ink-muted); }
+  .controls select { max-width: 100%; min-width: 0; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: .25rem .4rem; }
   .lede { margin: 0; font-size: .82rem; color: var(--ink-muted); max-width: 90ch; }
   /* The fixture is taller than one screen once the hand is added; without this
      the flex column shrinks the table and the seats overlap the hand (measured:
