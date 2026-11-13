@@ -39,7 +39,10 @@ const SCENES = [
   { scene: 'wardPower', slug: 'guardia-poder', block: '[data-ward-sacrifice]' },
   { scene: 'startingPlayer', slug: 'quien-empieza', block: '[data-starting-player]' },
   { scene: 'scry', slug: 'adivinar', block: '[data-scry-prompt]' },
-  { scene: 'surveil', slug: 'vigilar', block: '[data-scry-prompt]' }
+  { scene: 'surveil', slug: 'vigilar', block: '[data-scry-prompt]' },
+  { scene: 'crew', slug: 'tripular', block: '[data-tap-power]' },
+  { scene: 'saddle', slug: 'montar', block: '[data-tap-power]' },
+  { scene: 'equip', slug: 'equipar', block: '[data-equip-prompt]' }
 ] as const;
 
 const THEMES = [

@@ -14,7 +14,8 @@ import {
   tokenHostPrompt as readTokenHost, tributePrompt as readTribute, payUnlessCost,
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
-  scryPrompt as readScry, scryAction, revealAction, revealPrompt as readRevealPrompt,
+  scryPrompt as readScry, scryAction,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -216,6 +217,7 @@ class GameSession {
     this.hostPick = null;
     this.branchPick = null;
     this.scryKeep = [];
+    this.tapPick = [];
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -331,6 +333,46 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 702.122a / CR 702.171a: tap creatures until their contribution adds up. */
+  get tapPowerPrompt() {
+    return readTapPower(this.snapshot);
+  }
+  tapPick = $state<ObjectId[]>([]);
+  toggleTapPick(id: ObjectId) {
+    const picked = this.tapPick;
+    this.tapPick = picked.includes(id) ? picked.filter((card) => card !== id) : [...picked, id];
+  }
+  /** CR 702.122a: the sum of the engine's contributions for the picked creatures. */
+  get tapTotal(): number | null {
+    const prompt = this.tapPowerPrompt;
+    return prompt ? tapPowerTotal(prompt, this.tapPick) : null;
+  }
+  get tapReady(): boolean {
+    const prompt = this.tapPowerPrompt;
+    if (!prompt) return false;
+    const total = this.tapTotal;
+    // Without a published contribution there is no sum to claim: Phase decides.
+    if (total === null) return this.tapPick.length > 0;
+    return total >= prompt.required;
+  }
+  confirmTapPick() {
+    const prompt = this.tapPowerPrompt;
+    if (!prompt || !this.tapPick.length) return;
+    const ids = this.tapPick;
+    this.tapPick = [];
+    void this.dispatch(tapPowerAction(prompt, ids));
+  }
+
+  /** CR 702.6a: which permanent the equipment attaches to. */
+  get equipPrompt() {
+    return readEquip(this.snapshot);
+  }
+  equipTo(targetId: ObjectId) {
+    const prompt = this.equipPrompt;
+    if (!prompt) return;
+    void this.dispatch(equipAction(prompt.equipmentId, targetId));
   }
 
   /** CR 701.22a / CR 701.25a: look at the top N and keep any of it on top. */
@@ -741,6 +783,7 @@ class GameSession {
       this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = [];
       this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.pairPick = null;
       this.scryKeep = [];
+      this.tapPick = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

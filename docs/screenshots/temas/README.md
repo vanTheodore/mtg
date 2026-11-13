@@ -24,6 +24,9 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `startingPlayer` | `ChooseStartingPlayer` | [claro](quien-empieza-claro.jpg) | [oscuro](quien-empieza-oscuro.jpg) |
 | `scry` | `ScryChoice` | [claro](adivinar-claro.jpg) | [oscuro](adivinar-oscuro.jpg) |
 | `surveil` | `SurveilChoice` | [claro](vigilar-claro.jpg) | [oscuro](vigilar-oscuro.jpg) |
+| `crew` | `CrewVehicle` | [claro](tripular-claro.jpg) | [oscuro](tripular-oscuro.jpg) |
+| `saddle` | `SaddleMount` | [claro](montar-claro.jpg) | [oscuro](montar-oscuro.jpg) |
+| `equip` | `EquipTarget` | [claro](equipar-claro.jpg) | [oscuro](equipar-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

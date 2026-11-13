@@ -1093,3 +1093,69 @@ poda de basura, la acción ordenada y el caso ajeno); build OK; y en Chromium un
 prueba nueva que marca dos cartas, comprueba el orden en el texto del botón, lo
 mueve con ↑, quita una, y verifica que surveil dice «al cementerio» y cita CR
 701.25a —con axe.
+
+## Girar criaturas: tripular, montar y equipar (vigesimoséptima pasada, 7 nov 2026)
+
+`CrewVehicle` y `SaddleMount` son la misma pregunta —girar criaturas tuyas cuya
+aportación sume N— con dos palabras clave distintas, y `EquipTarget` es la
+pregunta vecina que **no** suma nada: elegir a qué permanente se anexa el
+equipo. Van juntas porque las tres giran alrededor del mismo objeto del
+tablero, pero no comparten bloque: la primera necesita una suma y un umbral, la
+tercera es una lista.
+
+| `WaitingFor` | Pregunta | Respuesta | Regla |
+|---|---|---|---|
+| `CrewVehicle` | girar criaturas hasta `crew_power` | `CrewVehicle { vehicle_id, creature_ids }` | CR 702.122a |
+| `SaddleMount` | girar criaturas hasta `saddle_power` | `SaddleMount { mount_id, creature_ids }` | CR 702.171a |
+| `EquipTarget` | elegir `valid_targets` | `Equip { equipment_id, target_id }` por objetivo | CR 301.5, CR 702.6a |
+
+**La suma es la del motor, no la del poder impreso.** `contributions` viene
+alineado índice a índice con `eligible_creatures` y lo calcula
+`object_crew_power_contribution`: un Piloto aporta más («como si su fuerza fuera
+N mayor») y una Montura puede contar resistencia. Por eso el bloque suma esa
+lista y no `power`, y por eso la fila de cada criatura enseña **su aportación**,
+que puede no coincidir con la fuerza de la carta. Si el motor no publica la
+lista, no hay suma que afirmar: el bloque dice exactamente eso («aquí no hay
+suma que enseñar: valida la elección el motor») y deja confirmar sin inventar un
+total.
+
+**Montar no es tripular.** Son keywords distintas, con acciones distintas, y la
+única que tiene restricción de momento es `SaddleMount` («Saddle may only be
+activated as a sorcery», `engine.rs`). El bloque lo dice con la palabra del
+keyword y cita CR 702.171a cuando el `kind` es `saddle`, en vez de reutilizar la
+frase de crew.
+
+**Cualquier subconjunto que sume es legal.** Los candidatos de la IA para estas
+variantes son coberturas minimales (`minimal_power_subset_candidates`), pero el
+manejador sólo compara el total de lo que llega con el umbral
+(`PreparedContributionSnapshot::meets_threshold`), así que la mesa compone la
+selección con lo que el jugador marca y Phase valida. Si rechaza, se muestra su
+mensaje y no se aplica nada.
+
+**Equipar no compone nada.** `valid_targets` ya es la lista de permanentes
+legales y hay una acción `Equip` por cada uno: el bloque es esa lista, y no
+ofrece un tercer candidato que Phase no haya publicado.
+
+Los objetos del laboratorio son cartas que el propio motor cita en sus pruebas y
+llevan **sólo lo que esos literales dicen**: `Smogbelcher Chariot` con Crew 3
+(`tests/integration/balthier_and_fran_crew_history.rs`), `Ornery Tumblewagg` con
+Saddle 2 (`tests/integration/attacks_while_saddled_trigger.rs`) y `Bonesplitter`
+como Equipment (`game/layers.rs`). Coste de maná y fuerza/resistencia impresas
+se dejan fuera antes que adivinarlas: el bloque no las necesita y sus números
+salen de `contributions`.
+
+Laboratorio: `/ux?scene=crew` (Crew 3 con aportaciones 2, 2 y 1: una criatura no
+llega, dos sí), `/ux?scene=saddle` (Saddle 2) y `/ux?scene=equip` (dos
+candidatos de tres criaturas). Capturas `docs/screenshots/ux-tripular-1440.jpg`,
+`ux-montar-1440.jpg`, `ux-equipar-1440.jpg` y sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **409** (8
+nuevas en `game/__tests__/tap-power.test.ts`: la forma de crew, la de saddle con
+su keyword, la ausencia de aportaciones, la poda de basura, la suma —incluido
+que un id ajeno no infla el total—, la acción de cada keyword, el equip y el
+caso ajeno); build OK; y en Chromium dos pruebas nuevas: tripular no deja
+confirmar hasta llegar al umbral y montar dice que es otra acción, y equipar
+ofrece exactamente los permanentes de Phase —las dos con axe—, más las tres
+filas nuevas en la prueba de temas.

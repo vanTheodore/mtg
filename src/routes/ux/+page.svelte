@@ -42,9 +42,11 @@
   import WardSacrificePrompt from '#lib/components/WardSacrificePrompt.svelte';
   import StartingPlayerPrompt from '#lib/components/StartingPlayerPrompt.svelte';
   import ScryPrompt from '#lib/components/ScryPrompt.svelte';
+  import TapPowerPrompt from '#lib/components/TapPowerPrompt.svelte';
+  import EquipPrompt from '#lib/components/EquipPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -72,6 +74,9 @@
     { value: 'startingPlayer', label: 'Quién empieza' },
     { value: 'scry', label: 'Adivinar (scry)' },
     { value: 'surveil', label: 'Vigilar (surveil)' },
+    { value: 'crew', label: 'Tripular (crew)' },
+    { value: 'saddle', label: 'Montar (saddle)' },
+    { value: 'equip', label: 'Equipar' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -101,6 +106,9 @@
     startingPlayer: 'ChooseStartingPlayer · CR 103.1, la tirada elige',
     scry: 'ScryChoice · CR 701.22a, lo que no se queda va al fondo',
     surveil: 'SurveilChoice · CR 701.25a, lo que no se queda va al cementerio',
+    crew: 'CrewVehicle · CR 702.122a, girar criaturas por su aportación',
+    saddle: 'SaddleMount · CR 702.171a, montar no es tripular',
+    equip: 'EquipTarget · CR 702.6a, elegir a quién se anexa',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -177,6 +185,30 @@
     mana_cost: '{1}{R}{G}', power: 3, toughness: 3,
     oracle_text: 'Tribute 1 (As this creature enters, an opponent of your choice may put a +1/+1 counter on it.)'
   } as GameObject;
+  // Crew, saddle and equip name a permanent the fixture does not need on a
+  // battlefield row: like the spell waiting for its X, they live only in
+  // `objects`, so no pile count moves.
+  //
+  // Each one is a card the engine itself quotes — `Smogbelcher Chariot` with
+  // Crew 3 and `Ornery Tumblewagg` with Saddle 2 in `tests/integration`, and
+  // `Bonesplitter` as an Equipment in `layers.rs` — and carries only what those
+  // literals state: the name, the type and the verbatim text. Mana cost and
+  // printed P/T are left out rather than guessed; the block never needs them,
+  // and its numbers come from the engine's `contributions`, not from the face.
+  const smogbelcherChariot = {
+    id: 340, card_id: 340, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Smogbelcher Chariot', card_types: { core_types: ['Artifact'], subtypes: ['Vehicle'] },
+    oracle_text: 'Menace, deathtouch, lifelink\nWhenever Smogbelcher Chariot attacks, target creature that crewed it this turn perpetually gains your choice of menace, deathtouch, or lifelink.\nCrew 3'
+  } as GameObject;
+  const bonesplitter = {
+    id: 341, card_id: 341, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Bonesplitter', card_types: { core_types: ['Artifact'], subtypes: ['Equipment'] }
+  } as GameObject;
+  const orneryTumblewagg = {
+    id: 342, card_id: 342, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Ornery Tumblewagg', card_types: { core_types: ['Creature'], subtypes: ['Mount'] },
+    oracle_text: 'At the beginning of combat on your turn, put a +1/+1 counter on target creature.\nWhenever this creature attacks while saddled, double the number of +1/+1 counters on target creature.\nSaddle 2 (Tap any number of other creatures you control with total power 2 or more: This Mount becomes saddled until end of turn. Saddle only as a sorcery.)'
+  } as GameObject;
   // A modal card for the mode scene: Fireball is not modal, and the lab should
   // not teach the wrong example.
   const modeSpell = {
@@ -211,7 +243,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -259,6 +291,36 @@
           attacker_constraints: {}
         }
       };
+    }
+    if (scene === 'crew' || scene === 'saddle') {
+      // Shape taken from `CrewVehicle` / `SaddleMount`: the permanent being paid
+      // for, the threshold, and one contribution per eligible creature — in the
+      // engine's order, aligned index-for-index.
+      return scene === 'crew'
+        ? {
+            type: 'CrewVehicle',
+            data: {
+              player: 0,
+              vehicle_id: 340,
+              crew_power: 3,
+              eligible_creatures: [100, 101, 105],
+              contributions: [2, 2, 1]
+            }
+          }
+        : {
+            type: 'SaddleMount',
+            data: {
+              player: 0,
+              mount_id: 342,
+              saddle_power: 2,
+              eligible_creatures: [100, 101, 105],
+              contributions: [2, 2, 1]
+            }
+          };
+    }
+    if (scene === 'equip') {
+      // `EquipTarget`: the equipment and the permanents it may attach to.
+      return { type: 'EquipTarget', data: { player: 0, equipment_id: 341, valid_targets: [101, 105] } };
     }
     if (scene === 'scry' || scene === 'surveil') {
       // Shape taken from `ScryChoice` / `SurveilChoice`: the seat and the cards it
@@ -564,6 +626,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -754,6 +817,8 @@
         {#if scene === 'ward' || scene === 'wardPower'}<WardSacrificePrompt />{/if}
         {#if scene === 'startingPlayer'}<StartingPlayerPrompt />{/if}
         {#if scene === 'scry' || scene === 'surveil'}<ScryPrompt />{/if}
+        {#if scene === 'crew' || scene === 'saddle'}<TapPowerPrompt />{/if}
+        {#if scene === 'equip'}<EquipPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

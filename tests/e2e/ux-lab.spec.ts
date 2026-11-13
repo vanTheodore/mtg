@@ -316,6 +316,62 @@ test('lo que no se queda arriba va al fondo en scry y al cementerio en surveil',
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('tripular y montar suman la aportación que publica el motor, no el poder impreso', async ({ page }) => {
+  await page.goto('/ux?scene=crew');
+  const crew = page.locator('[data-tap-power]');
+  await expect(crew).toBeVisible();
+  await expect(crew.locator('strong')).toHaveText('Tripular · Smogbelcher Chariot');
+  // Crew 3 with a 2, a 2 and a 1: the threshold is the engine's, the sum is shown.
+  await expect(crew).toContainText('hasta sumar 3');
+  await expect(crew.locator('[data-tap-total]')).toContainText('Sumas 0 de 3');
+  // The confirm button keeps its place and changes its label with the pick.
+  const board = crew.locator('button.primary');
+  await expect(board).toBeDisabled();
+
+  // One creature is not enough, and the block says how much is missing.
+  await crew.getByRole('button', { name: /^Elvish Mystic/ }).click();
+  await expect(crew.locator('[data-tap-total]')).toContainText('Sumas 1 de 3');
+  await expect(crew.locator('[data-tap-total]')).not.toContainText('suficiente');
+  await expect(board).toBeDisabled();
+
+  // The pick reaches the threshold and only then can be confirmed.
+  await crew.getByRole('button', { name: /^Grizzly Bears/ }).click();
+  await expect(crew.locator('[data-tap-total]')).toContainText('Sumas 3 de 3 · suficiente');
+  await expect(board).toBeEnabled();
+  await expect(board).toHaveText('Tripular: Elvish Mystic + Grizzly Bears');
+  // Selected rows are marked, not just coloured.
+  await expect(crew.getByRole('button', { name: /^Grizzly Bears/ })).toHaveAttribute('aria-pressed', 'true');
+
+  // Saddle is the same block with another keyword and another action.
+  await page.goto('/ux?scene=saddle');
+  const saddle = page.locator('[data-tap-power]');
+  await expect(saddle.locator('strong')).toHaveText('Montar · Ornery Tumblewagg');
+  await expect(saddle).toContainText('hasta sumar 2');
+  // The distinction the block has to carry: mounting is not crewing.
+  await expect(saddle).toContainText('Es montar, no tripular');
+  await expect(saddle).toContainText('CR 702.171a');
+  await expect(saddle.locator('[data-tap-total]')).toContainText('Sumas 0 de 2');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('equipar ofrece exactamente los permanentes que acepta Phase', async ({ page }) => {
+  await page.goto('/ux?scene=equip');
+  const equip = page.locator('[data-equip-prompt]');
+  await expect(equip).toBeVisible();
+  await expect(equip.locator('strong')).toHaveText('Equipar · Bonesplitter');
+  await expect(equip).toContainText('CR 702.6a');
+  // `valid_targets` lists two creatures; the block does not add a third.
+  await expect(equip.locator('button.row')).toHaveCount(2);
+  await expect(equip.getByRole('button', { name: 'Savannah Lions' })).toBeEnabled();
+  await expect(equip.getByRole('button', { name: 'Elvish Mystic' })).toBeEnabled();
+  await expect(equip.getByRole('button', { name: 'Grizzly Bears' })).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('la tirada elige quién decide, no quién empieza', async ({ page }) => {
   await page.goto('/ux?scene=startingPlayer');
   const prompt = page.locator('[data-starting-player]');

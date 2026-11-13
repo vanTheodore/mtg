@@ -405,6 +405,113 @@ export function revealAction(card: ObjectId | null): GameAction {
 }
 
 /**
+ * CR 702.122a (crew) and CR 702.171a (saddle): tap creatures whose **crew power
+ * contribution** adds up to N. The engine publishes the eligible creatures, the
+ * number it needs, and one contribution per creature, aligned index-for-index —
+ * and it means those numbers, not printed power: a Pilot token contributes more
+ * and a Mount can count toughness instead. The table sums what the engine sent.
+ *
+ * The engine's candidates are the *minimal* covers (`minimal_power_subset_candidates`),
+ * but the handler only checks the captured total against the threshold, so any
+ * subset that reaches it is legal. The view lets the player pick and shows the
+ * running total; Phase validates.
+ *
+ * Three keywords share this gesture and not this action: crew answers
+ * `CrewVehicle`, saddle answers `SaddleMount`, station taps exactly one
+ * creature (`StationTarget`) and equip names one target instead (below).
+ */
+export type TapPowerPrompt = {
+  kind: 'crew' | 'saddle';
+  player: PlayerId;
+  /** The Vehicle or Mount being paid for. */
+  sourceId: ObjectId;
+  required: number;
+  /** CR 702.122a: contributions, aligned with `eligible`. */
+  creatures: { id: ObjectId; contribution: number | null }[];
+  /** False when the engine sent no contribution list and no total may be claimed. */
+  counted: boolean;
+};
+export function tapPowerPrompt(snapshot: EngineSnapshot | null): TapPowerPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting) return null;
+  const kind = waiting.type === 'CrewVehicle' ? 'crew' : waiting.type === 'SaddleMount' ? 'saddle' : null;
+  if (!kind) return null;
+  const data = waiting.data ?? {};
+  const objects = snapshot!.state.objects;
+  const eligible = Array.isArray(data.eligible_creatures)
+    ? (data.eligible_creatures as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+    : [];
+  const raw = Array.isArray(data.contributions) ? (data.contributions as unknown[]) : [];
+  const counted = raw.length === eligible.length;
+  return {
+    kind,
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId:
+      typeof data.vehicle_id === 'number'
+        ? (data.vehicle_id as ObjectId)
+        : typeof data.mount_id === 'number'
+          ? (data.mount_id as ObjectId)
+          : 0,
+    required:
+      typeof data.crew_power === 'number'
+        ? data.crew_power
+        : typeof data.saddle_power === 'number'
+          ? data.saddle_power
+          : 0,
+    creatures: eligible.map((id, index) => {
+      const value = raw[index];
+      return { id, contribution: typeof value === 'number' ? value : null };
+    }),
+    counted
+  };
+}
+/** CR 702.122a / CR 702.171a: the tapped creatures, as the engine expects them. */
+/**
+ * CR 702.122a: what the picked creatures add up to, according to the engine.
+ *
+ * The sum is the engine's own `contributions`, not the printed power: a Pilot
+ * contributes more and a Mount may count toughness. When the engine published no
+ * list there is no total to claim and this returns `null` — the block then shows
+ * the pick without a number and lets Phase decide.
+ */
+export function tapPowerTotal(prompt: TapPowerPrompt, ids: ObjectId[]): number | null {
+  if (!prompt.counted) return null;
+  return ids.reduce(
+    (sum, id) => sum + (prompt.creatures.find((creature) => creature.id === id)?.contribution ?? 0),
+    0
+  );
+}
+
+export function tapPowerAction(prompt: TapPowerPrompt, ids: ObjectId[]): GameAction {
+  return prompt.kind === 'crew'
+    ? { type: 'CrewVehicle', data: { vehicle_id: prompt.sourceId, creature_ids: [...ids] } }
+    : { type: 'SaddleMount', data: { mount_id: prompt.sourceId, creature_ids: [...ids] } };
+}
+
+/**
+ * CR 301.5 + CR 702.6a: equip. The engine publishes the equipment and the
+ * permanents it may attach to; each is one `Equip` action, so this view is a
+ * list of the targets and nothing else — no set to compose, no threshold to
+ * check.
+ */
+export type EquipPrompt = { player: PlayerId; equipmentId: ObjectId; targets: ObjectId[] };
+export function equipPrompt(snapshot: EngineSnapshot | null): EquipPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'EquipTarget') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    equipmentId: typeof data.equipment_id === 'number' ? (data.equipment_id as ObjectId) : 0,
+    targets: Array.isArray(data.valid_targets)
+      ? (data.valid_targets as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+      : []
+  };
+}
+export function equipAction(equipmentId: ObjectId, targetId: ObjectId): GameAction {
+  return { type: 'Equip', data: { equipment_id: equipmentId, target_id: targetId } };
+}
+
+/**
  * CR 701.22a (scry) and CR 701.25a (surveil), as the engine writes them: look at
  * the top N and put any number back **in any order**. The two prompts carry the
  * same shape — the deciding seat and the cards it looked at — but the rest goes
