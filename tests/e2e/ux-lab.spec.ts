@@ -281,6 +281,22 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('la tirada elige quién decide, no quién empieza', async ({ page }) => {
+  await page.goto('/ux?scene=startingPlayer');
+  const prompt = page.locator('[data-starting-player]');
+  await expect(prompt).toBeVisible();
+  await expect(prompt.locator('strong')).toHaveText('La tirada decide quién elige');
+  // The rule the block has to carry: winning the roll gives the choice, not the turn.
+  await expect(prompt).toContainText('No decide la tirada');
+  // The seats are the engine's, one answer each, and the chooser is marked.
+  await expect(prompt.locator('button.row')).toHaveCount(2);
+  await expect(prompt.getByRole('button', { name: 'Empieza Jugador 1 (tú)' })).toBeVisible();
+  await expect(prompt.getByRole('button', { name: 'Empieza Jugador 2' })).toBeVisible();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('la guardia pide el permanente, no pregunta otra vez si se paga', async ({ page }) => {
   await page.goto('/ux?scene=ward');
   const prompt = page.locator('[data-ward-sacrifice]');

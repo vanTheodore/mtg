@@ -36,7 +36,8 @@ const SCENES = [
   { scene: 'branches', slug: 'pagar-uno-de-dos', block: '[data-unless-branch]' },
   { scene: 'tribute', slug: 'tributo', block: '[data-tribute]' },
   { scene: 'ward', slug: 'guardia', block: '[data-ward-sacrifice]' },
-  { scene: 'wardPower', slug: 'guardia-poder', block: '[data-ward-sacrifice]' }
+  { scene: 'wardPower', slug: 'guardia-poder', block: '[data-ward-sacrifice]' },
+  { scene: 'startingPlayer', slug: 'quien-empieza', block: '[data-starting-player]' }
 ] as const;
 
 const THEMES = [

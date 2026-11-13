@@ -405,6 +405,34 @@ export function revealAction(card: ObjectId | null): GameAction {
 }
 
 /**
+ * CR 103.1: before the first turn of game 1 the players roll, and the winner
+ * **chooses who takes the first turn** — the roll does not decide it. The engine
+ * publishes the chooser (`player`) and the seats that may be named
+ * (`candidates`, in seat order); under shared team turns (CR 103.1a) the choice
+ * names a starting team, so a candidate is a seat, not necessarily a person.
+ *
+ * The answer is the seat itself. Nothing here re-rolls or re-orders: the
+ * contest already happened inside the engine, and `candidates` is what it will
+ * accept.
+ */
+export type StartingPlayerPrompt = { player: PlayerId; candidates: PlayerId[] };
+export function startingPlayerPrompt(snapshot: EngineSnapshot | null): StartingPlayerPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ChooseStartingPlayer') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    candidates: Array.isArray(data.candidates)
+      ? (data.candidates as unknown[]).filter((seat): seat is PlayerId => typeof seat === 'number')
+      : []
+  };
+}
+/** CR 103.1: the seat that takes the first turn. */
+export function chooseStartingPlayer(player: PlayerId): GameAction {
+  return { type: 'ChooseStartingPlayer', data: { player } };
+}
+
+/**
  * CR 702.21a/b: paying a ward cost by sacrificing. This prompt is reached only
  * **after** the payer said yes to the ward, so there is no "no pago" among the
  * options: the engine accepts exactly one permanent per round-trip, or — when

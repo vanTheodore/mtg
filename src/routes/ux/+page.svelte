@@ -40,9 +40,10 @@
   import UnlessBranchPrompt from '#lib/components/UnlessBranchPrompt.svelte';
   import TributePrompt from '#lib/components/TributePrompt.svelte';
   import WardSacrificePrompt from '#lib/components/WardSacrificePrompt.svelte';
+  import StartingPlayerPrompt from '#lib/components/StartingPlayerPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -67,6 +68,7 @@
     { value: 'tribute', label: 'Tributo: lo paga un oponente' },
     { value: 'ward', label: 'Guardia: un permanente' },
     { value: 'wardPower', label: 'Guardia: poder total' },
+    { value: 'startingPlayer', label: 'Quién empieza' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -93,6 +95,7 @@
     tribute: 'TributeChoice · un oponente decide si se paga',
     ward: 'WardSacrificeChoice · CR 702.21b, un permanente por vuelta',
     wardPower: 'WardSacrificeChoice · CR 118.12a, poder total mínimo',
+    startingPlayer: 'ChooseStartingPlayer · CR 103.1, la tirada elige',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -251,6 +254,11 @@
           attacker_constraints: {}
         }
       };
+    }
+    if (scene === 'startingPlayer') {
+      // Shape taken from `WaitingFor::ChooseStartingPlayer`: the roll winner and
+      // the seats the engine will accept, in seat order.
+      return { type: 'ChooseStartingPlayer', data: { player: 0, candidates: [0, 1] } };
     }
     if (scene === 'ward' || scene === 'wardPower') {
       // Shape taken from `WaitingFor::WardSacrificeChoice`. Without a threshold
@@ -540,6 +548,7 @@
           : scene === 'branches' ? 'PreCombatMain'
           : scene === 'tribute' ? 'PreCombatMain'
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
+          : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -728,6 +737,7 @@
         {#if scene === 'branches'}<UnlessBranchPrompt />{/if}
         {#if scene === 'tribute'}<TributePrompt />{/if}
         {#if scene === 'ward' || scene === 'wardPower'}<WardSacrificePrompt />{/if}
+        {#if scene === 'startingPlayer'}<StartingPlayerPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

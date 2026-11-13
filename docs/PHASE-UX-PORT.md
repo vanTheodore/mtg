@@ -1013,3 +1013,40 @@ larga no puede volver a decidir el ancho del cromo.
 `bun test src/lib` **391**, `bun run check` 0 errores, build OK, y en Chromium
 `ux-themes` **3/3** (20 capturas, 20 auditorías axe) además de `ux-lab` (36),
 `a11y` y `arena-quality-gate`.
+
+## Quién empieza: la tirada elige, no decide (vigesimoquinta pasada, 7 nov 2026)
+
+Motor a **v0.124.0** (`1cd03ab`, 10 commits). La única alta de `WaitingFor` en ese
+rango es `ChooseStartingPlayer` (147 → **148** variantes), y los bloques de campo de
+las 30 variantes que Mesa ya representaba son idénticos, comprobados bloque a bloque.
+
+CR 103.1: antes del primer turno los jugadores tiran, y el ganador **elige** quién
+empieza — la tirada no decide el turno. El motor ya corre el concurso y publica
+`player` (el ganador que elige) y `candidates` (los asientos que aceptará, en orden
+de asiento). El bloque no re-tira, no reordena y no deduce un ganador: nombra los
+asientos tal cual y lo dice con esas palabras, porque «has ganado la tirada» y
+«empiezas tú» no son la misma frase.
+
+CR 103.1a: en equipo con turno compartido el asiento nombra al equipo que empieza;
+cuando hay más de dos asientos el bloque lo advierte.
+
+**Adaptación local, a la vista:** el puente `mtg-engine-wasm` arranca con
+`start_game_with_starting_player(first_player)` y no con `start_game`, así que Mesa
+no corre el concurso de dados y el primer turno es el que pide el cliente (por
+defecto el asiento 0). Eso mantiene deterministas las pruebas de arranque. La vista
+se porta igual: cubre el contrato, y el día que el puente cambie la mesa no se
+quedará parada en un prompt desconocido. El evento nuevo `StartingPlayerContest` no
+se resume en el registro —el resumen ignora lo que no conoce—, así que tampoco hay
+texto inventado.
+
+Laboratorio: `/ux?scene=startingPlayer`, capturas `docs/screenshots/ux-quien-empieza-1440.jpg`
+y el par de temas `docs/screenshots/temas/quien-empieza-{claro,oscuro}.jpg`.
+
+### Verificación de esta pasada
+
+`bun run engine:verify` verde con `sourceSha256`
+`8c2d51040608405aace27260822df952bc526bf9699a2cd197b67f7048fb4d79`; `bun run check`
+0 errores; `bun test src/lib` **396** (5 nuevas en
+`game/__tests__/starting-player.test.ts`); build OK; y en Chromium una prueba nueva
+(la tirada da la elección, los asientos son los del motor y el que elige está
+marcado) más la captura de temas.

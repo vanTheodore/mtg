@@ -21,6 +21,7 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `tribute` | `TributeChoice` | [claro](tributo-claro.jpg) | [oscuro](tributo-oscuro.jpg) |
 | `ward` | `WardSacrificeChoice` | [claro](guardia-claro.jpg) | [oscuro](guardia-oscuro.jpg) |
 | `wardPower` | `WardSacrificeChoice` (umbral) | [claro](guardia-poder-claro.jpg) | [oscuro](guardia-poder-oscuro.jpg) |
+| `startingPlayer` | `ChooseStartingPlayer` | [claro](quien-empieza-claro.jpg) | [oscuro](quien-empieza-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

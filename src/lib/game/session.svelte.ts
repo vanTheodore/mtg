@@ -12,7 +12,8 @@ import {
   choosePair, chooseTokenHost, chooseUnlessCostBranch, pairPrompt as readPairPrompt,
   unlessBranchPrompt as readUnlessBranch,
   tokenHostPrompt as readTokenHost, tributePrompt as readTribute, payUnlessCost,
-  wardSacrificePrompt as readWardSacrifice, wardSacrificeAction, revealAction, revealPrompt as readRevealPrompt,
+  wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
+  startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -328,6 +329,14 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 103.1: the roll winner names who takes the first turn. */
+  get startingPlayerPrompt() {
+    return readStartingPlayer(this.snapshot);
+  }
+  startWith(player: number) {
+    void this.dispatch(chooseStartingPlayer(player));
   }
 
   /** CR 702.21b: which permanents pay the ward cost. */
