@@ -41,9 +41,10 @@
   import TributePrompt from '#lib/components/TributePrompt.svelte';
   import WardSacrificePrompt from '#lib/components/WardSacrificePrompt.svelte';
   import StartingPlayerPrompt from '#lib/components/StartingPlayerPrompt.svelte';
+  import ScryPrompt from '#lib/components/ScryPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -69,6 +70,8 @@
     { value: 'ward', label: 'Guardia: un permanente' },
     { value: 'wardPower', label: 'Guardia: poder total' },
     { value: 'startingPlayer', label: 'Quién empieza' },
+    { value: 'scry', label: 'Adivinar (scry)' },
+    { value: 'surveil', label: 'Vigilar (surveil)' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -96,6 +99,8 @@
     ward: 'WardSacrificeChoice · CR 702.21b, un permanente por vuelta',
     wardPower: 'WardSacrificeChoice · CR 118.12a, poder total mínimo',
     startingPlayer: 'ChooseStartingPlayer · CR 103.1, la tirada elige',
+    scry: 'ScryChoice · CR 701.22a, lo que no se queda va al fondo',
+    surveil: 'SurveilChoice · CR 701.25a, lo que no se queda va al cementerio',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -253,6 +258,15 @@
           valid_attack_targets_by_attacker: { '100': [seat, walker], '101': [seat] },
           attacker_constraints: {}
         }
+      };
+    }
+    if (scene === 'scry' || scene === 'surveil') {
+      // Shape taken from `ScryChoice` / `SurveilChoice`: the seat and the cards it
+      // looked at, in library order. The cards are library-only in this fixture,
+      // so no pile count moves.
+      return {
+        type: scene === 'scry' ? 'ScryChoice' : 'SurveilChoice',
+        data: { player: 0, cards: scene === 'scry' ? [400, 401, 402] : [401, 403] }
       };
     }
     if (scene === 'startingPlayer') {
@@ -549,6 +563,7 @@
           : scene === 'tribute' ? 'PreCombatMain'
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
+          : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -738,6 +753,7 @@
         {#if scene === 'tribute'}<TributePrompt />{/if}
         {#if scene === 'ward' || scene === 'wardPower'}<WardSacrificePrompt />{/if}
         {#if scene === 'startingPlayer'}<StartingPlayerPrompt />{/if}
+        {#if scene === 'scry' || scene === 'surveil'}<ScryPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

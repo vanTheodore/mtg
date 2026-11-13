@@ -1050,3 +1050,46 @@ y el par de temas `docs/screenshots/temas/quien-empieza-{claro,oscuro}.jpg`.
 `game/__tests__/starting-player.test.ts`); build OK; y en Chromium una prueba nueva
 (la tirada da la elección, los asientos son los del motor y el que elige está
 marcado) más la captura de temas.
+
+## Mirar y ordenar: scry y surveil (vigesimosexta pasada, 7 nov 2026)
+
+`ScryChoice` y `SurveilChoice` son, en la lectura del motor, la misma pregunta con
+dos destinos distintos (CR 701.22a y CR 701.25a): mirar las primeras N cartas y
+devolver **cualquier número, en cualquier orden**. La respuesta es
+`SelectCards` con el conjunto **ordenado que se queda arriba**; lo que no está en
+él va al otro sitio:
+
+| | Lo que no se queda |
+|---|---|
+| Adivinar (*scry*) | al **fondo** de la biblioteca |
+| Vigilar (*surveil*) | al **cementerio** |
+
+Por eso comparten bloque y no comparten frase: un bloque único que dijera «al
+fondo» estaría enseñando la regla equivocada la mitad de las veces. El destino se
+nombra con el `kind` del prompt, que sale del tipo de `WaitingFor`, no de una
+suposición.
+
+**El orden es parte de la respuesta.** La primera carta de la lista es la nueva
+cima, así que el bloque ordena esa lista y la deja mover (↑/↓ por carta), además
+de marcar y desmarcar. Vacío es una respuesta legal y el botón lo dice con todas
+las letras: «Confirmar: todo va al fondo / al cementerio».
+
+**Composición explícita:** los candidatos de Phase para estas variantes enumeran
+sólo el conjunto vacío, el conjunto completo y cada carta suelta
+(`select_cards_variants(..., None)`), que es lo que necesita la IA, no lo que
+permite la regla. La mesa compone el `SelectCards` con lo que el jugador marca
+—igual que hace el descarte— y Phase sigue siendo quien valida: si rechaza, el
+mensaje de rechazo de la sesión se muestra y no se aplica nada.
+
+Laboratorio: `/ux?scene=scry` (tres cartas, dos arriba) y `/ux?scene=surveil` (dos
+cartas), capturas `docs/screenshots/ux-adivinar-1440.jpg`,
+`ux-vigilar-1440.jpg` y sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores; `bun test src/lib` **401** (5 nuevas en
+`game/__tests__/scry.test.ts`: la forma de scry, la de surveil con su destino, la
+poda de basura, la acción ordenada y el caso ajeno); build OK; y en Chromium una
+prueba nueva que marca dos cartas, comprueba el orden en el texto del botón, lo
+mueve con ↑, quita una, y verifica que surveil dice «al cementerio» y cita CR
+701.25a —con axe.

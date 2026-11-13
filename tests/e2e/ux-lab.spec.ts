@@ -281,6 +281,41 @@ test('el descarte de un efecto pide exactamente las cartas que publica el motor'
   expect(axe.violations.filter((v) => ['critical', 'serious'].includes(v.impact ?? '')).map((v) => v.id)).toEqual([]);
 });
 
+test('lo que no se queda arriba va al fondo en scry y al cementerio en surveil', async ({ page }) => {
+  await page.goto('/ux?scene=scry');
+  const scry = page.locator('[data-scry-prompt]');
+  await expect(scry).toBeVisible();
+  await expect(scry.locator('strong')).toHaveText('Adivinar 3 (scry)');
+  await expect(scry).toContainText('al fondo de la biblioteca');
+  await expect(scry).toContainText('CR 701.22a');
+
+  // Nothing kept yet: the confirm says everything goes down.
+  await expect(scry.locator('.kept')).toContainText('Nada se queda arriba');
+  const confirm = scry.getByRole('button', { name: /^Confirmar/ });
+  await expect(confirm).toHaveText('Confirmar: todo va al fondo de la biblioteca');
+
+  // Keeping two, and the order is the answer: the first kept card is the new top.
+  await scry.getByRole('button', { name: /^Shock/ }).click();
+  await scry.getByRole('button', { name: /^Llanowar Elves/ }).click();
+  await expect(confirm).toHaveText('Confirmar: Shock → Llanowar Elves');
+  await scry.getByRole('button', { name: 'Subir Llanowar Elves' }).click();
+  await expect(confirm).toHaveText('Confirmar: Llanowar Elves → Shock');
+  await expect(scry.getByRole('button', { name: 'Subir Llanowar Elves' })).toBeDisabled();
+  await scry.getByRole('button', { name: 'Quitar Shock de arriba' }).click();
+  await expect(confirm).toHaveText('Confirmar: Llanowar Elves');
+
+  // Surveil: same block, different destination — and it says so.
+  await page.goto('/ux?scene=surveil');
+  const surveil = page.locator('[data-scry-prompt]');
+  await expect(surveil.locator('strong')).toHaveText('Vigilar 2 (surveil)');
+  await expect(surveil).toContainText('al cementerio');
+  await expect(surveil).toContainText('CR 701.25a');
+  await expect(surveil.getByRole('button', { name: /^Confirmar/ })).toHaveText('Confirmar: todo va al cementerio');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('la tirada elige quién decide, no quién empieza', async ({ page }) => {
   await page.goto('/ux?scene=startingPlayer');
   const prompt = page.locator('[data-starting-player]');

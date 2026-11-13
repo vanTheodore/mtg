@@ -13,7 +13,8 @@ import {
   unlessBranchPrompt as readUnlessBranch,
   tokenHostPrompt as readTokenHost, tributePrompt as readTribute, payUnlessCost,
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
-  startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer, revealAction, revealPrompt as readRevealPrompt,
+  startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
+  scryPrompt as readScry, scryAction, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -214,6 +215,7 @@ class GameSession {
     this.pairPick = null;
     this.hostPick = null;
     this.branchPick = null;
+    this.scryKeep = [];
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -329,6 +331,31 @@ class GameSession {
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 701.22a / CR 701.25a: look at the top N and keep any of it on top. */
+  get scryPrompt() {
+    return readScry(this.snapshot);
+  }
+  /** The keep-on-top cards, in the order they will sit on the library. */
+  scryKeep = $state<ObjectId[]>([]);
+  toggleScryKeep(id: ObjectId) {
+    const kept = this.scryKeep;
+    this.scryKeep = kept.includes(id) ? kept.filter((card) => card !== id) : [...kept, id];
+  }
+  /** Order matters: the first kept card ends up on the very top. */
+  moveScryKeep(id: ObjectId, direction: -1 | 1) {
+    const kept = [...this.scryKeep];
+    const at = kept.indexOf(id);
+    const to = at + direction;
+    if (at < 0 || to < 0 || to >= kept.length) return;
+    [kept[at], kept[to]] = [kept[to]!, kept[at]!];
+    this.scryKeep = kept;
+  }
+  confirmScry() {
+    const cards = this.scryKeep;
+    this.scryKeep = [];
+    void this.dispatch(scryAction(cards));
   }
 
   /** CR 103.1: the roll winner names who takes the first turn. */
@@ -713,6 +740,7 @@ class GameSession {
     if (this.snapshot?.revision !== reply.revision) {
       this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = [];
       this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.pairPick = null;
+      this.scryKeep = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

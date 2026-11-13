@@ -405,6 +405,46 @@ export function revealAction(card: ObjectId | null): GameAction {
 }
 
 /**
+ * CR 701.22a (scry) and CR 701.25a (surveil), as the engine writes them: look at
+ * the top N and put any number back **in any order**. The two prompts carry the
+ * same shape — the deciding seat and the cards it looked at — but the rest goes
+ * to different places, and that difference is the whole view:
+ *
+ *   - scry: what is not kept goes to the **bottom** of the library;
+ *   - surveil: what is not kept goes to the **graveyard**.
+ *
+ * The answer is `SelectCards` carrying the ordered **keep-on-top** set; every
+ * looked-at card outside it takes the other destination. Phase's candidates only
+ * enumerate the empty set, the full set and each single card, so the table
+ * composes the selection from what the player marks — the rule allows any
+ * subset in any order, and Phase is still the one that validates it.
+ */
+export type ScryPrompt = {
+  kind: 'scry' | 'surveil';
+  player: PlayerId;
+  /** The looked-at cards, in library order (first is the top). */
+  cards: ObjectId[];
+};
+export function scryPrompt(snapshot: EngineSnapshot | null): ScryPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting) return null;
+  const kind = waiting.type === 'ScryChoice' ? 'scry' : waiting.type === 'SurveilChoice' ? 'surveil' : null;
+  if (!kind) return null;
+  const data = waiting.data ?? {};
+  return {
+    kind,
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    cards: Array.isArray(data.cards)
+      ? (data.cards as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+      : []
+  };
+}
+/** The ordered set that stays on top; the rest takes the other destination. */
+export function scryAction(keepOnTop: ObjectId[]): GameAction {
+  return selectCardsAction(keepOnTop);
+}
+
+/**
  * CR 103.1: before the first turn of game 1 the players roll, and the winner
  * **chooses who takes the first turn** — the roll does not decide it. The engine
  * publishes the chooser (`player`) and the seats that may be named
