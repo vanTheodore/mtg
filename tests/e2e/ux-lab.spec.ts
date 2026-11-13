@@ -356,6 +356,41 @@ test('tripular y montar suman la aportación que publica el motor, no el poder i
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('mover contadores no puede sacar del origen más de los que hay', async ({ page }) => {
+  await page.goto('/ux?scene=moveCounters');
+  const block = page.locator('[data-move-counters]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Mover contadores · Forgotten Ancient');
+  await expect(block).toContainText('nunca puedes mover más de los que hay');
+  await expect(block).toContainText('CR 122.5');
+  // The pool is the ceiling, and it is the engine's.
+  await expect(block.locator('[data-move-available]')).toContainText('3 de +1/+1');
+  await expect(block.locator('[data-move-remaining="P1P1"]')).toHaveText('3');
+  // Moving nothing is legal: the text says "may move any number".
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Confirmar sin mover nada');
+
+  // Two to one creature, one to another: the pool empties and the + stops.
+  await block.getByRole('button', { name: 'Añadir un +1/+1 a Grizzly Bears (Jugador 1)' }).click();
+  await block.getByRole('button', { name: 'Añadir un +1/+1 a Grizzly Bears (Jugador 1)' }).click();
+  await expect(block.locator('[data-move-remaining="P1P1"]')).toHaveText('1');
+  await expect(confirm).toHaveText('Mover: 2 +1/+1 a Grizzly Bears (Jugador 1)');
+  await block.getByRole('button', { name: 'Añadir un +1/+1 a Elvish Mystic' }).click();
+  await expect(block.locator('[data-move-remaining="P1P1"]')).toHaveText('0');
+  // The ceiling is per counter type, so it stops every row at once.
+  await expect(block.getByRole('button', { name: 'Añadir un +1/+1 a Grizzly Bears (Jugador 2)' })).toBeDisabled();
+  await expect(confirm).toHaveText('Mover: 2 +1/+1 a Grizzly Bears (Jugador 1) · 1 +1/+1 a Elvish Mystic');
+
+  // Taking one back frees the pool again.
+  await block.getByRole('button', { name: 'Quitar un +1/+1 a Grizzly Bears (Jugador 1)' }).click();
+  await expect(block.locator('[data-move-remaining="P1P1"]')).toHaveText('1');
+  await expect(block.getByRole('button', { name: 'Añadir un +1/+1 a Grizzly Bears (Jugador 2)' })).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

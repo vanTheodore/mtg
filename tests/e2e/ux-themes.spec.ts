@@ -47,7 +47,8 @@ const SCENES = [
   { scene: 'multiTarget', slug: 'objetivos-multiples', block: '[data-multi-target]' },
   { scene: 'multiTargetExact', slug: 'objetivos-fijos', block: '[data-multi-target]' },
   { scene: 'distribute', slug: 'reparto', block: '[data-distribute]' },
-  { scene: 'distributeAnnounced', slug: 'reparto-anunciado', block: '[data-distribute]' }
+  { scene: 'distributeAnnounced', slug: 'reparto-anunciado', block: '[data-distribute]' },
+  { scene: 'moveCounters', slug: 'mover-contadores', block: '[data-move-counters]' }
 ] as const;
 
 const THEMES = [

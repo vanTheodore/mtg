@@ -47,9 +47,10 @@
   import StationPrompt from '#lib/components/StationPrompt.svelte';
   import MultiTargetPrompt from '#lib/components/MultiTargetPrompt.svelte';
   import DistributePrompt from '#lib/components/DistributePrompt.svelte';
+  import MoveCountersPrompt from '#lib/components/MoveCountersPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -85,6 +86,7 @@
     { value: 'multiTargetExact', label: 'Objetivos: exactamente dos' },
     { value: 'distribute', label: 'Reparto: 5 entre candidatos' },
     { value: 'distributeAnnounced', label: 'Reparto: todos los objetivos' },
+    { value: 'moveCounters', label: 'Mover contadores' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -122,6 +124,7 @@
     multiTargetExact: 'MultiTargetSelection · CR 601.2c, cuenta fija',
     distribute: 'DistributeAmong · CR 608.2d, se puede dejar fuera',
     distributeAnnounced: 'DistributeAmong · CR 601.2d, todos reciben',
+    moveCounters: 'MoveCountersDistribution · CR 122.5, salen del origen',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -257,6 +260,14 @@
     id: 353, card_id: 353, owner: 0, controller: 0, zone: 'Graveyard',
     name: 'Grizzly Bears', card_types: { core_types: ['Creature'], subtypes: ['Bear'] }
   } as GameObject;
+  // CR 122.5: the counter source, with the text the engine quotes in
+  // `tests/integration/issue_680_shalai_upkeep_move.rs`.
+  const forgottenAncient = {
+    id: 344, card_id: 344, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Forgotten Ancient',
+    card_types: { core_types: ['Creature'], subtypes: ['Elemental'] },
+    oracle_text: 'Whenever a player casts a spell, you may put a +1/+1 counter on this creature.\nAt the beginning of your upkeep, you may move any number of +1/+1 counters from this creature onto other creatures.'
+  } as GameObject;
   // A modal card for the mode scene: Fireball is not modal, and the lab should
   // not teach the wrong example.
   const modeSpell = {
@@ -291,7 +302,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -365,6 +376,22 @@
               contributions: [2, 2, 1]
             }
           };
+    }
+    if (scene === 'moveCounters') {
+      // `MoveCountersDistribution`: what the source holds, by type, and where it
+      // may go. `Forgotten Ancient` is the card whose own text the engine quotes
+      // for this shape ("move any number of +1/+1 counters from this creature
+      // onto other creatures").
+      return {
+        type: 'MoveCountersDistribution',
+        data: {
+          player: 0,
+          source_id: 344,
+          available: [['P1P1', 3]],
+          destinations: [100, 105, 200],
+          pending_effect: { ability: {} }
+        }
+      };
     }
     if (scene === 'distribute' || scene === 'distributeAnnounced') {
       // `DistributeAmong`: the amount, the recipients and when the division is
@@ -712,7 +739,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -908,6 +935,7 @@
         {#if scene === 'station'}<StationPrompt />{/if}
         {#if scene === 'multiTarget' || scene === 'multiTargetExact'}<MultiTargetPrompt />{/if}
         {#if scene === 'distribute' || scene === 'distributeAnnounced'}<DistributePrompt />{/if}
+        {#if scene === 'moveCounters'}<MoveCountersPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

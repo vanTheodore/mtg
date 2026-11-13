@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -220,6 +220,7 @@ class GameSession {
     this.tapPick = [];
     this.multiPick = [];
     this.splitAmount = {};
+    this.movePick = {};
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -365,6 +366,53 @@ class GameSession {
     const ids = this.tapPick;
     this.tapPick = [];
     void this.dispatch(tapPowerAction(prompt, ids));
+  }
+
+  /** CR 122.5 + CR 608.2d: which counters leave the source and where they land. */
+  get moveCountersPrompt() {
+    return readMoveCounters(this.snapshot);
+  }
+  /** Amounts keyed by `type|destination`; the validator forbids repeated pairs. */
+  movePick = $state<Record<string, number>>({});
+  moveAmount(type: string, destination: ObjectId): number {
+    return this.movePick[`${type}|${destination}`] ?? 0;
+  }
+  /** What is left of one counter type after the picks. */
+  moveRemaining(type: string): number {
+    const prompt = this.moveCountersPrompt;
+    const offer = prompt?.available.find((entry) => entry.type === type);
+    if (!prompt || !offer) return 0;
+    const spent = prompt.destinations.reduce((sum, id) => sum + this.moveAmount(type, id), 0);
+    return Math.max(0, offer.count - spent);
+  }
+  setMove(type: string, destination: ObjectId, amount: number) {
+    const prompt = this.moveCountersPrompt;
+    if (!prompt) return;
+    const offer = prompt.available.find((entry) => entry.type === type);
+    if (!offer) return;
+    const others = prompt.destinations
+      .filter((id) => id !== destination)
+      .reduce((sum, id) => sum + this.moveAmount(type, id), 0);
+    // The engine's ceiling is per counter type, not global.
+    const clamped = Math.max(0, Math.min(Math.trunc(amount), offer.count - others));
+    this.movePick = { ...this.movePick, [`${type}|${destination}`]: clamped };
+  }
+  get moveSelections(): { destinationId: ObjectId; counterType: string; count: number }[] {
+    const prompt = this.moveCountersPrompt;
+    if (!prompt) return [];
+    return prompt.available.flatMap((offer) =>
+      prompt.destinations
+        .map((id) => ({ destinationId: id, counterType: offer.type, count: this.moveAmount(offer.type, id) }))
+        .filter((entry) => entry.count > 0)
+    );
+  }
+  /** Moving nothing is legal: the text says "may move any number". */
+  confirmMoveCounters() {
+    const prompt = this.moveCountersPrompt;
+    if (!prompt) return;
+    const selections = this.moveSelections;
+    this.movePick = {};
+    void this.dispatch(moveCountersAction(selections));
   }
 
   /** CR 601.2d / CR 608.2d: how much of an amount each recipient gets. */
@@ -874,6 +922,7 @@ class GameSession {
       this.tapPick = [];
       this.multiPick = [];
       this.splitAmount = {};
+      this.movePick = {};
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

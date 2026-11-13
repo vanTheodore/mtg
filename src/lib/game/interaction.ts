@@ -537,6 +537,66 @@ export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | 
   };
 }
 /**
+ * CR 122.5 + CR 608.2d: "move any number of counters". A different question from
+ * the division above: the amount is not fixed — **the available pool is** — and the
+ * counters leave the source as they arrive at each destination, one
+ * `CounterMoveChoice` per (destination, type) pair.
+ *
+ * The engine publishes the source, the counters on it by type, and the legal
+ * destinations. Its validator refuses a zero count, a destination outside the
+ * list, a repeated (destination, type) pair, and any request that exceeds what is
+ * available *of that type*; moving nothing is legal, because the text says "may".
+ *
+ * Counter types are flat strings on the wire (`P1P1`, `M1M1`, `loyalty`,
+ * `flying`…). `counterLabel` translates the ones a table meets constantly and
+ * otherwise shows the engine's own string — it never invents a name.
+ */
+export type CounterOffer = { type: string; count: number };
+export type MoveCountersPrompt = {
+  player: PlayerId;
+  sourceId: ObjectId;
+  /** Set when the effect narrowed the counters it moves. */
+  counterType: string | null;
+  available: CounterOffer[];
+  destinations: ObjectId[];
+};
+export function moveCountersPrompt(snapshot: EngineSnapshot | null): MoveCountersPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'MoveCountersDistribution') return null;
+  const data = waiting.data ?? {};
+  const available: CounterOffer[] = Array.isArray(data.available)
+    ? (data.available as unknown[])
+        .map((entry) => {
+          if (!Array.isArray(entry) || typeof entry[0] !== 'string' || typeof entry[1] !== 'number') return null;
+          return { type: entry[0] as string, count: entry[1] as number };
+        })
+        .filter((entry): entry is CounterOffer => entry !== null)
+    : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
+    counterType: typeof data.counter_type === 'string' ? data.counter_type : null,
+    available,
+    destinations: Array.isArray(data.destinations)
+      ? (data.destinations as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+      : []
+  };
+}
+export type CounterMoveSelection = { destinationId: ObjectId; counterType: string; count: number };
+export function moveCountersAction(selections: CounterMoveSelection[]): GameAction {
+  return {
+    type: 'ChooseCounterMoveDistribution',
+    data: {
+      selections: selections.map(({ destinationId, counterType, count }) => ({
+        destination_id: destinationId,
+        counter_type: counterType,
+        count
+      }))
+    }
+  };
+}
+
+/**
  * CR 601.2d + CR 608.2d: a division. The engine publishes the amount, the legal
  * recipients (`TargetRef`s, so players count too) and **when** the division is
  * chosen:
@@ -1370,6 +1430,21 @@ export function targetLabel(target: unknown, objects: Record<string, GameObject>
   if (!t) return 'Sin objetivo';
   return t.kind === 'player' ? `Jugador ${t.id + 1}` : objects[String(t.id)]?.name ?? 'permanente';
 }
+/**
+ * Names for a list of recipients, disambiguated by controller only where the name
+ * repeats. Two permanents can share a name and both be legal recipients (one per
+ * side); a bare name would make two rows the player cannot tell apart, and the
+ * controller is published, so it is what separates them.
+ */
+export function distinctTargetLabels(targets: TargetRef[], objects: Record<string, GameObject>): string[] {
+  const base = targets.map((target) => targetLabel(target, objects));
+  return base.map((name, index) => {
+    if (base.filter((other) => other === name).length < 2) return name;
+    const parsed = parseTarget(targets[index]);
+    const controller = parsed?.kind === 'object' ? objects[String(parsed.id)]?.controller : undefined;
+    return typeof controller === 'number' ? `${name} (Jugador ${controller + 1})` : name;
+  });
+}
 export function attackLabel(target: AttackTarget, objects: Record<string, GameObject>): string {
   if (target.type === 'Player') return `Jugador ${target.data + 1}`;
   return objects[String(target.data)]?.name ?? (target.type === 'Battle' ? 'Batalla' : 'Planeswalker');
@@ -1412,7 +1487,17 @@ export function permanentStates(o: GameObject, combat?: string): string[] {
   for (const [kind, count] of counters) if (count) states.push(`${count} ${counterLabel(kind)}`);
   return states;
 }
-const COUNTERS: Record<string, string> = { PlusOnePlusOne: '+1/+1', MinusOneMinusOne: '−1/−1', Loyalty: 'lealtad', Defense: 'defensa', Charge: 'carga', Flying: 'vuelo', Shield: 'escudo', Stun: 'aturdimiento', Finality: 'finalidad' };
+/**
+ * Counter names in Spanish. Two spellings reach the table: the PascalCase the
+ * older payloads use and the flat strings `CounterType::as_str` writes on the
+ * wire (`P1P1`, `loyalty`, `flying`). What is not in the table keeps the engine's
+ * own word — it is never renamed into something the rules do not say.
+ */
+const COUNTERS: Record<string, string> = {
+  PlusOnePlusOne: '+1/+1', MinusOneMinusOne: '−1/−1', Loyalty: 'lealtad', Defense: 'defensa', Charge: 'carga', Flying: 'vuelo', Shield: 'escudo', Stun: 'aturdimiento', Finality: 'finalidad',
+  P1P1: '+1/+1', M1M1: '−1/−1', loyalty: 'lealtad', defense: 'defensa', stun: 'aturdimiento', lore: 'relato', time: 'tiempo', shield: 'escudo', finality: 'finalidad',
+  flying: 'vuelo', trample: 'arrollar', deathtouch: 'toque mortal', lifelink: 'vínculo vital', vigilance: 'vigilancia', haste: 'prisa', reach: 'alcance', menace: 'amenaza', hexproof: 'antimaleficio', indestructible: 'indestructible'
+};
 export function counterLabel(kind: string) { return COUNTERS[kind] ?? kind; }
 const KEYWORDS: Record<string, string> = { Flying: 'Vuelo', Haste: 'Prisa', Vigilance: 'Vigilancia', Trample: 'Arrolla', Lifelink: 'Vínculo vital', Deathtouch: 'Toque mortal', FirstStrike: 'Daña primero', DoubleStrike: 'Daña dos veces', Defender: 'Defensor', Menace: 'Amenaza', Reach: 'Alcance', Hexproof: 'Antimaleficio', Indestructible: 'Indestructible' };
 export function keywordLabel(value: unknown): string {

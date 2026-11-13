@@ -1311,3 +1311,56 @@ verde con el pin nuevo; build OK; y en Chromium una prueba nueva que compone 3+2
 comprueba que sobra/falta, que no se puede pasar del total, que quitar una porción
 vuelve a bloquear, y que en anunciado un objetivo sin nada se nombra y bloquea
 —con axe—, más las dos escenas en la prueba de temas.
+
+## Mover contadores: el techo es el origen (trigésima primera pasada, 13 nov 2026)
+
+`MoveCountersDistribution` es CR 122.5 + CR 608.2d: «mueve cualquier cantidad de
+contadores». Se parece al reparto y no lo es: allí el total es fijo y se reparte;
+aquí **el total no existe** y lo que manda es lo que hay en el origen.
+
+| | Qué está fijado | Qué elige el jugador |
+|---|---|---|
+| Reparto (`DistributeAmong`) | cuánto se reparte | cómo se reparte |
+| Mover contadores | cuántos hay de cada tipo | cuántos salen y a dónde |
+
+El validador del motor rechaza una cantidad cero, un destino fuera de su lista, un
+par (destino, tipo) repetido y cualquier petición que supere lo disponible **de ese
+tipo**. Mover nada es legal —el texto dice «may»—, así que el botón arranca en
+«Confirmar sin mover nada» y nunca se bloquea: no hay nada que completar.
+
+**El techo es por tipo, no global.** Con 3 de +1/+1 y 1 de lealtad, vaciar el
+primero no toca al segundo; el bloque lo enseña con un «quedan N de M» por tipo y
+deshabilita los + de ese tipo cuando llega a cero, mientras los demás siguen
+vivos. Los − sólo están activos con algo puesto, así que no hay forma de componer
+una selección que Phase rechace.
+
+**El vocabulario de contadores es uno solo.** El cable trae cadenas planas
+(`P1P1`, `M1M1`, `loyalty`, `flying`) y la mesa ya tenía un traductor con
+PascalCase para otras cargas; se extendió ese mismo mapa en vez de crear un
+segundo. Lo que no está en el mapa conserva la palabra del motor: no se inventa un
+nombre. Efecto secundario bienvenido: la ficha de Chandra, que enseñaba «4
+loyalty», ahora dice «4 lealtad».
+
+**Dos permanentes con el mismo nombre.** La escena tiene dos «Grizzly Bears», uno
+por lado, y los dos son destinos legales; la etiqueta con controlador que estrenó
+el reparto se extrajo a un ayudante compartido (`distinctTargetLabels`) y ahora la
+usan los dos bloques, en vez de repetir la regla en cada componente.
+
+Objeto del laboratorio: `Forgotten Ancient`, con el texto que el motor cita en
+`tests/integration/issue_680_shalai_upkeep_move.rs` («move any number of +1/+1
+counters from this creature onto other creatures»), 3 contadores +1/+1 en el
+origen y tres destinos.
+
+Laboratorio: `/ux?scene=moveCounters` y captura
+`docs/screenshots/ux-mover-contadores-1440.jpg`, más el par de temas.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **434** (6 nuevas
+en `game/__tests__/move-counters.test.ts`: el origen con su pozo por tipo, el tipo
+acotado cuando el motor lo nombra, varios tipos con la basura podada, la forma de
+la respuesta —incluido mover nada—, el vocabulario de contadores con su respaldo
+en crudo y el caso ajeno); build OK; y en Chromium una prueba nueva que vacía el
+pozo, comprueba que el + se apaga en todas las filas del tipo, que mover nada es
+una respuesta y que soltar uno lo reabre —con axe—, más la escena en la prueba de
+temas.

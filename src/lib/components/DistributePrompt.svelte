@@ -13,7 +13,7 @@
    * would not change anything.
    */
   import { session } from '#lib/game/session.svelte.ts';
-  import { targetKey, targetLabel } from '#lib/game/interaction.ts';
+  import { distinctTargetLabels, targetKey, targetLabel } from '#lib/game/interaction.ts';
   import type { TargetRef } from '#lib/engine/types.ts';
 
   const prompt = $derived(session.distributePrompt);
@@ -21,15 +21,12 @@
   const objects = $derived(session.snapshot?.state.objects ?? {});
   // Same key the session writes with: a `TargetRef` is not a key of its own.
   const amountOf = (target: TargetRef) => session.splitAmount[targetKey(target)] ?? 0;
-  // Two permanents can share a name and both be legal recipients (one per side),
-  // and then a bare name is two rows the player cannot tell apart. The controller
-  // is published, so it is what disambiguates.
-  const baseLabels = $derived(prompt ? prompt.targets.map((target) => targetLabel(target, objects)) : []);
+  // Two permanents can share a name and both be legal recipients (one per side);
+  // the shared helper adds the controller only where the name repeats.
+  const labels = $derived(prompt ? distinctTargetLabels(prompt.targets, objects) : []);
   const label = (target: TargetRef) => {
-    const base = targetLabel(target, objects);
-    if (baseLabels.filter((name) => name === base).length < 2) return base;
-    const controller = 'Object' in target ? objects[String(target.Object)]?.controller : undefined;
-    return typeof controller === 'number' ? `${base} (Jugador ${controller + 1})` : base;
+    const index = prompt ? prompt.targets.findIndex((other) => targetKey(other) === targetKey(target)) : -1;
+    return index >= 0 ? labels[index] ?? targetLabel(target, objects) : targetLabel(target, objects);
   };
 
   const noun = $derived.by(() => {
