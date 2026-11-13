@@ -1,8 +1,8 @@
 {
   "origin": "https://github.com/phase-rs/phase",
-  "commit": "1cd03ab59083665b5cc5ed9f2b161c68808d8a71",
+  "commit": "74fc941c2ddddc95f52c24cf8dab315ecb75ef94",
   "version": "0.124.0",
-  "sourceSha256": "8c2d51040608405aace27260822df952bc526bf9699a2cd197b67f7048fb4d79",
+  "sourceSha256": "f532dea28256844c5f4d43228ee9538bc778ecc7dcd8f55577287a9e80482b2e",
   "crates": [
     "phase-engine",
     "phase-ast",
