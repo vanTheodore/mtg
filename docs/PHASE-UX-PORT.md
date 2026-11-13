@@ -1686,3 +1686,68 @@ subconjunto y el caso ajeno); build OK; y en Chromium dos pruebas nuevas —el t
 que sube y baja, la criatura que desborda apagada y reabierta, y el rótulo del cero;
 y la variante que elige por el rival con su tope de 3— más las dos escenas en la
 prueba de temas.
+
+## Conservar exactos: el número ya lo resolvió el motor (trigésima octava pasada, 7 nov 2026)
+
+`KeepExactPermanentsChoice` es CR 101.4 + CR 701.21a, y es la **otra mitad** de la
+pasada anterior: la misma familia de «conserva y sacrifica el resto», pero medida en
+**unidades** y con una cardinalidad **exacta**. `Razia's Purification` la fija en tres
+(«each player chooses three permanents they control, then sacrifices the rest»); el
+`KeeperConstraint::ExactCount` genérico la usa para cualquier carta que diga un número.
+Viene justo detrás de la ventana de fuerza total, y compararlas es el mejor resumen
+del port: allí la pantalla **sumaba** y decidía si un candidato cabía; aquí no hay
+nada que sumar, sólo un número que llega resuelto.
+
+**El número no se recalcula.** El propio contrato del payload lo dice: `required_count`
+llega **ya recortado** al pozo elegible bajo la regla «haz todo lo posible» de CR 609.3,
+y los clientes lo **muestran**; no derivan una segunda regla de legalidad a partir de
+`eligible.len()`. Así que el bloque no tiene una copia de la regla: rotula el número,
+cuenta hacia él («Elegidos 2 de 3») y no lo baja en silencio si el pozo viene corto.
+Ese detalle se ve en el código: la primera versión de esta pasada tenía una rama que
+avisaba de un pozo insuficiente, y se quitó —no porque no pudiera pasar, sino porque
+pintarla habría sido **inventar un estado** que el motor no publica. Lo que sí se dice
+es de dónde viene la cifra: «Hay 5 candidatos y el número ya viene recortado a lo que
+se puede hacer (CR 609.3)».
+
+**Cero no es una respuesta aquí**, y por eso el bloque es el reverso del de la pasada
+37: allí «any number» incluía cero y el botón lo anunciaba; aquí el botón está apagado
+y dice cuántos faltan («Elige 2 más»), porque el número es exacto y confirmar antes de
+tiempo no es una jugada legal. La contrapartida tampoco es un tope de suma: al llegar
+a tres se apagan **todos** los candidatos de más, y soltar uno los **reabre todos**,
+porque el techo es una cuenta, no una suma.
+
+**El contador del guardián se anuncia antes del sacrificio.** Cuando la instrucción
+debe una marca a lo conservado —`Promise of Loyalty` pone un contador de voto «and
+sacrifices the rest»—, el payload la trae con su número ya resuelto (CR 608.2c +
+CR 122.1, CR 608.2h), porque la habilidad ya no existe cuando se reanuda
+`ChooseKeptPermanents`. El bloque la dice en la misma frase que la elección, que es
+donde ocurre: cada permanente conservado recibe el contador **antes** de que se
+sacrifique el resto. El nombre del contador no se traduce cuando no está en el
+vocabulario de la mesa (`vow`), igual que en las demás vistas de contadores: se queda
+con la palabra del motor en vez de inventarle una.
+
+`chooser_scope` y `remaining_players` se comportan como en las dos pasadas anteriores
+—la forma que elige por todos y el «después elige el Jugador n» al final del botón—, y
+el sujeto se nombra con «los candidatos del Jugador n»: los filtros (`choose_filter`,
+`sacrifice_filter`) pueden pedir criaturas y no permanentes, y esta vista no los lee.
+
+Objetos del laboratorio, los dos con el texto literal que el motor prueba en
+`tests/integration/promise_of_loyalty.rs`: el jugador 1 con cinco permanentes
+(criaturas y tierras, que es lo que `Razia's Purification` deja elegir) para la forma
+de tres, y sus tres criaturas para la del voto, que pide una.
+
+Laboratorio: `/ux?scene=keepExact` y `/ux?scene=keepExactVow`, capturas
+`docs/screenshots/ux-conservar-exactos-1440.jpg` y
+`docs/screenshots/ux-conservar-exactos-voto-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **487** (10 nuevas en
+`game/__tests__/keep-exact.test.ts`: el pozo con su número exacto, el alias `count`,
+la cifra ausente en cero y no adivinada del pozo, la marca con su cuenta y su palabra
+del motor en las dos formas, la marca que no nombra contador, la forma que elige por
+todos, la basura podada con la cifra negativa a cero, los valores por defecto del
+asiento, la respuesta con el conjunto elegido y el caso ajeno); build OK; y en
+Chromium dos pruebas nuevas —el número del motor con el candidato de más apagado, la
+cuenta que cierra y reabre, y el botón que no admite cero; y la variante con voto, con
+el contador anunciado antes del sacrificio— más las dos escenas en la prueba de temas.

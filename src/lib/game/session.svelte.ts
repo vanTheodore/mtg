@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -228,6 +228,7 @@ class GameSession {
     this.categoryPick = {};
     this.copyChosenPick = [];
     this.keepPowerPick = [];
+    this.keepExactPick = [];
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -717,6 +718,42 @@ class GameSession {
     const kept = this.keepPowerPick;
     this.keepPowerPick = [];
     void this.dispatch(keepPowerAction(kept));
+  }
+
+  /** CR 101.4 + CR 609.3: exactly the number the engine resolved, all distinct. */
+  get keepExactPrompt() {
+    return readKeepExact(this.snapshot);
+  }
+  keepExactPick = $state<ObjectId[]>([]);
+  keepExactIsPicked(id: ObjectId): boolean {
+    return this.keepExactPick.includes(id);
+  }
+  get keepExactRemaining(): number {
+    const prompt = this.keepExactPrompt;
+    return prompt ? Math.max(0, prompt.requiredCount - this.keepExactPick.length) : 0;
+  }
+  toggleKeepExact(id: ObjectId) {
+    const prompt = this.keepExactPrompt;
+    if (!prompt) return;
+    if (this.keepExactPick.includes(id)) {
+      this.keepExactPick = this.keepExactPick.filter((entry) => entry !== id);
+      return;
+    }
+    // The ceiling is the engine's own number; it is not derived from the pool.
+    if (this.keepExactPick.length >= prompt.requiredCount) return;
+    if (!prompt.eligible.includes(id)) return;
+    this.keepExactPick = [...this.keepExactPick, id];
+  }
+  get keepExactReady(): boolean {
+    const prompt = this.keepExactPrompt;
+    if (!prompt) return false;
+    return this.keepExactPick.length === prompt.requiredCount;
+  }
+  confirmKeepExact() {
+    if (!this.keepExactReady) return;
+    const kept = this.keepExactPick;
+    this.keepExactPick = [];
+    void this.dispatch(keepExactAction(kept));
   }
 
   /** CR 601.2d / CR 608.2d: how much of an amount each recipient gets. */
@@ -1234,6 +1271,7 @@ class GameSession {
       this.categoryPick = {};
       this.copyChosenPick = [];
       this.keepPowerPick = [];
+      this.keepExactPick = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

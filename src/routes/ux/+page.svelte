@@ -55,9 +55,10 @@
   import CategoryPrompt from '#lib/components/CategoryPrompt.svelte';
   import CopyChosenPrompt from '#lib/components/CopyChosenPrompt.svelte';
   import KeepPowerPrompt from '#lib/components/KeepPowerPrompt.svelte';
+  import KeepExactPrompt from '#lib/components/KeepExactPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -107,6 +108,8 @@
     { value: 'copyChosenNeighbor', label: 'Copiar del vecino' },
     { value: 'keepPower', label: 'Conservar por fuerza' },
     { value: 'keepPowerForAll', label: 'Conservar por fuerza: todos' },
+    { value: 'keepExact', label: 'Conservar exactos' },
+    { value: 'keepExactVow', label: 'Conservar exactos con voto' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -158,6 +161,8 @@
     copyChosenNeighbor: 'EachPlayerCopyChosenSelection · CR 102.1, del vecino',
     keepPower: 'KeepWithinTotalPowerChoice · CR 107.1c, tope de fuerza',
     keepPowerForAll: 'KeepWithinTotalPowerChoice · CR 101.4, por todos',
+    keepExact: 'KeepExactPermanentsChoice · CR 701.21a, exactamente tres',
+    keepExactVow: 'KeepExactPermanentsChoice · CR 122.1, contador de voto',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -312,6 +317,22 @@
     card_types: { core_types: ['Sorcery'] },
     oracle_text: 'Each player chooses any number of creatures they control with total power 4 or less, then sacrifices all other creatures they control.'
   } as GameObject;
+  // CR 701.21a + CR 122.1: the two cards the engine tests for the exact keeper.
+  // Verbatim text from `tests/integration/promise_of_loyalty.rs`: `Razia's
+  // Purification` fixes the number at three, and `Promise of Loyalty` owes the kept
+  // creature a vow counter, which is placed before the sacrifice.
+  const raziasPurification = {
+    id: 374, card_id: 374, owner: 0, controller: 0, zone: 'Stack',
+    name: "Razia's Purification",
+    card_types: { core_types: ['Sorcery'] },
+    oracle_text: 'Each player chooses three permanents they control, then sacrifices the rest.'
+  } as GameObject;
+  const promiseOfLoyalty = {
+    id: 375, card_id: 375, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Promise of Loyalty',
+    card_types: { core_types: ['Sorcery'] },
+    oracle_text: "Each player puts a vow counter on a creature they control and sacrifices the rest. Each of those creatures can't attack you or planeswalkers you control for as long as it has a vow counter on it."
+  } as GameObject;
   // CR 707.2: the phenomenon whose body is one `EachPlayerCopyChosen` — the
   // verbatim text is the one in `oracle_effect/tests.rs`
   // (`each_player_copy_chosen_human_time_lord_trigger`).
@@ -382,7 +403,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -474,6 +495,29 @@
           source_id: 373,
           source_controller: 0,
           remaining_players: forAll ? [] : [1],
+          all_kept: [],
+          scoped_players: [0, 1]
+        }
+      };
+    }
+    if (scene === 'keepExact' || scene === 'keepExactVow') {
+      // `KeepExactPermanentsChoice`: a fixed number, already capped by the engine.
+      // `Razia's Purification` asks for three permanents out of five; `Promise of
+      // Loyalty` asks for one creature and owes it a vow counter (CR 122.1) before
+      // the rest is sacrificed.
+      const vow = scene === 'keepExactVow';
+      return {
+        type: 'KeepExactPermanentsChoice',
+        data: {
+          player: 0,
+          target_player: 0,
+          eligible: vow ? [100, 101, 105] : [100, 101, 105, 102, 340],
+          required_count: vow ? 1 : 3,
+          keeper_counter: vow ? [{ Generic: 'vow' }, 1] : null,
+          chooser_scope: 'EachPlayerSelf',
+          source_id: vow ? 375 : 374,
+          source_controller: 0,
+          remaining_players: [1],
           all_kept: [],
           scoped_players: [0, 1]
         }
@@ -977,7 +1021,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1185,6 +1229,7 @@
         {#if scene === 'category' || scene === 'categoryForAll'}<CategoryPrompt />{/if}
         {#if scene === 'copyChosen' || scene === 'copyChosenNeighbor'}<CopyChosenPrompt />{/if}
         {#if scene === 'keepPower' || scene === 'keepPowerForAll'}<KeepPowerPrompt />{/if}
+        {#if scene === 'keepExact' || scene === 'keepExactVow'}<KeepExactPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

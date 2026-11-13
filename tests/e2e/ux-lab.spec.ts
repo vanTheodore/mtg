@@ -783,6 +783,74 @@ test('conservar por fuerza para todos: el tope se aplica a la mesa del rival', a
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('conservar exactos: el número es del motor y bloquea el candidato de más', async ({ page }) => {
+  await page.goto('/ux?scene=keepExact');
+  const block = page.locator('[data-keep-exact]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Conservar exactamente 3');
+  await expect(block).toHaveAttribute('data-keep-exact-required', '3');
+  // CR 609.3: the number arrives capped; the block states the pool but derives nothing.
+  await expect(block.locator('[data-keep-exact-pool]')).toHaveText(
+    'Hay 5 candidatos y el número ya viene recortado a lo que se puede hacer (CR 609.3).'
+  );
+  await expect(block.locator('[data-keep-exact-count]')).toHaveText('Elegidos 0 de 3');
+  // With no keeper mark owed there is no counter line, and no line is invented.
+  await expect(block.locator('[data-keep-exact-counter]')).toHaveCount(0);
+
+  const confirm = block.locator('button.primary');
+  // Unlike the total-power window, zero is not an answer here: the count is exact.
+  await expect(confirm).toBeDisabled();
+  const ready = block.locator('[data-keep-exact-ready]');
+  await expect(ready).toHaveAttribute('data-keep-exact-ready', 'false');
+  await expect(confirm).toHaveText('Elige 3 más');
+
+  await block.locator('[data-keep-exact-object="100"]').click();
+  await expect(block.locator('[data-keep-exact-count]')).toHaveText('Elegidos 1 de 3');
+  await block.locator('[data-keep-exact-object="101"]').click();
+  await expect(confirm).toHaveText('Elige uno más');
+  await block.locator('[data-keep-exact-object="105"]').click();
+  await expect(block.locator('[data-keep-exact-count]')).toHaveText('Elegidos 3 de 3');
+  await expect(ready).toHaveAttribute('data-keep-exact-ready', 'true');
+  await expect(confirm).toHaveText('Conservar 3 y sacrificar el resto · después elige el Jugador 2');
+  // The fourth and fifth candidates can no longer be added: exactly three.
+  await expect(block.locator('[data-keep-exact-object="102"]')).toBeDisabled();
+  await expect(block.locator('[data-keep-exact-object="340"]')).toBeDisabled();
+
+  // Releasing one reopens every candidate, because the ceiling is a count.
+  await block.locator('[data-keep-exact-object="101"]').click();
+  await expect(ready).toHaveAttribute('data-keep-exact-ready', 'false');
+  await expect(confirm).toHaveText('Elige uno más');
+  await expect(block.locator('[data-keep-exact-object="340"]')).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('conservar exactos con voto: el contador se anuncia antes del sacrificio', async ({ page }) => {
+  await page.goto('/ux?scene=keepExactVow');
+  const block = page.locator('[data-keep-exact]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Conservar exactamente 1');
+  await expect(block).toHaveAttribute('data-keep-exact-required', '1');
+  // CR 122.1: the keeper mark is placed before the rest is sacrificed, so it is
+  // announced with the choice. The counter keeps the engine's own word, `vow`.
+  await expect(block.locator('[data-keep-exact-counter]')).toHaveText(
+    'Cada permanente conservado recibe un contador de vow antes de que se sacrifique el resto (CR 122.1).'
+  );
+  await expect(block).toContainText('CR 701.21a');
+
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toHaveText('Elige uno más');
+  await block.locator('[data-keep-exact-object="105"]').click();
+  await expect(block.locator('[data-keep-exact-count]')).toHaveText('Elegidos 1 de 1');
+  await expect(confirm).toHaveText('Conservar 1 y sacrificar el resto · después elige el Jugador 2');
+  // Exactly one: the other two creatures stay out and cannot be added.
+  await expect(block.locator('[data-keep-exact-object="100"]')).toBeDisabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

@@ -537,6 +537,75 @@ export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | 
   };
 }
 /**
+ * CR 101.4 + CR 701.21a: the **exact** keeper — "each player chooses three
+ * permanents they control, then sacrifices the rest" (Razia's Purification), and
+ * the one-creature vow-counter form (Promise of Loyalty, CR 122.1).
+ *
+ * `required_count` is the number the engine already resolved **and capped to this
+ * prompt's eligible pool** under CR 609.3 ("do as much as possible"); the prompt's
+ * own contract says display clients must render it and not derive a second legality
+ * rule from `eligible.len()`. So the screen shows that number, asks for exactly
+ * that many distinct permanents, and never silently lowers it.
+ *
+ * `keeper_counter` is the mark the instruction owes its keepers (CR 122.1), placed
+ * before the sacrifice; it rides here because the resolved ability is gone by the
+ * time the answer arrives.
+ */
+export type KeepExactPrompt = {
+  player: PlayerId;
+  targetPlayer: PlayerId;
+  eligible: ObjectId[];
+  /** CR 609.3: already capped by the engine — rendered, never recomputed. */
+  requiredCount: number;
+  /** CR 122.1: the keeper mark, with its own count already resolved (CR 608.2h). */
+  keeperCounter: { type: string; count: number } | null;
+  chooserScope: 'self' | 'forAll';
+  sourceId: ObjectId | null;
+  remainingPlayers: PlayerId[];
+  keptBefore: ObjectId[];
+};
+/** `CounterType::Generic("vow")` arrives as an object; a flat string also happens. */
+function counterTypeName(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    const generic = (value as { Generic?: unknown }).Generic;
+    if (typeof generic === 'string') return generic;
+  }
+  return null;
+}
+export function keepExactPrompt(snapshot: EngineSnapshot | null): KeepExactPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'KeepExactPermanentsChoice') return null;
+  const data = waiting.data ?? {};
+  const ids = (value: unknown): ObjectId[] =>
+    Array.isArray(value) ? (value as unknown[]).filter((id): id is ObjectId => typeof id === 'number') : [];
+  const rawCounter = Array.isArray(data.keeper_counter) ? (data.keeper_counter as unknown[]) : null;
+  const counterType = rawCounter ? counterTypeName(rawCounter[0]) : null;
+  const counterCount = rawCounter && typeof rawCounter[1] === 'number' ? (rawCounter[1] as number) : 1;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    targetPlayer: typeof data.target_player === 'number' ? data.target_player : snapshot!.viewer,
+    eligible: ids(data.eligible),
+    // `count` is the older alias the payload may still use.
+    requiredCount:
+      typeof data.required_count === 'number'
+        ? Math.max(0, data.required_count)
+        : typeof data.count === 'number'
+          ? Math.max(0, data.count)
+          : 0,
+    keeperCounter: counterType ? { type: counterType, count: counterCount } : null,
+    chooserScope: data.chooser_scope === 'ControllerForAll' ? 'forAll' : 'self',
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+    remainingPlayers: ids(data.remaining_players),
+    keptBefore: ids(data.all_kept)
+  };
+}
+/** CR 101.4: exactly `required_count` permanents to keep; the rest are sacrificed. */
+export function keepExactAction(ids: ObjectId[]): GameAction {
+  return { type: 'ChooseKeptPermanents', data: { kept: [...ids] } };
+}
+
+/**
  * CR 107.1c + CR 701.21a: "each player chooses any number of creatures they
  * control with total power 4 or less, then sacrifices all other creatures they
  * control" (Slaughter the Strong).
