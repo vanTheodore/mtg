@@ -35,6 +35,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `moveCounters` | `MoveCountersDistribution` | [claro](mover-contadores-claro.jpg) | [oscuro](mover-contadores-oscuro.jpg) |
 | `retarget` | `RetargetChoice` (todos) | [claro](cambiar-objetivos-claro.jpg) | [oscuro](cambiar-objetivos-oscuro.jpg) |
 | `retargetSingle` | `RetargetChoice` (uno) | [claro](cambiar-objetivo-claro.jpg) | [oscuro](cambiar-objetivo-oscuro.jpg) |
+| `chooseObjects` | `ChooseObjectsSelection` (cualquiera) | [claro](elegir-permanentes-claro.jpg) | [oscuro](elegir-permanentes-oscuro.jpg) |
+| `chooseObjectsRecipient` | `ChooseObjectsSelection` (receptor) | [claro](elegir-receptor-claro.jpg) | [oscuro](elegir-receptor-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

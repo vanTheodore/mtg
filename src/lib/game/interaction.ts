@@ -537,6 +537,65 @@ export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | 
   };
 }
 /**
+ * CR 608.2c + CR 115.10a: `ChooseObjectsIntoTrackedSet` and the described damage
+ * recipient. Neither is a *target*: the prompt names a set of battlefield
+ * permanents (plus, for a damage recipient, the seats) and the engine publishes a
+ * **window** — at least `min`, at most `max`, and `max` absent means "any number"
+ * and clamps to the eligible set. Picks must be distinct.
+ *
+ * Two consequences the block states instead of guessing:
+ *
+ *   - CR 608.2c: the selection becomes a **fresh tracked set** ("those
+ *     creatures"), a new resolution scope for the rest of the effect; selecting
+ *     nothing yields an empty set, which is legal only when `min == 0`;
+ *   - CR 115.10a: a pick made while the instruction is applied is not announced as
+ *     a target, so ward, hexproof, shroud and protection never restrict it — which
+ *     is why a player may appear in the eligible set here and nowhere else.
+ */
+export type ChooseObjectsPrompt = {
+  player: PlayerId;
+  eligible: TargetRef[];
+  min: number;
+  /** Clamped to the eligible set, exactly as the engine's own projection does. */
+  max: number;
+  /** `max` was absent in the payload: "any number" of the eligible objects. */
+  openMax: boolean;
+  /** A seat is eligible, so this is a described damage recipient. */
+  recipient: boolean;
+  /** The trigger whose resolution raised the prompt (CR 608.2). */
+  triggered: boolean;
+};
+export function chooseObjectsPrompt(snapshot: EngineSnapshot | null): ChooseObjectsPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ChooseObjectsSelection') return null;
+  const data = waiting.data ?? {};
+  const eligible = Array.isArray(data.eligible)
+    ? (data.eligible as unknown[])
+        .map((entry) => parseTarget(entry))
+        .filter((entry): entry is NormalizedTarget => !!entry)
+        .map((entry) => (entry.kind === 'player' ? playerTarget(entry.id) : objectTarget(entry.id)))
+    : [];
+  const min = typeof data.min === 'number' ? Math.max(0, data.min) : 0;
+  const openMax = typeof data.max !== 'number';
+  // A missing maximum is the eligible set: "any number" cannot need more objects
+  // than the ones it may pick from.
+  const max = Math.min(openMax ? eligible.length : Math.max(0, data.max as number), eligible.length);
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    eligible,
+    min,
+    max,
+    openMax,
+    recipient: eligible.some((target) => parseTarget(target)?.kind === 'player'),
+    triggered: !!data.trigger_event
+  };
+}
+/** CR 608.2c: one `SelectTargets` answer, distinct, in the chosen order. */
+export function chooseObjectsAction(targets: TargetRef[]): GameAction {
+  return { type: 'SelectTargets', data: { targets: targets.map((target) => ({ ...target })) } };
+}
+
+/**
  * CR 115.7: changing the targets of a spell or ability already on the stack.
  * "Each target can be changed only to another legal target" — a per-position rule,
  * which is why the engine publishes a candidate pool **per position**

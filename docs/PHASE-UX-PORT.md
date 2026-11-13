@@ -1423,3 +1423,60 @@ forma de la respuesta y el caso ajeno); build OK; y en Chromium dos pruebas nuev
 contador de cambios que sube y baja; `single` con el botón apagado hasta elegir y
 la segunda elección reemplazando a la primera— más las dos escenas en la prueba de
 temas.
+
+## Elegir objetos: la elección es «esos», y no es un objetivo (trigésima tercera pasada, 13 nov 2026)
+
+`ChooseObjectsSelection` cubre dos efectos que comparten prompt y no son el mismo
+caso: `ChooseObjectsIntoTrackedSet` (CR 608.2c), donde el jugador elige un
+conjunto de permanentes que el resto del efecto llamará «esos», y el **receptor
+descrito** de una instrucción de daño (CR 115.10a), donde la elección puede ser
+además un asiento.
+
+Lo que el motor publica decide la pantalla:
+
+| Campo | Qué manda en la vista |
+|---|---|
+| `eligible` | la lista completa de lo elegible; nada fuera de ella se ofrece |
+| `min` | el botón no se habilita por debajo |
+| `max` ausente | «cualquier número», y el tope es lo elegible |
+| `max` presente | las filas se apagan en cuanto se alcanza |
+| un `Player` en `eligible` | es un receptor descrito, y el bloque lo dice |
+
+**La elección no es un objetivo.** Ni el conjunto de CR 608.2c ni el receptor de
+CR 115.10a se anuncian al ir a la pila, así que velo, antimaleficio, shroud y
+protección no la restringen — y ésa es exactamente la razón por la que un jugador
+puede aparecer aquí y en ningún otro bloque. El texto lo dice con esas palabras en
+vez de dejar que el jugador lo adivine.
+
+**No elegir es una respuesta**, no un estado incompleto: CR 608.2c publica un
+conjunto nuevo y vacío, legal sólo cuando `min` es cero. Por eso el botón de la
+escena «cualquiera» arranca habilitado con «Confirmar sin elegir ninguno», y el de
+la escena «un receptor» arranca apagado con «Elige uno» — el rótulo dice qué falta
+en vez de sólo estar gris.
+
+**El conjunto es el que dice «esos».** La línea de recuento («Elegidos 2 · mínimo
+0 · sin tope») usa los campos del contrato tal cual: `sin tope` es `max` ausente, y
+`hasta N` es `max` presente. Cuando el tope está en lo elegible, no hay ninguna
+fila que apagar.
+
+Objetos del laboratorio: `Magnetic Mountain` («choose any number of tapped blue
+creatures … pay {4} for each creature chosen this way», de
+`tests/integration/magnetic_mountain_choose_and_pay.rs`) es la forma «cualquier
+número», con `max` ausente; `Comet, Stellar Pup` («Comet deals damage equal to the
+number of loyalty counters on him to a creature or player») es la forma del
+receptor descrito, con un objeto y las dos sillas elegibles.
+
+Laboratorio: `/ux?scene=chooseObjects` y `/ux?scene=chooseObjectsRecipient`,
+capturas `docs/screenshots/ux-elegir-permanentes-1440.jpg` y
+`docs/screenshots/ux-elegir-receptor-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **450** (7 nuevas
+en `game/__tests__/choose-objects.test.ts`: el conjunto con su ventana y su
+disparo, el `max` ausente con su recorte a lo elegible, el asiento que marca
+receptor, los valores por defecto del motor, la basura podada, la forma de la
+respuesta —incluida la vacía— y el caso ajeno); build OK; y en Chromium dos
+pruebas nuevas —el recuento que sigue a los toggles y la respuesta vacía; el
+receptor con las filas apagadas al alcanzar `max` y reabiertas al soltar— más las
+dos escenas en la prueba de temas.

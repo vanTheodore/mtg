@@ -49,9 +49,10 @@
   import DistributePrompt from '#lib/components/DistributePrompt.svelte';
   import MoveCountersPrompt from '#lib/components/MoveCountersPrompt.svelte';
   import RetargetPrompt from '#lib/components/RetargetPrompt.svelte';
+  import ChooseObjectsPrompt from '#lib/components/ChooseObjectsPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -90,6 +91,8 @@
     { value: 'moveCounters', label: 'Mover contadores' },
     { value: 'retarget', label: 'Cambiar objetivos: todos' },
     { value: 'retargetSingle', label: 'Cambiar objetivos: uno' },
+    { value: 'chooseObjects', label: 'Elegir permanentes: cualquiera' },
+    { value: 'chooseObjectsRecipient', label: 'Elegir receptor del daño' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -130,6 +133,8 @@
     moveCounters: 'MoveCountersDistribution · CR 122.5, salen del origen',
     retarget: 'RetargetChoice · CR 115.7a, un pozo por posición',
     retargetSingle: 'RetargetChoice · CR 115.7a, «change the target»',
+    chooseObjects: 'ChooseObjectsSelection · CR 608.2c, «esos» es el conjunto',
+    chooseObjectsRecipient: 'ChooseObjectsSelection · CR 115.10a, sin objetivo',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -381,6 +386,33 @@
               contributions: [2, 2, 1]
             }
           };
+    }
+    if (scene === 'chooseObjects' || scene === 'chooseObjectsRecipient') {
+      // `ChooseObjectsSelection`: the eligible set and the window the engine
+      // enforces. `Magnetic Mountain` ("choose any number of tapped blue creatures
+      // … pay {4} for each creature chosen this way") is the "any number" shape —
+      // `max` absent — and `Comet, Stellar Pup` names a described damage recipient
+      // ("a creature or player"), which is the one case where a seat is eligible
+      // and the pick is still not a target (CR 115.10a).
+      const recipient = scene === 'chooseObjectsRecipient';
+      return {
+        type: 'ChooseObjectsSelection',
+        data: recipient
+          ? {
+              player: 0,
+              eligible: [{ Object: 200 }, { Object: 100 }, { Player: 1 }, { Player: 0 }],
+              min: 1,
+              max: 1,
+              trigger_event: { type: 'SpellCast', data: { player_id: 1, object_id: 1002 } }
+            }
+          : {
+              // `max` is deliberately absent: "any number" clamps to what is eligible.
+              player: 0,
+              eligible: [{ Object: 100 }, { Object: 101 }, { Object: 105 }],
+              min: 0,
+              trigger_event: { type: 'StepBegins', data: { player_id: 0, phase: 'Upkeep' } }
+            }
+      };
     }
     if (scene === 'retarget' || scene === 'retargetSingle') {
       // `RetargetChoice`: the declared targets and, per position, what that
@@ -773,7 +805,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -975,6 +1007,7 @@
         {#if scene === 'distribute' || scene === 'distributeAnnounced'}<DistributePrompt />{/if}
         {#if scene === 'moveCounters'}<MoveCountersPrompt />{/if}
         {#if scene === 'retarget' || scene === 'retargetSingle'}<RetargetPrompt />{/if}
+        {#if scene === 'chooseObjects' || scene === 'chooseObjectsRecipient'}<ChooseObjectsPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

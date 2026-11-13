@@ -458,6 +458,77 @@ test('cambiar «el» objetivo: una elección, y no puedes dejarlo igual', async 
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('elegir permanentes: el conjunto es «esos», y no elegir también es respuesta', async ({ page }) => {
+  await page.goto('/ux?scene=chooseObjects');
+  const block = page.locator('[data-choose-objects]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Elegir permanentes');
+  // CR 608.2c: the selection is the set the rest of the effect calls «those».
+  await expect(block).toContainText('CR 608.2c');
+  await expect(block).toContainText('cualquier número');
+  await expect(block.locator('[data-choose-count]')).toHaveText('Elegidos 0 · mínimo 0 · sin tope');
+
+  // "Any number" includes none: the answer is legal as it stands.
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Confirmar sin elegir ninguno');
+
+  // Every eligible object is a toggle, and the count follows the picks.
+  const row = (name: string) => block.getByRole('button', { name: new RegExp(`^${name}`) });
+  await row('Grizzly Bears').click();
+  await expect(row('Grizzly Bears')).toHaveAttribute('aria-pressed', 'true');
+  await expect(block.locator('[data-choose-count]')).toHaveText('Elegidos 1 · mínimo 0 · sin tope');
+  await expect(confirm).toHaveText('Confirmar uno elegido');
+  await row('Savannah Lions').click();
+  await row('Elvish Mystic').click();
+  await expect(block.locator('[data-choose-count]')).toHaveText('Elegidos 3 · mínimo 0 · sin tope');
+  await expect(confirm).toHaveText('Confirmar 3 elegidos');
+  // The window is the eligible set, so nothing is left to disable.
+  await expect(block.locator('button.row[aria-pressed="true"]')).toHaveCount(3);
+
+  // Untoggling is how a pick is undone — no separate "clear".
+  await row('Savannah Lions').click();
+  await expect(block.locator('[data-choose-count]')).toHaveText('Elegidos 2 · mínimo 0 · sin tope');
+  await expect(confirm).toHaveText('Confirmar 2 elegidos');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el receptor del daño: una elección que puede ser un jugador, y no es un objetivo', async ({ page }) => {
+  await page.goto('/ux?scene=chooseObjectsRecipient');
+  const block = page.locator('[data-choose-objects]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Elegir el receptor del daño');
+  // CR 115.10a: the recipient is chosen while the instruction is applied, so it
+  // is a choice and not a target — no ward, hexproof or protection involved.
+  await expect(block).toContainText('CR 115.10a');
+  await expect(block).toContainText('no es un objetivo');
+  await expect(block).toHaveAttribute('data-choose-recipient', 'true');
+  // A seat is eligible here and nowhere else.
+  await expect(block.locator('.kind', { hasText: 'Jugador' })).toHaveCount(2);
+
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeDisabled();
+  await expect(confirm).toHaveText('Elige uno');
+
+  await block.getByRole('button', { name: /^Jugador 2/ }).click();
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Confirmar uno elegido');
+  await expect(block.locator('[data-choose-count]')).toHaveText('Elegidos 1 · mínimo 1 · hasta 1');
+  // `max == 1`: with the pick made, the other rows cannot hold a second one.
+  await expect(block.getByRole('button', { name: /^Grizzly Bears \(Jugador 2\)/ })).toBeDisabled();
+  await expect(block.getByRole('button', { name: /^Jugador 1/ })).toBeDisabled();
+
+  // Releasing the pick reopens the window.
+  await block.getByRole('button', { name: /^Jugador 2/ }).click();
+  await expect(confirm).toBeDisabled();
+  await expect(block.getByRole('button', { name: /^Jugador 1/ })).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

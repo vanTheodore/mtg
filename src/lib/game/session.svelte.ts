@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -222,6 +222,7 @@ class GameSession {
     this.splitAmount = {};
     this.movePick = {};
     this.retargetPick = {};
+    this.choosePick = [];
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -471,6 +472,47 @@ class GameSession {
     const newTargets = this.retargetSelections;
     this.retargetPick = {};
     void this.dispatch(retargetAction(newTargets));
+  }
+
+  /** CR 608.2c + CR 115.10a: a set of permanents (or a damage recipient). */
+  get chooseObjectsPrompt() {
+    return readChooseObjects(this.snapshot);
+  }
+  /** Picks by `targetKey`, in the order they were made. */
+  choosePick = $state<string[]>([]);
+  chooseIsPicked(target: TargetRef): boolean {
+    return this.choosePick.includes(splitKey(target));
+  }
+  get chooseSelected(): TargetRef[] {
+    const prompt = this.chooseObjectsPrompt;
+    if (!prompt) return [];
+    return this.choosePick
+      .map((key) => prompt.eligible.find((target) => splitKey(target) === key))
+      .filter((target): target is TargetRef => !!target);
+  }
+  toggleChooseObject(target: TargetRef) {
+    const prompt = this.chooseObjectsPrompt;
+    if (!prompt) return;
+    const key = splitKey(target);
+    if (this.choosePick.includes(key)) {
+      this.choosePick = this.choosePick.filter((entry) => entry !== key);
+      return;
+    }
+    // The ceiling is the engine's: never hold more than it will accept.
+    if (this.choosePick.length >= prompt.max) return;
+    if (!prompt.eligible.some((entry) => splitKey(entry) === key)) return;
+    this.choosePick = [...this.choosePick, key];
+  }
+  get chooseReady(): boolean {
+    const prompt = this.chooseObjectsPrompt;
+    if (!prompt) return false;
+    return this.choosePick.length >= prompt.min && this.choosePick.length <= prompt.max;
+  }
+  confirmChooseObjects() {
+    if (!this.chooseReady) return;
+    const targets = this.chooseSelected;
+    this.choosePick = [];
+    void this.dispatch(chooseObjectsAction(targets));
   }
 
   /** CR 601.2d / CR 608.2d: how much of an amount each recipient gets. */
@@ -982,6 +1024,7 @@ class GameSession {
       this.splitAmount = {};
       this.movePick = {};
       this.retargetPick = {};
+      this.choosePick = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

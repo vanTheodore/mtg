@@ -50,7 +50,9 @@ const SCENES = [
   { scene: 'distributeAnnounced', slug: 'reparto-anunciado', block: '[data-distribute]' },
   { scene: 'moveCounters', slug: 'mover-contadores', block: '[data-move-counters]' },
   { scene: 'retarget', slug: 'cambiar-objetivos', block: '[data-retarget]' },
-  { scene: 'retargetSingle', slug: 'cambiar-objetivo', block: '[data-retarget]' }
+  { scene: 'retargetSingle', slug: 'cambiar-objetivo', block: '[data-retarget]' },
+  { scene: 'chooseObjects', slug: 'elegir-permanentes', block: '[data-choose-objects]' },
+  { scene: 'chooseObjectsRecipient', slug: 'elegir-receptor', block: '[data-choose-objects]' }
 ] as const;
 
 const THEMES = [
