@@ -141,6 +141,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'MultiTargetSelection': return 'Elige los objetivos del hechizo o habilidad.';
     case 'DistributeAmong': return 'Reparte la cantidad entre los objetivos: no puede sobrar ni faltar.';
     case 'MoveCountersDistribution': return 'Elige cuántos contadores se mueven y a qué permanentes.';
+    case 'RetargetChoice': return 'Cambia los objetivos de un hechizo que ya está en la pila.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

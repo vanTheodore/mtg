@@ -1364,3 +1364,62 @@ en crudo y el caso ajeno); build OK; y en Chromium una prueba nueva que vacía e
 pozo, comprueba que el + se apaga en todas las filas del tipo, que mover nada es
 una respuesta y que soltar uno lo reabre —con axe—, más la escena en la prueba de
 temas.
+
+## Cambiar objetivos: un pozo por posición (trigésima segunda pasada, 13 nov 2026)
+
+`RetargetChoice` es CR 115.7: cambiar los objetivos de un hechizo o habilidad que
+**ya está en la pila**. La regla que decide la pantalla es CR 115.7a —«each target
+can be changed only to another legal target»—, y es una regla **por posición**, no
+por hechizo: el motor publica `slot_pools`, una lista alineada con `slots` donde
+cada entrada es lo que *esa* posición admite, y `legal_new_targets` sólo como el
+conjunto plano de respaldo. El bloque ofrece, en cada fila, exactamente su pozo.
+
+| | Qué elige el jugador | ¿Se puede «dejar como está»? |
+|---|---|---|
+| `single` («change the target») | un objetivo nuevo, y sólo uno | **No**: no hay nada que conservar (el motor rechaza un `null`) |
+| `all` («choose new targets») | cuántas posiciones cambiar y a qué | Sí, y no cambiar ninguna es una respuesta legal |
+
+**La respuesta es un `Option` por posición**, en el espacio de índices del propio
+prompt: `null` conserva, un `TargetRef` cambia. Por eso la cuenta de posiciones se
+preserva y el botón de `all` nunca se bloquea: «dejar los objetivos como están» es
+la respuesta por defecto, y el rótulo dice cuántas posiciones se mueven («Confirmar
+2 de 2 cambios»). En `single` el botón arranca apagado y pide la elección.
+
+**Dos sutilezas del contrato que la vista respeta en vez de adivinar:**
+
+- un `slot_pools` **vacío por fuera** significa «sin refinamiento» y cada posición
+  cae al conjunto plano; uno **vacío por dentro** significa «esta posición no
+  admite nada» y no cae a nada. Se distinguen, y la fila lo dice.
+- `keep_is_distinct` marca las posiciones donde el objeto anunciado ya no está: ahí
+  nombrar el mismo id elige el objeto que volvió (CR 115.7d + CR 400.7), así que el
+  objetivo declarado **sí** es una alternativa propia y se rotula como tal. En las
+  demás posiciones se filtra: conservarlo es el valor por defecto, no una opción.
+- `forced` no es interactivo (el motor lo aplica y rechaza una sumisión), así que
+  el bloque no lo renderiza.
+
+**Dos copias en el mismo lado.** La escena de `all` declara dos «Grizzly Bears» del
+mismo jugador, y el sufijo de controlador que estrenó el reparto no los separa. El
+ayudante compartido `distinctTargetLabels` ganó un tercer escalón: cuando el
+nombre **y** el controlador siguen coincidiendo, añade el id que publica el motor
+(`Grizzly Bears (Jugador 2) · #200`). Una etiqueta que se repite no es etiqueta.
+
+Objetos del laboratorio: `Frost Breath` («tap up to two target creatures», dos
+objetivos declarados) para `all`, y `Lightning Bolt` («deals 3 damage to any
+target», un objetivo declarado con las dos sillas entre las alternativas) para
+`single`. Ambos textos son los que el motor cita.
+
+Laboratorio: `/ux?scene=retarget` y `/ux?scene=retargetSingle`, capturas
+`docs/screenshots/ux-cambiar-objetivos-1440.jpg` y
+`docs/screenshots/ux-cambiar-objetivo-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **443** (9 nuevas
+en `game/__tests__/retarget.test.ts`: el pozo por posición, el respaldo al
+conjunto plano, el pozo interior vacío que no cae a nada, `single` con su
+posición única, `keep_is_distinct`, `forced` que no renderiza, la basura podada, la
+forma de la respuesta y el caso ajeno); build OK; y en Chromium dos pruebas nuevas
+—`all` con sus dos filas, el objetivo declarado ausente de sus alternativas y el
+contador de cambios que sube y baja; `single` con el botón apagado hasta elegir y
+la segunda elección reemplazando a la primera— más las dos escenas en la prueba de
+temas.

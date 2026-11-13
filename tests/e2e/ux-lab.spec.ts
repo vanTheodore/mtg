@@ -391,6 +391,73 @@ test('mover contadores no puede sacar del origen más de los que hay', async ({ 
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('cambiar los objetivos de un hechizo: cada posición con su pozo', async ({ page }) => {
+  await page.goto('/ux?scene=retarget');
+  const block = page.locator('[data-retarget]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Cambiar objetivos · Frost Breath');
+  // CR 115.7a: each target changes only to another legal target.
+  await expect(block).toContainText('CR 115.7a');
+  const first = block.locator('[data-retarget-position="0"]');
+  const second = block.locator('[data-retarget-position="1"]');
+  await expect(first).toHaveCount(1);
+  // Two same-name permanents on the same side: the controller alone does not tell
+  // them apart, so the engine's id does.
+  await expect(first.locator('.declared')).toHaveText('Grizzly Bears (Jugador 2) · #200');
+  await expect(second.locator('.declared')).toHaveText('Grizzly Bears (Jugador 2) · #201');
+
+  // "All" keeps every target by default, and that is a legal submission.
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Dejar los objetivos como están');
+  await expect(first.getByRole('button', { name: 'Dejar como está' })).toHaveAttribute('aria-pressed', 'true');
+  // The declared target is not among its own alternatives: keeping it is the default.
+  await expect(first.getByRole('button', { name: /Grizzly Bears/ })).toHaveCount(0);
+
+  // One position changed; the other stays until it is touched.
+  await first.getByRole('button', { name: 'Savannah Lions' }).click();
+  await expect(first.getByRole('button', { name: 'Savannah Lions' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(block.locator('[data-retarget-changed]')).toHaveText('Confirmar 1 de 2 cambios');
+  await second.getByRole('button', { name: 'Elvish Mystic' }).click();
+  await expect(block.locator('[data-retarget-changed]')).toHaveText('Confirmar 2 de 2 cambios');
+
+  // A position can go back to its declared target without losing the other pick.
+  await first.getByRole('button', { name: 'Dejar como está' }).click();
+  await expect(block.locator('[data-retarget-changed]')).toHaveText('Confirmar 1 de 2 cambios');
+  await expect(second.getByRole('button', { name: 'Elvish Mystic' })).toHaveAttribute('aria-pressed', 'true');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('cambiar «el» objetivo: una elección, y no puedes dejarlo igual', async ({ page }) => {
+  await page.goto('/ux?scene=retargetSingle');
+  const block = page.locator('[data-retarget]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Cambiar objetivos · Lightning Bolt');
+  await expect(block).toContainText('no puedes dejarlo como está');
+  await expect(block.locator('[data-retarget-position]')).toHaveCount(1);
+  // Only "single" forbids keeping, and the engine rejects a null here.
+  await expect(block.getByRole('button', { name: 'Dejar como está' })).toHaveCount(0);
+
+  const confirm = block.locator('button.primary');
+  await expect(confirm).toBeDisabled();
+  await expect(confirm).toHaveText('Elige un objetivo nuevo');
+
+  // "Any target": the seats are legal alternatives, not only creatures.
+  await block.getByRole('button', { name: 'Jugador 2', exact: true }).click();
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Cambiar a Jugador 2');
+  // One target changes to one target: a second pick replaces the first.
+  await block.getByRole('button', { name: 'Savannah Lions' }).click();
+  await expect(confirm).toHaveText('Cambiar a Savannah Lions');
+  await expect(block.getByRole('button', { name: 'Jugador 2', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(block.locator('button[aria-pressed="true"]')).toHaveCount(1);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

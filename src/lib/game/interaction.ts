@@ -537,6 +537,79 @@ export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | 
   };
 }
 /**
+ * CR 115.7: changing the targets of a spell or ability already on the stack.
+ * "Each target can be changed only to another legal target" — a per-position rule,
+ * which is why the engine publishes a candidate pool **per position**
+ * (`slot_pools`, aligned with `slots`) and a flat union (`legal_new_targets`) only
+ * as the fallback for payloads that predate the per-position field.
+ *
+ * The submission is an `Option` per position, in the prompt's index space: `null`
+ * keeps that target, a `TargetRef` changes it. That is what splits the two scopes:
+ *
+ *   - `single` ("change the target of target spell"): exactly one pick, and it
+ *     cannot be "keep" — the engine rejects a null there;
+ *   - `all` ("choose new targets"): the same number of positions as the spell has
+ *     targets, and any of them may stay.
+ *
+ * `forced` is not interactive: the engine applies it and rejects a submission, so
+ * this view never offers it.
+ */
+export type RetargetScopeKind = 'single' | 'all';
+export type RetargetPrompt = {
+  player: PlayerId;
+  stackEntryIndex: number;
+  scope: RetargetScopeKind;
+  /** The declared targets, in the prompt's order. */
+  current: TargetRef[];
+  /** Per position, exactly what that position admits. */
+  pools: TargetRef[][];
+  /** The flat union — only a fallback, never an admission set of its own. */
+  union: TargetRef[];
+  /**
+   * Per position, whether the announced object is gone, so keeping it and naming
+   * the same id are DIFFERENT objects (CR 115.7d + CR 400.7). Only there does the
+   * declared target belong among its own alternatives.
+   */
+  keepDistinct: boolean[];
+};
+export function retargetPrompt(snapshot: EngineSnapshot | null): RetargetPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'RetargetChoice') return null;
+  const data = waiting.data ?? {};
+  const rawScope = data.scope as { type?: string } | undefined;
+  if (rawScope?.type === 'ForcedTo') return null;
+  const toTargets = (value: unknown): TargetRef[] =>
+    Array.isArray(value)
+      ? value
+          .map((entry) => parseTarget(entry))
+          .filter((entry): entry is NormalizedTarget => !!entry)
+          .map((entry) => (entry.kind === 'player' ? playerTarget(entry.id) : objectTarget(entry.id)))
+      : [];
+  const current = toTargets(data.current_targets);
+  const union = toTargets(data.legal_new_targets);
+  const rawPools = Array.isArray(data.slot_pools) ? (data.slot_pools as unknown[]) : [];
+  // An outer-empty `slot_pools` means no per-position refinement was recorded, so
+  // every position falls back to the union — the engine's own rule.
+  const pools = rawPools.length
+    ? current.map((_, index) => (Array.isArray(rawPools[index]) ? toTargets(rawPools[index]) : union))
+    : current.map(() => union);
+  const rawKeep = Array.isArray(data.keep_is_distinct) ? (data.keep_is_distinct as unknown[]) : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    stackEntryIndex: typeof data.stack_entry_index === 'number' ? data.stack_entry_index : -1,
+    scope: rawScope?.type === 'Single' ? 'single' : 'all',
+    current,
+    pools,
+    union,
+    keepDistinct: current.map((_, index) => rawKeep[index] === true)
+  };
+}
+/** `null` keeps a position; `single` needs one non-null entry and no more. */
+export function retargetAction(newTargets: (TargetRef | null)[]): GameAction {
+  return { type: 'RetargetSpell', data: { new_targets: newTargets.map((target) => target ?? null) } };
+}
+
+/**
  * CR 122.5 + CR 608.2d: "move any number of counters". A different question from
  * the division above: the amount is not fixed — **the available pool is** — and the
  * counters leave the source as they arrive at each destination, one
@@ -1438,11 +1511,19 @@ export function targetLabel(target: unknown, objects: Record<string, GameObject>
  */
 export function distinctTargetLabels(targets: TargetRef[], objects: Record<string, GameObject>): string[] {
   const base = targets.map((target) => targetLabel(target, objects));
-  return base.map((name, index) => {
+  const withController = base.map((name, index) => {
     if (base.filter((other) => other === name).length < 2) return name;
     const parsed = parseTarget(targets[index]);
     const controller = parsed?.kind === 'object' ? objects[String(parsed.id)]?.controller : undefined;
     return typeof controller === 'number' ? `${name} (Jugador ${controller + 1})` : name;
+  });
+  // The controller separates the two sides, but not two copies on the SAME side:
+  // a retarget can name both. Phase publishes the id, and it is what is left, so
+  // that is what tells them apart — a label that repeats is not a label.
+  return withController.map((name, index) => {
+    if (withController.filter((other) => other === name).length < 2) return name;
+    const parsed = parseTarget(targets[index]);
+    return parsed ? `${name} · #${parsed.id}` : name;
   });
 }
 export function attackLabel(target: AttackTarget, objects: Record<string, GameObject>): string {

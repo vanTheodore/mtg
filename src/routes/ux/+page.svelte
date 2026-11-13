@@ -48,9 +48,10 @@
   import MultiTargetPrompt from '#lib/components/MultiTargetPrompt.svelte';
   import DistributePrompt from '#lib/components/DistributePrompt.svelte';
   import MoveCountersPrompt from '#lib/components/MoveCountersPrompt.svelte';
+  import RetargetPrompt from '#lib/components/RetargetPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -87,6 +88,8 @@
     { value: 'distribute', label: 'Reparto: 5 entre candidatos' },
     { value: 'distributeAnnounced', label: 'Reparto: todos los objetivos' },
     { value: 'moveCounters', label: 'Mover contadores' },
+    { value: 'retarget', label: 'Cambiar objetivos: todos' },
+    { value: 'retargetSingle', label: 'Cambiar objetivos: uno' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -125,6 +128,8 @@
     distribute: 'DistributeAmong · CR 608.2d, se puede dejar fuera',
     distributeAnnounced: 'DistributeAmong · CR 601.2d, todos reciben',
     moveCounters: 'MoveCountersDistribution · CR 122.5, salen del origen',
+    retarget: 'RetargetChoice · CR 115.7a, un pozo por posición',
+    retargetSingle: 'RetargetChoice · CR 115.7a, «change the target»',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -376,6 +381,35 @@
               contributions: [2, 2, 1]
             }
           };
+    }
+    if (scene === 'retarget' || scene === 'retargetSingle') {
+      // `RetargetChoice`: the declared targets and, per position, what that
+      // position admits. `Frost Breath` ("tap up to two target creatures") is the
+      // two-target spell — both declared targets are creatures, and the pools say
+      // which creatures each position may name. `Lightning Bolt` ("deals 3 damage
+      // to any target") is the one-target case, so its alternatives include the
+      // seats. Both texts are the engine's, and every offered target is an object
+      // this fixture already has.
+      const single = scene === 'retargetSingle';
+      return {
+        type: 'RetargetChoice',
+        data: {
+          player: 0,
+          stack_entry_index: 0,
+          scope: single ? { type: 'Single' } : { type: 'All' },
+          current_targets: single ? [{ Object: 200 }] : [{ Object: 200 }, { Object: 201 }],
+          slots: single
+            ? [{ path: [], slot: 0 }]
+            : [{ path: [], slot: 0 }, { path: [], slot: 1 }],
+          slot_pools: single
+            ? [[{ Object: 200 }, { Object: 101 }, { Object: 105 }, { Player: 0 }, { Player: 1 }]]
+            : [[{ Object: 200 }, { Object: 101 }, { Object: 105 }], [{ Object: 201 }, { Object: 100 }, { Object: 105 }]],
+          keep_is_distinct: single ? [false] : [false, false],
+          legal_new_targets: single
+            ? [{ Object: 200 }, { Object: 101 }, { Object: 105 }, { Player: 0 }, { Player: 1 }]
+            : [{ Object: 200 }, { Object: 201 }, { Object: 101 }, { Object: 100 }, { Object: 105 }]
+        }
+      };
     }
     if (scene === 'moveCounters') {
       // `MoveCountersDistribution`: what the source holds, by type, and where it
@@ -739,7 +773,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -748,7 +782,11 @@
         waiting_for: waiting(),
         players: seats,
         battlefield: [...viewerField, ...rivalField].map((object) => object.id),
-        stack: scene === 'targets' ? [{ id: 7, source_id: 300, controller: 0 }] : [],
+        stack: scene === 'targets'
+          ? [{ id: 7, source_id: 300, controller: 0 }]
+          : scene === 'retarget' || scene === 'retargetSingle'
+            ? [{ id: 7, source_id: scene === 'retarget' ? 350 : 300, controller: 0 }]
+            : [],
         exile: [],
         objects: objects as Record<string, GameObject>,
         combat: scene === 'combat' || scene === 'damage'
@@ -936,6 +974,7 @@
         {#if scene === 'multiTarget' || scene === 'multiTargetExact'}<MultiTargetPrompt />{/if}
         {#if scene === 'distribute' || scene === 'distributeAnnounced'}<DistributePrompt />{/if}
         {#if scene === 'moveCounters'}<MoveCountersPrompt />{/if}
+        {#if scene === 'retarget' || scene === 'retargetSingle'}<RetargetPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, retargetPrompt as readRetarget, retargetAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -221,6 +221,7 @@ class GameSession {
     this.multiPick = [];
     this.splitAmount = {};
     this.movePick = {};
+    this.retargetPick = {};
     this.optionalRemember = false;
     this.optionalSameCard = false;
     this.history = [];
@@ -413,6 +414,63 @@ class GameSession {
     const selections = this.moveSelections;
     this.movePick = {};
     void this.dispatch(moveCountersAction(selections));
+  }
+
+  /** CR 115.7: repointing a spell (or ability) that is already on the stack. */
+  get retargetPrompt() {
+    return readRetarget(this.snapshot);
+  }
+  /** Position → replacement; a position absent from the map keeps its target. */
+  retargetPick = $state<Record<number, TargetRef>>({});
+  retargetPicked(index: number): TargetRef | undefined {
+    return this.retargetPick[index];
+  }
+  /**
+   * Only what that position admits is selectable — the per-position pool is the
+   * engine's own admission set, so the UI cannot offer a target it would reject.
+   */
+  retargetCandidates(index: number): TargetRef[] {
+    const prompt = this.retargetPrompt;
+    if (!prompt) return [];
+    const pool = prompt.pools[index] ?? prompt.union;
+    const declared = prompt.current[index];
+    // The declared target is its own alternative only where the announced object
+    // is gone: naming that id elects the object that came back (CR 400.7).
+    if (!declared || prompt.keepDistinct[index]) return pool;
+    return pool.filter((ref) => splitKey(ref) !== splitKey(declared));
+  }
+  setRetarget(index: number, target: TargetRef | null) {
+    const prompt = this.retargetPrompt;
+    if (!prompt) return;
+    if (!target) {
+      const next = { ...this.retargetPick };
+      delete next[index];
+      this.retargetPick = next;
+      return;
+    }
+    if (!this.retargetCandidates(index).some((ref) => splitKey(ref) === splitKey(target))) return;
+    // "Change the target" names one new target: there is nothing else to keep.
+    this.retargetPick = prompt.scope === 'single' ? { [index]: target } : { ...this.retargetPick, [index]: target };
+  }
+  /** One entry per position, in the prompt's order; `null` is the engine's keep. */
+  get retargetSelections(): (TargetRef | null)[] {
+    const prompt = this.retargetPrompt;
+    if (!prompt) return [];
+    return prompt.current.map((_, index) => this.retargetPick[index] ?? null);
+  }
+  get retargetReady(): boolean {
+    const prompt = this.retargetPrompt;
+    if (!prompt) return false;
+    return prompt.scope === 'single' ? Object.keys(this.retargetPick).length === 1 : true;
+  }
+  get retargetChanged(): number {
+    return Object.keys(this.retargetPick).length;
+  }
+  confirmRetarget() {
+    if (!this.retargetReady) return;
+    const newTargets = this.retargetSelections;
+    this.retargetPick = {};
+    void this.dispatch(retargetAction(newTargets));
   }
 
   /** CR 601.2d / CR 608.2d: how much of an amount each recipient gets. */
@@ -923,6 +981,7 @@ class GameSession {
       this.multiPick = [];
       this.splitAmount = {};
       this.movePick = {};
+      this.retargetPick = {};
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };
