@@ -2087,3 +2087,66 @@ carta separados y `payment_mode` automático, y la negativa genérica); build OK
 Chromium una prueba nueva —la primera carta del turno, sus dos costes y la frase que
 distingue revelar de lanzar— más su escena en la prueba de temas (46 → 47 escenas, 97 jpg,
 presupuesto de 500 s).
+
+## Una oferta de lanzamiento, nueve formas de decir que no (cuadragésima quinta pasada, 7 nov 2026)
+
+`CastOffer` (CR 608.2g) es la variante que el motor reutiliza para **cualquier**
+lanzamiento que ofrece mientras algo se resuelve, y tiene nueve formas. La pasada la
+trata como lo que es —un bloque con una pregunta y nueve respuestas— porque preguntar
+lo mismo en nueve ventanas distintas habría dejado nueve pantallas que nunca se ven
+juntas. La pregunta es siempre «¿la lanzas?»; lo que cambia es qué pasa si dices que no.
+
+**El declinar es la forma.** `Miracle` (CR 702.94a) deja la carta en la mano y gasta el
+disparo; `Madness` (CR 702.35a) la manda al cementerio, que es exactamente lo que locura
+cambia; `Cascade` (CR 702.85a) y `Ripple` (CR 702.60a) mandan la carta y todas las
+falladas al fondo de la biblioteca en orden aleatorio; `Discover` (CR 701.57a) se queda
+la carta en la mano y manda solo las falladas al fondo; `GraveyardPaidCast` (CR 609.4b)
+la deja en el cementerio. Por eso el bloque no usa un «No» genérico: cada forma nombra
+su destino con su cifra —«Lightning Bolt y las 2 cartas exiliadas van al fondo … 3 en
+total»—.
+
+**Adventure no es una pregunta de sí o no.** CR 715.3a publica una **cara**: el motor
+manda `ChooseAdventureFace { creature }`, así que el bloque ofrece las dos caras y no
+inventa un declinar que esa forma no tiene.
+
+**Las dos clases de acciones del motor se respetan.** Siete formas responden con su
+acción propia (`ChooseAdventureFace`, `CastSpellAsMiracle`, `CastSpellAsMadness`,
+`CastParadigmCopy`/`PassParadigmOffer`, `CascadeChoice`/`DiscoverChoice`/`RippleChoice`/
+`GraveyardPaidCastChoice`, `FreeCastWindowChoice` con `selection` o `null`). El helper
+compartido sólo construye las cuatro que son «lanza o declina» y **lanza** si se le pide
+otra: es más honesto fallar en el borde que mandar un `choice` a un prompt que espera
+otra cosa.
+
+**La ventana gratuita publica sus dos topes y se leen por separado.** `remaining_casts`
+ausente es «cualquier número de hechizos» y `remaining_mv_budget` ausente es «sin tope de
+valor de maná»: ninguno de los dos se pinta como cero. Cerrar la ventana es
+`selection: null`, que no es lo mismo que una carta.
+
+**Cascada y descubrir se enuncian con su tope.** CR 702.85a exige que el valor de maná
+del lanzamiento quede por debajo del hechizo que lo provocó, y CR 701.57a que no supere
+el valor descubierto; el bloque muestra ese número (lo publica la oferta) en vez de
+prometer un lanzamiento que el motor rechazaría.
+
+Objetos del laboratorio: `Terminus` con su coste de milagro para la forma de milagro
+—la que completa la pasada anterior—; `Lightning Bolt` como acierto de cascada con dos
+cartas falladas de la biblioteca y `Mizzix's Mastery` (valor de maná 4) como fuente; y
+`Shock` y `Giant Growth` en el cementerio como candidatas de la ventana gratuita. Todos
+viven en `objects`, como el resto de cartas que sólo nombra una ventana.
+
+Laboratorio: `/ux?scene=castOffer`, `/ux?scene=castOfferCascade` y
+`/ux?scene=castOfferWindow`, capturas `ux-lanzar-milagro-1440.jpg`,
+`ux-lanzar-cascada-1440.jpg` y `ux-lanzar-ventana-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **552** (12 nuevas en
+`game/__tests__/cast-offer.test.ts`: las nueve formas, el objeto bajo `object_id` o
+`hit_card`, candidatas y falladas de sus dos listas, los topes de la ventana que no se
+pintan como cero, el tope de cascada y el valor descubierto, la concesión de maná,
+la forma desconocida y el prompt ajeno, el asiento por defecto, las dos caras de
+aventura, objeto y carta separados en milagro y locura, la tabla de acciones por forma
+—incluido el fallo explícito para las que no son «sí o no»— y las acciones de paradigma y
+de la ventana); el duplicado de la pasada anterior desapareció: `revealMiracleAction` es
+ahora `castAsMiracleAction`, porque revelar y lanzar por milagro mandan la misma acción;
+build OK; en Chromium tres pruebas nuevas —milagro, cascada y ventana gratuita, con axe—
+y tres escenas más en la prueba de temas (47 → 50 escenas, 103 jpg, presupuesto de 560 s).

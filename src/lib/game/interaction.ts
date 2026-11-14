@@ -1170,21 +1170,166 @@ export function miraclePrompt(snapshot: EngineSnapshot | null): MiraclePrompt | 
     cost: data.cost
   };
 }
+// Accepting the reveal is `castAsMiracleAction`, declared with the `CastOffer`
+// block below: the same action answers the reveal and the cast offer that follows
+// it (CR 702.94a + CR 608.2g).
+/** CR 702.94a: decline — the card stays unrevealed in hand and the offer is spent. */
+export function declineMiracleAction(): GameAction {
+  return { type: 'DecideOptionalEffect', data: { accept: false } };
+}
+
 /**
- * CR 702.94a: accept — reveal the card and put the miracle trigger on the stack.
- * This is not the cast: the cast arrives later as its own `CastOffer` once the
- * trigger resolves (CR 608.2g). The engine identifies the card by object and by
- * `card_id`, so both travel.
+ * CR 608.2g: **«you may cast it»** during a resolution. One `WaitingFor` variant,
+ * nine shapes — the engine reuses `CastOffer` for every cast it offers while a spell
+ * or ability is resolving, and each shape answers with a different action. The block
+ * is one block because the question is always the same one (cast this, or not), and
+ * the copy changes with the shape:
+ *
+ *   - `Adventure` (CR 715.3a) — which face: the creature or the Adventure half.
+ *     The engine publishes a face, not a yes/no, so there is nothing to decline.
+ *   - `Miracle` (CR 702.94a) — the card revealed last step, at the cost the offer
+ *     latched. Declining spends the trigger and the card stays in hand.
+ *   - `Madness` (CR 702.35a) — the exiled card at its madness cost; declining puts
+ *     it into its owner's graveyard, which is the whole point of madness.
+ *   - `Paradigm` — a list of exiled sources offering a copy, one at a time.
+ *   - `Cascade` (CR 702.85a) — cast the hit for free if its mana value ends up
+ *     below `sourceMv`; declining shuffles the hit and every miss to the bottom.
+ *   - `Discover` (CR 701.57a) — the same, gated by the discovered value, and
+ *     declining sends the hit to hand instead.
+ *   - `Ripple` (CR 702.60a) — a same-named revealed card for free, with the rest of
+ *     the hits still offered afterwards; declining puts everything on the bottom.
+ *   - `FreeCastWindow` (CR 608.2g) — a window of candidates, optionally bounded by
+ *     casts and by a running mana-value budget; closing it is the decline.
+ *   - `GraveyardPaidCast` (CR 609.4b) — a graveyard card at its real cost, with the
+ *     any-type-mana concession when the grant carries it.
  */
-export function revealMiracleAction(objectId: ObjectId, cardId: number): GameAction {
+export type CastOfferShape =
+  | 'adventure'
+  | 'miracle'
+  | 'madness'
+  | 'paradigm'
+  | 'cascade'
+  | 'discover'
+  | 'ripple'
+  | 'freeWindow'
+  | 'graveyardPaid';
+const CAST_OFFER_SHAPES: Record<string, CastOfferShape> = {
+  Adventure: 'adventure',
+  Miracle: 'miracle',
+  Madness: 'madness',
+  Paradigm: 'paradigm',
+  Cascade: 'cascade',
+  Discover: 'discover',
+  Ripple: 'ripple',
+  FreeCastWindow: 'freeWindow',
+  GraveyardPaidCast: 'graveyardPaid'
+};
+export type CastOfferPrompt = {
+  shape: CastOfferShape;
+  /** The player the offer belongs to. */
+  player: PlayerId;
+  /** The single card being offered (absent in `paradigm` and `freeWindow`). */
+  objectId: ObjectId | null;
+  /** CR 702.94a / CR 702.35a: the cost the offer latched. */
+  cost?: unknown;
+  /** CR 601.2b: a cost the grant adds on top of the printed one. */
+  additionalCost?: unknown;
+  /** CR 609.4b: "mana of any type can be spent to cast that spell". */
+  anyMana: boolean;
+  /** `paradigm` sources and `freeWindow` candidates, in engine order. */
+  candidates: ObjectId[];
+  /** Cards that go to the library bottom with the decline (cascade/discover/ripple). */
+  misses: ObjectId[];
+  /** CR 702.60a: same-named cards still to be offered after this one. */
+  remainingHits: ObjectId[];
+  /** CR 702.85a: the cascading spell's mana value — the hit must land below it. */
+  sourceMv: number | null;
+  /** CR 701.57a: the discovered value the hit's mana value must not exceed. */
+  discoverValue: number | null;
+  /** CR 608.2c: casts left in the window, or `null` for "any number of spells". */
+  remainingCasts: number | null;
+  /** CR 202.3: mana-value budget left in the window, or `null` for no cap. */
+  mvBudget: number | null;
+};
+export function castOfferPrompt(snapshot: EngineSnapshot | null): CastOfferPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'CastOffer') return null;
+  const data = waiting.data ?? {};
+  const kind = data.kind as Record<string, unknown> | undefined;
+  const shape = kind && typeof kind.type === 'string' ? CAST_OFFER_SHAPES[kind.type] : undefined;
+  if (!kind || !shape) return null;
+  const ids = (value: unknown): ObjectId[] =>
+    Array.isArray(value) ? (value as unknown[]).filter((id): id is ObjectId => typeof id === 'number') : [];
+  const number = (value: unknown): number | null => (typeof value === 'number' ? value : null);
+  // Every shape names its card differently: cascade/discover/ripple/graveyard use
+  // `hit_card`, adventure/miracle/madness use `object_id`.
+  const single = kind.hit_card ?? kind.object_id;
+  return {
+    shape,
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: typeof single === 'number' ? (single as ObjectId) : null,
+    cost: kind.cost,
+    additionalCost: kind.additional_cost,
+    anyMana: kind.mana_spend_permission != null,
+    candidates: ids(kind.offers).length ? ids(kind.offers) : ids(kind.candidates),
+    misses: ids(kind.exiled_misses).length ? ids(kind.exiled_misses) : ids(kind.revealed_misses),
+    remainingHits: ids(kind.remaining_hits),
+    sourceMv: number(kind.source_mv),
+    discoverValue: number(kind.discover_value),
+    remainingCasts: number(kind.remaining_casts),
+    mvBudget: number(kind.remaining_mv_budget)
+  };
+}
+/** CR 715.3a: the creature face, or the Adventure half. */
+export function adventureFaceAction(creature: boolean): GameAction {
+  return { type: 'ChooseAdventureFace', data: { creature } };
+}
+/** CR 702.94a: cast the revealed card at the latched miracle cost. */
+export function castAsMiracleAction(objectId: ObjectId, cardId: number): GameAction {
   return {
     type: 'CastSpellAsMiracle',
     data: { object_id: objectId, card_id: cardId, payment_mode: { type: 'Auto' } }
   };
 }
-/** CR 702.94a: decline — the card stays unrevealed in hand and the offer is spent. */
-export function declineMiracleAction(): GameAction {
-  return { type: 'DecideOptionalEffect', data: { accept: false } };
+/** CR 702.35a: cast the exiled card at its madness cost. */
+export function castAsMadnessAction(objectId: ObjectId, cardId: number): GameAction {
+  return {
+    type: 'CastSpellAsMadness',
+    data: { object_id: objectId, card_id: cardId, payment_mode: { type: 'Auto' } }
+  };
+}
+/** Paradigm: cast a copy of one of the offered exiled sources. */
+export function castParadigmCopyAction(source: ObjectId): GameAction {
+  return { type: 'CastParadigmCopy', data: { source } };
+}
+/** Paradigm: pass the turn-based offer. */
+export function passParadigmOfferAction(): GameAction {
+  return { type: 'PassParadigmOffer', data: {} };
+}
+/** CR 702.85a / CR 701.57a / CR 702.60a / CR 609.4b: the shared cast-or-decline answer. */
+export function castOfferChoiceAction(shape: CastOfferShape, cast: boolean): GameAction {
+  const choice = cast ? 'Cast' : 'Decline';
+  const type =
+    shape === 'cascade'
+      ? 'CascadeChoice'
+      : shape === 'discover'
+        ? 'DiscoverChoice'
+        : shape === 'ripple'
+          ? 'RippleChoice'
+          : shape === 'graveyardPaid'
+            ? 'GraveyardPaidCastChoice'
+            : null;
+  // The other shapes answer with their own actions; asking here would be a bug.
+  if (!type) throw new Error(`CastOffer ${shape} has no cast/decline answer`);
+  return { type, data: { choice } };
+}
+/** CR 608.2c: cast one candidate of a free-cast window. */
+export function castFreeCandidateAction(selection: ObjectId): GameAction {
+  return { type: 'FreeCastWindowChoice', data: { selection } };
+}
+/** CR 608.2c: close the window with no further casts (`selection: null`). */
+export function finishFreeCastWindowAction(): GameAction {
+  return { type: 'FreeCastWindowChoice', data: { selection: null } };
 }
 
 /**

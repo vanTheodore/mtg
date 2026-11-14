@@ -61,10 +61,11 @@
   import VotePrompt from '#lib/components/VotePrompt.svelte';
   import ExploreChoicePrompt from '#lib/components/ExploreChoicePrompt.svelte';
   import MiracleRevealPrompt from '#lib/components/MiracleRevealPrompt.svelte';
+  import CastOfferPrompt from '#lib/components/CastOfferPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -127,6 +128,9 @@
     { value: 'pilePartition', label: 'Separar en dos montones' },
     { value: 'pileChoice', label: 'Elegir un montón' },
     { value: 'miracle', label: 'Milagro' },
+    { value: 'castOffer', label: 'Lanzar: milagro' },
+    { value: 'castOfferCascade', label: 'Lanzar: cascada' },
+    { value: 'castOfferWindow', label: 'Lanzar: ventana gratuita' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -191,6 +195,9 @@
     pilePartition: 'SeparatePilesPartition · CR 700.3a, dos montones',
     pileChoice: 'SeparatePilesChoice · CR 700.3, elegir lado',
     miracle: 'MiracleReveal · CR 702.94a, revelar o no',
+    castOffer: 'CastOffer · CR 608.2g, milagro',
+    castOfferCascade: 'CastOffer · CR 702.85a, cascada',
+    castOfferWindow: 'CastOffer · CR 608.2g, ventana de lanzamiento',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -385,6 +392,20 @@
     mana_cost: { type: 'Cost', shards: ['White', 'White'], generic: 4 },
     oracle_text: 'Put all creatures on the bottom of their owners\u2019 libraries.\nMiracle {W}'
   } as GameObject;
+  // CR 608.2g: the free-cast window (Invoke Calamity) offers instants and sorceries
+  // from the controller's graveyard. Two real cheap ones, in `objects` only.
+  const graveShock = {
+    id: 396, card_id: 396, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Shock', card_types: { core_types: ['Instant'] },
+    mana_cost: { type: 'Cost', shards: ['Red'], generic: 0 },
+    oracle_text: 'Shock deals 2 damage to any target.'
+  } as GameObject;
+  const graveGrowth = {
+    id: 397, card_id: 397, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Giant Growth', card_types: { core_types: ['Instant'] },
+    mana_cost: { type: 'Cost', shards: ['Green'], generic: 0 },
+    oracle_text: 'Target creature gets +3/+3 until end of turn.'
+  } as GameObject;
   // CR 101.4 + CR 701.38: the two ballot shapes. `Emissary Green` is the attack
   // trigger whose named vote the engine tests end to end (`emissary_green.rs`,
   // verbatim text); the object-pool shape carries the very clause the engine's own
@@ -541,7 +562,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -719,6 +740,50 @@
           player: 0,
           object_id: 395,
           cost: { type: 'Cost', shards: ['White'], generic: 0 }
+        }
+      };
+    }
+    if (scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow') {
+      // `CastOffer` (CR 608.2g) is one variant with nine shapes. The lab shows the
+      // three that ask different things: the miracle cast that follows the reveal,
+      // a cascade hit gated by the source's mana value, and a free-cast window with
+      // candidates and a budget. Only the fields this view reads are published.
+      if (scene === 'castOfferCascade') {
+        return {
+          type: 'CastOffer',
+          data: {
+            player: 0,
+            kind: {
+              type: 'Cascade',
+              hit_card: 300,
+              exiled_misses: [401, 403],
+              source_mv: 4,
+              source_id: 384
+            }
+          }
+        };
+      }
+      if (scene === 'castOfferWindow') {
+        return {
+          type: 'CastOffer',
+          data: {
+            player: 0,
+            kind: {
+              type: 'FreeCastWindow',
+              candidates: [396, 397],
+              remaining_casts: 2,
+              remaining_mv_budget: 4,
+              zones: ['Graveyard'],
+              member_pool: []
+            }
+          }
+        };
+      }
+      return {
+        type: 'CastOffer',
+        data: {
+          player: 0,
+          kind: { type: 'Miracle', object_id: 395, cost: { type: 'Cost', shards: ['White'], generic: 0 } }
         }
       };
     }
@@ -1340,6 +1405,7 @@
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
           : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' || scene === 'explore' || scene === 'exploreShared' || scene === 'pilePartition' || scene === 'pileChoice' ? 'PreCombatMain'
           : scene === 'miracle' ? 'Draw'
+          : scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1554,6 +1620,7 @@
         {#if scene === 'explore' || scene === 'exploreShared'}<ExploreChoicePrompt />{/if}
         {#if scene === 'pilePartition' || scene === 'pileChoice'}<SeparatePilesPrompt />{/if}
         {#if scene === 'miracle'}<MiracleRevealPrompt />{/if}
+        {#if scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow'}<CastOfferPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

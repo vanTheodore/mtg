@@ -157,6 +157,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'SeparatePilesPartition': return 'Separa en dos montones: el otro se queda con lo que dejes fuera.';
     case 'SeparatePilesChoice': return 'Elige un montón: el elegido recibe el efecto.';
     case 'MiracleReveal': return 'Revela la primera carta que robaste y lánzala por su coste de milagro, o déjala en la mano.';
+    case 'CastOffer': return 'Puedes lanzar esta carta durante la resolución: elige si la lanzas o qué haces con ella.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, revealMiracleAction, declineMiracleAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -589,11 +589,62 @@ class GameSession {
     // The engine matches the action against the offered object by `card_id`; a
     // card the viewer cannot see is not a card they can offer, so nothing is sent.
     if (!card || typeof card.card_id !== 'number') return;
-    void this.dispatch(revealMiracleAction(prompt.objectId, card.card_id));
+    void this.dispatch(castAsMiracleAction(prompt.objectId, card.card_id));
   }
   declineMiracle() {
     if (!this.miraclePrompt) return;
     void this.dispatch(declineMiracleAction());
+  }
+
+  /**
+   * CR 608.2g: the umbrella cast offer — nine shapes, one question. Each shape
+   * answers with its own action, so the block asks this getter which one it has
+   * instead of guessing from the card alone.
+   */
+  get castOfferPrompt() {
+    return readCastOffer(this.snapshot);
+  }
+  /** CR 715.3a: creature face (`true`) or Adventure half (`false`). */
+  chooseAdventureFace(creature: boolean) {
+    void this.dispatch(adventureFaceAction(creature));
+  }
+  /** The card the offer names, when it names exactly one. */
+  private offeredCard(): { id: ObjectId; cardId: number } | null {
+    const prompt = this.castOfferPrompt;
+    if (!prompt || prompt.objectId === null) return null;
+    const card = this.snapshot?.state.objects?.[String(prompt.objectId)];
+    if (!card || typeof card.card_id !== 'number') return null;
+    return { id: prompt.objectId, cardId: card.card_id };
+  }
+  /** CR 702.94a / CR 702.35a: cast the single offered card at its latched cost. */
+  castOfferedCard() {
+    const prompt = this.castOfferPrompt;
+    const card = this.offeredCard();
+    if (!prompt || !card) return;
+    if (prompt.shape === 'miracle') void this.dispatch(castAsMiracleAction(card.id, card.cardId));
+    else if (prompt.shape === 'madness') void this.dispatch(castAsMadnessAction(card.id, card.cardId));
+  }
+  /** CR 702.85a / CR 701.57a / CR 702.60a / CR 609.4b: cast or decline. */
+  answerCastOffer(cast: boolean) {
+    const prompt = this.castOfferPrompt;
+    if (!prompt) return;
+    const shapes: CastOfferShape[] = ['cascade', 'discover', 'ripple', 'graveyardPaid'];
+    if (!shapes.includes(prompt.shape)) return;
+    void this.dispatch(castOfferChoiceAction(prompt.shape, cast));
+  }
+  /** Paradigm: cast a copy of one of the offered exiled sources. */
+  castParadigmCopy(source: ObjectId) {
+    void this.dispatch(castParadigmCopyAction(source));
+  }
+  passParadigmOffer() {
+    void this.dispatch(passParadigmOfferAction());
+  }
+  /** CR 608.2c: cast one candidate of the window, or close it with no cast. */
+  castFreeCandidate(selection: ObjectId) {
+    void this.dispatch(castFreeCandidateAction(selection));
+  }
+  finishFreeCastWindow() {
+    void this.dispatch(finishFreeCastWindowAction());
   }
 
   /** CR 115.7: repointing a spell (or ability) that is already on the stack. */

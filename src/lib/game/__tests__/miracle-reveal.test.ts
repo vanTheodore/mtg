@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { declineMiracleAction, miraclePrompt, revealMiracleAction } from '../interaction';
+import { castAsMiracleAction, declineMiracleAction, miraclePrompt } from '../interaction';
 import type { EngineSnapshot } from '../../engine/types';
 
 /**
@@ -78,7 +78,7 @@ test('other prompts are not this block', () => {
 });
 
 test('accepting reveals the card: object, card and an automatic payment mode', () => {
-  const action = revealMiracleAction(395, 395);
+  const action = castAsMiracleAction(395, 395);
   expect(action.type).toBe('CastSpellAsMiracle');
   expect(action.data).toEqual({
     object_id: 395,
@@ -86,7 +86,7 @@ test('accepting reveals the card: object, card and an automatic payment mode', (
     payment_mode: { type: 'Auto' }
   });
   // The object and the card are separate identities and both travel.
-  expect(revealMiracleAction(700, 12).data).toMatchObject({ object_id: 700, card_id: 12 });
+  expect(castAsMiracleAction(700, 12).data).toMatchObject({ object_id: 700, card_id: 12 });
 });
 
 test('declining reuses the generic optional decline', () => {

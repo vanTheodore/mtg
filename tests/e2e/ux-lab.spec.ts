@@ -1142,6 +1142,59 @@ test('milagro: la primera carta del turno se revela, y revelarla no la lanza', a
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('lanzar: la oferta de milagro es el lanzamiento, no la revelación', async ({ page }) => {
+  await page.goto('/ux?scene=castOffer');
+  const block = page.locator('[data-cast-offer]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-cast-shape', 'miracle');
+  await expect(block.locator('[data-cast-subject]')).toHaveText('Terminus');
+  // CR 702.94a: the latched cost is the one the offer carries.
+  await expect(block.locator('[data-cast-rule]')).toContainText('CR 702.94a');
+  await expect(block.locator('[data-cast-cost]')).toHaveText('Coste de milagro: {W}');
+  await expect(block.locator('button.primary')).toHaveText('Lanzarla por {W}');
+  // Declining here is not the reveal's decline: the trigger is already spent.
+  await expect(block.locator('button.ghost')).toHaveText('Dejarla en la mano');
+  await expect(block.locator('[data-cast-decline-hint]')).toContainText('el disparo de milagro se gasta');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('lanzar: en cascada, el declinar manda la carta y las falladas al fondo', async ({ page }) => {
+  await page.goto('/ux?scene=castOfferCascade');
+  const block = page.locator('[data-cast-offer]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-cast-shape', 'cascade');
+  await expect(block.locator('[data-cast-subject]')).toHaveText('Lightning Bolt');
+  // CR 702.85a: the gate is the source's mana value, published by the engine.
+  await expect(block.locator('[data-cast-gate]')).toHaveText('El hechizo que la provoca tiene valor de maná 4.');
+  await expect(block.locator('button.primary')).toHaveText('Lanzarla sin pagar');
+  await expect(block.locator('button.ghost')).toHaveText('Al fondo de la biblioteca');
+  await expect(block.locator('[data-cast-decline-hint]')).toContainText(
+    'Al declinar, Lightning Bolt y las 2 cartas exiliadas van al fondo en orden aleatorio: 3 en total'
+  );
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('lanzar: la ventana gratuita lista candidatas, su presupuesto y cómo cerrarla', async ({ page }) => {
+  await page.goto('/ux?scene=castOfferWindow');
+  const block = page.locator('[data-cast-offer]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-cast-shape', 'freeWindow');
+  await expect(block.locator('[data-cast-subject]')).toHaveText('Ventana de lanzamiento gratuito');
+  // CR 608.2c: the window publishes both bounds, and they are read apart.
+  await expect(block.locator('[data-cast-budget]')).toHaveText('Quedan 2 lanzamientos · 4 de valor de maná disponibles.');
+  await expect(block.locator('[data-cast-candidate="396"]')).toHaveText('Lanzar Shock sin pagar');
+  await expect(block.locator('[data-cast-candidate="397"]')).toHaveText('Lanzar Giant Growth sin pagar');
+  // Closing the window is the decline, and it says what it does.
+  await expect(block.locator('button.ghost')).toHaveText('Terminar la ventana');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

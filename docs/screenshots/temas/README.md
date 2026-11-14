@@ -59,6 +59,9 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `pilePartition` | `SeparatePilesPartition` | [claro](separar-montones-claro.jpg) | [oscuro](separar-montones-oscuro.jpg) |
 | `pileChoice` | `SeparatePilesChoice` | [claro](elegir-monton-claro.jpg) | [oscuro](elegir-monton-oscuro.jpg) |
 | `miracle` | `MiracleReveal` | [claro](milagro-claro.jpg) | [oscuro](milagro-oscuro.jpg) |
+| `castOffer` | `CastOffer` (milagro) | [claro](lanzar-milagro-claro.jpg) | [oscuro](lanzar-milagro-oscuro.jpg) |
+| `castOfferCascade` | `CastOffer` (cascada) | [claro](lanzar-cascada-claro.jpg) | [oscuro](lanzar-cascada-oscuro.jpg) |
+| `castOfferWindow` | `CastOffer` (ventana gratuita) | [claro](lanzar-ventana-claro.jpg) | [oscuro](lanzar-ventana-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 
