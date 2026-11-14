@@ -60,9 +60,10 @@
   import CopyRetargetPrompt from '#lib/components/CopyRetargetPrompt.svelte';
   import VotePrompt from '#lib/components/VotePrompt.svelte';
   import ExploreChoicePrompt from '#lib/components/ExploreChoicePrompt.svelte';
+  import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -122,6 +123,8 @@
     { value: 'voteObject', label: 'Votación sobre permanentes' },
     { value: 'explore', label: 'Quién explora' },
     { value: 'exploreShared', label: 'Explorar entre dos jugadores' },
+    { value: 'pilePartition', label: 'Separar en dos montones' },
+    { value: 'pileChoice', label: 'Elegir un montón' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -183,6 +186,8 @@
     voteObject: 'VoteChoice · CR 701.38b, voto sobre objetos',
     explore: 'ExploreChoice · CR 701.44d, el orden lo eliges tú',
     exploreShared: 'ExploreChoice · CR 101.4, cada jugador ordena los suyos',
+    pilePartition: 'SeparatePilesPartition · CR 700.3a, dos montones',
+    pileChoice: 'SeparatePilesChoice · CR 700.3, elegir lado',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -658,6 +663,37 @@
           source_id: 0,
           choosable: shared ? [390, 391] : [390, 391, 392],
           remaining: shared ? [390, 391, 393, 394] : [390, 391, 392]
+        }
+      };
+    }
+    if (scene === 'pilePartition' || scene === 'pileChoice') {
+      // `SeparateIntoPiles` (CR 700.3) is three prompts in a row; the lab shows the
+      // two a two-player game can reach. The viewer splits their own creatures for
+      // a rival's effect (the stage-2 shape), and then picks a side for the rival's
+      // piles (the stage-3 shape). The stage-1 prompt — who partitions — only
+      // exists with three or more players, so it has no scene here rather than an
+      // invented one. `pile_source` is the battlefield shape (CR 700.3), which is
+      // what the shape's own docs call the Make an Example case.
+      if (scene === 'pileChoice') {
+        return {
+          type: 'SeparatePilesChoice',
+          data: {
+            player: 0,
+            pending: [],
+            current: { subject: 1, pile_a: [200], pile_b: [201] },
+            pile_source: { type: 'Battlefield' }
+          }
+        };
+      }
+      return {
+        type: 'SeparatePilesPartition',
+        data: {
+          player: 0,
+          eligible: [100, 101, 105],
+          remaining_subjects: [],
+          completed: [],
+          chooser: 1,
+          pile_source: { type: 'Battlefield' }
         }
       };
     }
@@ -1277,7 +1313,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' || scene === 'explore' || scene === 'exploreShared' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' || scene === 'explore' || scene === 'exploreShared' || scene === 'pilePartition' || scene === 'pileChoice' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1490,6 +1526,7 @@
         {#if scene === 'copyRetarget' || scene === 'copyAnnounce'}<CopyRetargetPrompt />{/if}
         {#if scene === 'vote' || scene === 'voteObject'}<VotePrompt />{/if}
         {#if scene === 'explore' || scene === 'exploreShared'}<ExploreChoicePrompt />{/if}
+        {#if scene === 'pilePartition' || scene === 'pileChoice'}<SeparatePilesPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

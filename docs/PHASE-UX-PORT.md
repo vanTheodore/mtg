@@ -1986,3 +1986,55 @@ acción del motor); build OK; y en Chromium dos pruebas nuevas —la forma propi
 cola y su CR 701.44a enunciado; y la compartida, con la diferencia entre los listados y
 los nombres desempatados por controlador— más las dos escenas en la prueba de temas
 (que subió su presupuesto a 480 s al llegar a 44 escenas).
+
+## Separar en dos montones es un flujo de tres etapas (cuadragésima tercera pasada, 7 nov 2026)
+
+`SeparatePilesChooseOpponent`, `SeparatePilesPartition` y `SeparatePilesChoice` son
+**una sola sesión** de `WaitingFor`, no tres pantallas sueltas: el motor pregunta quién
+separa, luego espera el reparto de esa persona y por último pide a cada afectado que se
+quede con un montón. Portarlas por separado habría dejado tres ventanas que nunca se
+ven juntas; se portaron como un bloque con tres etapas, que es como llegan.
+
+**La etapa de elegir rival sólo existe con más de un oponente.** `ChooseOpponent`
+enumera a los rivales (`remaining_subjects` mientras quedan, `current` el que separa) y
+con un único rival el motor **no pregunta**: pasa directo al reparto. Por eso el
+laboratorio no inventa esa escena —no hay forma de alcanzarla con dos jugadores— y el
+componente la pinta sólo cuando el payload la trae.
+
+**Sólo se envía el montón A (CR 700.3a).** `SubmitPilePartition` lleva `pile_a` y el
+motor deriva B con lo que no se nombró; el botón lo dice así —«Separar en dos montones
+(n y m)»— y el resumen de la ventana cuenta las dos mitades antes de confirmar. Un
+montón vacío es legal (CR 700.3d): dejar todo de un lado no es un error, así que la
+acción se etiqueta «Dejar todo en el montón B» en vez de deshabilitarse.
+
+**La elección final es de quien no separó.** `SeparatePilesChoice` reparte `pending`
+(los que aún eligen) y `current` (el que elige ahora, con sus dos montones ya fijos); el
+actor es ese jugador, no el que separó, y el bloque lo rotula con su nombre. `ChoosePile`
+manda `{ pile: { type: 'A' | 'B' } }` —tipo, no índice— porque los montones no están
+ordenados en el payload.
+
+**El origen decide el sustantivo.** `PileSource` dice de dónde salen las cartas:
+`Battlefield` (por defecto si el campo no viene) ⇒ «permanentes», y
+`RevealedFromLibraryTop`/`ExiledThisWay` ⇒ «cartas». La ventana usa esa palabra en su
+primera frase en vez de llamar permanentes a lo que no lo es.
+
+Objetos del laboratorio: en el reparto, tres permanentes del propio jugador 1 (`Grizzly
+Bears`, `Savannah Lions`, `Elvish Mystic`, con sus datos reales de
+`data/mtgjson/10E.es.json`); en la elección, dos permanentes del rival —#200 y #201— para
+que los dos montones se lean como del jugador 2 (`CR 700.3`), separados por `· #id` al
+ser homónimos.
+
+Laboratorio: `/ux?scene=pilePartition` y `/ux?scene=pileChoice`, capturas
+`docs/screenshots/ux-separar-montones-1440.jpg` y `docs/screenshots/ux-elegir-monton-1440.jpg`,
+más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **533** (9 nuevas en
+`game/__tests__/separate-piles.test.ts`: las tres etapas, el reparto sin `pile_a`, el
+montón vacío que sigue siendo acción válida, la elección con `type` y no índice, `pending`
+sin sujeto podado frente al sujeto con dos montones vacíos, el actor por defecto en el
+asiento del espectador y en `current`, y la acción exacta de cada etapa); build OK; y en
+Chromium dos pruebas nuevas —el reparto con su resumen y su «Dejar todo en el montón B»,
+y la elección con los dos montones del rival— más las dos escenas en la prueba de temas
+(que sigue en 480 s de presupuesto al llegar a 46 escenas).

@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -222,6 +222,7 @@ class GameSession {
     this.splitAmount = {};
     this.movePick = {};
     this.removePick = {};
+    this.pilePick = [];
     this.retargetPick = {};
     this.choosePick = [];
     this.proliferatePick = [];
@@ -531,6 +532,45 @@ class GameSession {
   }
   chooseExplorer(id: ObjectId) {
     void this.dispatch(exploreAction(id));
+  }
+
+  /**
+   * CR 700.3: the two-pile flow. Stage 1 and 3 are one answer each, but stage 2 is
+   * a **draft** — the subject builds pile A before submitting it — so this is the
+   * one part of the family that needs local state, cleared with the others.
+   */
+  get separatePilesPrompt() {
+    return readSeparatePiles(this.snapshot);
+  }
+  /** Pile A under construction; pile B is whatever stays out (CR 700.3a). */
+  pilePick = $state<ObjectId[]>([]);
+  pileIsPicked(id: ObjectId): boolean {
+    return this.pilePick.includes(id);
+  }
+  togglePileCard(id: ObjectId) {
+    const prompt = this.separatePilesPrompt;
+    if (!prompt || prompt.stage !== 'partition' || !prompt.eligible.includes(id)) return;
+    this.pilePick = this.pilePick.includes(id)
+      ? this.pilePick.filter((entry) => entry !== id)
+      : [...this.pilePick, id];
+  }
+  /** CR 700.3d: either pile may be empty, so an empty pile A is a legal answer. */
+  get pileReady(): boolean {
+    return this.separatePilesPrompt?.stage === 'partition';
+  }
+  confirmPilePartition() {
+    if (!this.pileReady) return;
+    const pileA = this.pilePick;
+    this.pilePick = [];
+    void this.dispatch(submitPilePartitionAction(pileA));
+  }
+  /** CR 700.3: the multi-player stage — who partitions. */
+  choosePileOpponent(player: PlayerId) {
+    void this.dispatch(choosePileOpponentAction(player));
+  }
+  /** CR 700.3: the chooser picks a side; the engine then asks for the next subject. */
+  choosePile(side: PileSide) {
+    void this.dispatch(choosePileAction(side));
   }
 
   /** CR 115.7: repointing a spell (or ability) that is already on the stack. */
@@ -1375,6 +1415,7 @@ class GameSession {
       this.splitAmount = {};
       this.movePick = {};
       this.removePick = {};
+      this.pilePick = [];
       this.retargetPick = {};
       this.choosePick = [];
       this.proliferatePick = [];

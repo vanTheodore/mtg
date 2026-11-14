@@ -1060,6 +1060,65 @@ test('explorar entre dos jugadores: la cola es más larga que lo que puedes eleg
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('separar en dos montones: sólo se elige el A, y el B es lo que queda', async ({ page }) => {
+  await page.goto('/ux?scene=pilePartition');
+  const block = page.locator('[data-separate-piles]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pile-stage', 'partition');
+  // CR 700.3: the pool is named by the engine's own pile_source.
+  await expect(block).toContainText('Son permanentes del campo de batalla (CR 700.3).');
+  await expect(block.locator('[data-pile-chooser]')).toHaveText(
+    'Después elige un montón el Jugador 2 (CR 700.3).'
+  );
+  // CR 700.3d: an empty pile A is a real answer and the button says what it does.
+  await expect(block.locator('[data-pile-piles]')).toHaveText(
+    'Montón A: nada · Montón B: Grizzly Bears · Savannah Lions · Elvish Mystic'
+  );
+  await expect(block.locator('button.primary')).toHaveText('Dejar todo en el montón B');
+
+  await block.locator('[data-pile-object="101"]').click();
+  await expect(block.locator('[data-pile-object="101"]')).toHaveAttribute('data-pile-picked', 'true');
+  // CR 700.3a: pile B is derived, never chosen.
+  await expect(block.locator('[data-pile-piles]')).toHaveText(
+    'Montón A: Savannah Lions · Montón B: Grizzly Bears · Elvish Mystic'
+  );
+  await expect(block.locator('button.primary')).toHaveText('Separar en dos montones (1 y 2)');
+
+  await block.locator('[data-pile-object="100"]').click();
+  await block.locator('[data-pile-object="105"]').click();
+  await expect(block.locator('button.primary')).toHaveText('Dejar todo en el montón A');
+
+  // Untoggling puts it back in B.
+  await block.locator('[data-pile-object="100"]').click();
+  await expect(block.locator('[data-pile-piles]')).toHaveText(
+    'Montón A: Savannah Lions · Elvish Mystic · Montón B: Grizzly Bears'
+  );
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('elegir un montón: el que se queda con el efecto, con lo que hay en cada uno', async ({ page }) => {
+  await page.goto('/ux?scene=pileChoice');
+  const block = page.locator('[data-separate-piles]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pile-stage', 'choice');
+  // CR 700.3: the chooser is told whose partition it is.
+  await expect(block.locator('[data-pile-subject]')).toHaveText('Separó el Jugador 2.');
+  await expect(block.locator('[data-pile-side="A"]')).toContainText('Montón A · 1');
+  await expect(block.locator('[data-pile-side="B"]')).toContainText('Montón B · 1');
+  // Two candidates with the same name: the id is what separates the piles.
+  await expect(block.locator('[data-pile-side="A"]')).toContainText('Grizzly Bears (Jugador 2) · #200');
+  await expect(block.locator('[data-pile-side="B"]')).toContainText('Grizzly Bears (Jugador 2) · #201');
+  // One subject only, so there is no queue to announce.
+  await expect(block.locator('[data-pile-more]')).toHaveCount(0);
+  // The partition stage's controls have no business here.
+  await expect(block.locator('[data-pile-object]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

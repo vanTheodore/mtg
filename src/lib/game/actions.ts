@@ -153,6 +153,9 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'CopyRetarget': return 'Elige los objetivos de una copia: cada ranura, una respuesta; las demás pueden quedarse.';
     case 'VoteChoice': return 'Emite tu voto: el recuento se aplica cuando hayan votado todos.';
     case 'ExploreChoice': return 'Elige qué permanente explora ahora: el orden lo decides tú.';
+    case 'SeparatePilesChooseOpponent': return 'Elige qué oponente separa los objetos en dos montones.';
+    case 'SeparatePilesPartition': return 'Separa en dos montones: el otro se queda con lo que dejes fuera.';
+    case 'SeparatePilesChoice': return 'Elige un montón: el elegido recibe el efecto.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

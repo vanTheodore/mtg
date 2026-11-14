@@ -1038,6 +1038,106 @@ export function moveCountersAction(selections: CounterMoveSelection[]): GameActi
 }
 
 /**
+ * CR 700.3: "separate into two piles, then an opponent chooses one" — the two-pile
+ * primitive behind Make an Example and Fact or Fiction. The engine runs it as three
+ * stages, and the block is the same block in all three because it is one flow:
+ *
+ *   1. **opponent** (`SeparatePilesChooseOpponent`) — who partitions. Only exists
+ *      with three or more players: with a single opponent the engine skips it, so
+ *      this stage is never seen in a two-player game.
+ *   2. **partition** (`SeparatePilesPartition`) — the subject splits their own
+ *      objects. Submitting `pile_a` is enough: pile B is derived by the engine as
+ *      `eligible \ pile_a` (CR 700.3a), and an empty pile A is legal (CR 700.3d),
+ *      which also makes an empty pile B legal.
+ *   3. **choice** (`SeparatePilesChoice`) — the chooser picks A or B, one subject at
+ *      a time (CR 101.4c).
+ *
+ * `pile_source` says where the objects come from — the battlefield (Make an
+ * Example), the top of the library (Fact or Fiction) or an earlier exile (Boneyard
+ * Parley) — so the block can say "permanentes" or "cartas" without guessing.
+ */
+export type PileSourceKind = 'battlefield' | 'library' | 'exile';
+export type PileStage = 'opponent' | 'partition' | 'choice';
+export type PileSide = 'A' | 'B';
+export type PileResultView = { subject: PlayerId; pileA: ObjectId[]; pileB: ObjectId[] };
+export type SeparatePilesPrompt = {
+  stage: PileStage;
+  /** The player answering this stage. */
+  player: PlayerId;
+  sourceId: ObjectId;
+  /** CR 700.3: who picks a pile once the partition is in. */
+  chooser: PlayerId | null;
+  pileSource: PileSourceKind;
+  /** `RevealedFromLibraryTop { count }` when the cards come from the library. */
+  libraryCount: number | null;
+  /** Stage 1: seats that may partition. */
+  candidates: PlayerId[];
+  /** Stage 2: objects this subject must split. */
+  eligible: ObjectId[];
+  /** Stage 2: who is still to partition, in APNAP order, with their own pool. */
+  remainingSubjects: { player: PlayerId; eligible: ObjectId[] }[];
+  /** Stage 3: the piles awaiting a choice, `current` first. */
+  current: PileResultView | null;
+  pending: PileResultView[];
+};
+export function separatePilesPrompt(snapshot: EngineSnapshot | null): SeparatePilesPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  const type = waiting?.type;
+  if (type !== 'SeparatePilesChooseOpponent' && type !== 'SeparatePilesPartition' && type !== 'SeparatePilesChoice') {
+    return null;
+  }
+  const data = waiting!.data ?? {};
+  const ids = (value: unknown): ObjectId[] =>
+    Array.isArray(value) ? (value as unknown[]).filter((id): id is ObjectId => typeof id === 'number') : [];
+  const pile = (value: unknown): PileResultView | null => {
+    if (!value || typeof value !== 'object') return null;
+    const entry = value as Record<string, unknown>;
+    if (typeof entry.subject !== 'number') return null;
+    return { subject: entry.subject, pileA: ids(entry.pile_a), pileB: ids(entry.pile_b) };
+  };
+  const piles = (value: unknown): PileResultView[] =>
+    Array.isArray(value) ? (value as unknown[]).map(pile).filter((entry): entry is PileResultView => entry !== null) : [];
+  const rawSource = data.pile_source as Record<string, unknown> | undefined;
+  const sourceKind = rawSource?.type;
+  const pileSource: PileSourceKind =
+    sourceKind === 'RevealedFromLibraryTop' ? 'library' : sourceKind === 'ExiledThisWay' ? 'exile' : 'battlefield';
+  const libraryData = rawSource?.data as Record<string, unknown> | undefined;
+  return {
+    stage:
+      type === 'SeparatePilesChooseOpponent' ? 'opponent' : type === 'SeparatePilesPartition' ? 'partition' : 'choice',
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
+    chooser: typeof data.chooser === 'number' ? data.chooser : null,
+    pileSource,
+    libraryCount: typeof libraryData?.count === 'number' ? (libraryData.count as number) : null,
+    candidates: ids(data.candidates),
+    eligible: ids(data.eligible),
+    remainingSubjects: Array.isArray(data.remaining_subjects)
+      ? (data.remaining_subjects as unknown[])
+          .map((entry) => {
+            if (!Array.isArray(entry) || typeof entry[0] !== 'number') return null;
+            return { player: entry[0] as PlayerId, eligible: ids(entry[1]) };
+          })
+          .filter((entry): entry is { player: PlayerId; eligible: ObjectId[] } => entry !== null)
+      : [],
+    current: pile(data.current),
+    pending: piles(data.pending)
+  };
+}
+/** CR 700.3: which opponent performs the partition (multiplayer only). */
+export function choosePileOpponentAction(opponent: PlayerId): GameAction {
+  return { type: 'ChoosePileOpponent', data: { opponent } };
+}
+/** CR 700.3a: pile A; the engine derives pile B as the rest of the pool. */
+export function submitPilePartitionAction(pileA: ObjectId[]): GameAction {
+  return { type: 'SubmitPilePartition', data: { pile_a: [...pileA] } };
+}
+/** CR 700.3: the chooser's pick, typed on the wire as `{"type":"A"}`. */
+export function choosePileAction(side: PileSide): GameAction {
+  return { type: 'ChoosePile', data: { pile: { type: side } } };
+}
+
+/**
  * CR 701.44d: several permanents explore at the same time, so the player who
  * controls them chooses **the order** — one explorer per step. The engine asks
  * with the ones this player may pick (`choosable`) and the whole queue

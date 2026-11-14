@@ -77,7 +77,9 @@ const SCENES = [
   { scene: 'vote', slug: 'votacion', block: '[data-vote]' },
   { scene: 'voteObject', slug: 'votacion-objetos', block: '[data-vote]' },
   { scene: 'explore', slug: 'quien-explora', block: '[data-explore]' },
-  { scene: 'exploreShared', slug: 'explorar-dos-jugadores', block: '[data-explore]' }
+  { scene: 'exploreShared', slug: 'explorar-dos-jugadores', block: '[data-explore]' },
+  { scene: 'pilePartition', slug: 'separar-montones', block: '[data-separate-piles]' },
+  { scene: 'pileChoice', slug: 'elegir-monton', block: '[data-separate-piles]' }
 ] as const;
 
 const THEMES = [

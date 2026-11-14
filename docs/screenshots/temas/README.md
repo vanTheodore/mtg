@@ -56,6 +56,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `voteObject` | `VoteChoice` (objetos) | [claro](votacion-objetos-claro.jpg) | [oscuro](votacion-objetos-oscuro.jpg) |
 | `explore` | `ExploreChoice` (el orden) | [claro](quien-explora-claro.jpg) | [oscuro](quien-explora-oscuro.jpg) |
 | `exploreShared` | `ExploreChoice` (dos jugadores) | [claro](explorar-dos-jugadores-claro.jpg) | [oscuro](explorar-dos-jugadores-oscuro.jpg) |
+| `pilePartition` | `SeparatePilesPartition` | [claro](separar-montones-claro.jpg) | [oscuro](separar-montones-oscuro.jpg) |
+| `pileChoice` | `SeparatePilesChoice` | [claro](elegir-monton-claro.jpg) | [oscuro](elegir-monton-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 
