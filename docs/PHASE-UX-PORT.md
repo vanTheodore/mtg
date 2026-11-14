@@ -2038,3 +2038,52 @@ asiento del espectador y en `current`, y la acción exacta de cada etapa); build
 Chromium dos pruebas nuevas —el reparto con su resumen y su «Dejar todo en el montón B»,
 y la elección con los dos montones del rival— más las dos escenas en la prueba de temas
 (que sigue en 480 s de presupuesto al llegar a 46 escenas).
+
+## Revelar no es lanzar: el milagro es una oferta, no un hechizo (cuadragésima cuarta pasada, 7 nov 2026)
+
+`MiracleReveal` (CR 702.94a) parece un «¿quieres lanzar esta carta?» y no lo es. La
+primera carta que un jugador roba en un turno puede llevar `Miracle`, y Phase ofrece
+**revelarla**: el motor emite el evento de revelado, pone en la pila la habilidad
+disparada —«cuando reveles esta carta de esta manera, puedes lanzarla pagando [coste de
+milagro]»— y **vuelve a la prioridad**. La mesa entera puede responder antes de que el
+hechizo se lance, así que la ventana dice que revelar todavía no lanza nada (CR 608.2g) y
+el botón no promete un lanzamiento que aún no ha ocurrido.
+
+**El coste llega fijado y no se relee.** `cost` viene en la propia oferta porque la fuente
+que concedió milagro puede haber abandonado el campo de batalla antes de que la oferta se
+resuelva, y el motor no vuelve a leerla (CR 608.2b). Por eso el bloque muestra las dos
+cifras cuando las tiene —coste de milagro y coste impreso— en vez de deducir una de la
+otra. Cuando el motor publica un coste que no son símbolos (`NoCost`, `SelfManaCost`…), el
+bloque lo dice con palabras: «Phase no publica el coste de milagro de esta oferta».
+
+**Las dos respuestas no son la misma forma.** Revelar manda
+`CastSpellAsMiracle { object_id, card_id, payment_mode }` —el objeto y la carta viajan
+separados, y el motor rechaza la acción si el `object_id` no es el de la oferta—; declinar
+reutiliza el `DecideOptionalEffect { accept: false }` genérico. Cualquiera de las dos
+consume la oferta: milagro sólo mira la primera carta que robas en el turno, así que no
+hay nada que recordar entre ofertas.
+
+**El cast sigue siendo otra variante.** Una vez resuelta la habilidad de milagro, el motor
+pregunta con `CastOffer { kind: Miracle }`, que es la variante que comparte con locura,
+cascada y descubrir y que todavía no tiene vista propia en Mesa. La ventana de esta pasada
+llega hasta donde llega el prompt que representa; la siguiente candidata natural es ese
+`CastOffer`.
+
+Objetos del laboratorio: `Terminus`, con su texto impreso y su `Miracle {W}`, en la mano
+del jugador 1 (objeto propio, fuera de la fila de la mano para no mover los recuentos que
+el resto del laboratorio comprueba). La escena se dibuja en la fase de robo, que es donde
+la oferta existe.
+
+Laboratorio: `/ux?scene=miracle`, captura `docs/screenshots/ux-milagro-1440.jpg`, más sus
+pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **540** (7 nuevas en
+`game/__tests__/miracle-reveal.test.ts`: el objeto y el coste fijado, la oferta sin carta
+que no es oferta, el coste ausente que no se inventa, el asiento del espectador como valor
+por defecto, los otros prompts que no son este bloque, la acción de revelar con objeto y
+carta separados y `payment_mode` automático, y la negativa genérica); build OK; en
+Chromium una prueba nueva —la primera carta del turno, sus dos costes y la frase que
+distingue revelar de lanzar— más su escena en la prueba de temas (46 → 47 escenas, 97 jpg,
+presupuesto de 500 s).

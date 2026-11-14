@@ -68,7 +68,7 @@ principio a fin». Esta tabla mantiene la distinción:
 | Vista ampliada, tamaño/densidad/tema | Sí | Sí (a11y y anchos 320–1440) |
 | Constructor: buscar, cantidades, guardar, importar lista | Sí | **Sí**: `tests/e2e/deck-builder.spec.ts` en Chromium con motor disponible |
 | Jugar un mazo propio y leer cartas cargadas por el motor | Sí | **Sí**: prueba de constructor → partida con cartas del pack real |
-| Líneas de objetivo, pila y combate; pilas de zona con visor | Sí | **Parcial**: `ux-lab.spec.ts` (68 pruebas, con axe) y `ux-themes.spec.ts` (los dos temas) lo verifica en Chromium sobre el fixture `/ux` sin motor; en partida real lo mide el CI con el WASM del pin |
+| Líneas de objetivo, pila y combate; pilas de zona con visor | Sí | **Parcial**: `ux-lab.spec.ts` (69 pruebas, con axe) y `ux-themes.spec.ts` (los dos temas) lo verifica en Chromium sobre el fixture `/ux` sin motor; en partida real lo mide el CI con el WASM del pin |
 
 Sobre el bloqueo, en tres niveles distintos:
 

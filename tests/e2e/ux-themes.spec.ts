@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 // (dos capturas y dos auditorías por escena), así que su presupuesto es el del
 // recorrido entero y crece con el catálogo; el límite del proyecto es para un test
 // corto. Cuando la lista crezca otra vez, este número es el que hay que mirar.
-test.describe.configure({ timeout: 480_000 });
+test.describe.configure({ timeout: 500_000 });
 
 const shotsDir = fileURLToPath(new URL('../../docs/screenshots/temas/', import.meta.url));
 
@@ -79,7 +79,8 @@ const SCENES = [
   { scene: 'explore', slug: 'quien-explora', block: '[data-explore]' },
   { scene: 'exploreShared', slug: 'explorar-dos-jugadores', block: '[data-explore]' },
   { scene: 'pilePartition', slug: 'separar-montones', block: '[data-separate-piles]' },
-  { scene: 'pileChoice', slug: 'elegir-monton', block: '[data-separate-piles]' }
+  { scene: 'pileChoice', slug: 'elegir-monton', block: '[data-separate-piles]' },
+  { scene: 'miracle', slug: 'milagro', block: '[data-miracle]' }
 ] as const;
 
 const THEMES = [

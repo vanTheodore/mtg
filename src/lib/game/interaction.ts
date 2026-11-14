@@ -1138,6 +1138,56 @@ export function choosePileAction(side: PileSide): GameAction {
 }
 
 /**
+ * CR 702.94a: miracle — the first card a player draws in a turn can carry a
+ * `Miracle` keyword, and the engine then offers them a reveal as a **binary**
+ * offer, not a cast: accepting emits the reveal and puts the miracle triggered
+ * ability on the stack ("When you reveal this card this way, you may cast it for
+ * [miracle cost]"), so opponents still get priority before anything is cast.
+ *
+ * The cost comes latched in the prompt (`cost`), because the granting source may
+ * have left the battlefield by the time the offer resolves (CR 608.2b); it is not
+ * re-read from the card. Losing the offer — declining, or the reveal being
+ * impossible — consumes it either way, so nothing is remembered here.
+ */
+export type MiraclePrompt = {
+  /** The player who drew the card and answers the offer. */
+  player: PlayerId;
+  /** The drawn card, still in hand until it is revealed. */
+  objectId: ObjectId;
+  /** CR 702.94a: the miracle cost, as the offer latched it. */
+  cost?: unknown;
+};
+export function miraclePrompt(snapshot: EngineSnapshot | null): MiraclePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'MiracleReveal') return null;
+  const data = waiting.data ?? {};
+  // A reveal that names no card has nothing to reveal, and the engine rejects a
+  // cast that does not name the offered object, so there is no answer to offer.
+  if (typeof data.object_id !== 'number') return null;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: data.object_id as ObjectId,
+    cost: data.cost
+  };
+}
+/**
+ * CR 702.94a: accept — reveal the card and put the miracle trigger on the stack.
+ * This is not the cast: the cast arrives later as its own `CastOffer` once the
+ * trigger resolves (CR 608.2g). The engine identifies the card by object and by
+ * `card_id`, so both travel.
+ */
+export function revealMiracleAction(objectId: ObjectId, cardId: number): GameAction {
+  return {
+    type: 'CastSpellAsMiracle',
+    data: { object_id: objectId, card_id: cardId, payment_mode: { type: 'Auto' } }
+  };
+}
+/** CR 702.94a: decline — the card stays unrevealed in hand and the offer is spent. */
+export function declineMiracleAction(): GameAction {
+  return { type: 'DecideOptionalEffect', data: { accept: false } };
+}
+
+/**
  * CR 701.44d: several permanents explore at the same time, so the player who
  * controls them chooses **the order** — one explorer per step. The engine asks
  * with the ones this player may pick (`choosable`) and the whole queue

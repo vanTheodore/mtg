@@ -60,10 +60,11 @@
   import CopyRetargetPrompt from '#lib/components/CopyRetargetPrompt.svelte';
   import VotePrompt from '#lib/components/VotePrompt.svelte';
   import ExploreChoicePrompt from '#lib/components/ExploreChoicePrompt.svelte';
+  import MiracleRevealPrompt from '#lib/components/MiracleRevealPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -125,6 +126,7 @@
     { value: 'exploreShared', label: 'Explorar entre dos jugadores' },
     { value: 'pilePartition', label: 'Separar en dos montones' },
     { value: 'pileChoice', label: 'Elegir un montón' },
+    { value: 'miracle', label: 'Milagro' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -188,6 +190,7 @@
     exploreShared: 'ExploreChoice · CR 101.4, cada jugador ordena los suyos',
     pilePartition: 'SeparatePilesPartition · CR 700.3a, dos montones',
     pileChoice: 'SeparatePilesChoice · CR 700.3, elegir lado',
+    miracle: 'MiracleReveal · CR 702.94a, revelar o no',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -372,6 +375,16 @@
     name: 'Rootwater Commando', card_types: { core_types: ['Creature'], subtypes: ['Merfolk'] },
     power: 2, toughness: 2
   } as GameObject;
+  // CR 702.94a: the first card drawn in a turn with miracle. `Terminus` is the
+  // printed wording the keyword asks for — the reveal offer names the card while it
+  // is still in hand, and the miracle cost ({W}) is not its mana cost ({4}{W}{W}).
+  // It lives only in `objects`, like the other prompt-only cards.
+  const terminus = {
+    id: 395, card_id: 395, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Terminus', card_types: { core_types: ['Sorcery'] },
+    mana_cost: { type: 'Cost', shards: ['White', 'White'], generic: 4 },
+    oracle_text: 'Put all creatures on the bottom of their owners\u2019 libraries.\nMiracle {W}'
+  } as GameObject;
   // CR 101.4 + CR 701.38: the two ballot shapes. `Emissary Green` is the attack
   // trigger whose named vote the engine tests end to end (`emissary_green.rs`,
   // verbatim text); the object-pool shape carries the very clause the engine's own
@@ -528,7 +541,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -694,6 +707,18 @@
           completed: [],
           chooser: 1,
           pile_source: { type: 'Battlefield' }
+        }
+      };
+    }
+    if (scene === 'miracle') {
+      // `MiracleReveal` (CR 702.94a) names the drawn card and the cost the offer
+      // latched; the reveal is the answer, and the cast comes later (CR 608.2g).
+      return {
+        type: 'MiracleReveal',
+        data: {
+          player: 0,
+          object_id: 395,
+          cost: { type: 'Cost', shards: ['White'], generic: 0 }
         }
       };
     }
@@ -1314,6 +1339,7 @@
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
           : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' || scene === 'explore' || scene === 'exploreShared' || scene === 'pilePartition' || scene === 'pileChoice' ? 'PreCombatMain'
+          : scene === 'miracle' ? 'Draw'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1527,6 +1553,7 @@
         {#if scene === 'vote' || scene === 'voteObject'}<VotePrompt />{/if}
         {#if scene === 'explore' || scene === 'exploreShared'}<ExploreChoicePrompt />{/if}
         {#if scene === 'pilePartition' || scene === 'pileChoice'}<SeparatePilesPrompt />{/if}
+        {#if scene === 'miracle'}<MiracleRevealPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

@@ -1119,6 +1119,29 @@ test('elegir un montón: el que se queda con el efecto, con lo que hay en cada u
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('milagro: la primera carta del turno se revela, y revelarla no la lanza', async ({ page }) => {
+  await page.goto('/ux?scene=miracle');
+  const block = page.locator('[data-miracle]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-miracle-object', '395');
+  await expect(block.locator('strong')).toHaveText('Milagro · Terminus');
+  // CR 702.94a: it is the FIRST card drawn this turn, and that is why it is offered.
+  await expect(block).toContainText('Terminus es la primera carta que robas este turno');
+  await expect(block.locator('[data-miracle-cost]')).toHaveText('Coste de milagro: {W}');
+  // The printed cost is a different number; the offer does not replace it silently.
+  await expect(block.locator('[data-miracle-printed]')).toHaveText('Coste impreso: {4}{W}{W}');
+  // CR 608.2g: accepting reveals; the cast is a later prompt.
+  await expect(block.locator('[data-miracle-reveal-hint]')).toContainText('todavía no la lanza');
+  await expect(block.locator('[data-miracle-reveal-hint]')).toContainText('CR 608.2g');
+  await expect(block.locator('button.primary')).toHaveText('Revelar y lanzarla por {W}');
+  await expect(block.locator('button.ghost')).toHaveText('Dejarla en la mano');
+  // Declining spends the offer: miracle only looks at the first card of the turn.
+  await expect(block.locator('[data-miracle-decline-hint]')).toContainText('la oferta se gasta');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

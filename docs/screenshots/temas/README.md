@@ -58,6 +58,7 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `exploreShared` | `ExploreChoice` (dos jugadores) | [claro](explorar-dos-jugadores-claro.jpg) | [oscuro](explorar-dos-jugadores-oscuro.jpg) |
 | `pilePartition` | `SeparatePilesPartition` | [claro](separar-montones-claro.jpg) | [oscuro](separar-montones-oscuro.jpg) |
 | `pileChoice` | `SeparatePilesChoice` | [claro](elegir-monton-claro.jpg) | [oscuro](elegir-monton-oscuro.jpg) |
+| `miracle` | `MiracleReveal` | [claro](milagro-claro.jpg) | [oscuro](milagro-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 
