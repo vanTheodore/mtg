@@ -182,6 +182,7 @@ fn redact_paid_cast_cleanup_authority(waiting_for: &mut WaitingFor) {
         | WaitingFor::TriggerTargetSelection { .. }
         | WaitingFor::BetweenGamesSideboard { .. }
         | WaitingFor::BetweenGamesChoosePlayDraw { .. }
+        | WaitingFor::ChooseStartingPlayer { .. }
         | WaitingFor::NamedChoice { .. }
         | WaitingFor::OpponentGuess { .. }
         | WaitingFor::SpellbookDraft { .. }
@@ -2663,6 +2664,28 @@ fn filter_state_for_scope(state: &GameState, viewer: Option<PlayerId>) -> GameSt
                 constraint: constraint.clone(),
                 ordering_hint,
                 split: split.clone(),
+            };
+        }
+    }
+
+    // Digital-only Alchemy spellbook draft (no CR entry): a draft's offer is a
+    // private random sample shown only to the drafting player, so other viewers
+    // see the prompt without its options.
+    if let WaitingFor::SpellbookDraft {
+        player,
+        source_id,
+        destination,
+        tapped,
+        ..
+    } = state.waiting_for
+    {
+        if !can_view_private_for_player(player) {
+            filtered.waiting_for = WaitingFor::SpellbookDraft {
+                player,
+                source_id,
+                options: Vec::new(),
+                destination,
+                tapped,
             };
         }
     }
@@ -8141,6 +8164,8 @@ mod tests {
             chosen_tappers: None,
             chosen_discards: Vec::new(),
             chosen_mana_payment: None,
+            payment_mode: CastPaymentMode::Auto,
+            pinned_pool_units: Vec::new(),
             chosen_counter_counts: Vec::new(),
             chosen_x: None,
             collected_evidence: Vec::new(),
@@ -11481,6 +11506,7 @@ mod tests {
             .execute(AbilityDefinition::new(
                 AbilityKind::Spell,
                 Effect::ChangeZone {
+                    library_shuffle: Default::default(),
                     origin: None,
                     destination: Zone::Library,
                     target: TargetFilter::SelfRef,
@@ -11668,6 +11694,7 @@ mod tests {
             .execute(AbilityDefinition::new(
                 AbilityKind::Spell,
                 Effect::ChangeZone {
+                    library_shuffle: Default::default(),
                     origin: None,
                     destination: Zone::Library,
                     target: TargetFilter::SelfRef,
@@ -12543,6 +12570,7 @@ mod tests {
                 paused_at_index: 0,
                 destination: Zone::Exile,
                 completion: PendingCostMoveCompletion::FinishPending,
+                requested_cost_count: None,
                 deferred_cost_events: Vec::new(),
                 departure_record_indices: Vec::new(),
             },
@@ -12562,6 +12590,7 @@ mod tests {
                     phyrexian_choices: None,
                     pre_payment_checks: None,
                 },
+                requested_cost_count: None,
                 deferred_cost_events: Vec::new(),
                 departure_record_indices: Vec::new(),
             },

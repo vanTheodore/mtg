@@ -136,6 +136,11 @@ const SUBTYPES_ES: Record<string, string> = {
   Warrior: 'Guerrero', Wizard: 'Mago', Zombie: 'Zombi'
 };
 
+/** One core type in es-419; an unmapped type keeps the engine's own word. */
+export function coreTypeLabel(type: string): string {
+  return CORE_TYPES_ES[type]?.es ?? type;
+}
+
 /** "Criatura legendaria — Humano Mago", "Tierra básica — Llanura", "Ficha de criatura — Soldado". */
 function spanishTypeLine(supertypes: string[], coreTypes: string[]): string | undefined {
   const isTokenType = coreTypes.includes('Token');
