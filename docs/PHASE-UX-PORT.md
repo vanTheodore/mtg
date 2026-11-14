@@ -1939,3 +1939,50 @@ sentidos, el voto secreto, la basura podada, los recuentos de más y los que fal
 valores por defecto y las dos acciones); build OK; y en Chromium dos pruebas nuevas —la
 sesión con nombre con su turno y su recuento vacío; y la de objetos con la papeleta ya
 emitida y su índice— más las dos escenas en la prueba de temas.
+
+## Explorar es elegir un orden (cuadragésima segunda pasada, 7 nov 2026)
+
+`ExploreChoice` es CR 701.44d, y no es la acción de explorar: es la **cola**. Cuando
+varios permanentes exploran a la vez —«each Merfolk creature you control explores»—,
+quien los controla elige **en qué orden**, uno por paso, y el motor vuelve a preguntar
+tras cada elección. La vista, por tanto, no enseña la carta revelada: enseña a quién le
+toca.
+
+**Los dos listados no son el mismo y la diferencia importa.** El payload trae
+`choosable` (lo que este jugador puede mandar ahora) y `remaining` (la cola entera). Si
+exploran permanentes de varios jugadores, cada uno ordena los suyos (CR 101.4), así que
+la cola puede ser más larga que lo elegible. El bloque lo dice con esas palabras —«Quedan
+4 por explorar; 2 de ellos los elige su controlador»— y lista aparte lo que está en cola
+para otros, en vez de ofrecer filas que no se pueden pulsar.
+
+**CR 701.44a se enuncia, no se pregunta.** Lo que ocurre después —revelar la primera
+carta de la biblioteca del controlador, tierra a la mano, y si no un contador +1/+1— es
+resolución del motor. La vista lo cuenta para que la elección tenga sentido y no finge
+un paso que no existe en este prompt.
+
+**El origen no se nombra si no está.** `source_id` nombra la habilidad que provocó la
+exploración; en el fixture del laboratorio no hay objeto para ella, y el bloque
+simplemente no pinta un nombre que no tiene. Es la misma regla de siempre, aquí aplicada
+a un dato opcional por diseño.
+
+Objetos del laboratorio: tres Merfolk del jugador 1 —`Merfolk Looter`, `Rootwater
+Commando` y `Rootwater Matriarch`, con los nombres, tipos y fuerza/resistencia reales
+de `data/mtgjson/10E.es.json`— para la forma propia, y dos Merfolk más del rival para
+la compartida, donde las dos listas se separan. Viven sólo en `objects`: la ventana los
+nombra y ninguna fila de la mesa cambia, así que los recuentos que el resto del
+laboratorio comprueba siguen quietos.
+
+Laboratorio: `/ux?scene=explore` y `/ux?scene=exploreShared`, capturas
+`docs/screenshots/ux-quien-explora-1440.jpg` y
+`docs/screenshots/ux-explorar-dos-jugadores-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **524** (7 nuevas en
+`game/__tests__/explore-choice.test.ts`: los dos listados tal cual llegan, la cola más
+larga que lo elegible, la basura podada —incluida la cadena `'391'` que no es un id—,
+el listado ausente que es vacío y no se adivina del otro, los valores por defecto y la
+acción del motor); build OK; y en Chromium dos pruebas nuevas —la forma propia con su
+cola y su CR 701.44a enunciado; y la compartida, con la diferencia entre los listados y
+los nombres desempatados por controlador— más las dos escenas en la prueba de temas
+(que subió su presupuesto a 480 s al llegar a 44 escenas).

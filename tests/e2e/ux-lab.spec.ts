@@ -1018,6 +1018,48 @@ test('votación sobre permanentes: el recuento va por índice y se ve quién vot
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('quién explora: el orden lo elige el jugador, un permanente por paso', async ({ page }) => {
+  await page.goto('/ux?scene=explore');
+  const block = page.locator('[data-explore]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Explorar');
+  // CR 701.44d: the three Merfolk are one queue and one choice.
+  await expect(block).toHaveAttribute('data-explore-queue', '3');
+  await expect(block.locator('[data-explore-remaining]')).toHaveText(
+    'Quedan 3 permanentes por explorar, y el orden lo eliges tú (CR 701.44d).'
+  );
+  await expect(block.locator('[data-explore-object]')).toHaveCount(3);
+  await expect(block.locator('[data-explore-object="392"]')).toHaveText('Rootwater Matriarch');
+  // CR 701.44a is stated, not asked: the engine owns the reveal that follows.
+  await expect(block).toContainText('CR 701.44a');
+  await expect(block).toContainText('un contador +1/+1');
+  // Every candidate is this player's, so there is no foreign queue to show.
+  await expect(block.locator('[data-explore-others]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('explorar entre dos jugadores: la cola es más larga que lo que puedes elegir', async ({ page }) => {
+  await page.goto('/ux?scene=exploreShared');
+  const block = page.locator('[data-explore]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-explore-queue', '4');
+  // CR 101.4: each player orders their own, so two of the four are not this player's.
+  await expect(block.locator('[data-explore-remaining]')).toHaveText(
+    'Quedan 4 permanentes por explorar; 2 de ellos los elige su controlador (CR 101.4).'
+  );
+  await expect(block.locator('[data-explore-object]')).toHaveCount(2);
+  // Same name on both sides: the controller is what tells the rows apart.
+  await expect(block.locator('[data-explore-object="390"]')).toHaveText('Merfolk Looter (Jugador 1)');
+  await expect(block.locator('[data-explore-others]')).toHaveText(
+    'En cola para otros jugadores: Merfolk Looter (Jugador 2) · Rootwater Commando (Jugador 2)'
+  );
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

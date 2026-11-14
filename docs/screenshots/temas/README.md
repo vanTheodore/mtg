@@ -54,6 +54,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `copyAnnounce` | `CopyRetarget` (anunciar) | [claro](copia-anuncia-claro.jpg) | [oscuro](copia-anuncia-oscuro.jpg) |
 | `vote` | `VoteChoice` (con nombre) | [claro](votacion-claro.jpg) | [oscuro](votacion-oscuro.jpg) |
 | `voteObject` | `VoteChoice` (objetos) | [claro](votacion-objetos-claro.jpg) | [oscuro](votacion-objetos-oscuro.jpg) |
+| `explore` | `ExploreChoice` (el orden) | [claro](quien-explora-claro.jpg) | [oscuro](quien-explora-oscuro.jpg) |
+| `exploreShared` | `ExploreChoice` (dos jugadores) | [claro](explorar-dos-jugadores-claro.jpg) | [oscuro](explorar-dos-jugadores-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

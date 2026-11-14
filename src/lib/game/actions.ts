@@ -152,6 +152,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'RemoveCountersChoice': return 'Quita contadores de un permanente hasta el tope que publique el motor.';
     case 'CopyRetarget': return 'Elige los objetivos de una copia: cada ranura, una respuesta; las demás pueden quedarse.';
     case 'VoteChoice': return 'Emite tu voto: el recuento se aplica cuando hayan votado todos.';
+    case 'ExploreChoice': return 'Elige qué permanente explora ahora: el orden lo decides tú.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

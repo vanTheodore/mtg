@@ -1038,6 +1038,45 @@ export function moveCountersAction(selections: CounterMoveSelection[]): GameActi
 }
 
 /**
+ * CR 701.44d: several permanents explore at the same time, so the player who
+ * controls them chooses **the order** — one explorer per step. The engine asks
+ * with the ones this player may pick (`choosable`) and the whole queue
+ * (`remaining`), which can be longer: when permanents of several players explore
+ * together, each player orders their own, so the difference between the two lists
+ * is exactly what someone else will decide (CR 101.4).
+ *
+ * CR 701.44a: each explorer then reveals the top card of its controller's library
+ * — a land goes to hand, anything else puts a +1/+1 counter on the creature. That
+ * second half is the engine's own resolution, not a choice of this prompt, so the
+ * block states it without pretending to ask.
+ */
+export type ExplorePrompt = {
+  player: PlayerId;
+  sourceId: ObjectId;
+  /** The permanents this player may send to explore now. */
+  choosable: ObjectId[];
+  /** The whole queue, this player's picks included. */
+  remaining: ObjectId[];
+};
+export function explorePrompt(snapshot: EngineSnapshot | null): ExplorePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ExploreChoice') return null;
+  const data = waiting.data ?? {};
+  const ids = (value: unknown): ObjectId[] =>
+    Array.isArray(value) ? (value as unknown[]).filter((id): id is ObjectId => typeof id === 'number') : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
+    choosable: ids(data.choosable),
+    remaining: ids(data.remaining)
+  };
+}
+/** CR 701.44d: this permanent explores next; the engine then asks again. */
+export function exploreAction(id: ObjectId): GameAction {
+  return { type: 'ChooseTarget', data: { target: { Object: id } } };
+}
+
+/**
  * CR 101.4 + CR 701.38a–d: a vote. The engine runs it as a **session**: every
  * voter casts its ballots in APNAP order, extra votes resolve at the moment the
  * player would vote once (CR 701.38d), and the tally only resolves when the queue

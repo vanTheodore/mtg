@@ -59,9 +59,10 @@
   import RemoveCountersPrompt from '#lib/components/RemoveCountersPrompt.svelte';
   import CopyRetargetPrompt from '#lib/components/CopyRetargetPrompt.svelte';
   import VotePrompt from '#lib/components/VotePrompt.svelte';
+  import ExploreChoicePrompt from '#lib/components/ExploreChoicePrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -119,6 +120,8 @@
     { value: 'copyAnnounce', label: 'La copia anuncia objetivos' },
     { value: 'vote', label: 'Votación' },
     { value: 'voteObject', label: 'Votación sobre permanentes' },
+    { value: 'explore', label: 'Quién explora' },
+    { value: 'exploreShared', label: 'Explorar entre dos jugadores' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -178,6 +181,8 @@
     copyAnnounce: 'CopyRetarget · CR 707.12, la copia anuncia',
     vote: 'VoteChoice · CR 701.38, voto con nombre',
     voteObject: 'VoteChoice · CR 701.38b, voto sobre objetos',
+    explore: 'ExploreChoice · CR 701.44d, el orden lo eliges tú',
+    exploreShared: 'ExploreChoice · CR 101.4, cada jugador ordena los suyos',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -331,6 +336,36 @@
     name: 'Slaughter the Strong',
     card_types: { core_types: ['Sorcery'] },
     oracle_text: 'Each player chooses any number of creatures they control with total power 4 or less, then sacrifices all other creatures they control.'
+  } as GameObject;
+  // CR 701.44d: "each Merfolk creature you control explores" — the clause the
+  // parser's own test uses (`explore_all`), with Merfolk taken from the 10E data in
+  // `data/mtgjson/10E.es.json` (real names, types and printed P/T). They live only
+  // in `objects`: the prompt names them, no battlefield row changes, and the pile
+  // counts the rest of the lab asserts stay put.
+  const merfolkLooter = {
+    id: 390, card_id: 390, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Merfolk Looter', card_types: { core_types: ['Creature'], subtypes: ['Merfolk', 'Rogue'] },
+    power: 1, toughness: 1
+  } as GameObject;
+  const rootwaterCommando = {
+    id: 391, card_id: 391, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Rootwater Commando', card_types: { core_types: ['Creature'], subtypes: ['Merfolk'] },
+    power: 2, toughness: 2
+  } as GameObject;
+  const rootwaterMatriarch = {
+    id: 392, card_id: 392, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Rootwater Matriarch', card_types: { core_types: ['Creature'], subtypes: ['Merfolk'] },
+    power: 2, toughness: 3
+  } as GameObject;
+  const rivalMerfolkLooter = {
+    id: 393, card_id: 393, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Merfolk Looter', card_types: { core_types: ['Creature'], subtypes: ['Merfolk', 'Rogue'] },
+    power: 1, toughness: 1
+  } as GameObject;
+  const rivalRootwaterCommando = {
+    id: 394, card_id: 394, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Rootwater Commando', card_types: { core_types: ['Creature'], subtypes: ['Merfolk'] },
+    power: 2, toughness: 2
   } as GameObject;
   // CR 101.4 + CR 701.38: the two ballot shapes. `Emissary Green` is the attack
   // trigger whose named vote the engine tests end to end (`emissary_green.rs`,
@@ -488,7 +523,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -605,6 +640,24 @@
           remaining_players: [1],
           all_kept: [],
           scoped_players: [0, 1]
+        }
+      };
+    }
+    if (scene === 'explore' || scene === 'exploreShared') {
+      // `ExploreChoice`: several permanents explore at once and their controller
+      // orders them (CR 701.44d). The shared shape shows the two lists differ —
+      // the rival's Merfolk are in the queue but not in this player's `choosable`,
+      // because each player orders their own (CR 101.4). `source_id` is the ability
+      // that caused it; this fixture has no object for it, and the block never
+      // names a source it was not given.
+      const shared = scene === 'exploreShared';
+      return {
+        type: 'ExploreChoice',
+        data: {
+          player: 0,
+          source_id: 0,
+          choosable: shared ? [390, 391] : [390, 391, 392],
+          remaining: shared ? [390, 391, 393, 394] : [390, 391, 392]
         }
       };
     }
@@ -1224,7 +1277,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' || scene === 'explore' || scene === 'exploreShared' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1436,6 +1489,7 @@
         {#if scene === 'removeCounters' || scene === 'removeCountersCapped'}<RemoveCountersPrompt />{/if}
         {#if scene === 'copyRetarget' || scene === 'copyAnnounce'}<CopyRetargetPrompt />{/if}
         {#if scene === 'vote' || scene === 'voteObject'}<VotePrompt />{/if}
+        {#if scene === 'explore' || scene === 'exploreShared'}<ExploreChoicePrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>
