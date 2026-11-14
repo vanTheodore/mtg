@@ -1195,6 +1195,33 @@ test('lanzar: la ventana gratuita lista candidatas, su presupuesto y cómo cerra
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('fusionar: se elige la copia concreta, no el nombre de la carta', async ({ page }) => {
+  await page.goto('/ux?scene=meld');
+  const block = page.locator('[data-meld]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-meld-choices', '2');
+  await expect(block.locator('strong')).toHaveText('Fusión · Brisela, Voice of Nightmares');
+  // CR 701.42: the fixed half and how many partners the engine offers.
+  await expect(block.locator('[data-meld-pair]')).toHaveText(
+    'Mitad fija: Bruna, the Fading Light · 2 parejas posibles.'
+  );
+  // Two copies, one name: the id is what tells them apart.
+  await expect(block.locator('[data-meld-choice="406"]')).toHaveText(
+    'Fusionar con Gisela, the Broken Blade (Jugador 1) · #406'
+  );
+  await expect(block.locator('[data-meld-choice="407"]')).toHaveText(
+    'Fusionar con Gisela, the Broken Blade (Jugador 1) · #407'
+  );
+  // CR 701.42b: choosing does not guarantee the meld.
+  await expect(block.locator('[data-meld-canonical]')).toContainText('después comprueba');
+  await expect(block.locator('[data-meld-canonical]')).toContainText('CR 701.42b');
+  // The result enters normally here, so there is no attack destination to announce.
+  await expect(block.locator('[data-meld-attacking]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

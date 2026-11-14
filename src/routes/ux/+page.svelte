@@ -62,10 +62,11 @@
   import ExploreChoicePrompt from '#lib/components/ExploreChoicePrompt.svelte';
   import MiracleRevealPrompt from '#lib/components/MiracleRevealPrompt.svelte';
   import CastOfferPrompt from '#lib/components/CastOfferPrompt.svelte';
+  import MeldPairPrompt from '#lib/components/MeldPairPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -131,6 +132,7 @@
     { value: 'castOffer', label: 'Lanzar: milagro' },
     { value: 'castOfferCascade', label: 'Lanzar: cascada' },
     { value: 'castOfferWindow', label: 'Lanzar: ventana gratuita' },
+    { value: 'meld', label: 'Fusionar dos mitades' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -198,6 +200,7 @@
     castOffer: 'CastOffer · CR 608.2g, milagro',
     castOfferCascade: 'CastOffer · CR 702.85a, cascada',
     castOfferWindow: 'CastOffer · CR 608.2g, ventana de lanzamiento',
+    meld: 'MeldPairChoice · CR 701.42, elegir la pareja',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -392,6 +395,26 @@
     mana_cost: { type: 'Cost', shards: ['White', 'White'], generic: 4 },
     oracle_text: 'Put all creatures on the bottom of their owners\u2019 libraries.\nMiracle {W}'
   } as GameObject;
+  // CR 701.42: a meld pair, with a duplicate half. The engine only asks when more
+  // than one permanent could be the other half, and two copies of the same card are
+  // exactly that case — which is why the answer names ids and not names. Printed
+  // names and the result are the real Eldritch Moon pair.
+  const bruna = {
+    id: 405, card_id: 405, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Bruna, the Fading Light',
+    card_types: { core_types: ['Creature'], subtypes: ['Angel', 'Horror'], supertypes: ['Legendary'] },
+    power: 5, toughness: 7,
+    oracle_text:
+      'When Bruna, the Fading Light enters, you may meld it with Gisela, the Broken Blade. Flying, vigilance.'
+  } as GameObject;
+  const giselaOne = {
+    id: 406, card_id: 406, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Gisela, the Broken Blade',
+    card_types: { core_types: ['Creature'], subtypes: ['Angel', 'Horror'], supertypes: ['Legendary'] },
+    power: 4, toughness: 3,
+    oracle_text: 'Flying, first strike, lifelink. At the beginning of your end step, transform Gisela.'
+  } as GameObject;
+  const giselaTwo = { ...giselaOne, id: 407, card_id: 407 } as GameObject;
   // CR 608.2g: the free-cast window (Invoke Calamity) offers instants and sorceries
   // from the controller's graveyard. Two real cheap ones, in `objects` only.
   const graveShock = {
@@ -562,7 +585,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -741,6 +764,24 @@
           object_id: 395,
           cost: { type: 'Cost', shards: ['White'], generic: 0 }
         }
+      };
+    }
+    if (scene === 'meld') {
+      // `MeldPairChoice` (CR 701.42) freezes the referents of each candidate pair:
+      // same half fixed, one entry per possible partner, plus the printed names the
+      // instruction expects and the card the pair becomes.
+      const pair = (partner: number) => ({
+        source_id: 405,
+        partner_id: partner,
+        controller: 0,
+        expected_source: 'Bruna, the Fading Light',
+        expected_partner: 'Gisela, the Broken Blade',
+        result: 'Brisela, Voice of Nightmares',
+        entry: 'Normal'
+      });
+      return {
+        type: 'MeldPairChoice',
+        data: { player: 0, choices: [pair(406), pair(407)] }
       };
     }
     if (scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow') {
@@ -1406,6 +1447,7 @@
           : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' || scene === 'explore' || scene === 'exploreShared' || scene === 'pilePartition' || scene === 'pileChoice' ? 'PreCombatMain'
           : scene === 'miracle' ? 'Draw'
           : scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow' ? 'PreCombatMain'
+          : scene === 'meld' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1621,6 +1663,7 @@
         {#if scene === 'pilePartition' || scene === 'pileChoice'}<SeparatePilesPrompt />{/if}
         {#if scene === 'miracle'}<MiracleRevealPrompt />{/if}
         {#if scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow'}<CastOfferPrompt />{/if}
+        {#if scene === 'meld'}<MeldPairPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

@@ -40,6 +40,7 @@
   import SeparatePilesPrompt from './SeparatePilesPrompt.svelte';
   import MiracleRevealPrompt from './MiracleRevealPrompt.svelte';
   import CastOfferPrompt from './CastOfferPrompt.svelte';
+  import MeldPairPrompt from './MeldPairPrompt.svelte';
   import { manaText } from '#lib/game/cards.ts';
   import { actionObjectId, attackLabel, attackTargets, blockTargets, isManaAction, isManaPrompt, isTargetPrompt, manaActions, manualCast, targetLabel } from '#lib/game/interaction.ts';
   import type { GameAction } from '#lib/engine/types.ts';
@@ -94,7 +95,7 @@
   const pass = $derived(actions.find((a) => a.type === 'PassPriority'));
   const cancel = $derived(actions.find((a) => a.type === 'CancelCast'));
   const handled = new Set(['PassPriority', 'CancelCast', 'ChooseTarget', 'DeclareAttackers', 'DeclareBlockers', 'CastSpell', 'PlayLand', 'TapLandForMana', 'ActivateManaSource', 'MulliganDecision', 'SelectCards']);
-  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'ChooseXValue', 'OrderTriggers', 'ModeChoice', 'AbilityModeChoice', 'SearchChoice', 'DigChoice', 'OptionalEffectChoice', 'OpponentMayChoice', 'PayAmountChoice', 'RevealChoice', 'PairChoice', 'ChooseTokenHost', 'GameOver', 'UnlessPayment', 'UnlessPaymentChooseCost', 'TributeChoice', 'WardSacrificeChoice', 'ChooseStartingPlayer', 'ScryChoice', 'SurveilChoice', 'CrewVehicle', 'SaddleMount', 'EquipTarget', 'StationTarget', 'MultiTargetSelection', 'DistributeAmong', 'MoveCountersDistribution', 'RetargetChoice', 'ChooseObjectsSelection', 'ProliferateChoice', 'TimeTravelChoice', 'CategoryChoice', 'EachPlayerCopyChosenSelection', 'KeepWithinTotalPowerChoice', 'KeepExactPermanentsChoice', 'RemoveCountersChoice', 'CopyRetarget', 'VoteChoice', 'ExploreChoice', 'SeparatePilesChooseOpponent', 'SeparatePilesPartition', 'SeparatePilesChoice', 'MiracleReveal', 'CastOffer']);
+  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'ChooseXValue', 'OrderTriggers', 'ModeChoice', 'AbilityModeChoice', 'SearchChoice', 'DigChoice', 'OptionalEffectChoice', 'OpponentMayChoice', 'PayAmountChoice', 'RevealChoice', 'PairChoice', 'ChooseTokenHost', 'GameOver', 'UnlessPayment', 'UnlessPaymentChooseCost', 'TributeChoice', 'WardSacrificeChoice', 'ChooseStartingPlayer', 'ScryChoice', 'SurveilChoice', 'CrewVehicle', 'SaddleMount', 'EquipTarget', 'StationTarget', 'MultiTargetSelection', 'DistributeAmong', 'MoveCountersDistribution', 'RetargetChoice', 'ChooseObjectsSelection', 'ProliferateChoice', 'TimeTravelChoice', 'CategoryChoice', 'EachPlayerCopyChosenSelection', 'KeepWithinTotalPowerChoice', 'KeepExactPermanentsChoice', 'RemoveCountersChoice', 'CopyRetarget', 'VoteChoice', 'ExploreChoice', 'SeparatePilesChooseOpponent', 'SeparatePilesPartition', 'SeparatePilesChoice', 'MiracleReveal', 'CastOffer', 'MeldPairChoice']);
   const manaExtras = new Set(['UntapLandForMana', 'BackToManaPayment', 'PayManaAbilityMana', 'ChooseManaColor']);
   const globalActions = $derived(actions.filter((a) => !handled.has(a.type) && actionObjectId(a) === undefined && !isManaAction(a) && !(manaPrompt && manaExtras.has(a.type))));
   const attackDraft = $derived(Object.entries(session.attacks));
@@ -178,6 +179,8 @@
   const miracle = $derived(session.miraclePrompt);
   // CR 608.2g: the umbrella cast offer, in whichever of its nine shapes it is.
   const castOffer = $derived(session.castOfferPrompt);
+  // CR 701.42: which copy is the other half of the meld.
+  const meld = $derived(session.meldPrompt);
   const PHASES: Record<string, string> = { Untap: 'Enderezar', Upkeep: 'Mantenimiento', Draw: 'Robar', PreCombatMain: 'Fase principal', BeginCombat: 'Inicio de combate', DeclareAttackers: 'Ataque', DeclareBlockers: 'Bloqueo', CombatDamage: 'Daño de combate', EndCombat: 'Fin de combate', PostCombatMain: 'Fase principal posterior', End: 'Final', Cleanup: 'Limpieza' };
   function manaActionsFor(id?: number) { return manaActions(s, id); }
   function play(action: GameAction) { void session.dispatch(action); }
@@ -246,6 +249,8 @@
       <MiracleRevealPrompt />
     {:else if castOffer && castOffer.player === s.viewer}
       <CastOfferPrompt />
+    {:else if meld && meld.player === s.viewer}
+      <MeldPairPrompt />
     {:else if scry && scry.player === s.viewer}
       <ScryPrompt />
     {:else if startingPlayer && startingPlayer.player === s.viewer}

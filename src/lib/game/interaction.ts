@@ -1333,6 +1333,73 @@ export function finishFreeCastWindowAction(): GameAction {
 }
 
 /**
+ * CR 701.42: meld — two permanents are exiled and, if they are the printed halves,
+ * a single card comes back fused. The engine freezes *referents*, not names: the
+ * prompt lists each candidate pair as `MeldSelection { source_id, partner_id,
+ * expected_source, expected_partner, result }`, and the answer names the pair by
+ * both object ids (`ChooseMeldPair`), because a name would not say which copy.
+ *
+ * Two consequences the block states instead of hiding:
+ *
+ *   - With exactly one legal partner the engine **does not ask**: it melds straight
+ *     away, so this window only exists when several permanents could be the other
+ *     half (duplicates of the same card, say).
+ *   - Choosing a pair does not guarantee the meld. The instruction exiles both
+ *     referents first and only then checks that the tracked cards really are the
+ *     canonical halves (CR 701.42b); if they are not, nothing comes back.
+ */
+export type MeldChoice = {
+  sourceId: ObjectId;
+  partnerId: ObjectId;
+  /** CR 508.4: the result enters tapped and attacking, so a destination follows. */
+  attacking: boolean;
+};
+export type MeldPrompt = {
+  player: PlayerId;
+  /** The half that stays fixed across every candidate. */
+  sourceId: ObjectId;
+  /** Printed name of that half, as the instruction expects it. */
+  expectedSource?: string;
+  /** The card the pair would become. */
+  result?: string;
+  choices: MeldChoice[];
+};
+export function meldPrompt(snapshot: EngineSnapshot | null): MeldPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'MeldPairChoice') return null;
+  const data = waiting.data ?? {};
+  const raw = Array.isArray(data.choices) ? (data.choices as unknown[]) : [];
+  const choices: MeldChoice[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const choice = entry as Record<string, unknown>;
+    if (typeof choice.source_id !== 'number' || typeof choice.partner_id !== 'number') continue;
+    const mode = choice.entry;
+    const attacking =
+      (typeof mode === 'string' && mode === 'TappedAndAttacking') ||
+      (!!mode && typeof mode === 'object' && (mode as Record<string, unknown>).type === 'TappedAndAttacking');
+    choices.push({
+      sourceId: choice.source_id as ObjectId,
+      partnerId: choice.partner_id as ObjectId,
+      attacking
+    });
+  }
+  if (!choices.length) return null;
+  const first = raw[0] as Record<string, unknown>;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: choices[0].sourceId,
+    expectedSource: typeof first.expected_source === 'string' ? first.expected_source : undefined,
+    result: typeof first.result === 'string' ? first.result : undefined,
+    choices
+  };
+}
+/** CR 701.42: name the pair by both object ids; the engine validates it against the offer. */
+export function chooseMeldPairAction(sourceId: ObjectId, partnerId: ObjectId): GameAction {
+  return { type: 'ChooseMeldPair', data: { source_id: sourceId, partner_id: partnerId } };
+}
+
+/**
  * CR 701.44d: several permanents explore at the same time, so the player who
  * controls them chooses **the order** — one explorer per step. The engine asks
  * with the ones this player may pick (`choosable`) and the whole queue

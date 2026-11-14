@@ -2150,3 +2150,48 @@ de la ventana); el duplicado de la pasada anterior desapareció: `revealMiracleA
 ahora `castAsMiracleAction`, porque revelar y lanzar por milagro mandan la misma acción;
 build OK; en Chromium tres pruebas nuevas —milagro, cascada y ventana gratuita, con axe—
 y tres escenas más en la prueba de temas (47 → 50 escenas, 103 jpg, presupuesto de 560 s).
+
+## Fusionar es nombrar dos objetos, no dos nombres (cuadragésima sexta pasada, 7 nov 2026)
+
+`MeldPairChoice` (CR 701.42) parece «elige una carta con la que fusionar» y es otra
+cosa: el motor **congela referentes**. Cada pareja candidata llega como
+`MeldSelection { source_id, partner_id, expected_source, expected_partner, result }`, y
+la respuesta —`ChooseMeldPair { source_id, partner_id }`— nombra **los dos objetos**. El
+nombre de la carta no serviría: si hay dos copias de la mitad, la pregunta existe
+precisamente porque hay que decir cuál.
+
+**La ventana sólo existe cuando hay más de una mitad posible.** Con un único candidato
+el motor no pregunta: funde directamente. Por eso el bloque lo dice con esas palabras —«2
+parejas posibles»— y el laboratorio necesita dos copias de la otra mitad para poder
+enseñar la vista.
+
+**Elegir la pareja no garantiza la fusión.** La instrucción de CR 701.42 exilia primero
+los dos referentes y **después** comprueba que las cartas rastreadas son las mitades
+impresas (CR 701.42b); si no lo son, la resolución termina sin fusionar. El bloque lo
+dice en vez de prometer el resultado, y por eso muestra el nombre impreso que la carta
+espera junto al nombre del objeto, cuando difieren.
+
+**El resultado puede entrar atacando.** `entry` es `Normal` o `TappedAndAttacking`; en
+el segundo caso la carta entra girada y atacando y la siguiente pregunta es a quién
+(CR 508.4), que ya es `MeldAttackTargetChoice` — otra variante, no esta ventana. La
+prueba de unidad cubre las dos formas en que ese dato viaja en JSON (cadena para la
+unitaria y objeto con `type` para la de datos), porque el contrato las serializa distinto.
+
+Objetos del laboratorio: la pareja real de Eldritch Moon —`Bruna, the Fading Light` como
+mitad fija y **dos** `Gisela, the Broken Blade` (objetos #406 y #407) como candidatas, con
+el resultado que imprime la carta, `Brisela, Voice of Nightmares`. Los tres viven en
+`objects`, como el resto de cartas que sólo nombra una ventana.
+
+Laboratorio: `/ux?scene=meld`, captura `docs/screenshots/ux-fusionar-1440.jpg`, más sus
+pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **560** (8 nuevas en
+`game/__tests__/meld-pair.test.ts`: la mitad fija con sus nombres y el resultado, la
+entrada incompleta que se descarta, la oferta sin pareja utilizable que no es ventana, los
+nombres opcionales, las dos serializaciones de `TappedAndAttacking` frente a `Normal`, el
+asiento por defecto, el prompt vecino —`MeldAttackTargetChoice`— que no es este bloque y la
+acción con sus dos identificadores); build OK; en Chromium una prueba nueva —dos copias
+desempatadas por `· #id`, la mitad fija y el aviso de CR 701.42b— y una escena más en la
+prueba de temas (50 → 51 escenas, 105 jpg, presupuesto de 580 s).
