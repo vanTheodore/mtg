@@ -73,7 +73,9 @@ const SCENES = [
   { scene: 'removeCounters', slug: 'quitar-contadores', block: '[data-remove-counters]' },
   { scene: 'removeCountersCapped', slug: 'quitar-contadores-tope', block: '[data-remove-counters]' },
   { scene: 'copyRetarget', slug: 'objetivos-copia', block: '[data-copy-retarget]' },
-  { scene: 'copyAnnounce', slug: 'copia-anuncia', block: '[data-copy-retarget]' }
+  { scene: 'copyAnnounce', slug: 'copia-anuncia', block: '[data-copy-retarget]' },
+  { scene: 'vote', slug: 'votacion', block: '[data-vote]' },
+  { scene: 'voteObject', slug: 'votacion-objetos', block: '[data-vote]' }
 ] as const;
 
 const THEMES = [

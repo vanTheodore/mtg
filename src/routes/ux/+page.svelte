@@ -58,9 +58,10 @@
   import KeepExactPrompt from '#lib/components/KeepExactPrompt.svelte';
   import RemoveCountersPrompt from '#lib/components/RemoveCountersPrompt.svelte';
   import CopyRetargetPrompt from '#lib/components/CopyRetargetPrompt.svelte';
+  import VotePrompt from '#lib/components/VotePrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -116,6 +117,8 @@
     { value: 'removeCountersCapped', label: 'Quitar contadores con tope' },
     { value: 'copyRetarget', label: 'Objetivos de la copia' },
     { value: 'copyAnnounce', label: 'La copia anuncia objetivos' },
+    { value: 'vote', label: 'Votación' },
+    { value: 'voteObject', label: 'Votación sobre permanentes' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -173,6 +176,8 @@
     removeCountersCapped: 'RemoveCountersChoice · CR 608.2d, hasta N en total',
     copyRetarget: 'CopyRetarget · CR 707.10c, objetivos nuevos',
     copyAnnounce: 'CopyRetarget · CR 707.12, la copia anuncia',
+    vote: 'VoteChoice · CR 701.38, voto con nombre',
+    voteObject: 'VoteChoice · CR 701.38b, voto sobre objetos',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -327,6 +332,22 @@
     card_types: { core_types: ['Sorcery'] },
     oracle_text: 'Each player chooses any number of creatures they control with total power 4 or less, then sacrifices all other creatures they control.'
   } as GameObject;
+  // CR 101.4 + CR 701.38: the two ballot shapes. `Emissary Green` is the attack
+  // trigger whose named vote the engine tests end to end (`emissary_green.rs`,
+  // verbatim text); the object-pool shape carries the very clause the engine's own
+  // vote test parses for Council's Judgment (the inner sentence, which is what the
+  // engine reads — the fixture never claims more text than that).
+  const emissaryGreen = {
+    id: 385, card_id: 385, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Emissary Green',
+    card_types: { core_types: ['Creature'] }, power: 3, toughness: 3,
+    oracle_text: 'Whenever Emissary Green attacks, starting with you, each player votes for profit or security. You create a number of Treasure tokens equal to twice the number of profit votes. Put a number of +1/+1 counters on each creature you control equal to the number of security votes.'
+  } as GameObject;
+  const councilsJudgment = {
+    id: 386, card_id: 386, owner: 1, controller: 1, zone: 'Stack',
+    name: "Council's Judgment", card_types: { core_types: ['Sorcery'] },
+    oracle_text: "Starting with you, each player votes for a nonland permanent you don't control. Exile each permanent with the most votes or tied for most votes."
+  } as GameObject;
   // CR 707.10c + CR 707.12: one walk, two operations. `Twincast` is the engine's
   // no-rider control for the copy-retarget clause, and `Mizzix's Mastery` is the
   // real way a copied spell reaches the announcement walk (its copy of `Frost
@@ -467,7 +488,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -584,6 +605,54 @@
           remaining_players: [1],
           all_kept: [],
           scoped_players: [0, 1]
+        }
+      };
+    }
+    if (scene === 'vote' || scene === 'voteObject') {
+      // `VoteChoice`: the engine runs the vote as a session in APNAP order.
+      //   - `vote`: Emissary Green's named vote, first ballot, nobody has voted.
+      //   - `voteObject`: Council's Judgment cast by the rival, so its controller
+      //     votes first and the viewer answers second: one ballot is already
+      //     tallied, and the candidates are the permanents the caster doesn't
+      //     control (CR 701.38b, index-based because names repeat).
+      if (scene === 'voteObject') {
+        return {
+          type: 'VoteChoice',
+          data: {
+            player: 0,
+            remaining_votes: 1,
+            options: ['bears', 'lions'],
+            option_labels: ['Grizzly Bears', 'Savannah Lions'],
+            remaining_voters: [],
+            tallies: [1, 0],
+            ballots: [[1, 0]],
+            candidate_objects: [100, 101],
+            controller: 1,
+            source_id: 386,
+            actor: 'SubjectActs',
+            tally_mode: 'TopVotes',
+            visibility: 'Open',
+            chain_root_targets: []
+          }
+        };
+      }
+      return {
+        type: 'VoteChoice',
+        data: {
+          player: 0,
+          remaining_votes: 1,
+          options: ['profit', 'security'],
+          option_labels: ['Profit', 'Security'],
+          remaining_voters: [[1, 1]],
+          tallies: [0, 0],
+          ballots: [],
+          candidate_objects: [],
+          controller: 0,
+          source_id: 385,
+          actor: 'SubjectActs',
+          tally_mode: 'PerVote',
+          visibility: 'Open',
+          chain_root_targets: []
         }
       };
     }
@@ -1155,7 +1224,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1366,6 +1435,7 @@
         {#if scene === 'keepExact' || scene === 'keepExactVow'}<KeepExactPrompt />{/if}
         {#if scene === 'removeCounters' || scene === 'removeCountersCapped'}<RemoveCountersPrompt />{/if}
         {#if scene === 'copyRetarget' || scene === 'copyAnnounce'}<CopyRetargetPrompt />{/if}
+        {#if scene === 'vote' || scene === 'voteObject'}<VotePrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

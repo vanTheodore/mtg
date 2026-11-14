@@ -1038,6 +1038,127 @@ export function moveCountersAction(selections: CounterMoveSelection[]): GameActi
 }
 
 /**
+ * CR 101.4 + CR 701.38a–d: a vote. The engine runs it as a **session**: every
+ * voter casts its ballots in APNAP order, extra votes resolve at the moment the
+ * player would vote once (CR 701.38d), and the tally only resolves when the queue
+ * empties. So the prompt is the room, not one ballot: who votes now, what is
+ * already tallied, and what is left to vote.
+ *
+ * Two ballot shapes share this prompt, and they answer differently:
+ *
+ *   - **Named votes** (`options` / `option_labels`): "votes for profit or
+ *     security". The answer is `ChooseOption { choice }` with the lowercase
+ *     canonical option; the label is what the screen shows.
+ *   - **Object votes** (`candidate_objects`): Council's Judgment's "votes for a
+ *     nonland permanent you don't control". The answer is `SubmitVoteCandidate
+ *     { candidate_index }` — index-based, because two candidates can share a name.
+ *
+ * `actor` decides who may answer: `SubjectActs` is the voter itself, while
+ * `Delegated(p)` hands the ballot to another seat (friend-or-foe). The block gates
+ * on that resolved seat rather than on `player`.
+ *
+ * CR 701.38: a secret vote (`visibility: Secret`) has its running tallies and
+ * ballots scrubbed for viewers until the simultaneous reveal, so the block says it
+ * is secret instead of drawing zeros as if nobody had voted.
+ */
+export type VoteEntry = {
+  /** The label the engine publishes for this option or candidate. */
+  label: string;
+  /** CR 707.10c-style canonical word; `null` for object-pool candidates. */
+  option: string | null;
+  /** Object-pool candidate; `null` for named votes. */
+  candidateId: ObjectId | null;
+  /** Ballots recorded for it so far (open votes only). */
+  tally: number;
+};
+export type VotePrompt = {
+  /** The voter this step belongs to (the subject, CR 701.38d). */
+  player: PlayerId;
+  /** Which seat may actually answer: `actor.resolve(player)`. */
+  voter: PlayerId;
+  /** True when another seat answers for the voter (friend-or-foe). */
+  delegated: boolean;
+  /** CR 701.38d: ballots this voter still owes before the turn passes. */
+  remainingVotes: number;
+  controller: PlayerId;
+  sourceId: ObjectId;
+  /** True for object-pool votes (Council's Judgment), false for named ones. */
+  objectPool: boolean;
+  visibility: 'open' | 'secret';
+  entries: VoteEntry[];
+  /** Ballots already cast, in order (open votes only). */
+  ballots: { player: PlayerId; choice: number }[];
+  /** Who still owes a first vote, in APNAP order, with how many. */
+  remainingVoters: { player: PlayerId; votes: number }[];
+};
+export function votePrompt(snapshot: EngineSnapshot | null): VotePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'VoteChoice') return null;
+  const data = waiting.data ?? {};
+  const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+  const numbers = (value: unknown): number[] =>
+    Array.isArray(value) ? (value as unknown[]).filter((n): n is number => typeof n === 'number') : [];
+  const strings = (value: unknown): string[] =>
+    Array.isArray(value) ? (value as unknown[]).filter((s): s is string => typeof s === 'string') : [];
+  const options = strings(data.options);
+  const labels = strings(data.option_labels);
+  const candidates = numbers(data.candidate_objects);
+  const tallies = numbers(data.tallies);
+  const objectPool = candidates.length > 0;
+  const entries: VoteEntry[] = objectPool
+    ? candidates.map((id, index) => ({
+        label: labels[index] ?? '',
+        option: null,
+        candidateId: id,
+        tally: tallies[index] ?? 0
+      }))
+    : options.map((option, index) => ({
+        label: labels[index] ?? option,
+        option,
+        candidateId: null,
+        tally: tallies[index] ?? 0
+      }));
+  const player = typeof data.player === 'number' ? data.player : snapshot!.viewer;
+  const actor = data.actor as { Delegated?: unknown } | string | undefined;
+  const delegatedTo = actor && typeof actor === 'object' && typeof actor.Delegated === 'number' ? actor.Delegated : null;
+  return {
+    player,
+    voter: delegatedTo ?? player,
+    delegated: delegatedTo !== null && delegatedTo !== player,
+    remainingVotes: typeof data.remaining_votes === 'number' ? Math.max(1, data.remaining_votes) : 1,
+    controller: typeof data.controller === 'number' ? data.controller : player,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : 0,
+    objectPool,
+    visibility: data.visibility === 'Secret' ? 'secret' : 'open',
+    entries,
+    ballots: Array.isArray(data.ballots)
+      ? (data.ballots as unknown[])
+          .map((entry) => {
+            if (!Array.isArray(entry) || typeof entry[0] !== 'number' || typeof entry[1] !== 'number') return null;
+            return { player: entry[0] as PlayerId, choice: entry[1] as number };
+          })
+          .filter((entry): entry is { player: PlayerId; choice: number } => entry !== null)
+      : [],
+    remainingVoters: Array.isArray(data.remaining_voters)
+      ? (data.remaining_voters as unknown[])
+          .map((entry) => {
+            if (!Array.isArray(entry) || typeof entry[0] !== 'number') return null;
+            return { player: entry[0] as PlayerId, votes: typeof entry[1] === 'number' ? (entry[1] as number) : 1 };
+          })
+          .filter((entry): entry is { player: PlayerId; votes: number } => entry !== null)
+      : []
+  };
+}
+/** CR 701.38a: a named ballot, by the lowercase canonical option. */
+export function voteAction(option: string): GameAction {
+  return { type: 'ChooseOption', data: { choice: option } };
+}
+/** CR 701.38b: an object-pool ballot, by index — names cannot disambiguate. */
+export function voteCandidateAction(index: number): GameAction {
+  return { type: 'SubmitVoteCandidate', data: { candidate_index: index } };
+}
+
+/**
  * CR 707.10c + CR 722.3c + CR 702.192a: the copy target walk, which the engine
  * runs **one slot at a time**. One variant serves two operations, and the screen
  * says which one it is:

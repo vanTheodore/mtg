@@ -1877,3 +1877,65 @@ valores por defecto, las tres acciones del motor y el caso ajeno); build OK; y e
 Chromium dos pruebas nuevas —la forma de cambiar objetivos con sus alternativas y las
 tres puertas; y la de anunciar, con el prefijo visible, la ranura opcional y la
 ausencia de «conservar»— más las dos escenas en la prueba de temas.
+
+## Votar es una sesión, no una pregunta (cuadragésima primera pasada, 7 nov 2026)
+
+`VoteChoice` es CR 101.4 + CR 701.38a–d, y el motor lo corre como una **sesión**: cada
+jugador emite sus votos en orden de turno, los votos extra se resuelven en el momento
+en que el jugador votaría una vez (CR 701.38d) y el recuento no se aplica hasta que la
+cola se vacía. Por eso el bloque no es una papeleta: es la **sala**. Dice a quién le
+toca, quién votará después, qué se ha votado ya y qué queda.
+
+**Dos papeletas que se contestan distinto.** Un voto **con nombre** («votes for profit
+or security») responde con la palabra canónica que el motor compara —`ChooseOption
+{ choice }`— mientras la pantalla enseña la etiqueta del texto original. Un voto
+**sobre objetos** (Council's Judgment, «votes for a nonland permanent you don't
+control») responde con el **índice** del candidato —`SubmitVoteCandidate`—, porque dos
+candidatos pueden llamarse igual y el motor no puede desempatarlos por nombre
+(CR 701.38b). La misma ventana sirve las dos y lo dice en la cabecera.
+
+**Quién contesta lo decide el motor.** `actor` es `SubjectActs` (vota el propio
+jugador) o `Delegated(p)` (vota otro asiento por él, como en friend-or-foe). El bloque
+se abre según el asiento **resuelto**, no según `player`, y cuando son distintos lo
+explica en la línea del turno. Es el primer sitio del port donde el que responde y el
+que vota pueden ser dos jugadores diferentes.
+
+**El voto secreto se anuncia como secreto.** En `visibility: Secret` el motor borra
+los recuentos y las papeletas de la vista hasta la revelación simultánea, así que la
+vista filtrada trae ceros que **no significan «nadie ha votado»**. El bloque no los
+pinta como un recuento: dice que es secreto y que el número no se publica hasta el
+final. Es la misma regla de siempre —no inventar un estado— aplicada a una ausencia que
+tiene forma de dato.
+
+Como el recorrido de la copia, esta vista **no guarda estado propio**: cada papeleta se
+envía y el motor vuelve a preguntar con el recuento actualizado, así que un borrador
+local sería un segundo contable.
+
+**Corrección de la propuesta anterior.** La variante propuesta al cerrar la pasada 39
+era `AssignBlockerDamage`, que resultó **ya estar representada** (`DamageAssignment`
+la sirve junto a `AssignCombatDamage`, y está en `REPRESENTED` desde hace treinta
+pasadas). En vez de portar lo que ya estaba, se comparó el censo del pin —148
+variantes— con `REPRESENTED` y quedan **96** sin vista propia; de esas se eligió esta,
+que tiene pantalla propia y ninguna otra la cubre.
+
+Objetos del laboratorio: `Emissary Green` (trigger de ataque, texto literal de
+`emissary_green.rs`) para el voto con nombre en su primera papeleta, y `Council's
+Judgment` lanzado por el rival —de modo que su controlador vota primero y el jugador
+del asiento 1 contesta después— para el voto sobre objetos, con una papeleta ya
+tallada. El texto de esa segunda carta es la cláusula que el propio test del motor
+parsea, no más.
+
+Laboratorio: `/ux?scene=vote` y `/ux?scene=voteObject`, capturas
+`docs/screenshots/ux-votacion-1440.jpg` y `docs/screenshots/ux-votacion-objetos-1440.jpg`,
+más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **517** (11 nuevas en
+`game/__tests__/vote.test.ts`: el voto con nombre con sus etiquetas y su recuento, la
+papeleta por índice con los ids de candidato, la etiqueta ausente que cae a la palabra
+canónica, los votos múltiples con su cero que sigue siendo uno, la delegación en los dos
+sentidos, el voto secreto, la basura podada, los recuentos de más y los que faltan, los
+valores por defecto y las dos acciones); build OK; y en Chromium dos pruebas nuevas —la
+sesión con nombre con su turno y su recuento vacío; y la de objetos con la papeleta ya
+emitida y su índice— más las dos escenas en la prueba de temas.

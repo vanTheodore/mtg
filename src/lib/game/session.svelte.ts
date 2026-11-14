@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -502,6 +502,23 @@ class GameSession {
   /** CR 601.2c + CR 115.1: which opponent announces the next target group. */
   chooseCopyAnnouncer(player: PlayerId) {
     void this.dispatch(chooseCopyAnnouncerAction(player));
+  }
+
+  /**
+   * CR 701.38: the vote session. Like the copy walk, the engine advances it — a
+   * ballot is tallied, the next voter (or the same voter's next ballot) is asked —
+   * so the answer goes out one ballot at a time and there is no draft to hold.
+   */
+  get votePrompt() {
+    return readVote(this.snapshot);
+  }
+  /** CR 701.38a: named ballot, by the canonical option the engine matches. */
+  castVote(option: string) {
+    void this.dispatch(voteAction(option));
+  }
+  /** CR 701.38b: object-pool ballot, by index. */
+  castVoteCandidate(index: number) {
+    void this.dispatch(voteCandidateAction(index));
   }
 
   /** CR 115.7: repointing a spell (or ability) that is already on the stack. */

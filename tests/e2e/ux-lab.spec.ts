@@ -976,6 +976,48 @@ test('la copia anuncia: nada que conservar, la ranura opcional se declina y lo e
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('votación: el voto con nombre se emite en una sesión, no en una pregunta suelta', async ({ page }) => {
+  await page.goto('/ux?scene=vote');
+  const block = page.locator('[data-vote]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Votación · Emissary Green');
+  await expect(block).toHaveAttribute('data-vote-kind', 'named');
+  await expect(block).toHaveAttribute('data-vote-visibility', 'open');
+  await expect(block).toHaveAttribute('data-vote-remaining', '1');
+  // CR 101.4 + CR 701.38d: whose ballot it is, and who votes after.
+  await expect(block.locator('[data-vote-turn]')).toHaveText('Te toca votar, Jugador 1. Después vota el Jugador 2.');
+  await expect(block.locator('[data-vote-tallies]')).toHaveText('Todavía no ha votado nadie.');
+  // The options are the engine's labels; the answer is the canonical word.
+  await expect(block.locator('[data-vote-choice="profit"]')).toContainText('Profit');
+  await expect(block.locator('[data-vote-choice="security"]')).toContainText('Security');
+  await expect(block.locator('[data-vote-tally="0"]')).toHaveText('0');
+  // Nothing to list yet, so no ballot ledger is drawn.
+  await expect(block.locator('[data-vote-ballots]')).toHaveCount(0);
+  await expect(block.locator('[data-vote-secret]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('votación sobre permanentes: el recuento va por índice y se ve quién votó qué', async ({ page }) => {
+  await page.goto('/ux?scene=voteObject');
+  const block = page.locator('[data-vote]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText("Votación · Council's Judgment");
+  // CR 701.38b: an object-pool ballot is answered by index, because names repeat.
+  await expect(block).toHaveAttribute('data-vote-kind', 'object');
+  await expect(block.locator('[data-vote-turn]')).toHaveText('Te toca votar, Jugador 1.');
+  await expect(block.locator('[data-vote-tallies]')).toHaveText('1 voto emitido.');
+  await expect(block.locator('[data-vote-index="0"]')).toContainText('Grizzly Bears');
+  await expect(block.locator('[data-vote-tally="0"]')).toHaveText('1');
+  await expect(block.locator('[data-vote-tally="1"]')).toHaveText('0');
+  // The ledger names the seat that already voted, and for what.
+  await expect(block.locator('[data-vote-ballots] li')).toHaveText('Jugador 2: Grizzly Bears');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');
