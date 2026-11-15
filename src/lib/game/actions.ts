@@ -160,6 +160,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'CastOffer': return 'Puedes lanzar esta carta durante la resolución: elige si la lanzas o qué haces con ella.';
     case 'MeldPairChoice': return 'Elige qué mitad se fusiona: Phase nombra las dos cartas y el resultado.';
     case 'MeldAttackTargetChoice': return 'La carta fusionada entra atacando: elige a quién.';
+    case 'EntryAttackTargetChoice': return 'El permanente entra atacando: elige a quién.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

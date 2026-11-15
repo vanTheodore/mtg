@@ -65,6 +65,7 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `meld` | `MeldPairChoice` | [claro](fusionar-claro.jpg) | [oscuro](fusionar-oscuro.jpg) |
 | `meldAttack` | `MeldAttackTargetChoice` | [claro](fusion-ataca-claro.jpg) | [oscuro](fusion-ataca-oscuro.jpg) |
 | `revealAny` | `RevealChoice` (cualquier número) | [claro](revelar-cualquier-numero-claro.jpg) | [oscuro](revelar-cualquier-numero-oscuro.jpg) |
+| `entryAttack` | `EntryAttackTargetChoice` | [claro](entra-atacando-claro.jpg) | [oscuro](entra-atacando-oscuro.jpg) |
 | `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:

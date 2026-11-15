@@ -1460,13 +1460,7 @@ export function meldAttackPrompt(snapshot: EngineSnapshot | null): MeldAttackPro
   const data = waiting.data ?? {};
   const context = data.context as Record<string, unknown> | undefined;
   if (!context || typeof context.source_id !== 'number') return null;
-  const targets = Array.isArray(data.valid_targets)
-    ? (data.valid_targets as unknown[]).filter((entry): entry is AttackTarget => {
-        if (!entry || typeof entry !== 'object') return false;
-        const target = entry as Record<string, unknown>;
-        return typeof target.type === 'string' && typeof target.data === 'number';
-      })
-    : [];
+  const targets = attackTargetList(data.valid_targets);
   // The engine only pauses when it has a destination to ask about.
   if (!targets.length) return null;
   return {
@@ -1479,6 +1473,55 @@ export function meldAttackPrompt(snapshot: EngineSnapshot | null): MeldAttackPro
 /** CR 508.4: the entering permanent attacks the chosen destination. */
 export function chooseEntryAttackTargetAction(target: AttackTarget): GameAction {
   return { type: 'ChooseEntryAttackTarget', data: { target } };
+}
+/**
+ * CR 508.4: the destinations Phase publishes are `Player`, `Planeswalker` and
+ * `Battle`, each as `{ type, data }`. A malformed entry is not a destination: the
+ * button it would draw could not name anyone, and the answer is that same object.
+ */
+function attackTargetList(raw: unknown): AttackTarget[] {
+  return Array.isArray(raw)
+    ? (raw as unknown[]).filter((entry): entry is AttackTarget => {
+        if (!entry || typeof entry !== 'object') return false;
+        const target = entry as Record<string, unknown>;
+        return typeof target.type === 'string' && typeof target.data === 'number';
+      })
+    : [];
+}
+/**
+ * CR 508.4: a permanent that enters the battlefield **already attacking** skipped
+ * the declare-attackers step (CR 508.1), so its controller names the defending
+ * player, planeswalker or battle it attacks — and CR 508.4a is what happens when
+ * that destination is gone by the time the choice is applied. Ninjutsu
+ * (CR 702.49c), sneak (CR 702.190b) and every "put it onto the battlefield tapped
+ * and attacking" instruction land in this same window.
+ *
+ * This is the generic variant, not the melded one: there is no frozen
+ * `MeldSelection` here, only `object_id`, which is the real permanent — so the
+ * block reads the name off the battlefield instead of a published result.
+ *
+ * The window exists only when the legal topology has more than one destination;
+ * with exactly one the engine seats the attacker there and asks nothing.
+ */
+export type EntryAttackPrompt = {
+  player: PlayerId;
+  /** The permanent that is entering attacking. */
+  objectId: ObjectId;
+  targets: AttackTarget[];
+};
+export function entryAttackPrompt(snapshot: EngineSnapshot | null): EntryAttackPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'EntryAttackTargetChoice') return null;
+  const data = waiting.data ?? {};
+  if (typeof data.object_id !== 'number') return null;
+  const targets = attackTargetList(data.valid_targets);
+  // The engine only pauses when it has a destination to ask about.
+  if (!targets.length) return null;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: data.object_id as ObjectId,
+    targets
+  };
 }
 
 /**

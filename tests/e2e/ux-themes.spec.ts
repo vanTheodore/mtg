@@ -86,6 +86,7 @@ const SCENES = [
   { scene: 'castOfferWindow', slug: 'lanzar-ventana', block: '[data-cast-offer]' },
   { scene: 'meld', slug: 'fusionar', block: '[data-meld]' },
   { scene: 'meldAttack', slug: 'fusion-ataca', block: '[data-meld-attack]' },
+  { scene: 'entryAttack', slug: 'entra-atacando', block: '[data-entry-attack]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

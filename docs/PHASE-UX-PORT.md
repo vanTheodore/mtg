@@ -2269,3 +2269,52 @@ errores; en Chromium dos pruebas nuevas —revelar cualquier número con su conj
 «Revelar ninguna», y el mantenimiento acumulativo con su «× 3»— y dos escenas más en el
 laboratorio (53 → 55 escenas en la prueba de temas, 110 jpg, presupuesto de 600 s). Poda de pruebas upstream sin cambios (78 de siempre) y ninguna adaptación
 más en los tres árboles `src` ni en `phase-ast/data`.
+
+## Entrar atacando no es la fusión: la ventana genérica (cuadragésima octava pasada, 7 nov 2026)
+
+`EntryAttackTargetChoice` (CR 508.4) es la variante que comparte acción con la fusión
+—las dos se responden con `ChooseEntryAttackTarget { target }`— y no es la misma
+ventana. La fusión tiene contexto congelado; esta publica `object_id` y nada más: es el
+motor diciendo «este permanente entra en el campo **ya atacando**, elige a quién». Ahí
+caen ninjutsu (CR 702.49c), sneak (CR 702.190b) y cualquier efecto que ponga una criatura
+en el campo girada y atacando.
+
+**Se parsea por variante, no por acción.** Como la acción es la misma, el bloque sólo
+puede decidir leyendo `waiting_for.type`; leer la acción habría devuelto dos ventanas
+distintas al mismo componente. Por eso `meldAttackPrompt` y `entryAttackPrompt` se
+niegan mutuamente, y eso está probado en los dos sentidos.
+
+**El nombre sale del campo, no de un resultado.** El objeto que entra es el permanente
+real (`object_id`), así que la cabecera lee su nombre en `state.objects` —«Entra
+atacando · Ninja of the Deep Hours»— con el id como respaldo, en vez de prometer un
+nombre que el motor no publicó.
+
+**Los tres tipos de destino son tipos, no adornos.** `AttackTarget` tiene `Player`,
+`Planeswalker` y `Battle`, y la escena enseña los tres: un asiento se nombra por número
+(«Atacar a Jugador 2»), y un planeswalker o una batalla por el nombre del objeto. CR
+310.5 dice que una batalla también se ataca, así que el bloque no la esconde.
+
+**La ventana existe sólo con más de un destino.** Con uno, el motor sienta al atacante
+ahí y no pregunta; con ninguno —fuera de combate, o sin defensores legales— el
+permanente entra girado y atacando pero sin destino, y tampoco hay nada que preguntar.
+El bloque cuenta los destinos que publica Phase y no inventa una elección vacía.
+
+Objetos del laboratorio: `Ninja of the Deep Hours` como criatura que entra por ninjutsu
+(#408), `Chandra, Torch of Defiance` como planeswalker (#205) e `Invasion of Kamigawa`
+como batalla (#409); los dos primeros ya estaban en el laboratorio. El ninja y la batalla
+viven en `objects` para no mover los recuentos de zona que otras escenas comprueban.
+
+Laboratorio: `/ux?scene=entryAttack`, captura
+`docs/screenshots/ux-entra-atacando-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **579** (8 nuevas en
+`game/__tests__/entry-attack.test.ts`: el permanente y la topología completa, la falta de
+`object_id`, los destinos malformados que se descartan, la topología vacía que no es
+ventana, el asiento por defecto, las dos ventanas que se niegan mutuamente, las etiquetas
+de los tres tipos de destino —con respaldo cuando no hay objeto que leer— y la acción
+compartida); el filtro de destinos pasó a un ayudante único que también usa la fusión, en
+vez de duplicar el predicado; build OK; en Chromium una prueba nueva —tres destinos, los
+nombres de los botones, CR 310.5 y el aviso de CR 508.4a— y una escena más en la prueba de
+temas (55 → 56 escenas, 112 jpg, presupuesto de 600 s).

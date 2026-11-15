@@ -64,10 +64,11 @@
   import CastOfferPrompt from '#lib/components/CastOfferPrompt.svelte';
   import MeldPairPrompt from '#lib/components/MeldPairPrompt.svelte';
   import MeldAttackPrompt from '#lib/components/MeldAttackPrompt.svelte';
+  import EntryAttackPrompt from '#lib/components/EntryAttackPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -135,6 +136,7 @@
     { value: 'castOfferWindow', label: 'Lanzar: ventana gratuita' },
     { value: 'meld', label: 'Fusionar dos mitades' },
     { value: 'meldAttack', label: 'A quién ataca la fusión' },
+    { value: 'entryAttack', label: 'A quién ataca quien entra' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -206,6 +208,7 @@
     castOfferWindow: 'CastOffer · CR 608.2g, ventana de lanzamiento',
     meld: 'MeldPairChoice · CR 701.42, elegir la pareja',
     meldAttack: 'MeldAttackTargetChoice · CR 508.4, el destino',
+    entryAttack: 'EntryAttackTargetChoice · CR 508.4, cualquier permanente',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -422,6 +425,26 @@
     oracle_text: 'Flying, first strike, lifelink. At the beginning of your end step, transform Gisela.'
   } as GameObject;
   const giselaTwo = { ...giselaOne, id: 407, card_id: 407 } as GameObject;
+  // CR 702.49c + CR 508.4: a ninjutsu creature is put onto the battlefield already
+  // attacking, so its controller names the defender. It lives in `objects` only,
+  // like the other prompt-only cards, so the board counts the other scenes assert
+  // do not move.
+  const shinobi = {
+    id: 408, card_id: 408, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Ninja of the Deep Hours',
+    card_types: { core_types: ['Creature'], subtypes: ['Human', 'Ninja'] },
+    power: 2, toughness: 2,
+    mana_cost: { type: 'Cost', shards: ['Blue'], generic: 3 },
+    oracle_text:
+      'Ninjutsu {1}{U}. Whenever Ninja of the Deep Hours deals combat damage to a player, you may draw a card.'
+  } as GameObject;
+  // CR 310.5: a battle is a legal attack destination too — the third kind of
+  // defender the engine can publish besides a seat and a planeswalker.
+  const invasion = {
+    id: 409, card_id: 409, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Invasion of Kamigawa',
+    card_types: { core_types: ['Battle'], subtypes: ['Siege'] }
+  } as GameObject;
   // CR 608.2g: the free-cast window (Invoke Calamity) offers instants and sorceries
   // from the controller's graveyard. Two real cheap ones, in `objects` only.
   const graveShock = {
@@ -592,7 +615,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -770,6 +793,23 @@
           player: 0,
           object_id: 395,
           cost: { type: 'Cost', shards: ['White'], generic: 0 }
+        }
+      };
+    }
+    if (scene === 'entryAttack') {
+      // `EntryAttackTargetChoice` (CR 508.4): the generic window — no frozen meld
+      // context, just the permanent that is entering and the whole legal topology.
+      // Three destinations cover the three kinds `AttackTarget` has.
+      return {
+        type: 'EntryAttackTargetChoice',
+        data: {
+          player: 0,
+          object_id: 408,
+          valid_targets: [
+            { type: 'Player', data: 1 },
+            { type: 'Planeswalker', data: 205 },
+            { type: 'Battle', data: 409 }
+          ]
         }
       };
     }
@@ -1506,7 +1546,7 @@
           : scene === 'miracle' ? 'Draw'
           : scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow' ? 'PreCombatMain'
           : scene === 'meld' ? 'PreCombatMain'
-          : scene === 'meldAttack' ? 'DeclareAttackers'
+          : scene === 'meldAttack' || scene === 'entryAttack' ? 'DeclareAttackers'
           : scene === 'revealAny' || scene === 'unlessRepeat' ? 'Upkeep'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
@@ -1725,6 +1765,7 @@
         {#if scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow'}<CastOfferPrompt />{/if}
         {#if scene === 'meld'}<MeldPairPrompt />{/if}
         {#if scene === 'meldAttack'}<MeldAttackPrompt />{/if}
+        {#if scene === 'entryAttack'}<EntryAttackPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

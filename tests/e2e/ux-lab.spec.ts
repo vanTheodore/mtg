@@ -1241,6 +1241,31 @@ test('la fusión entra atacando: se elige el destino entre los que publica Phase
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('el permanente que entra atacando nombra sus tres tipos de destino', async ({ page }) => {
+  await page.goto('/ux?scene=entryAttack');
+  const block = page.locator('[data-entry-attack]');
+  await expect(block).toBeVisible();
+  // CR 508.4: the permanent is the real one —no frozen meld context— and the name
+  // comes from the battlefield, not from a published result.
+  await expect(block).toHaveAttribute('data-entry-attack-targets', '3');
+  await expect(block.locator('strong')).toHaveText('Entra atacando · Ninja of the Deep Hours');
+  await expect(block.locator('[data-entry-attack-count]')).toHaveText('Hay 3 destinos posibles.');
+  await expect(block.locator('[data-entry-attack-target="Player:1"]')).toHaveText('Atacar a Jugador 2');
+  await expect(block.locator('[data-entry-attack-target="Planeswalker:205"]')).toHaveText(
+    'Atacar a Chandra, Torch of Defiance'
+  );
+  // CR 310.5: a battle is a legal destination too.
+  await expect(block.locator('[data-entry-attack-target="Battle:409"]')).toHaveText(
+    'Atacar a Invasion of Kamigawa'
+  );
+  await expect(block).toContainText('CR 310.5');
+  // CR 508.4a: a destination that goes stale leaves it tapped and attacking, with no defender.
+  await expect(block.locator('[data-entry-attack-stale]')).toContainText('CR 508.4a');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('revelar cualquier número admite un conjunto y también ninguna carta', async ({ page }) => {
   await page.goto('/ux?scene=revealAny');
   const block = page.locator('[data-reveal-prompt]');
