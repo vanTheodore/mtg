@@ -87,6 +87,9 @@ const SCENES = [
   { scene: 'meld', slug: 'fusionar', block: '[data-meld]' },
   { scene: 'meldAttack', slug: 'fusion-ataca', block: '[data-meld-attack]' },
   { scene: 'entryAttack', slug: 'entra-atacando', block: '[data-entry-attack]' },
+  { scene: 'replacement', slug: 'reemplazos', block: '[data-replacement]' },
+  { scene: 'replacementCompose', slug: 'reemplazos-componen', block: '[data-replacement]' },
+  { scene: 'replacementOptional', slug: 'reemplazo-opcional', block: '[data-replacement]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

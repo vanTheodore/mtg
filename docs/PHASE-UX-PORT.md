@@ -2318,3 +2318,59 @@ compartida); el filtro de destinos pasó a un ayudante único que también usa l
 vez de duplicar el predicado; build OK; en Chromium una prueba nueva —tres destinos, los
 nombres de los botones, CR 310.5 y el aviso de CR 508.4a— y una escena más en la prueba de
 temas (55 → 56 escenas, 112 jpg, presupuesto de 600 s).
+
+## Un reemplazo no es un orden que se arrastre (cuadragésima novena pasada, 7 nov 2026)
+
+`ReplacementChoice` (CR 616.1) es la variante que más se parece a lo que no es. Su
+nombre sugiere «ordena los reemplazos», y en realidad son **tres** preguntas distintas
+con la misma forma de datos: ordenar varios reemplazos que escriben el mismo dato
+(CR 616.1e), aceptar o rechazar uno solo que dice «puedes», y elegir el destino de una
+carta encontrada. El motor las separa él mismo con `kind`, precisamente para que la
+mesa no las adivine leyendo el texto de las etiquetas.
+
+**Ordenar es elegir de uno en uno.** Con `kind: Order` el jugador no entrega una
+permutación: elige **uno** y el motor lo aplica, y luego vuelve a preguntar por lo que
+siga siendo aplicable (CR 616.1f). Por eso la vista es una lista de botones con su
+efecto escrito y no una lista arrastrable; la nota final lo dice con esas palabras.
+
+**Quién decide el resultado lo dice el motor, no la mesa.** `last_applied_decides` es
+la respuesta de Phase a si el último reemplazo aplicado gana solo —dos efectos que
+escriben el mismo campo, como exiliar una criatura moribunda— o si los efectos se
+componen —un doble contra un añadido de daño, contadores, maná—. El bloque repite esa
+respuesta y no asume «gana el último».
+
+**Una rama opcional no se ordena.** Con `kind: OptionalBranch` los dos candidatos son
+la misma fuente mostrada dos veces (índice 0 acepta, índice 1 declina); pintarlos como
+lista ordenable habría inventado una decisión que la carta no pide. Y con
+`kind: SearchFoundDestination` los destinos son alternativas excluyentes, no pasos.
+
+**Un índice sin botón sería un callejón.** La respuesta es una **posición**
+(`ChooseReplacement { index }`), y `candidates` no está garantizado a llenar
+`candidate_count` (el caso `EmptyManaPool` filtra). El prompt conserva todas las
+posiciones que el motor aceptará y, cuando no hay descripción, el botón dice «Opción N ·
+Phase no describió esta opción» en vez de dejar una respuesta legal sin dónde pulsar.
+
+Objetos del laboratorio: `Kalitas, Traitor of Ghet` (#410) y `Rest in Peace` (#411) como
+los dos reemplazos que escriben el mismo destino; `Furnace of Rath` (#412) y
+`Gratuitous Violence` (#413) como los que se componen; y `Life from the Loam` (#414)
+para la rama opcional del dredge. Todos viven en `objects`, como el resto de cartas que
+sólo nombra una ventana.
+
+Laboratorio: `/ux?scene=replacement`, `/ux?scene=replacementCompose` y
+`/ux?scene=replacementOptional`, capturas `ux-reemplazos-1440.jpg`,
+`ux-reemplazos-componen-1440.jpg` y `ux-reemplazo-opcional-1440.jpg`, más sus pares de
+tema. La forma de destinos no tiene escena propia: se pinta igual que la de orden y está
+cubierta en la prueba de unidad.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **587** (8 nuevas en
+`game/__tests__/replacement-choice.test.ts`: el orden con sus fuentes y descripciones y
+`last_applied_decides`, las tres formas del campo `kind` con su valor por defecto, la
+posición sin resumen que igualmente tiene botón, la ventana vacía y la vecina que no son
+este prompt, los nombres y descripciones ausentes que no se inventan, el asiento por
+defecto y el «se componen» que es la ausencia del indicador, la marca de recordable que
+sólo da la clave del motor, y la acción con el índice); build OK; en Chromium dos pruebas
+nuevas —el orden con las dos respuestas del motor y la rama opcional que no se anuncia
+como orden— y tres escenas más en la prueba de temas (56 → 59 escenas, 118 jpg,
+presupuesto de 600 s).

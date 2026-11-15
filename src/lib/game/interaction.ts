@@ -1525,6 +1525,96 @@ export function entryAttackPrompt(snapshot: EngineSnapshot | null): EntryAttackP
 }
 
 /**
+ * CR 616.1: a replacement effect rewrites an event before it happens, and when
+ * more than one applies the affected player decides. One `WaitingFor` serves
+ * **three** structurally different prompts, and the engine publishes which one
+ * (`kind`) exactly so the display layer does not re-derive it from label text:
+ *
+ *   - `order` (CR 616.1e): several distinct replacements apply. The player picks
+ *     **one** now; per CR 616.1f the engine applies it and re-prompts for
+ *     whatever is still applicable, so this is a sequence of single picks, not a
+ *     sortable list. `lastAppliedDecides` says whether the last one applied alone
+ *     decides the outcome (every colliding write overwrites the same field) or
+ *     the effects compose (damage doublers against adders, counters, mana).
+ *   - `optionalBranch`: a single "you may" replacement shown as two branches of
+ *     one source — index 0 accepts, index 1 declines. Not an ordering.
+ *   - `destination`: mutually exclusive destinations for a found card.
+ *
+ * The answer is always a **position** in the list (`ChooseReplacement { index }`),
+ * which is why the prompt keeps every slot: an index has to name the same option
+ * the engine means, described or not.
+ */
+export type ReplacementKind = 'order' | 'optional' | 'destination';
+export type ReplacementOption = {
+  /** Position in the engine's list — the whole of `ChooseReplacement { index }`. */
+  index: number;
+  /** Who causes it, when Phase names a source. */
+  sourceId: ObjectId | null;
+  sourceName: string | null;
+  /** The engine's own wording for what this option does; `null` when it sent none. */
+  description: string | null;
+};
+export type ReplacementPrompt = {
+  player: PlayerId;
+  kind: ReplacementKind;
+  /** One slot per answer the engine will accept, in index order. */
+  options: ReplacementOption[];
+  /** CR 616.1f: whether the last replacement applied alone decides the outcome. */
+  lastAppliedDecides: boolean;
+  /** CR 616.1: the engine will accept a remembered answer for this prompt. */
+  rememberable: boolean;
+};
+/** CR 616.1: the engine's own classification, read from its tag. */
+function replacementKind(raw: unknown): ReplacementKind {
+  const tag =
+    typeof raw === 'string'
+      ? raw
+      : raw && typeof raw === 'object' && typeof (raw as { type?: unknown }).type === 'string'
+        ? (raw as { type: string }).type
+        : 'Order';
+  if (tag === 'OptionalBranch') return 'optional';
+  if (tag === 'SearchFoundDestination') return 'destination';
+  return 'order';
+}
+export function replacementPrompt(snapshot: EngineSnapshot | null): ReplacementPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ReplacementChoice') return null;
+  const data = waiting.data ?? {};
+  const summaries = Array.isArray(data.candidates) ? (data.candidates as unknown[]) : [];
+  const described: ReplacementOption[] = summaries.map((entry, index) => {
+    const candidate = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
+    const name = typeof candidate.source_name === 'string' && candidate.source_name ? candidate.source_name : null;
+    const description =
+      typeof candidate.description === 'string' && candidate.description ? candidate.description : null;
+    return {
+      index,
+      sourceId: typeof candidate.source_id === 'number' ? (candidate.source_id as ObjectId) : null,
+      sourceName: name,
+      description
+    };
+  });
+  // `candidate_count` is what the engine will accept; the summaries describe those
+  // slots but are not guaranteed to fill them (`EmptyManaPool` filters). Keeping the
+  // unnamed slots is what stops a legal index from having no button.
+  const count = typeof data.candidate_count === 'number' ? data.candidate_count : described.length;
+  const options: ReplacementOption[] = Array.from({ length: Math.max(count, described.length) }, (_, index) =>
+    described[index] ?? { index, sourceId: null, sourceName: null, description: null }
+  );
+  if (!options.length) return null;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    kind: replacementKind(data.kind),
+    options,
+    lastAppliedDecides: data.last_applied_decides === true,
+    rememberable: data.remember_identity != null
+  };
+}
+/** CR 616.1: apply the replacement at `index`, or accept the branch there. */
+export function chooseReplacementAction(index: number): GameAction {
+  return { type: 'ChooseReplacement', data: { index } };
+}
+
+/**
  * CR 701.44d: several permanents explore at the same time, so the player who
  * controls them chooses **the order** — one explorer per step. The engine asks
  * with the ones this player may pick (`choosable`) and the whole queue

@@ -65,10 +65,11 @@
   import MeldPairPrompt from '#lib/components/MeldPairPrompt.svelte';
   import MeldAttackPrompt from '#lib/components/MeldAttackPrompt.svelte';
   import EntryAttackPrompt from '#lib/components/EntryAttackPrompt.svelte';
+  import ReplacementPrompt from '#lib/components/ReplacementPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -137,6 +138,9 @@
     { value: 'meld', label: 'Fusionar dos mitades' },
     { value: 'meldAttack', label: 'A quién ataca la fusión' },
     { value: 'entryAttack', label: 'A quién ataca quien entra' },
+    { value: 'replacement', label: 'Reemplazos: cuál se aplica' },
+    { value: 'replacementCompose', label: 'Reemplazos que se suman' },
+    { value: 'replacementOptional', label: 'Reemplazo opcional' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -209,6 +213,9 @@
     meld: 'MeldPairChoice · CR 701.42, elegir la pareja',
     meldAttack: 'MeldAttackTargetChoice · CR 508.4, el destino',
     entryAttack: 'EntryAttackTargetChoice · CR 508.4, cualquier permanente',
+    replacement: 'ReplacementChoice · CR 616.1e, el orden importa',
+    replacementCompose: 'ReplacementChoice · CR 616.1f, se componen',
+    replacementOptional: 'ReplacementChoice · CR 616.1, «puedes»',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -440,6 +447,47 @@
   } as GameObject;
   // CR 310.5: a battle is a legal attack destination too — the third kind of
   // defender the engine can publish besides a seat and a planeswalker.
+  // CR 616.1e: two replacements that write the same destination — the creature's
+  // zone — so the one applied last decides (CR 616.1f). Real cards, both printed.
+  const kalitas = {
+    id: 410, card_id: 410, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Kalitas, Traitor of Ghet',
+    card_types: { core_types: ['Creature'], subtypes: ['Vampire', 'Warrior'], supertypes: ['Legendary'] },
+    power: 3, toughness: 4,
+    oracle_text:
+      'Lifelink. If a nontoken creature an opponent controls would die, instead exile that card and create a 2/2 black Zombie creature token.'
+  } as GameObject;
+  const restInPeace = {
+    id: 411, card_id: 411, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Rest in Peace',
+    card_types: { core_types: ['Enchantment'] },
+    oracle_text:
+      'When Rest in Peace enters, exile all cards from all graveyards. If a card or token would be put into a graveyard from anywhere, exile it instead.'
+  } as GameObject;
+  // CR 616.1f: damage multipliers compose — neither decides the outcome alone.
+  const furnaceOfRath = {
+    id: 412, card_id: 412, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Furnace of Rath',
+    card_types: { core_types: ['Enchantment'] },
+    oracle_text: 'If a source would deal damage to any target, it deals double that damage instead.'
+  } as GameObject;
+  const gratuitousViolence = {
+    id: 413, card_id: 413, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Gratuitous Violence',
+    card_types: { core_types: ['Enchantment'] },
+    oracle_text:
+      'If a creature you control would deal damage to a permanent or player, it deals double that damage instead.'
+  } as GameObject;
+  // CR 616.1: one optional replacement («you may») shown as its two branches — the
+  // dredge offer on a draw, whose decline is a real answer.
+  const loam = {
+    id: 414, card_id: 414, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Life from the Loam',
+    card_types: { core_types: ['Sorcery'] },
+    mana_cost: { type: 'Cost', shards: ['Green'], generic: 1 },
+    oracle_text:
+      'Return up to three target land cards from your graveyard to your hand. Dredge 3 (If you would draw a card, you may mill three cards instead. If you do, return this card from your graveyard to your hand.)'
+  } as GameObject;
   const invasion = {
     id: 409, card_id: 409, owner: 1, controller: 1, zone: 'Battlefield',
     name: 'Invasion of Kamigawa',
@@ -615,7 +663,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -793,6 +841,58 @@
           player: 0,
           object_id: 395,
           cost: { type: 'Cost', shards: ['White'], generic: 0 }
+        }
+      };
+    }
+    if (scene === 'replacement') {
+      // CR 616.1e: two distinct applicable replacements for the same event — a
+      // creature dying. Both write the card's destination, so the last applied one
+      // decides (CR 616.1f), and the engine says so with `last_applied_decides`.
+      return {
+        type: 'ReplacementChoice',
+        data: {
+          player: 0,
+          candidate_count: 2,
+          candidates: [
+            { source_id: 410, source_name: 'Kalitas, Traitor of Ghet', description: 'Exiliar la criatura en vez de ponerla en el cementerio' },
+            { source_id: 411, source_name: 'Rest in Peace', description: 'Exiliar la carta en vez de ponerla en el cementerio' }
+          ],
+          kind: { type: 'Order' },
+          last_applied_decides: true
+        }
+      };
+    }
+    if (scene === 'replacementCompose') {
+      // CR 616.1f: damage multipliers apply one after the other and both count, so
+      // there is no single winner and the block must not name one.
+      return {
+        type: 'ReplacementChoice',
+        data: {
+          player: 0,
+          candidate_count: 2,
+          candidates: [
+            { source_id: 412, source_name: 'Furnace of Rath', description: 'El daño que se fuera a hacer a cualquier objetivo se duplica' },
+            { source_id: 413, source_name: 'Gratuitous Violence', description: 'El daño que una criatura que controlas fuera a hacer se duplica' }
+          ],
+          kind: { type: 'Order' },
+          last_applied_decides: false
+        }
+      };
+    }
+    if (scene === 'replacementOptional') {
+      // CR 616.1: a single «you may» replacement as two branches of one source —
+      // index 0 accepts, index 1 declines. It is not an ordering.
+      return {
+        type: 'ReplacementChoice',
+        data: {
+          player: 0,
+          candidate_count: 2,
+          candidates: [
+            { source_id: 414, source_name: 'Life from the Loam', description: 'Moler 3 cartas y devolver Life from the Loam a la mano' },
+            { source_id: 414, source_name: 'Life from the Loam', description: 'Robar la carta con normalidad' }
+          ],
+          kind: { type: 'OptionalBranch' },
+          last_applied_decides: false
         }
       };
     }
@@ -1547,7 +1647,8 @@
           : scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow' ? 'PreCombatMain'
           : scene === 'meld' ? 'PreCombatMain'
           : scene === 'meldAttack' || scene === 'entryAttack' ? 'DeclareAttackers'
-          : scene === 'revealAny' || scene === 'unlessRepeat' ? 'Upkeep'
+          : scene === 'revealAny' || scene === 'unlessRepeat' || scene === 'replacementOptional' ? 'Draw'
+          : scene === 'replacement' || scene === 'replacementCompose' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1766,6 +1867,7 @@
         {#if scene === 'meld'}<MeldPairPrompt />{/if}
         {#if scene === 'meldAttack'}<MeldAttackPrompt />{/if}
         {#if scene === 'entryAttack'}<EntryAttackPrompt />{/if}
+        {#if scene === 'replacement' || scene === 'replacementCompose' || scene === 'replacementOptional'}<ReplacementPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

@@ -1241,6 +1241,51 @@ test('la fusión entra atacando: se elige el destino entre los que publica Phase
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('los reemplazos que escriben el mismo dato se eligen uno por paso', async ({ page }) => {
+  await page.goto('/ux?scene=replacement');
+  const block = page.locator('[data-replacement]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-replacement-kind', 'order');
+  await expect(block).toHaveAttribute('data-replacement-count', '2');
+  await expect(block.locator('strong')).toHaveText('¿Qué reemplazo se aplica ahora?');
+  // CR 616.1e: the engine applies the chosen one and asks again — one pick per step.
+  await expect(block.locator('[data-replacement-rule]')).toContainText('CR 616.1e');
+  await expect(block.locator('[data-replacement-rule]')).toContainText('CR 616.1f');
+  await expect(block.locator('[data-replacement-again]')).toContainText('volver a preguntar');
+  // CR 616.1f: this collision is last-write-wins, and the engine is the one saying it.
+  await expect(block).toHaveAttribute('data-replacement-decides', 'last');
+  await expect(block.locator('[data-replacement-compose]')).toContainText('el último reemplazo que se aplique decide');
+  await expect(block.locator('[data-replacement-option="0"]')).toContainText('Kalitas, Traitor of Ghet');
+  await expect(block.locator('[data-replacement-option="1"]')).toContainText('Rest in Peace');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+
+  // The same window with composing effects must not name a winner.
+  await page.goto('/ux?scene=replacementCompose');
+  const compose = page.locator('[data-replacement]');
+  await expect(compose).toHaveAttribute('data-replacement-decides', 'compose');
+  await expect(compose.locator('[data-replacement-compose]')).toContainText('se componen');
+  await expect(compose.locator('[data-replacement-compose]')).not.toContainText('el último reemplazo');
+});
+
+test('un reemplazo opcional es una rama, no un orden que se arrastre', async ({ page }) => {
+  await page.goto('/ux?scene=replacementOptional');
+  const block = page.locator('[data-replacement]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-replacement-kind', 'optional');
+  await expect(block.locator('strong')).toHaveText('Un reemplazo opcional');
+  // Both branches name the same source: the choice is accept or decline.
+  await expect(block.locator('[data-replacement-option="0"]')).toContainText('Life from the Loam');
+  await expect(block.locator('[data-replacement-option="1"]')).toContainText('Robar la carta con normalidad');
+  // CR 616.1e wording and the re-prompt note belong to the ordering shape only.
+  await expect(block.locator('[data-replacement-rule]')).not.toContainText('aplicables al mismo suceso');
+  await expect(block.locator('[data-replacement-again]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el permanente que entra atacando nombra sus tres tipos de destino', async ({ page }) => {
   await page.goto('/ux?scene=entryAttack');
   const block = page.locator('[data-entry-attack]');
