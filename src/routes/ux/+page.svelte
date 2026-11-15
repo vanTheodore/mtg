@@ -63,10 +63,11 @@
   import MiracleRevealPrompt from '#lib/components/MiracleRevealPrompt.svelte';
   import CastOfferPrompt from '#lib/components/CastOfferPrompt.svelte';
   import MeldPairPrompt from '#lib/components/MeldPairPrompt.svelte';
+  import MeldAttackPrompt from '#lib/components/MeldAttackPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -133,6 +134,9 @@
     { value: 'castOfferCascade', label: 'Lanzar: cascada' },
     { value: 'castOfferWindow', label: 'Lanzar: ventana gratuita' },
     { value: 'meld', label: 'Fusionar dos mitades' },
+    { value: 'meldAttack', label: 'A quién ataca la fusión' },
+    { value: 'revealAny', label: 'Revelar cualquier número' },
+    { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -201,6 +205,9 @@
     castOfferCascade: 'CastOffer · CR 702.85a, cascada',
     castOfferWindow: 'CastOffer · CR 608.2g, ventana de lanzamiento',
     meld: 'MeldPairChoice · CR 701.42, elegir la pareja',
+    meldAttack: 'MeldAttackTargetChoice · CR 508.4, el destino',
+    revealAny: 'RevealChoice · CR 107.1c, cualquier número',
+    unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -766,6 +773,27 @@
         }
       };
     }
+    if (scene === 'meldAttack') {
+      // `MeldAttackTargetChoice` (CR 508.4): the frozen context of the pair plus the
+      // complete legal topology. Two destinations — the seat and a planeswalker —
+      // which is the case where the engine asks at all.
+      return {
+        type: 'MeldAttackTargetChoice',
+        data: {
+          player: 0,
+          context: {
+            source_id: 405,
+            partner_id: 406,
+            controller: 0,
+            expected_source: 'Bruna, the Fading Light',
+            expected_partner: 'Gisela, the Broken Blade',
+            result: 'Brisela, Voice of Nightmares',
+            entry: { type: 'TappedAndAttacking', data: { type: 'AnyDefender' } }
+          },
+          valid_targets: [{ type: 'Player', data: 1 }, { type: 'Planeswalker', data: 205 }]
+        }
+      };
+    }
     if (scene === 'meld') {
       // `MeldPairChoice` (CR 701.42) freezes the referents of each candidate pair:
       // same half fixed, one entry per possible partner, plus the printed names the
@@ -1235,6 +1263,36 @@
         }
       };
     }
+    if (scene === 'revealAny') {
+      // CR 107.1c from the pinned 0.126.0 contract: `cardinality: AnyNumber` admits
+      // any subset of the offered cards, including none — the field is additive and
+      // the historical single pick stays the default.
+      return {
+        type: 'RevealChoice',
+        data: {
+          player: 0,
+          cards: [1000, 1001, 1002],
+          optional: true,
+          decline_runs_continuation: true,
+          cardinality: 'AnyNumber'
+        }
+      };
+    }
+    if (scene === 'unlessRepeat') {
+      // CR 702.24a from the pinned 0.126.0 contract: a compact cumulative upkeep
+      // pays one printed instruction `repeat` times — the age-counter count.
+      return {
+        type: 'UnlessPayment',
+        data: {
+          player: 0,
+          cost: { type: 'Mana', cost: { generic: 1, shards: [] } },
+          pending_effect: { ability: { kind: 'Permanent' } },
+          effect_description: 'sacrificar este permanente',
+          repeat: 3,
+          remaining: []
+        }
+      };
+    }
     if (scene === 'reveal') {
       // Shape taken from `WaitingFor::RevealChoice` in the pinned engine: the
       // reveal-land pattern, where declining is a real answer (CR 701.20a).
@@ -1448,6 +1506,8 @@
           : scene === 'miracle' ? 'Draw'
           : scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow' ? 'PreCombatMain'
           : scene === 'meld' ? 'PreCombatMain'
+          : scene === 'meldAttack' ? 'DeclareAttackers'
+          : scene === 'revealAny' || scene === 'unlessRepeat' ? 'Upkeep'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1664,6 +1724,9 @@
         {#if scene === 'miracle'}<MiracleRevealPrompt />{/if}
         {#if scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow'}<CastOfferPrompt />{/if}
         {#if scene === 'meld'}<MeldPairPrompt />{/if}
+        {#if scene === 'meldAttack'}<MeldAttackPrompt />{/if}
+        {#if scene === 'revealAny'}<RevealPrompt />{/if}
+        {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>

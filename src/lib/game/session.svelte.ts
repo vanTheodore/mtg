@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, chooseEntryAttackTargetAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -659,6 +659,18 @@ class GameSession {
     void this.dispatch(chooseMeldPairAction(choice.sourceId, choice.partnerId));
   }
 
+  /**
+   * CR 508.4: the melded creature enters attacking, so one destination is chosen
+   * out of the ones the engine published. With a single destination the engine
+   * does not ask at all.
+   */
+  get meldAttackPrompt() {
+    return readMeldAttack(this.snapshot);
+  }
+  chooseMeldAttackTarget(target: AttackTarget) {
+    void this.dispatch(chooseEntryAttackTargetAction(target));
+  }
+
   /** CR 115.7: repointing a spell (or ability) that is already on the stack. */
   get retargetPrompt() {
     return readRetarget(this.snapshot);
@@ -1216,31 +1228,58 @@ class GameSession {
     void this.dispatch(payUnlessCost(pay));
   }
 
-  /** CR 701.20a: which card the player shows, or none. */
+  /** CR 701.20a: which card (or cards) the player shows, or none. */
   get revealPrompt() {
     return readRevealPrompt(this.snapshot);
   }
-  /** The single card marked for the reveal. One pick, so a plain id or nothing. */
+  /** The marked cards. One pick reads as a single id; "any number" reads as a set. */
   revealPick = $state<ObjectId | null>(null);
+  revealPicks = $state<ObjectId[]>([]);
+  get revealMax() {
+    const prompt = this.revealPrompt;
+    if (!prompt) return 0;
+    return prompt.cardinality.kind === 'any' ? prompt.cards.length : prompt.cardinality.count;
+  }
+  get revealChosen(): ObjectId[] {
+    const prompt = this.revealPrompt;
+    if (!prompt) return [];
+    if (prompt.cardinality.kind === 'any') return this.revealPicks;
+    return this.revealPick === null ? [] : [this.revealPick];
+  }
   get revealReady() {
     const prompt = this.revealPrompt;
-    return prompt !== null && prompt.cards.includes(this.revealPick ?? -1);
+    if (!prompt) return false;
+    const chosen = this.revealChosen;
+    // CR 107.1c: "any number" admits zero, so it is ready as soon as it is offered.
+    if (prompt.cardinality.kind === 'any') return chosen.every((id) => prompt.cards.includes(id));
+    return chosen.length === prompt.cardinality.count && chosen.every((id) => prompt.cards.includes(id));
   }
   toggleReveal(id: ObjectId) {
-    if (!this.revealPrompt) return;
-    this.revealPick = this.revealPick === id ? null : id;
+    const prompt = this.revealPrompt;
+    if (!prompt) return;
+    if (prompt.cardinality.kind === 'exactly' && prompt.cardinality.count === 1) {
+      // One card: marking another replaces the first instead of adding to it.
+      this.revealPick = this.revealPick === id ? null : id;
+      return;
+    }
+    const marked = this.revealPicks.includes(id)
+      ? this.revealPicks.filter((entry) => entry !== id)
+      : this.revealPicks.length >= this.revealMax ? this.revealPicks : [...this.revealPicks, id];
+    this.revealPicks = marked;
   }
   confirmReveal() {
     if (!this.revealReady) return;
-    const card = this.revealPick;
+    const chosen = this.revealChosen;
     this.revealPick = null;
-    void this.dispatch(revealAction(card));
+    this.revealPicks = [];
+    void this.dispatch(revealCardsAction(chosen));
   }
   /** CR 701.20a: revealing nothing — only when the engine offered the decline. */
   declineReveal() {
     const prompt = this.revealPrompt;
     if (!prompt?.optional) return;
     this.revealPick = null;
+    this.revealPicks = [];
     void this.dispatch(revealAction(null));
   }
 
@@ -1494,7 +1533,7 @@ class GameSession {
     if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
     if (this.snapshot?.revision !== reply.revision) {
       this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = [];
-      this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.pairPick = null;
+      this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.revealPicks = []; this.pairPick = null;
       this.scryKeep = [];
       this.tapPick = [];
       this.multiPick = [];

@@ -2195,3 +2195,77 @@ asiento por defecto, el prompt vecino —`MeldAttackTargetChoice`— que no es e
 acción con sus dos identificadores); build OK; en Chromium una prueba nueva —dos copias
 desempatadas por `· #id`, la mitad fija y el aviso de CR 701.42b— y una escena más en la
 prueba de temas (50 → 51 escenas, 105 jpg, presupuesto de 580 s).
+
+## La fusión entra atacando: el destino es la pregunta, no un extra (cuadragésima séptima pasada, 7 nov 2026)
+
+`MeldAttackTargetChoice` (CR 508.4) parece parte de la fusión y es otra ventana: la
+carta fusionada **entra girada y atacando** y el jugador elige a qué ataca. El motor
+publica `player`, el `context` de la fusión —`source_id`, los dos referentes congelados y
+el resultado— y `valid_targets: Vec<AttackTarget>`; la respuesta es
+`ChooseEntryAttackTarget { target }`.
+
+**La ventana sólo existe con más de un destino.** Con uno solo el motor no pregunta y
+ataca a ese; el bloque lo dice con la cifra —«Hay 2 destinos posibles.»— en vez de
+ofrecer una elección que no existe.
+
+**El nombre que se lee es el resultado, no la mitad.** El objeto del laboratorio sigue
+llamándose como la mitad que ya estaba en el campo, porque la fusión la ejecuta el motor;
+la cabecera usa el `result` del contexto —«Entra atacando · Brisela, Voice of
+Nightmares»— y no el nombre del objeto.
+
+**Un destino puede quedarse obsoleto.** CR 508.4a: la elección se revalida contra el
+controlador vivo, así que el bloque avisa de que un destino que desaparezca deja la
+carta girada y atacando pero sin destino, en vez de prometer el ataque.
+
+Objetos del laboratorio: la misma pareja de Eldritch Moon de la pasada anterior
+(`Bruna, the Fading Light` y `Gisela, the Broken Blade`) con `Brisela` como resultado y
+`Chandra, Torch of Defiance` como planeswalker al que atacar (objeto #205), en fase
+`DeclareAttackers`.
+
+Laboratorio: `/ux?scene=meldAttack`, captura
+`docs/screenshots/ux-fusion-ataca-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **568** (8 nuevas en
+`game/__tests__/meld-attack.test.ts`: el contexto con su resultado y los destinos, la
+falta de `source_id` que cierra la ventana, los destinos sin `type` o `data` numéricos
+que se descartan, la lista vacía que no es ventana, el nombre del resultado frente al
+del objeto, la marca de destino obsoleto, el asiento por defecto y la acción con su
+`target`); build OK; en Chromium una prueba nueva —dos destinos, los nombres de los
+botones y el aviso de CR 508.4a— y una escena más en la prueba de temas (52 → 53
+escenas, 106 jpg, presupuesto de 600 s).
+
+## Motor v0.126.0: dos campos aditivos que había que rescatar (importación, 15 nov 2026)
+
+La importación sube el pin de `74fc941c` a `c07324a5` (61 commits, releases v0.125.0 y
+v0.126.0; informe completo en
+[`PHASE-UPSTREAM-2026-11-15-C07324A.md`](PHASE-UPSTREAM-2026-11-15-C07324A.md)).
+`WaitingFor` sigue con **148** variantes y ningún bloque representado cambia de forma,
+pero **dos sí ganan campo**, y los dos son de los que la vista tiene que leer:
+
+- **`RevealChoice.cardinality`** (CR 608.2d + CR 107.1c): ausente es la elección de una
+  sola carta de siempre; `AnyNumber` admite cualquier subconjunto —incluido el vacío—,
+  que es el caso Metalworker de upstream. La vista de revelar elegía una carta porque
+  hasta ahora era lo único que el motor pedía; ahora publica la cardinalidad, mantiene
+  un conjunto marcado (con el mismo tacto de antes cuando es una sola carta) y con
+  `AnyNumber` el botón principal nace habilitado como «Revelar ninguna», que es una
+  respuesta legal y no un «todavía no».
+- **`UnlessPayment.repeat`** (CR 702.24a): el mantenimiento acumulativo compacto cobra
+  **la misma** instrucción impresa N veces, una por contador de edad. Se pinta como
+  sufijo del coste —«Paga {1} × 3»— y una línea dice de dónde sale la cifra; un `repeat`
+  de 0 o 1 es el valor por defecto y no se pinta.
+
+Las dos son rescates, no funcionalidad nueva: sin ellas la mesa habría seguido pintando
+la forma histórica de un contrato que ya admite más.
+
+### Verificación de esta importación
+
+`bun run engine:verify` en verde con 483 ficheros y SHA-256
+`c963ea30…8cc0e1f`; `bun test src/lib` **571** (3 nuevas: la cardinalidad en sus tres
+serializaciones y el valor por defecto, el conjunto completo en `SelectCards` con la
+lista copiada, y el `repeat` que sólo aparece cuando es más de uno); `bun run check` 0
+errores; en Chromium dos pruebas nuevas —revelar cualquier número con su conjunto y su
+«Revelar ninguna», y el mantenimiento acumulativo con su «× 3»— y dos escenas más en el
+laboratorio (53 → 55 escenas en la prueba de temas, 110 jpg, presupuesto de 600 s). Poda de pruebas upstream sin cambios (78 de siempre) y ninguna adaptación
+más en los tres árboles `src` ni en `phase-ast/data`.

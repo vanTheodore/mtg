@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { revealAction, revealPrompt } from '../interaction';
+import { revealAction, revealCardsAction, revealPrompt } from '../interaction';
 import type { EngineSnapshot } from '../../engine/types';
 
 /**
@@ -69,6 +69,29 @@ test('non-numeric card ids are dropped, not rendered as holes', () => {
 test('one card, and an empty selection for the decline', () => {
   expect(revealAction(1001)).toEqual({ type: 'SelectCards', data: { cards: [1001] } });
   expect(revealAction(null)).toEqual({ type: 'SelectCards', data: { cards: [] } });
+});
+
+test('the cardinality decides how many cards the answer may hold', () => {
+  // The historical shape: one card, and the field is omitted on the wire.
+  expect(revealPrompt(withWaiting(reveal()))!.cardinality).toEqual({ kind: 'exactly', count: 1 });
+  // CR 107.1c: "reveal any number of artifact cards" travels as a unit variant…
+  expect(revealPrompt(withWaiting(reveal({ cardinality: 'AnyNumber' })))!.cardinality).toEqual({ kind: 'any' });
+  // …or as a tagged object, depending on the serializer.
+  expect(revealPrompt(withWaiting(reveal({ cardinality: { type: 'AnyNumber' } })))!.cardinality).toEqual({ kind: 'any' });
+  expect(
+    revealPrompt(withWaiting(reveal({ cardinality: { type: 'Exactly', data: { count: 2 } } })))!.cardinality
+  ).toEqual({ kind: 'exactly', count: 2 });
+  // Junk is not a cardinality: it falls back to the single pick the engine defaults to.
+  expect(revealPrompt(withWaiting(reveal({ cardinality: 'junk' })))!.cardinality).toEqual({ kind: 'exactly', count: 1 });
+});
+
+test('an any-number reveal sends the whole marked set, or nothing', () => {
+  expect(revealCardsAction([1000, 1002])).toEqual({ type: 'SelectCards', data: { cards: [1000, 1002] } });
+  // CR 107.1c admits zero, which is the same empty selection the decline sends.
+  expect(revealCardsAction([])).toEqual({ type: 'SelectCards', data: { cards: [] } });
+  // The list is copied, so a later toggle cannot mutate a dispatched action.
+  const cards = [1000];
+  expect(revealCardsAction(cards).data!.cards).not.toBe(cards);
 });
 
 test('there is no reveal prompt for another decision', () => {

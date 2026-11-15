@@ -1222,6 +1222,63 @@ test('fusionar: se elige la copia concreta, no el nombre de la carta', async ({ 
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('la fusión entra atacando: se elige el destino entre los que publica Phase', async ({ page }) => {
+  await page.goto('/ux?scene=meldAttack');
+  const block = page.locator('[data-meld-attack]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-meld-attack-targets', '2');
+  // CR 508.4: the card that enters is the melded identity, not the half.
+  await expect(block.locator('strong')).toHaveText('Entra atacando · Brisela, Voice of Nightmares');
+  await expect(block.locator('[data-meld-attack-count]')).toHaveText('Hay 2 destinos posibles.');
+  await expect(block.locator('[data-meld-attack-target="Player:1"]')).toHaveText('Atacar a Jugador 2');
+  await expect(block.locator('[data-meld-attack-target="Planeswalker:205"]')).toHaveText(
+    'Atacar a Chandra, Torch of Defiance'
+  );
+  // CR 508.4a: a destination that goes stale leaves it tapped but not attacking.
+  await expect(block.locator('[data-meld-attack-stale]')).toContainText('CR 508.4a');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('revelar cualquier número admite un conjunto y también ninguna carta', async ({ page }) => {
+  await page.goto('/ux?scene=revealAny');
+  const block = page.locator('[data-reveal-prompt]');
+  await expect(block).toBeVisible();
+  // CR 107.1c: the engine's `AnyNumber` is not the single pick, and it says so.
+  await expect(block).toContainText('cualquier número');
+  const confirm = block.locator('button.primary');
+  // Zero is a legal subset, so the answer is ready before anything is marked.
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Revelar ninguna');
+  const cards = block.locator('button.card');
+  await cards.nth(0).click();
+  await cards.nth(2).click();
+  await expect(cards.nth(0)).toHaveAttribute('aria-pressed', 'true');
+  await expect(cards.nth(2)).toHaveAttribute('aria-pressed', 'true');
+  // Marking does not replace: the subset grows.
+  await expect(confirm).toHaveText('Revelar 2 cartas');
+  await cards.nth(0).click();
+  await expect(cards.nth(0)).toHaveAttribute('aria-pressed', 'false');
+  await expect(confirm).toHaveText('Revelar 1 carta');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el mantenimiento acumulativo cobra la instrucción una vez por contador', async ({ page }) => {
+  await page.goto('/ux?scene=unlessRepeat');
+  const block = page.locator('[data-unless-prompt]');
+  await expect(block).toBeVisible();
+  // CR 702.24a: the printed cost times the age-counter count, not a new amount.
+  await expect(block.locator('strong')).toHaveText('Paga {1} × 3');
+  await expect(block).toContainText('CR 702.24a');
+  await expect(block.getByRole('button', { name: 'Pagar {1} × 3' })).toBeVisible();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('el reparto no puede sobrar, faltar ni dejar un objetivo anunciado con nada', async ({ page }) => {
   await page.goto('/ux?scene=distribute');
   const block = page.locator('[data-distribute]');

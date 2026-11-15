@@ -213,6 +213,11 @@ export type UnlessPrompt = {
   effect?: string;
   /** CR 118.12a: seats still to be asked after `player`. */
   remaining: PlayerId[];
+  /**
+   * CR 702.24a: a compact cumulative-upkeep draw pays one printed instruction
+   * `repeat` times — the age-counter count. Absent means "pay it once".
+   */
+  repeat: number | null;
 };
 function unlessCostText(raw: unknown): UnlessCostText {
   const cost = (raw ?? {}) as Record<string, unknown>;
@@ -294,7 +299,9 @@ export function unlessPrompt(snapshot: EngineSnapshot | null): UnlessPrompt | nu
       typeof data.effect_description === 'string' && data.effect_description
         ? data.effect_description
         : undefined,
-    remaining
+    remaining,
+    // A zero or a missing count both mean the printed instruction is paid once.
+    repeat: typeof data.repeat === 'number' && data.repeat > 1 ? data.repeat : null
   };
 }
 /** What the cost is called in a sentence, or `null` when it cannot be named. */
@@ -377,6 +384,7 @@ export function payUnlessCost(pay: boolean): GameAction {
  * choice simply skips what came next. Same gesture, different consequence, so
  * the prompt carries both flags.
  */
+export type RevealCardinality = { kind: 'exactly'; count: number } | { kind: 'any' };
 export type RevealPrompt = {
   player: PlayerId;
   cards: ObjectId[];
@@ -384,6 +392,12 @@ export type RevealPrompt = {
   optional: boolean;
   /** Declining runs the effect's other branch instead of skipping the follow-up. */
   declineRunsContinuation: boolean;
+  /**
+   * CR 608.2d + CR 107.1c: how many of `cards` the answer must hold. The historical
+   * shape is exactly one (and it is the serde default); "reveal any number of
+   * artifact cards" admits any subset, including none.
+   */
+  cardinality: RevealCardinality;
 };
 export function revealPrompt(snapshot: EngineSnapshot | null): RevealPrompt | null {
   const waiting = snapshot?.state.waiting_for;
@@ -396,12 +410,35 @@ export function revealPrompt(snapshot: EngineSnapshot | null): RevealPrompt | nu
     player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
     cards,
     optional: data.optional === true,
-    declineRunsContinuation: data.decline_runs_continuation === true
+    declineRunsContinuation: data.decline_runs_continuation === true,
+    cardinality: revealCardinality(data.cardinality)
   };
+}
+/**
+ * CR 608.2d: `cardinality` is an `Exactly { count }` or `AnyNumber`; the first is
+ * omitted on the wire when it is the historical single pick, so an absent field is
+ * one card, not "unknown".
+ */
+function revealCardinality(raw: unknown): RevealCardinality {
+  if (raw === 'AnyNumber') return { kind: 'any' };
+  if (raw && typeof raw === 'object') {
+    const value = raw as Record<string, unknown>;
+    if (value.type === 'AnyNumber') return { kind: 'any' };
+    if (value.type === 'Exactly') {
+      const data = value.data as Record<string, unknown> | undefined;
+      const count = typeof data?.count === 'number' ? data.count : 1;
+      return count === 1 ? { kind: 'exactly', count: 1 } : { kind: 'exactly', count };
+    }
+  }
+  return { kind: 'exactly', count: 1 };
+}
+/** The chosen cards; an empty list reveals nothing and is only legal when offered. */
+export function revealCardsAction(cards: ObjectId[]): GameAction {
+  return selectCardsAction([...cards]);
 }
 /** One card, or none when the reveal is optional. */
 export function revealAction(card: ObjectId | null): GameAction {
-  return selectCardsAction(card === null ? [] : [card]);
+  return revealCardsAction(card === null ? [] : [card]);
 }
 
 /**
@@ -1397,6 +1434,51 @@ export function meldPrompt(snapshot: EngineSnapshot | null): MeldPrompt | null {
 /** CR 701.42: name the pair by both object ids; the engine validates it against the offer. */
 export function chooseMeldPairAction(sourceId: ObjectId, partnerId: ObjectId): GameAction {
   return { type: 'ChooseMeldPair', data: { source_id: sourceId, partner_id: partnerId } };
+}
+
+/**
+ * CR 508.4: the melded permanent enters tapped and attacking, so its controller
+ * chooses one defending player, planeswalker or battle. The engine publishes the
+ * complete legal topology (`valid_targets`) and the prompt only exists when there
+ * is more than one destination — with exactly one it enters attacking there and
+ * nothing is asked.
+ *
+ * The context is the same `MeldSelection` the pair choice froze, so the block can
+ * name the card that is entering without re-reading the battlefield.
+ */
+export type MeldAttackPrompt = {
+  player: PlayerId;
+  /** The melded permanent (the surviving half). */
+  sourceId: ObjectId;
+  /** The card it became, as the instruction named it. */
+  result?: string;
+  targets: AttackTarget[];
+};
+export function meldAttackPrompt(snapshot: EngineSnapshot | null): MeldAttackPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'MeldAttackTargetChoice') return null;
+  const data = waiting.data ?? {};
+  const context = data.context as Record<string, unknown> | undefined;
+  if (!context || typeof context.source_id !== 'number') return null;
+  const targets = Array.isArray(data.valid_targets)
+    ? (data.valid_targets as unknown[]).filter((entry): entry is AttackTarget => {
+        if (!entry || typeof entry !== 'object') return false;
+        const target = entry as Record<string, unknown>;
+        return typeof target.type === 'string' && typeof target.data === 'number';
+      })
+    : [];
+  // The engine only pauses when it has a destination to ask about.
+  if (!targets.length) return null;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: context.source_id as ObjectId,
+    result: typeof context.result === 'string' ? context.result : undefined,
+    targets
+  };
+}
+/** CR 508.4: the entering permanent attacks the chosen destination. */
+export function chooseEntryAttackTargetAction(target: AttackTarget): GameAction {
+  return { type: 'ChooseEntryAttackTarget', data: { target } };
 }
 
 /**

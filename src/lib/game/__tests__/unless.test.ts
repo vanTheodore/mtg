@@ -105,6 +105,16 @@ test('"unless any player pays" publishes the seats left to poll', () => {
   expect(noisy.remaining).toEqual([2]);
 });
 
+test('a compact cumulative upkeep pays the printed instruction N times', () => {
+  // CR 702.24a: `repeat` is the age-counter count, not a different cost.
+  const repeated = unlessPrompt(withWaiting(unless({ repeat: 3 })))!;
+  expect(repeated.repeat).toBe(3);
+  // Paying once is the default and travels as absent; a zero is not a repeat either.
+  expect(unlessPrompt(withWaiting(unless()))!.repeat).toBeNull();
+  expect(unlessPrompt(withWaiting(unless({ repeat: 1 })))!.repeat).toBeNull();
+  expect(unlessPrompt(withWaiting(unless({ repeat: 0 })))!.repeat).toBeNull();
+});
+
 test('the answer is the engine action, both ways', () => {
   expect(payUnlessCost(true)).toEqual({ type: 'PayUnlessCost', data: { pay: true } });
   expect(payUnlessCost(false)).toEqual({ type: 'PayUnlessCost', data: { pay: false } });

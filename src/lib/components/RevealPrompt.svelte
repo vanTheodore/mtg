@@ -7,9 +7,10 @@
    * pattern (Port Town, Gilt-Leaf Palace) makes «no revelar» a real answer that
    * runs the card's other branch, so the decline is a button, not an accident.
    *
-   * Exactly one card is picked. Marking a second one replaces the first instead
-   * of adding to it — the engine asks for one card and a multi-select would
-   * promise something the answer cannot express.
+   * How many cards may be marked is the engine's `cardinality` (CR 608.2d): the
+   * historical shape is exactly one — where marking a second card replaces the
+   * first instead of adding to it — and "reveal any number" (CR 107.1c) admits any
+   * subset of the offered cards, including none.
    */
   import { session } from '#lib/game/session.svelte.ts';
   import { manaText } from '#lib/game/cards.ts';
@@ -18,15 +19,19 @@
   const mine = $derived(prompt !== null && prompt.player === session.snapshot?.viewer);
   const objects = $derived(session.snapshot?.state.objects ?? {});
   const picked = $derived(session.revealPick);
+  const picks = $derived(session.revealPicks);
+  const marked = (id: number) => (picks.includes(id) || picked === id);
+  const single = $derived(prompt?.cardinality.kind === 'exactly' && prompt.cardinality.count === 1);
+  const count = $derived(prompt?.cardinality.kind === 'exactly' ? prompt.cardinality.count : null);
 
   const title = $derived(prompt?.optional ? 'Revelar de la mano' : 'Mano del oponente');
-  const hint = $derived(
-    !prompt
-      ? ''
-      : prompt.optional
-        ? 'Elige una carta para revelar, o no reveles.'
-        : 'Elige la carta que te muestran.'
-  );
+  const hint = $derived.by(() => {
+    if (!prompt) return '';
+    if (single) return prompt.optional ? 'Elige una carta para revelar, o no reveles.' : 'Elige la carta que te muestran.';
+    if (count !== null) return `Elige exactamente ${count} cartas para revelar.`;
+    // CR 107.1c: any subset of the offered cards, and none at all.
+    return 'Puedes revelar cualquier número de estas cartas, incluso ninguna (CR 107.1c).';
+  });
 
   function nameOf(id: number) {
     return objects[String(id)]?.name ?? `Carta ${id}`;
@@ -56,7 +61,7 @@
           <button
             type="button"
             class="card"
-            aria-pressed={picked === id}
+            aria-pressed={marked(id)}
             onclick={() => session.toggleReveal(id)}>
             <span class="name">{nameOf(id)}</span>
             <span class="type">{typeLine(id)}</span>
@@ -71,7 +76,15 @@
         class="primary"
         disabled={session.busy || !session.revealReady}
         onclick={() => session.confirmReveal()}>
-        {picked === null ? 'Confirmar' : `Revelar ${nameOf(picked)}`}
+        {#if picks.length}
+          Revelar {picks.length === 1 ? '1 carta' : `${picks.length} cartas`}
+        {:else if picked !== null}
+          Revelar {nameOf(picked)}
+        {:else if prompt.cardinality.kind === 'any'}
+          Revelar ninguna
+        {:else}
+          Confirmar
+        {/if}
       </button>
       {#if prompt.optional}
         <button type="button" class="ghost" disabled={session.busy} onclick={() => session.declineReveal()}>

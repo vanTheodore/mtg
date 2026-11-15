@@ -63,6 +63,9 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `castOfferCascade` | `CastOffer` (cascada) | [claro](lanzar-cascada-claro.jpg) | [oscuro](lanzar-cascada-oscuro.jpg) |
 | `castOfferWindow` | `CastOffer` (ventana gratuita) | [claro](lanzar-ventana-claro.jpg) | [oscuro](lanzar-ventana-oscuro.jpg) |
 | `meld` | `MeldPairChoice` | [claro](fusionar-claro.jpg) | [oscuro](fusionar-oscuro.jpg) |
+| `meldAttack` | `MeldAttackTargetChoice` | [claro](fusion-ataca-claro.jpg) | [oscuro](fusion-ataca-oscuro.jpg) |
+| `revealAny` | `RevealChoice` (cualquier número) | [claro](revelar-cualquier-numero-claro.jpg) | [oscuro](revelar-cualquier-numero-oscuro.jpg) |
+| `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

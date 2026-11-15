@@ -18,7 +18,9 @@
 
   const prompt = $derived(session.unlessPrompt);
   const mine = $derived(prompt !== null && prompt.player === session.snapshot?.viewer);
-  const cost = $derived(prompt ? unlessCostLabel(prompt.cost) : null);
+  const base = $derived(prompt ? unlessCostLabel(prompt.cost) : null);
+  // CR 702.24a: a compact cumulative upkeep pays the printed instruction N times.
+  const cost = $derived(base ? (prompt?.repeat ? `${base} × ${prompt.repeat}` : base) : null);
   const others = $derived(prompt?.remaining.length ?? 0);
 </script>
 
@@ -33,6 +35,10 @@
       {/if}
       {#if prompt.cost.kind === 'other'}
         La mesa no puede describir este coste con palabras; el motor sí comprueba si puedes pagarlo.
+      {/if}
+      {#if prompt.repeat}
+        CR 702.24a: el mantenimiento acumulativo se cobra {prompt.repeat} veces, una por contador de
+        edad; Phase repite la instrucción impresa y no pide un montante distinto.
       {/if}
       {#if others > 0}
         Si no pagas, {others === 1 ? 'se le pregunta a 1 jugador más' : `se les pregunta a ${others} jugadores más`}: el primero que pague lo detiene.
