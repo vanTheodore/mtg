@@ -34,6 +34,40 @@ Upstream sigue con `version.workspace = true`, así que los `Cargo.toml` importa
 copiarse tal cual: se mantiene la versión literal (`0.126.0` → **`0.127.0`**) y `Cargo.lock` cambia
 solo las tres líneas de versión de los crates importados. Ninguna dependencia externa cambia.
 
+## Datos que el motor compila dentro (`include_str!`)
+
+El build en frío de este commit destapó un agujero que no era de este rango: `phase-engine` compila
+dentro dos JSON que **nunca** se habían importado, y el trabajo de WASM venía pasando por la caché
+de Rust (`Swatinem/rust-cache`) sin recompilar la crate desde cero:
+
+- `crates/phase-engine/src/database/bracket_lists.rs:21` → `../../../../data/bracket_lists.json`
+  (listas curadas del estimador de bracket; también la leen `card_db` y `bin/oracle_gen`).
+- `crates/phase-engine/src/ai_deck_manifest.rs:68` → `../data/ai_commander_decks.json` (manifiesto
+  de mazos de IA, con su `version` y su fecha).
+
+Los dos se importan ahora tal cual desde el tarball: `data/bracket_lists.json` (6,8 KB) y
+`crates/phase-engine/data/ai_commander_decks.json` (36 KB). Se dejan fuera, a propósito, los datos
+que sólo usan los binarios de upstream en tiempo de ejecución (`data/baselines/`,
+`data/bundled_cedh_decks.json`, `data/learned-weights.json`, `data/overrides/`,
+`ai_commander_decks.feed-2026-09-08.json`): no los lee ninguna ruta que Mesa compile y su
+procedencia pertenece al estimador de bracket, no a las reglas.
+
+## Adaptación en el puente (`resolve_deck_list` gana la tabla de combos)
+
+El rango cambia una firma pública:
+
+```rust
+// antes
+pub fn resolve_deck_list(db: &CardDatabase, list: &DeckList) -> DeckPayload
+// ahora
+pub fn resolve_deck_list(db: &CardDatabase, combos: &ComboTable, list: &DeckList) -> DeckPayload
+```
+
+El puente y sus tres binarios (`parity`, `scenarios`, `packcheck`) pasan `&ComboTable::default()`:
+Mesa no estima brackets, así que la tabla vacía es el argumento honesto —es el mismo valor por
+defecto que upstream usa cuando no tiene tabla— y el mensaje queda comentado en el sitio. No se
+importa `data/combo_table` ni se estima nada: eso sería una función nueva, no una importación.
+
 ## Qué cambia en el contrato de vistas
 
 `WaitingFor` sigue con **148 variantes**: no hay altas ni bajas en el rango. De las **69** que
@@ -107,5 +141,9 @@ No hay cambios en el puente propio `crates/mtg-engine-wasm`: las funciones que u
   `commit`, `version` y `sourceSha256`).
 - `diff -rq` de los tres árboles `src`, de `phase-ast/data` y de las pruebas conservadas contra el
   tarball de `28b2f9e4`: sin diferencias más allá de la poda declarada.
+- `include_str!`/`include_bytes!` de los tres árboles revisados uno a uno: no queda ninguno sin
+  fichero salvo los cuatro que ya lo estaban antes y que no compila este repositorio (tres rutas del
+  cliente React dentro de `#[cfg(test)]` en `types/format.rs`, y el script de auditoría que CI
+  descarga con su hash).
 - Sin toolchain de Rust en este sandbox; la compilación la validan los trabajos **Native parity**,
   **WASM build** y **Phase source regressions** de CI sobre este commit.

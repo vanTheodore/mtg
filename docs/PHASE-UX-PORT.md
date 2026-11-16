@@ -2622,6 +2622,13 @@ el permanente al que corresponde la respuesta. Es de sólo lectura —la autorid
 siendo del titular y `source` no cambia— y `NamedChoice` todavía no tiene bloque propio, así que
 queda anotado para esa pasada en vez de portado a medias.
 
+**Dos `include_str!` que la caché tapaba.** El build en frío destapó que `phase-engine` compila
+dentro `data/bracket_lists.json` y `crates/phase-engine/data/ai_commander_decks.json`, y que ninguno
+de los dos se había importado nunca: la caché de Rust del trabajo de WASM no había recompilado la
+crate desde cero desde la importación anterior. Los dos se importan ahora tal cual. En el borde del
+puente, `resolve_deck_list` gana la tabla de combos del estimador de bracket y Mesa pasa
+`&ComboTable::default()`: no estima brackets, así que no inventa una tabla.
+
 Laboratorio: `/ux?scene=untapResume` (mismo `UntapChoice` que la escena 52, con `progress` anterior
 y sin nada todavía dejado girado), captura `ux-no-enderezar-partida-antigua-1440.jpg` y su par de
 tema.

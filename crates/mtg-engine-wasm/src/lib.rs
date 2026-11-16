@@ -1,6 +1,7 @@
 //! Raw JSON bridge to the Phase rules engine. No React, no wasm-bindgen glue.
 //! The engine remains the sole authority for rules, legality and visibility.
 use engine::database::CardDatabase;
+use engine::database::combo_table::ComboTable;
 use engine::game::deck_loading::{resolve_deck_list, DeckList};
 use engine::game::derived_views::derive_filtered_views;
 use engine::game::engine::{apply_with_rejection, start_game_with_starting_player};
@@ -110,7 +111,10 @@ fn initialize(input: &[u8]) -> Vec<u8> {
     }
     let format = FormatConfig::limited();
     let mut state = GameState::new(format, 2, req.seed);
-    let payload = resolve_deck_list(&db, &req.decks);
+    // CR 903.1: Phase resolves a deck list with a combo table for the Commander
+    // bracket estimator. Mesa does not estimate brackets, so the empty table is the
+    // honest argument — it is the same default upstream uses when it has none.
+    let payload = resolve_deck_list(&db, &ComboTable::default(), &req.decks);
     load_and_hydrate_decks(&mut state, &payload, Some(&db));
     let first = PlayerId(req.first_player.unwrap_or(0));
     let result = start_game_with_starting_player(&mut state, first);
