@@ -2428,3 +2428,24 @@ copias, en vez de duplicar la acción (el primer intento repetía el nombre y lo
 `svelte-check`); build OK; en
 Chromium dos pruebas nuevas —la copia con techo y las fichas sin él— y dos escenas más
 en la prueba de temas (59 → 61 escenas, 122 jpg, presupuesto de 600 s).
+
+## Corrección de contabilidad: tres vistas que no estaban en `REPRESENTED` (7 nov 2026)
+
+Las pasadas 48, 49 y 50 dijeron «`REPRESENTED` 61 → 62 → 63 → 64» y ninguna de las
+tres añadió su nombre al conjunto: el `replace()` que debía insertar la entrada
+apuntaba a una línea con sangría, y el conjunto vive en **una sola línea**, así que
+devolvió el fichero sin tocar. Las tres vistas se veían —el laboratorio monta los
+componentes él mismo— y por eso no lo cazó ninguna prueba. El recuento real se quedó en
+**61** con tres ventanas representadas fuera de la lista.
+
+Consecuencia visible: para esas tres variantes el panel no suprimía el aviso genérico
+de «esta decisión todavía no tiene una representación visual completa» cuando la
+ventana era de otro asiento. Nada más —los bloques se pintaban antes del aviso—, pero el
+número que publica la documentación no era el del código.
+
+Ahora el conjunto tiene **64** entradas de verdad, y hay una prueba que lo vigila:
+`game/__tests__/represented-variants.test.ts` lee el enum `WaitingFor` del pin y el
+conjunto del panel, y falla si un nombre no existe en el motor, si hay duplicados o si
+el total deja de ser 64 —que es el número que publican el README del port y el PR—.
+También comprueba los tres nombres que se quedaron fuera, para que el modo de fallo no
+vuelva a pasar inadvertido.
