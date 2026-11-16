@@ -72,10 +72,12 @@
   import UntapSubsetPrompt from '#lib/components/UntapSubsetPrompt.svelte';
   import ExertChoicePrompt from '#lib/components/ExertChoicePrompt.svelte';
   import EnlistChoicePrompt from '#lib/components/EnlistChoicePrompt.svelte';
+  import PayCostPrompt from '#lib/components/PayCostPrompt.svelte';
+  import PhyrexianPaymentPrompt from '#lib/components/PhyrexianPaymentPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -156,6 +158,10 @@
     { value: 'untapResume', label: 'No enderezar: partida antigua' },
     { value: 'exert', label: 'Exertar al atacar' },
     { value: 'enlist', label: 'Alistar al atacar' },
+    { value: 'payCost', label: 'Pagar un coste: sacrificar' },
+    { value: 'payCostHidden', label: 'Pagar un coste: no lo ves' },
+    { value: 'payCostAggregate', label: 'Pagar un coste: girar por fuerza' },
+    { value: 'phyrexian', label: 'Maná frigio' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -240,6 +246,10 @@
     untapResume: 'UntapChoice · CR 502.1, el paso se reanuda desde su primera acción',
     exert: 'ExertChoice · CR 508.1g + CR 701.43d, coste opcional al atacar',
     enlist: 'EnlistChoice · CR 508.1g + CR 702.154a, girar para alistar',
+    payCost: 'PayCost · CR 118.3 + CR 601.2b, coste de sacrificar',
+    payCostHidden: 'PayCost · CR 400.2, candidatos redactados para el rival',
+    payCostAggregate: 'PayCost · CR 208.1, girar criaturas por fuerza total',
+    phyrexian: 'PhyrexianPayment · CR 107.4f, maná o 2 vidas por símbolo',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -507,6 +517,15 @@
   // CR 707.2: the clone is entering, so the object it becomes is not on the
   // battlefield yet — the choice is one of the permanents already there, and the
   // printed mana-value ceiling is a sentence about a list Phase already filtered.
+  // CR 107.4f: the spell whose Phyrexian symbols are being paid. Two shards, one of
+  // each option shape, so the block can show a locked payment and a free one.
+  const dismember = {
+    id: 419, card_id: 419, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Dismember',
+    card_types: { core_types: ['Instant'] },
+    oracle_text:
+      '({B/P} can be paid with either {B} or 2 life.) Target creature gets -5/-5 until end of turn.'
+  } as GameObject;
   // CR 502.3: the two untap questions. Vedalken Shackles is the «you may choose not
   // to untap» class; Smoke is the MaxUntapPerType cap that forces a subset.
   const shackles = {
@@ -727,7 +746,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -927,6 +946,72 @@
       return {
         type: 'UntapChoice',
         data: { player: 0, candidates: [417], progress: 'BeforeTurnBasedActions' }
+      };
+    }
+    if (scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate') {
+      // `PayCost` (CR 118.3 + CR 601.2b): one answer — `SelectCards` — and three
+      // meanings. Only `resume.type` is read; the embedded pending cast is the
+      // engine's, and the block never repeats it.
+      const resume = (type: string) => ({ type, spell: { object_id: 419 } });
+      if (scene === 'payCost') {
+        return {
+          type: 'PayCost',
+          data: {
+            player: 0,
+            kind: { type: 'Sacrifice' },
+            choices: [100, 101, 105],
+            count: 2,
+            min_count: 2,
+            resume: resume('Spell')
+          }
+        };
+      }
+      if (scene === 'payCostHidden') {
+        // CR 400.2: the opponent's hand-pitch cost reaches this viewer with the
+        // cardinality intact and `0` in place of every card.
+        return {
+          type: 'PayCost',
+          data: {
+            player: 1,
+            kind: { type: 'ExileFromZone', zone: 'Hand' },
+            choices: [0, 0],
+            count: 2,
+            min_count: 2,
+            resume: resume('Resolution')
+          }
+        };
+      }
+      // CR 208.1: «tap any number of creatures with total power 4 or greater»
+      // — the crew/saddle/teamwork shape, where the ceiling is the whole set.
+      return {
+        type: 'PayCost',
+        data: {
+          player: 0,
+          kind: {
+            type: 'TapCreatures',
+            mode: { Aggregate: { stat: 'TotalPower', comparator: 'GE', value: 4 } }
+          },
+          choices: [100, 101, 105],
+          count: 3,
+          min_count: 0,
+          resume: resume('ManaAbility')
+        }
+      };
+    }
+    if (scene === 'phyrexian') {
+      // `PhyrexianPayment` (CR 107.4f): one answer per shard, in this order, and the
+      // options are the engine's per-shard verdict.
+      return {
+        type: 'PhyrexianPayment',
+        data: {
+          player: 0,
+          spell_object: 419,
+          shards: [
+            { shard_index: 0, color: 'Black', options: 'ManaOrLife' },
+            { shard_index: 1, color: 'Black', options: 'ManaOnly' },
+            { shard_index: 2, color: 'Blue', options: 'LifeOnly' }
+          ]
+        }
       };
     }
     if (scene === 'exert') {
@@ -1797,6 +1882,8 @@
           : scene === 'resolveAll' || scene === 'resolveAllStale' ? 'PreCombatMain'
           : scene === 'untapChoice' || scene === 'untapSubset' || scene === 'untapResume' ? 'Untap'
           : scene === 'exert' || scene === 'enlist' ? 'DeclareAttackers'
+          : scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate' || scene === 'phyrexian'
+            ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -2039,6 +2126,8 @@
         {#if scene === 'untapSubset'}<UntapSubsetPrompt />{/if}
         {#if scene === 'exert'}<ExertChoicePrompt />{/if}
         {#if scene === 'enlist'}<EnlistChoicePrompt />{/if}
+        {#if scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate'}<PayCostPrompt />{/if}
+        {#if scene === 'phyrexian'}<PhyrexianPaymentPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

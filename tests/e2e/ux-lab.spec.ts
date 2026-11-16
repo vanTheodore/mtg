@@ -1385,6 +1385,110 @@ test('alistar ofrece el conjunto del motor con su fuerza y deja rechazar', async
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('un coste de sacrificar pide exactamente lo que publica y no deja confirmar antes', async ({ page }) => {
+  await page.goto('/ux?scene=payCost');
+  const block = page.locator('[data-pay-cost]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pay-cost-kind', 'sacrifice');
+  await expect(block).toHaveAttribute('data-pay-cost-resume', 'spell');
+  await expect(block).toHaveAttribute('data-pay-cost-count', '2');
+  await expect(block).toHaveAttribute('data-pay-cost-min', '2');
+  await expect(block.locator('strong')).toHaveText('Sacrificar como coste');
+  // CR 701.21a: sacrificing is the cost, not an effect.
+  await expect(block.locator('[data-pay-cost-rule]')).toContainText('CR 701.21a');
+  await expect(block.locator('[data-pay-cost-contract]')).toHaveText('Elige exactamente 2 objetos de los 3 publicados.');
+
+  const confirmButton = block.locator('[data-pay-cost-confirm]');
+  await expect(confirmButton).toBeDisabled();
+  const options = block.locator('[data-pay-cost-object]');
+  await expect(options).toHaveCount(3);
+  await options.nth(0).click();
+  await expect(confirmButton).toBeDisabled();
+  await expect(confirmButton).toHaveText('Confirmar 1 objeto');
+  await options.nth(2).click();
+  await expect(block).toHaveAttribute('data-pay-cost-chosen', '2');
+  await expect(confirmButton).toBeEnabled();
+  // At the ceiling the third option closes instead of overflowing the answer.
+  await expect(options.nth(1)).toBeDisabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('CR 400.2: el coste del rival llega sin candidatos y con marcadores', async ({ page }) => {
+  await page.goto('/ux?scene=payCostHidden');
+  const block = page.locator('[data-pay-cost]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pay-cost-kind', 'exile-from-zone');
+  await expect(block).toHaveAttribute('data-pay-cost-choices', '0');
+  await expect(block).toHaveAttribute('data-pay-cost-hidden', '2');
+  // The seat is not this viewer's, so nothing here is clickable.
+  await expect(block.locator('[data-pay-cost-other]')).toContainText('Jugador 2');
+  await expect(block.locator('[data-pay-cost-placeholders]')).toContainText('marcador vacío');
+  await expect(block.locator('[data-pay-cost-redacted]')).toContainText('CR 400.2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un coste por fuerza total apaga el botón hasta que la suma llega al umbral', async ({ page }) => {
+  await page.goto('/ux?scene=payCostAggregate');
+  const block = page.locator('[data-pay-cost]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pay-cost-kind', 'tap-creatures');
+  await expect(block).toHaveAttribute('data-pay-cost-min', '0');
+  await expect(block.locator('[data-pay-cost-contract]')).toContainText('fuerza ≥ 4');
+  const confirmButton = block.locator('[data-pay-cost-confirm]');
+  // CR 208.1 needs a number: with nothing tapped the sum is 0 and the button is dead.
+  await expect(block.locator('[data-pay-cost-power]')).toHaveText('Fuerza elegida 0 de 4 · todavía no llega al umbral.');
+  await expect(confirmButton).toBeDisabled();
+  const options = block.locator('[data-pay-cost-object]');
+  await options.nth(2).click();
+  await expect(block.locator('[data-pay-cost-power]')).toHaveText('Fuerza elegida 1 de 4 · todavía no llega al umbral.');
+  await expect(confirmButton).toBeDisabled();
+  await options.nth(0).click();
+  await expect(block.locator('[data-pay-cost-power]')).toHaveText('Fuerza elegida 3 de 4 · todavía no llega al umbral.');
+  await expect(confirmButton).toBeDisabled();
+  await options.nth(1).click();
+  await expect(block.locator('[data-pay-cost-power]')).toHaveText('Fuerza elegida 5 de 4.');
+  await expect(confirmButton).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el maná frigio se responde símbolo a símbolo y sólo cierra con todos', async ({ page }) => {
+  await page.goto('/ux?scene=phyrexian');
+  const block = page.locator('[data-phyrexian]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-phyrexian-shards', '3');
+  await expect(block).toHaveAttribute('data-phyrexian-answered', '0');
+  await expect(block.locator('strong')).toHaveText('Maná frigio · Dismember');
+  // CR 107.4f: one decision per symbol, taken at payment time.
+  await expect(block.locator('[data-phyrexian-rule]')).toContainText('CR 107.4f');
+  const confirmButton = block.locator('[data-phyrexian-confirm]');
+  await expect(confirmButton).toBeDisabled();
+  // The engine's per-shard verdict closes the impossible side of each row.
+  await expect(block.locator('[data-phyrexian-life="1"]')).toBeDisabled();
+  await expect(block.locator('[data-phyrexian-mana="2"]')).toBeDisabled();
+  await expect(block.locator('[data-phyrexian-mana-only="1"]')).toHaveText('sólo maná');
+  await expect(block.locator('[data-phyrexian-life-only="2"]')).toHaveText('sólo vidas');
+
+  await block.locator('[data-phyrexian-mana="0"]').click();
+  await block.locator('[data-phyrexian-life="2"]').click();
+  await expect(block).toHaveAttribute('data-phyrexian-answered', '2');
+  // A partial vector is not an answer.
+  await expect(confirmButton).toBeDisabled();
+  await block.locator('[data-phyrexian-mana="1"]').click();
+  await expect(block).toHaveAttribute('data-phyrexian-answered', '3');
+  await expect(confirmButton).toBeEnabled();
+  await expect(block.locator('[data-phyrexian-total]')).toHaveText('Pagas 2 vidas y el resto con maná.');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

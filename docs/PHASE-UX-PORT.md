@@ -2645,3 +2645,87 @@ defecto del motor, en las dos ventanas); build OK; en Chromium una prueba nueva 
 por una versión anterior con su línea de reanudación y sin «ya dejados girados»— más el atributo
 nuevo comprobado en la escena moderna, y una escena más en la prueba de temas (67 → 68 escenas,
 136 jpg, presupuesto de 600 s). `REPRESENTED` no se mueve: **69**.
+
+## Pagar un coste: una respuesta, catorce significados; y el maná frigio, uno por símbolo (quincuagésima cuarta pasada, 7 nov 2026)
+
+Phase cobra los costes por la misma puerta. `PayCost` se responde con **un** sobre,
+`SelectCards { cards }`, y detrás de esa respuesta hay trece clases de coste distintas: descartar,
+revelar, sacrificar, devolver a la mano, exiliar de una zona, exiliar materiales, exiliar un
+permanente, exiliar de la zona de maná, desanexar, quitar contadores, girar criaturas, *behold* y
+exiliar un agregado. La ventana no las separa con sobres distintos —el motor vuelve a validar
+contra el `kind` que él mismo publicó— sino con el significado, y por eso el bloque no puede ser
+uno solo con trece textos: tiene que decir **qué se paga**, **cuántos** y **de qué conjunto**, y
+callarse lo que no sabe.
+
+**El contrato de cardinalidad es del motor, no del cliente.** `count` es el techo y `min_count`
+el suelo. Cuando coinciden el coste es «exactamente N» y el botón de confirmar está muerto hasta
+reunir N; cuando el suelo es más bajo —hasta `0`— la respuesta corta es legal y el botón lo
+nombra («Confirmar sin elegir ninguno»), en vez de fingir que falta algo. Un `min_count` ausente
+se lee como el sobre antiguo, que significaba «exactamente `count`»: no se inventa un suelo de
+cero. Un suelo mayor que el techo se recorta al techo, porque la respuesta no puede excederlo
+(`ExileAggregate` y `RemoveCounter::AmongObjects` publican `min_count: 1` con
+`count: eligible.len()`).
+
+**Lo que llega vacío no siempre es «no hay nada», y eso se dice (CR 400.2).** La redacción de
+Phase se hace por `kind`: `Reveal` y `Discard` pierden la lista entera para un espectador
+(`Some(vec![])`), mientras que exiliar de la mano, de la biblioteca o de la zona de maná conserva
+la longitud y pone `ObjectId(0)` en cada hueco; *behold* deja sólo los permanentes del campo. Un
+`0` no es una carta: esas filas se leen «carta oculta», no se pueden pulsar, y el bloque cuenta
+los huecos en lugar de descartarlos. Si la lista entera desapareció, el bloque dice que los
+candidatos no se publican a este asiento —y mantiene el número del contrato—, nunca «no hay
+candidatos». Cuando el coste es de otro jugador el bloque sigue en pie, dice de quién es la
+decisión y no ofrece ni un botón: la ventana se puede ver sin poder tocarla, que es exactamente lo
+que la mesa necesita para no parecer rota.
+
+**Los costes agregados traen su propia comparación.** Girar criaturas para pagar puede ser fijo
+(`Fixed`), por X (`VariableX`) o por un agregado («gira cualquier número de criaturas con fuerza
+total 4 o más», CR 208.1): en ese caso el prompt del motor trae `stat`, `comparator` y `value`, y
+el bloque imprime el comparador que el motor eligió (`≥`, `>`, `≤`, `<`, `=`, `≠`) en vez de
+suponer «al menos». Además, cuando las fuerzas están publicadas, el botón de confirmar obedece al
+umbral: con 0, 1 o 3 de fuerza el botón está apagado y la línea dice cuánto falta; con 5 se
+enciende. Si alguna fuerza no se publica, el cliente **no adivina**: deja la cuenta al motor y lo
+dice. `ExileAggregate` recibe el mismo trato con su `function`/`property`/`comparator`/`value`, y
+`RemoveCounter` añade lo suyo —cuántos contadores y si se quitan de un solo objeto o repartidos
+entre los elegidos— sin que el bloque prometa una distribución que no conoce.
+
+**El maná frigio es lo contrario: una respuesta por símbolo.** `PhyrexianPayment` (CR 107.4f) no
+elige objetos, elige **pagos**. El prompt publica una lista de *shards* con su color, su índice y
+las opciones que el motor consideró legales para ese símbolo —`ManaOrLife`, `ManaOnly`,
+`LifeOnly`—, y la respuesta es un vector **ordenado** de la misma longitud, un
+`PayMana`/`PayLife` por *shard*. De ahí las tres reglas que el bloque implementa y no estiliza:
+
+- el botón de pagar no se enciende hasta que **todos** los símbolos tienen respuesta: un vector
+  parcial no es una respuesta, y el motor lo rechazaría;
+- una opción que el motor no publicó está apagada, no escondida: se ve que ese símbolo **no** se
+  puede pagar con vidas y por qué (CR 107.4f exige que el símbolo sea frigio; si no hay maná del
+  color, `ManaOnly` no existe y la única salida son las vidas);
+- cancelar es una jugada real (CR 601.2i: el lanzamiento se deshace si no se puede pagar), así que
+  está al lado del pago, activa, con su nombre. El bloque no cuenta la vida que queda —la suma de
+  vidas del jugador es un dato de la mesa, no de la ventana— y se limita a resumir el reparto
+  («Pagas 2 vidas y el resto con maná»).
+
+Cuando `shards` llega vacío no hay ventana: el motor cobró sin preguntar y el bloque devuelve
+`null` en vez de pintar un panel sin decisiones.
+
+Laboratorio: `/ux?scene=payCost` (sacrificar exactamente 2 de 3, con el lanzamiento como
+reanudación), `/ux?scene=payCostHidden` (un descarte de mano del Jugador 2 que llega a este
+espectador como dos marcadores), `/ux?scene=payCostAggregate` (girar por fuerza total ≥ 4 con las
+tres criaturas publicadas) y `/ux?scene=phyrexian` (*Dismember* con tres símbolos: uno de cada
+forma de opción). Capturas `ux-coste-sacrificar-1440.jpg`, `ux-coste-sin-candidatos-1440.jpg`,
+`ux-coste-por-fuerza-1440.jpg` y `ux-mana-frigio-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **627** (11 nuevas en
+`game/__tests__/pay-cost.test.ts`: las trece etiquetas de `kind` y la desconocida, el techo y el
+suelo —incluido el `min_count` ausente y el suelo recortado—, la redacción con marcadores frente a
+la lista perdida, la reanudación sin repetir el lanzamiento pendiente, los contadores con su
+selección, los dos agregados con su comparador y `comparatorHolds` en sus seis formas, la cualidad
+compartida de `reveal` y la acción de *behold*, el sobre compartido `SelectCards`, y el vector
+frigio: opciones por símbolo, índice por posición, sin *shards* no hay ventana, y el vector
+completo de `SubmitPhyrexianChoices`); el recuento vigilado pasa a **71** entradas en
+`REPRESENTED` (69 → 71) y la prueba de contabilidad incluye los dos nombres; build OK; en Chromium
+cuatro pruebas nuevas —el sacrificio con su contrato y el techo que cierra la tercera fila, el
+coste ajeno con marcadores y sin botones, el agregado que sólo enciende el botón al llegar a 4, y
+el frigio símbolo a símbolo con las opciones imposibles apagadas y el vector incompleto sin
+confirmar— y cuatro escenas más en la prueba de temas (68 → 72 escenas, 144 jpg).

@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, payCostPrompt as readPayCost, payCostAction, comparatorHolds, phyrexianPaymentPrompt as readPhyrexian, phyrexianChoicesAction, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -774,6 +774,106 @@ class GameSession {
   answerEnlist(target: ObjectId | null) {
     if (!this.enlistPrompt) return;
     void this.dispatch(chooseEnlistAction(target));
+  }
+
+  /** CR 118.3 + CR 601.2b: a cost paid by choosing objects. */
+  get payCostPrompt() {
+    return readPayCost(this.snapshot);
+  }
+  payCostPick = $state<ObjectId[]>([]);
+  payCostIsPicked(id: ObjectId): boolean {
+    return this.payCostPick.includes(id);
+  }
+  /**
+   * CR 118.3 + CR 208.1: the answer is legal when it sits inside `[min_count,
+   * count]` **and**, for an aggregate cost, when the published powers already reach
+   * the threshold. Unpublished powers leave that half to the engine instead of
+   * guessing (CR 208.1 needs a number the client may not have).
+   */
+  get payCostAggregateHolds(): boolean | null {
+    const prompt = this.payCostPrompt;
+    if (!prompt?.tapAggregate) return null;
+    const total = this.payCostPower;
+    if (total === null) return null;
+    return comparatorHolds(prompt.tapAggregate.comparator, total, prompt.tapAggregate.value);
+  }
+  get payCostReady(): boolean {
+    const prompt = this.payCostPrompt;
+    if (!prompt) return false;
+    if (!this.payCostPick.every((id) => prompt.choices.includes(id))) return false;
+    if (this.payCostPick.length < prompt.minCount || this.payCostPick.length > prompt.count) return false;
+    return this.payCostAggregateHolds !== false;
+  }
+  /** CR 208.1: total power of the picked creatures, `null` if any is unpublished. */
+  get payCostPower(): number | null {
+    let total = 0;
+    for (const id of this.payCostPick) {
+      const power = this.powerOf(id);
+      if (power === undefined) return null;
+      total += power;
+    }
+    return total;
+  }
+  togglePayCost(id: ObjectId) {
+    const prompt = this.payCostPrompt;
+    if (!prompt) return;
+    if (this.payCostPick.includes(id)) {
+      this.payCostPick = this.payCostPick.filter((entry) => entry !== id);
+      return;
+    }
+    // CR 118.3: never past the ceiling; the floor is checked at confirm time.
+    if (this.payCostPick.length >= prompt.count) return;
+    this.payCostPick = [...this.payCostPick, id];
+  }
+  confirmPayCost() {
+    if (!this.payCostReady) return;
+    const cards = this.payCostPick;
+    this.payCostPick = [];
+    void this.dispatch(payCostAction(cards));
+  }
+
+  /**
+   * CR 107.4f: one answer per Phyrexian shard, in the published order. There is no
+   * partial state: the vector is complete or it is not an answer.
+   */
+  get phyrexianPrompt() {
+    return readPhyrexian(this.snapshot);
+  }
+  phyrexianPick = $state<('mana' | 'life')[]>([]);
+  /** The choice for one shard, or `null` while that shard has no answer yet. */
+  phyrexianChoiceAt(index: number): 'mana' | 'life' | null {
+    return this.phyrexianPick[index] ?? null;
+  }
+  setPhyrexianChoice(index: number, choice: 'mana' | 'life') {
+    const prompt = this.phyrexianPrompt;
+    if (!prompt || !prompt.shards.some((shard) => shard.index === index)) return;
+    const next = [...this.phyrexianPick];
+    next[index] = choice;
+    this.phyrexianPick = next;
+  }
+  get phyrexianReady(): boolean {
+    const prompt = this.phyrexianPrompt;
+    if (!prompt) return false;
+    // CR 107.4f: `shards.len()` entries, each one legal for its shard's options.
+    return prompt.shards.every((shard, position) => {
+      const choice = this.phyrexianPick[position];
+      if (!choice) return false;
+      if (shard.options === 'mana-only') return choice === 'mana';
+      if (shard.options === 'life-only') return choice === 'life';
+      return true;
+    });
+  }
+  confirmPhyrexian() {
+    const prompt = this.phyrexianPrompt;
+    if (!prompt || !this.phyrexianReady) return;
+    const choices = prompt.shards.map((_, position) => this.phyrexianPick[position]!);
+    this.phyrexianPick = [];
+    void this.dispatch(phyrexianChoicesAction(choices));
+  }
+  cancelPhyrexian() {
+    if (!this.phyrexianPrompt) return;
+    this.phyrexianPick = [];
+    void this.dispatch(cancelCastAction());
   }
 
   /** CR 115.7: repointing a spell (or ability) that is already on the stack. */
@@ -1638,7 +1738,7 @@ class GameSession {
     if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
     if (this.snapshot?.revision !== reply.revision) {
       this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = [];
-      this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.revealPicks = []; this.pairPick = null; this.untapSubsetPick = [];
+      this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.revealPicks = []; this.pairPick = null; this.untapSubsetPick = []; this.payCostPick = []; this.phyrexianPick = [];
       this.scryKeep = [];
       this.tapPick = [];
       this.multiPick = [];

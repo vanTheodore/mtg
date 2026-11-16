@@ -79,6 +79,10 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `untapResume` | `UntapChoice` (`progress` anterior) | [claro](no-enderezar-partida-antigua-claro.jpg) | [oscuro](no-enderezar-partida-antigua-oscuro.jpg) |
 | `exert` | `ExertChoice` («exertar al atacar») | [claro](exertar-al-atacar-claro.jpg) | [oscuro](exertar-al-atacar-oscuro.jpg) |
 | `enlist` | `EnlistChoice` (girar para alistar) | [claro](alistar-al-atacar-claro.jpg) | [oscuro](alistar-al-atacar-oscuro.jpg) |
+| `payCost` | `PayCost` (coste de sacrificar) | [claro](coste-sacrificar-claro.jpg) | [oscuro](coste-sacrificar-oscuro.jpg) |
+| `payCostHidden` | `PayCost` (candidatos redactados) | [claro](coste-sin-candidatos-claro.jpg) | [oscuro](coste-sin-candidatos-oscuro.jpg) |
+| `payCostAggregate` | `PayCost` (girar por fuerza) | [claro](coste-por-fuerza-claro.jpg) | [oscuro](coste-por-fuerza-oscuro.jpg) |
+| `phyrexian` | `PhyrexianPayment` | [claro](mana-frigio-claro.jpg) | [oscuro](mana-frigio-oscuro.jpg) |
 | `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:

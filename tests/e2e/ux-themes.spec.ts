@@ -99,6 +99,10 @@ const SCENES = [
   { scene: 'untapResume', slug: 'no-enderezar-partida-antigua', block: '[data-untap-choice]' },
   { scene: 'exert', slug: 'exertar-al-atacar', block: '[data-exert]' },
   { scene: 'enlist', slug: 'alistar-al-atacar', block: '[data-enlist]' },
+  { scene: 'payCost', slug: 'coste-sacrificar', block: '[data-pay-cost]' },
+  { scene: 'payCostHidden', slug: 'coste-sin-candidatos', block: '[data-pay-cost]' },
+  { scene: 'payCostAggregate', slug: 'coste-por-fuerza', block: '[data-pay-cost]' },
+  { scene: 'phyrexian', slug: 'mana-frigio', block: '[data-phyrexian]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

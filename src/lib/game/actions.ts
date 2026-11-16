@@ -168,6 +168,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'ChooseUntapSubset': return 'Un tope limita cuántos permanentes se enderezan: elige cuáles.';
     case 'ExertChoice': return 'Puedes exertar esta criatura al atacar: no se endereza en tu próximo paso de enderezar.';
     case 'EnlistChoice': return 'Puedes girar una criatura para alistar al atacante, o rechazarlo.';
+    case 'PayCost': return 'Un coste se paga eligiendo objetos de los que publica el motor.';
+    case 'PhyrexianPayment': return 'El maná frigio se paga con maná de su color o con 2 vidas por símbolo.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

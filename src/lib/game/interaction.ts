@@ -1844,6 +1844,288 @@ export function untapSubsetAction(cards: ObjectId[]): GameAction {
 }
 
 /**
+ * CR 118.3 + CR 601.2b + CR 601.2h: a cost paid by **choosing objects** is one
+ * window with one answer — `SelectCards { cards }` — and a dozen meanings. The
+ * engine has already filtered the candidates (`choices`) and published the
+ * cardinality contract: `count` is the ceiling and `min_count` the floor, so
+ * `min_count === count` is «exactly N» and `min_count < count` is «at least N»
+ * (a `SacrificeForCost` with `min_count`, or a Crew-style aggregate).
+ *
+ * Two kinds carry their own constraint on top of the numbers and this prompt keeps
+ * them verbatim instead of re-deriving: `TapCreatures { mode: Aggregate }` is the
+ * «tap any number with total power ≥ N» form (CR 208.1) and `ExileAggregate` is the
+ * «exile any number whose … satisfies …» form. Everything else is only the kind
+ * plus the published numbers.
+ *
+ * CR 400.2: `choices` may be **redacted for this viewer** — `Reveal`/`Discard` lose
+ * the whole list, hand-pitch exile keeps the cardinality with `0` placeholders, and
+ * `Behold` drops the hand cards. A `0` is therefore not a card: `hiddenChoices`
+ * counts placeholders so the block can say «no la ves» instead of inventing a name.
+ */
+export type PayCostKindName =
+  | 'discard'
+  | 'reveal'
+  | 'sacrifice'
+  | 'return-to-hand'
+  | 'exile-from-zone'
+  | 'exile-materials'
+  | 'exile-permanent'
+  | 'exile-from-mana-zone'
+  | 'unattach'
+  | 'remove-counter'
+  | 'tap-creatures'
+  | 'behold'
+  | 'exile-aggregate'
+  | 'unknown';
+/** CR 601.2b + CR 605.3b: which pipeline resumes once the cost is paid. */
+export type PayCostResume =
+  | 'spell'
+  | 'spell-cost'
+  | 'mana-ability'
+  | 'resolution'
+  | 'team-tap'
+  | 'turn-face-up'
+  | 'unknown';
+
+const PAY_COST_KINDS: Record<string, PayCostKindName> = {
+  Discard: 'discard',
+  Reveal: 'reveal',
+  Sacrifice: 'sacrifice',
+  ReturnToHand: 'return-to-hand',
+  ExileFromZone: 'exile-from-zone',
+  ExileMaterials: 'exile-materials',
+  ExilePermanent: 'exile-permanent',
+  ExileFromManaZone: 'exile-from-mana-zone',
+  UnattachFrom: 'unattach',
+  RemoveCounter: 'remove-counter',
+  TapCreatures: 'tap-creatures',
+  Behold: 'behold',
+  ExileAggregate: 'exile-aggregate'
+};
+const PAY_COST_RESUMES: Record<string, PayCostResume> = {
+  Spell: 'spell',
+  SpellCost: 'spell-cost',
+  ManaAbility: 'mana-ability',
+  Resolution: 'resolution',
+  TeamTapPayment: 'team-tap',
+  TurnFaceUp: 'turn-face-up'
+};
+/** CR 107.1a: does `lhs <comparator> rhs` hold, for the engine's own codes? */
+export function comparatorHolds(comparator: string, lhs: number, rhs: number): boolean {
+  switch (comparator) {
+    case 'GT': return lhs > rhs;
+    case 'LT': return lhs < rhs;
+    case 'LE': return lhs <= rhs;
+    case 'EQ': return lhs === rhs;
+    case 'NE': return lhs !== rhs;
+    default: return lhs >= rhs;
+  }
+}
+/** The engine's `Comparator`, as the glyph a player reads. */
+export function comparatorText(value: unknown): string | null {
+  switch (value) {
+    case 'GE': return '≥';
+    case 'GT': return '>';
+    case 'LE': return '≤';
+    case 'LT': return '<';
+    case 'EQ': return '=';
+    case 'NE': return '≠';
+    default: return null;
+  }
+}
+export type PayCostPrompt = {
+  player: PlayerId;
+  kind: PayCostKindName;
+  /** CR 400.2: pre-filtered by the engine; `0` entries are redacted placeholders. */
+  choices: ObjectId[];
+  /** CR 118.3: ceiling of the answer (and the exact count when `minCount` equals it). */
+  count: number;
+  /** CR 118.3: floor; `0` means the empty answer is legal. */
+  minCount: number;
+  resume: PayCostResume;
+  /** CR 400.2: how many entries the engine replaced with placeholders in this view. */
+  hiddenChoices: number;
+  /** Zone the cost takes from, when the kind publishes one. */
+  zone: string | null;
+  /** CR 701.20a: the shared quality two revealed cards have to meet. */
+  sharedQuality: string | null;
+  /** CR 122.1: counters this cost removes, and from how many objects. */
+  counters: { count: number; perObject: 'single' | 'among' } | null;
+  /** CR 122.1: which counters qualify (`any` or a counter-type name). */
+  counterKind: string | null;
+  /** CR 208.1: «tap any number with total power …» when the cost is aggregate. */
+  tapAggregate: { comparator: string; symbol: string; value: number } | null;
+  /** CR 118.3: «exile any number whose … » as the engine published it. */
+  exileAggregate: { function: string; property: string; comparator: string; value: number } | null;
+  /** CR 701.31a: behold either reveals or exiles the chosen card. */
+  behold: 'choose-or-reveal' | 'exile-chosen' | null;
+};
+export function payCostPrompt(snapshot: EngineSnapshot | null): PayCostPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'PayCost') return null;
+  const data = waiting.data ?? {};
+  const kindRaw = data.kind as
+    | {
+        type?: unknown;
+        zone?: unknown;
+        shared_quality?: unknown;
+        count?: unknown;
+        selection?: unknown;
+        counter_type?: unknown;
+        mode?: unknown;
+        function?: unknown;
+        property?: unknown;
+        comparator?: unknown;
+        value?: unknown;
+        action?: unknown;
+      }
+    | null
+    | undefined;
+  const kindType = typeof kindRaw?.type === 'string' ? kindRaw.type : '';
+  const kind = PAY_COST_KINDS[kindType] ?? 'unknown';
+  const rawChoices = Array.isArray(data.choices) ? (data.choices as unknown[]) : [];
+  const choices = rawChoices.filter((id): id is ObjectId => typeof id === 'number' && id !== 0);
+  const resumeRaw = data.resume as { type?: unknown } | null | undefined;
+  const resumeType = typeof resumeRaw?.type === 'string' ? resumeRaw.type : '';
+  const zone = typeof kindRaw?.zone === 'string' ? kindRaw.zone : null;
+  const sharedQuality =
+    typeof kindRaw?.shared_quality === 'string'
+      ? kindRaw.shared_quality
+      : kindRaw?.shared_quality != null
+        ? 'publicada'
+        : null;
+  const countersRaw = kindRaw;
+  const counters =
+    kind === 'remove-counter'
+      ? {
+          count: typeof countersRaw?.count === 'number' ? countersRaw.count : 0,
+          perObject: countersRaw?.selection === 'AmongObjects' ? ('among' as const) : ('single' as const)
+        }
+      : null;
+  const counterTypeRaw = kindRaw?.counter_type;
+  const counterKind =
+    kind === 'remove-counter'
+      ? typeof counterTypeRaw === 'string'
+        ? 'cualquiera'
+        : typeof (counterTypeRaw as { OfType?: unknown } | null)?.OfType === 'string'
+          ? String((counterTypeRaw as { OfType: string }).OfType)
+          : null
+      : null;
+  const modeRaw = kindRaw?.mode;
+  const aggregateRaw =
+    typeof modeRaw === 'object' && modeRaw !== null
+      ? ((modeRaw as { Aggregate?: { comparator?: unknown; value?: unknown } }).Aggregate ?? null)
+      : null;
+  const tapAggregate =
+    aggregateRaw && typeof aggregateRaw.value === 'number'
+      ? {
+          comparator: typeof aggregateRaw.comparator === 'string' ? aggregateRaw.comparator : 'GE',
+          symbol: comparatorText(aggregateRaw.comparator) ?? '≥',
+          value: aggregateRaw.value
+        }
+      : null;
+  const exileRaw = kindRaw;
+  const exileAggregate =
+    kind === 'exile-aggregate' && typeof exileRaw?.value === 'number'
+      ? {
+          function: String(exileRaw.function ?? '—'),
+          property: String(exileRaw.property ?? '—'),
+          comparator: comparatorText(exileRaw.comparator) ?? '≥',
+          value: exileRaw.value
+        }
+      : null;
+  const beholdAction = kindRaw?.action;
+  const behold =
+    kind === 'behold'
+      ? beholdAction === 'ExileChosen'
+        ? ('exile-chosen' as const)
+        : ('choose-or-reveal' as const)
+      : null;
+  const count = typeof data.count === 'number' ? data.count : choices.length;
+  const minCount = typeof data.min_count === 'number' ? data.min_count : count;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    kind,
+    choices,
+    count,
+    minCount: Math.min(minCount, count),
+    resume: PAY_COST_RESUMES[resumeType] ?? 'unknown',
+    hiddenChoices: rawChoices.length - choices.length,
+    zone,
+    sharedQuality,
+    counters,
+    counterKind,
+    tapAggregate,
+    exileAggregate,
+    behold
+  };
+}
+/** CR 118.3: the chosen objects, in the engine's own `SelectCards` envelope. */
+export function payCostAction(cards: ObjectId[]): GameAction {
+  return selectCardsAction(cards);
+}
+
+/**
+ * CR 107.4f: Phyrexian mana may be paid with **2 life** instead of the colored
+ * mana, per shard, at the moment the cost is paid (CR 118.3 + CR 119.4: the life
+ * payment is limited by the current total). This is not a subset and not a
+ * toggle — it is an **ordered vector with one entry per shard**, in the engine's
+ * `shard_index` order, and its length MUST equal `shards.len()`.
+ *
+ * `options` is per shard and the engine already decided it: `ManaOnly` (no life to
+ * spend, or a CR 119.8 lock), `LifeOnly` (no mana of that color is available) or
+ * `ManaOrLife`. The block offers only what each shard allows, and `CancelCast` is a
+ * real answer during this window (CR 601.2i).
+ */
+export type PhyrexianShardOption = 'mana-or-life' | 'mana-only' | 'life-only';
+export type PhyrexianShardView = {
+  /** The engine's `shard_index`: the position this answer occupies. */
+  index: number;
+  /** Printed shard color (one representative for hybrid-Phyrexian). */
+  color: string;
+  options: PhyrexianShardOption;
+};
+export type PhyrexianPaymentPrompt = {
+  player: PlayerId;
+  /** The spell being cast; public information (CR 400.2). */
+  spellId: ObjectId;
+  shards: PhyrexianShardView[];
+};
+const SHARD_OPTIONS: Record<string, PhyrexianShardOption> = {
+  ManaOrLife: 'mana-or-life',
+  ManaOnly: 'mana-only',
+  LifeOnly: 'life-only'
+};
+export function phyrexianPaymentPrompt(snapshot: EngineSnapshot | null): PhyrexianPaymentPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'PhyrexianPayment') return null;
+  const data = waiting.data ?? {};
+  const raw = Array.isArray(data.shards) ? (data.shards as unknown[]) : [];
+  const shards: PhyrexianShardView[] = raw.map((entry, position) => {
+    const shard = (entry ?? {}) as { shard_index?: unknown; color?: unknown; options?: unknown };
+    return {
+      index: typeof shard.shard_index === 'number' ? shard.shard_index : position,
+      color: typeof shard.color === 'string' ? shard.color : '—',
+      options: SHARD_OPTIONS[String(shard.options ?? '')] ?? 'mana-or-life'
+    };
+  });
+  // An empty vector asks nothing: the engine resolves the payment by itself.
+  if (!shards.length) return null;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    spellId: typeof data.spell_object === 'number' ? (data.spell_object as ObjectId) : 0,
+    shards
+  };
+}
+/** CR 107.4f: one answer per shard, in the published order. */
+export function phyrexianChoicesAction(choices: ('mana' | 'life')[]): GameAction {
+  return {
+    type: 'SubmitPhyrexianChoices',
+    data: { choices: choices.map((choice) => ({ type: choice === 'mana' ? 'PayMana' : 'PayLife' })) }
+  };
+}
+
+/**
  * CR 508.1g + CR 701.43d: as attackers are declared, the active player may pay
  * the optional «exert this creature as it attacks» cost, one creature at a time.
  * `attacker` is the creature being decided and `remaining` is the rest of the
