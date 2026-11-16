@@ -1241,6 +1241,41 @@ test('la fusión entra atacando: se elige el destino entre los que publica Phase
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('«resolver todo» pide el consentimiento del asiento y no promete lo que no ve', async ({ page }) => {
+  await page.goto('/ux?scene=resolveAll');
+  const block = page.locator('[data-resolve-all]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-resolve-all-representative', '0');
+  await expect(block).toHaveAttribute('data-resolve-all-epoch', '3');
+  await expect(block.locator('strong')).toHaveText('¿Autorizas resolver todo?');
+  // CR 117.3d + CR 117.4: who is bound by a «resolve all» proposal.
+  await expect(block.locator('[data-resolve-all-rule]')).toContainText('CR 117.3d');
+  await expect(block.locator('[data-resolve-all-rule]')).toContainText('CR 117.4');
+  // The run is server-private: the block says so instead of inventing participants.
+  await expect(block.locator('[data-resolve-all-private]')).toContainText('no puede decir');
+  await expect(block).toHaveAttribute('data-resolve-all-offers', 'both');
+  await expect(block.locator('[data-resolve-all-grant]')).toHaveText('Sí, resolver todo');
+  await expect(block.locator('[data-resolve-all-decline]')).toHaveText('No, seguir paso a paso');
+  await expect(block.locator('[data-resolve-all-epoch-note]')).toContainText('Época 3');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una propuesta que ya no admite respuestas no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=resolveAllStale');
+  const block = page.locator('[data-resolve-all]');
+  await expect(block).toBeVisible();
+  // The prompt outlives the run: the engine offers no envelope, so there is
+  // nothing to click — and the block explains why instead of disabling a guess.
+  await expect(block).toHaveAttribute('data-resolve-all-offers', 'none');
+  await expect(block.locator('button')).toHaveCount(0);
+  await expect(block.locator('[data-resolve-all-waiting]')).toContainText('época 3');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

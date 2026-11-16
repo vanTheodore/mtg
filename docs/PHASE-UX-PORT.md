@@ -2449,3 +2449,52 @@ conjunto del panel, y falla si un nombre no existe en el motor, si hay duplicado
 el total deja de ser 64 —que es el número que publican el README del port y el PR—.
 También comprueba los tres nombres que se quedaron fuera, para que el modo de fallo no
 vuelva a pasar inadvertido.
+
+## «Resolver todo» pide permiso, y la mesa sólo puede decir a quién (quincuagésima primera pasada, 7 nov 2026)
+
+`ResolveAllConsent` (CR 117.3d + CR 117.4) es el atajo de mesa para que Phase
+resuelva de golpe lo que queda de la pila, y no es una decisión de juego: es un
+**consentimiento** que se pide a cada representante de prioridad. La tentación era pintar
+el cuadro entero —quién ha concedido ya, a cuántos asientos vincula la propuesta, cuántas
+resoluciones permite—, y el motor no lo publica: `resolve_all_consent_run` se vacía en
+toda proyección de espectador (`visibility.rs`), así que el cliente sólo recibe `epoch` y
+`representative`.
+
+**El bloque dice lo que no puede decir.** Enseña a quién se pregunta —«te pregunta a ti
+como representante del asiento 1»— y una línea explica que los participantes, el alcance
+(`Own`/`Shared`) y el presupuesto de resoluciones son autoridad del motor. Inventar «2 de
+3 han concedido» habría sido eso: inventar.
+
+**La respuesta es el sobre del motor, no la época de la pantalla.** El prompt puede
+sobrevivir a la propuesta que lo emitió; por eso los dos botones salen de
+`legal.actions` (`RespondResolveAllConsent` con su `epoch`), igual que los objetivos de
+un `TargetSelection` salen de ahí. Una respuesta reconstruida con la época visible la
+aceptaría el componente y la rechazaría el reductor (CR 117.4: una respuesta tardía falla
+cerrada).
+
+**Sin respuestas no se deshabilita una suposición: se dice.** Si el motor ya no ofrece
+ningún sobre para esa época, el bloque se queda sin botones y explica que la propuesta ya
+no admite respuestas desde aquí. Es el estado que enseña la segunda escena.
+
+**`ResolveAllReady` queda fuera a propósito.** Es el estado siguiente —todos concedieron,
+la sesión está resolviendo— y no tiene actor que responder: sólo permite revocar
+consentimientos ya dados. Representarlo como si fuera esta ventana habría contado dos
+veces la misma decisión; queda en la lista, con `RevokeResolveAllConsent` ya modelado en
+el cliente para cuando se aborde.
+
+Laboratorio: `/ux?scene=resolveAll` y `/ux?scene=resolveAllStale`, con la época 3 y el
+asiento 0; la segunda quita los sobres de `legal.actions` para enseñar el caso sin
+respuestas. Capturas `ux-resolver-todo-1440.jpg` y
+`ux-resolver-todo-sin-respuesta-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **602** (5 nuevas en
+`game/__tests__/resolve-all-consent.test.ts`: el asiento y la época con sus dos ofertas,
+las ofertas que salen de `legal.actions` —incluido el sobre de otra época que no vale—,
+la ausencia de representante y las ventanas vecinas, la época ausente que no esconde las
+ofertas, y los tres sobres —conceder, rechazar y revocar— devueltos intactos); el
+recuento vigilado pasa a **65** entradas en `REPRESENTED` y la prueba de contabilidad
+incluye este nombre; build OK; en Chromium dos pruebas nuevas —el consentimiento con sus
+dos botones y la propuesta que ya no admite respuestas, que no ofrece ninguno— y dos
+escenas más en la prueba de temas (61 → 63 escenas, 126 jpg, presupuesto de 600 s).

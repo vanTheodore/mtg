@@ -67,10 +67,11 @@
   import EntryAttackPrompt from '#lib/components/EntryAttackPrompt.svelte';
   import ReplacementPrompt from '#lib/components/ReplacementPrompt.svelte';
   import CopyTargetPrompt from '#lib/components/CopyTargetPrompt.svelte';
+  import ResolveAllConsentPrompt from '#lib/components/ResolveAllConsentPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -144,6 +145,8 @@
     { value: 'replacementOptional', label: 'Reemplazo opcional' },
     { value: 'copyTarget', label: 'Copia: qué permanente' },
     { value: 'copyTargetToken', label: 'Copias de fichas' },
+    { value: 'resolveAll', label: 'Resolver todo: consentir' },
+    { value: 'resolveAllStale', label: 'Resolver todo: sin respuestas' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -221,6 +224,8 @@
     replacementOptional: 'ReplacementChoice · CR 616.1, «puedes»',
     copyTarget: 'CopyTargetChoice · CR 707.2, entrar como copia',
     copyTargetToken: 'CopyTargetChoice · CR 707.1, fuente de las fichas',
+    resolveAll: 'ResolveAllConsent · CR 117.3d, el asiento pregunta',
+    resolveAllStale: 'ResolveAllConsent · propuesta que ya no admite respuestas',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -871,6 +876,13 @@
           cost: { type: 'Cost', shards: ['White'], generic: 0 }
         }
       };
+    }
+    if (scene === 'resolveAll' || scene === 'resolveAllStale') {
+      // `ResolveAllConsent` (CR 117.3d + CR 117.4): only the epoch and the seat being
+      // asked cross the viewer projection — the run itself is server-private. The
+      // answers are the engine's own envelopes in `legal.actions`, which is what
+      // lets the stale scene show a proposal with none on offer.
+      return { type: 'ResolveAllConsent', data: { epoch: 3, representative: 0 } };
     }
     if (scene === 'copyTarget') {
       // CR 707.2 + CR 707.9: the entering object becomes a copy and the printed
@@ -1704,6 +1716,7 @@
           : scene === 'meldAttack' || scene === 'entryAttack' ? 'DeclareAttackers'
           : scene === 'revealAny' || scene === 'unlessRepeat' || scene === 'replacementOptional' ? 'Draw'
           : scene === 'replacement' || scene === 'replacementCompose' || scene === 'copyTarget' || scene === 'copyTargetToken' ? 'PreCombatMain'
+          : scene === 'resolveAll' || scene === 'resolveAllStale' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1766,7 +1779,12 @@
                 ]
               : scene === 'wardPower'
                 ? [{ type: 'SelectCards', data: { cards: [100, 105] } }]
-                : [{ type: 'PassPriority' }],
+                : scene === 'resolveAll'
+                  ? [
+                      { type: 'RespondResolveAllConsent', data: { epoch: 3, decision: { type: 'Grant' } } },
+                      { type: 'RespondResolveAllConsent', data: { epoch: 3, decision: { type: 'Decline' } } }
+                    ]
+                  : [{ type: 'PassPriority' }],
         spell_costs: {},
         // Actions the menu must show. In the real table these arrive from
         // `legal.by_object`; the fixture copies the shape, not the rules.
@@ -1924,6 +1942,7 @@
         {#if scene === 'entryAttack'}<EntryAttackPrompt />{/if}
         {#if scene === 'replacement' || scene === 'replacementCompose' || scene === 'replacementOptional'}<ReplacementPrompt />{/if}
         {#if scene === 'copyTarget' || scene === 'copyTargetToken'}<CopyTargetPrompt />{/if}
+        {#if scene === 'resolveAll' || scene === 'resolveAllStale'}<ResolveAllConsentPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

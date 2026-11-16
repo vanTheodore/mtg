@@ -1680,6 +1680,75 @@ export function copyTargetPrompt(snapshot: EngineSnapshot | null): CopyTargetPro
 // parsed by its `WaitingFor` variant and not by the action.
 
 /**
+ * CR 117.3d + CR 117.4: the table's «resolve all» shortcut asks each priority
+ * representative to consent before Phase resolves the remaining batch at once.
+ * The prompt carries only `epoch` and `representative` — the run's participant
+ * list, its scope and the auto-pass baseline are server-private and are cleared
+ * from every viewer projection (`resolve_all_consent_run = None`), so the block
+ * names the seat that is being asked and nothing else.
+ *
+ * `epoch` is the anti-replay guard: a delayed answer naming another epoch is
+ * refused, which is why the buttons come from `legal.actions` — the engine's own
+ * envelope — instead of being built from the epoch the table is looking at.
+ */
+export type ResolveAllPrompt = {
+  /** The seat whose consent is being asked (the engine's `representative`). */
+  representative: PlayerId;
+  /** The proposal this answer belongs to. */
+  epoch: number;
+  /** Whether the engine currently offers each answer to this viewer. */
+  grantOffered: boolean;
+  declineOffered: boolean;
+};
+export function resolveAllPrompt(snapshot: EngineSnapshot | null): ResolveAllPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ResolveAllConsent') return null;
+  const data = waiting.data ?? {};
+  if (typeof data.representative !== 'number') return null;
+  const epoch = typeof data.epoch === 'number' ? data.epoch : null;
+  const offers = resolveAllAnswers(snapshot, epoch);
+  return {
+    representative: data.representative,
+    epoch: epoch ?? 0,
+    grantOffered: offers.grant !== undefined,
+    declineOffered: offers.decline !== undefined
+  };
+}
+/** The engine's own `RespondResolveAllConsent` envelopes for one epoch. */
+function resolveAllAnswers(
+  snapshot: EngineSnapshot | null,
+  epoch: number | null
+): { grant?: GameAction; decline?: GameAction } {
+  const actions = snapshot?.legal.actions ?? [];
+  const forEpoch = actions.filter((action) => {
+    if (action.type !== 'RespondResolveAllConsent') return false;
+    return epoch === null || action.data?.epoch === epoch;
+  });
+  const pick = (decision: string) =>
+    forEpoch.find(
+      (action) => (action.data?.decision as { type?: string } | undefined)?.type === decision
+    );
+  return { grant: pick('Grant'), decline: pick('Decline') };
+}
+export function grantResolveAllAction(snapshot: EngineSnapshot | null): GameAction | undefined {
+  const epoch = typeof snapshot?.state.waiting_for?.data?.epoch === 'number' ? (snapshot.state.waiting_for.data.epoch as number) : null;
+  return resolveAllAnswers(snapshot, epoch).grant;
+}
+export function declineResolveAllAction(snapshot: EngineSnapshot | null): GameAction | undefined {
+  const epoch = typeof snapshot?.state.waiting_for?.data?.epoch === 'number' ? (snapshot.state.waiting_for.data.epoch as number) : null;
+  return resolveAllAnswers(snapshot, epoch).decline;
+}
+/** Withdrawing a consent that was already given, while the epoch is still live. */
+export function revokeResolveAllAction(
+  snapshot: EngineSnapshot | null,
+  representative: PlayerId
+): GameAction | undefined {
+  return (snapshot?.legal.actions ?? []).find(
+    (action) => action.type === 'RevokeResolveAllConsent' && action.data?.representative === representative
+  );
+}
+
+/**
  * CR 701.44d: several permanents explore at the same time, so the player who
  * controls them chooses **the order** — one explorer per step. The engine asks
  * with the ones this player may pick (`choosable`) and the whole queue
