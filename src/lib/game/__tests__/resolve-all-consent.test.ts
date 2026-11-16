@@ -84,10 +84,9 @@ test('a missing epoch still reads the offers the engine sent', () => {
   // Absent is not a reason to hide the answers; the envelope carries the epoch.
   expect(prompt.epoch).toBe(0);
   expect(prompt.grantOffered).toBe(true);
-  expect(grantResolveAllAction(withWaiting(consent({ epoch: undefined }), [grant(9)])).data).toEqual({
-    epoch: 9,
-    decision: { type: 'Grant' }
-  });
+  // The envelope keeps the epoch the engine minted, not the one the state omits.
+  const action = grantResolveAllAction(withWaiting(consent({ epoch: undefined }), [grant(9)]));
+  expect(action?.data).toEqual({ epoch: 9, decision: { type: 'Grant' } });
 });
 
 test('grant, decline and revoke hand over the envelope untouched', () => {
