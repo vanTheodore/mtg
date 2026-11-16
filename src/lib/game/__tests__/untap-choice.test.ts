@@ -56,6 +56,34 @@ test('the choice names one permanent, its seat and what the step already decline
   expect(prompt.declined).toEqual([418, 205]);
 });
 
+test('CR 502.1: the step says how far it had run, and absence reads as the engine default', () => {
+  // `UntapStepProgress` is serialized unconditionally, so a writer that omits it is
+  // an older build — and the engine's serde default for absence is «before».
+  const after = untapPrompt(
+    withWaiting({
+      type: 'UntapChoice',
+      data: { player: 0, candidates: [417], progress: 'AfterTurnBasedActions' }
+    })
+  )!;
+  expect(after.progress).toBe('after-turn-based-actions');
+  const before = untapPrompt(
+    withWaiting({
+      type: 'UntapChoice',
+      data: { player: 0, candidates: [417], progress: 'BeforeTurnBasedActions' }
+    })
+  )!;
+  expect(before.progress).toBe('before-turn-based-actions');
+  const absent = untapPrompt(withWaiting({ type: 'UntapChoice', data: { player: 0, candidates: [417] } }))!;
+  expect(absent.progress).toBe('before-turn-based-actions');
+  const subset = untapSubsetPrompt(
+    withWaiting({
+      type: 'ChooseUntapSubset',
+      data: { player: 0, group: [102], max: 1, progress: 'AfterTurnBasedActions' }
+    })
+  )!;
+  expect(subset.progress).toBe('after-turn-based-actions');
+});
+
 test('a drained candidate list asks nothing: the engine has moved on', () => {
   expect(untapPrompt(withWaiting({ type: 'UntapChoice', data: { player: 0, candidates: [] } }))).toBeNull();
   expect(untapPrompt(null)).toBeNull();

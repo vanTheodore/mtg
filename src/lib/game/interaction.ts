@@ -1765,12 +1765,27 @@ export function revokeResolveAllAction(
  * `ChooseUntap` is not shared with anything else, but `SelectCards` is shared with
  * every card picker in the game.
  */
+/** CR 502.1 + CR 502.3: how far the untap step had run when the prompt was raised. */
+export type UntapStepProgress = 'after-turn-based-actions' | 'before-turn-based-actions';
+/**
+ * CR 502.1 + CR 502.2: `UntapStepProgress` is serialized **unconditionally** by the
+ * writers of this engine (no `skip_serializing_if`), so its absence on the wire is a
+ * fact about the writer: a build that offered the determination before phasing and
+ * the day/night check. That is also the engine's own serde default, so an absent
+ * field reads as `before-turn-based-actions` here instead of a third state the
+ * player could not act on.
+ */
+function untapProgress(value: unknown): UntapStepProgress {
+  return value === 'AfterTurnBasedActions' ? 'after-turn-based-actions' : 'before-turn-based-actions';
+}
 export type UntapPrompt = {
   player: PlayerId;
   /** Whose untap step is being asked about. */
   candidates: ObjectId[];
   /** CR 502.3: already declined in this step, in the engine's own order. */
   declined: ObjectId[];
+  /** CR 502.1: where the step stood; `before` means the answer restarts its actions. */
+  progress: UntapStepProgress;
 };
 export function untapPrompt(snapshot: EngineSnapshot | null): UntapPrompt | null {
   const waiting = snapshot?.state.waiting_for;
@@ -1784,7 +1799,8 @@ export function untapPrompt(snapshot: EngineSnapshot | null): UntapPrompt | null
   return {
     player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
     candidates,
-    declined: ids(data.chosen_not_to_untap)
+    declined: ids(data.chosen_not_to_untap),
+    progress: untapProgress(data.progress)
   };
 }
 /** CR 502.3: untap this one, or leave it tapped. */
@@ -1798,6 +1814,8 @@ export type UntapSubsetPrompt = {
   group: ObjectId[];
   /** CR 502.3: at most this many of `group` untap. */
   max: number;
+  /** CR 502.1: where the step stood; `before` means the answer restarts its actions. */
+  progress: UntapStepProgress;
 };
 export function untapSubsetPrompt(snapshot: EngineSnapshot | null): UntapSubsetPrompt | null {
   const waiting = snapshot?.state.waiting_for;
@@ -1813,7 +1831,8 @@ export function untapSubsetPrompt(snapshot: EngineSnapshot | null): UntapSubsetP
   return {
     player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
     group,
-    max
+    max,
+    progress: untapProgress(data.progress)
   };
 }
 /**

@@ -26,7 +26,8 @@
     data-untap-choice
     data-untap-choice-object={first}
     data-untap-choice-pending={pending}
-    data-untap-choice-declined={declined.length}>
+    data-untap-choice-declined={declined.length}
+    data-untap-choice-progress={prompt.progress}>
     <strong>Enderezar · {nameOf(first)}</strong>
     <p class="hint" data-untap-choice-rule>
       CR 502.3: el paso de enderezar es del jugador activo, y esta carta permite elegir no enderezar un
@@ -37,6 +38,12 @@
         ? 'Es el último permanente por decidir en este paso.'
         : `Quedan ${pending} permanentes por decidir en este paso.`}
     </p>
+    {#if prompt.progress === 'before-turn-based-actions'}
+      <p class="hint" data-untap-choice-resume>
+        Este paso viene de una partida guardada por una versión anterior: el motor lo reanuda desde
+        su primera acción (faseo y día/noche) antes de enderezar, no a mitad del paso.
+      </p>
+    {/if}
     {#if declined.length}
       <p class="hint" data-untap-choice-so-far>
         Ya dejados girados: {declined.map(nameOf).join(', ')}.

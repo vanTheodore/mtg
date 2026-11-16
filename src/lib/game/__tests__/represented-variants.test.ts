@@ -60,7 +60,7 @@ function represented(): string[] {
 }
 
 test('the engine still declares the variants this port counts against', () => {
-  // Pinned 0.126.0 (`c07324a5`): 148 variants. A pin bump that changes this number
+  // Pinned 0.127.0 (`28b2f9e4`): 148 variants. A pin bump that changes this number
   // has to move this constant and the docs' census together.
   expect(variants().length).toBe(148);
 });

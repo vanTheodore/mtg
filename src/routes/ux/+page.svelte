@@ -75,7 +75,7 @@
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'exert' | 'enlist';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -153,6 +153,7 @@
     { value: 'resolveAllStale', label: 'Resolver todo: sin respuestas' },
     { value: 'untapChoice', label: 'No enderezar' },
     { value: 'untapSubset', label: 'Tope de enderezar' },
+    { value: 'untapResume', label: 'No enderezar: partida antigua' },
     { value: 'exert', label: 'Exertar al atacar' },
     { value: 'enlist', label: 'Alistar al atacar' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
@@ -236,6 +237,7 @@
     resolveAllStale: 'ResolveAllConsent · propuesta que ya no admite respuestas',
     untapChoice: 'UntapChoice · CR 502.3, «puedes no enderezar»',
     untapSubset: 'ChooseUntapSubset · CR 502.3, tope por tipo',
+    untapResume: 'UntapChoice · CR 502.1, el paso se reanuda desde su primera acción',
     exert: 'ExertChoice · CR 508.1g + CR 701.43d, coste opcional al atacar',
     enlist: 'EnlistChoice · CR 508.1g + CR 702.154a, girar para alistar',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
@@ -911,7 +913,20 @@
       // carries what this same untap step already declined.
       return {
         type: 'UntapChoice',
-        data: { player: 0, candidates: [417], chosen_not_to_untap: [418, 205] }
+        data: {
+          player: 0,
+          candidates: [417],
+          chosen_not_to_untap: [418, 205],
+          progress: 'AfterTurnBasedActions'
+        }
+      };
+    }
+    if (scene === 'untapResume') {
+      // CR 502.1: a save from an earlier build offered the determination *before*
+      // phasing and the day/night check, so the answer restarts the step's actions.
+      return {
+        type: 'UntapChoice',
+        data: { player: 0, candidates: [417], progress: 'BeforeTurnBasedActions' }
       };
     }
     if (scene === 'exert') {
@@ -935,7 +950,10 @@
     if (scene === 'untapSubset') {
       // `ChooseUntapSubset` (CR 502.3): a MaxUntapPerType cap leaves more eligible
       // tapped lands than the cap allows, so the player picks which one untaps.
-      return { type: 'ChooseUntapSubset', data: { player: 0, group: [102, 103, 104], max: 1 } };
+      return {
+        type: 'ChooseUntapSubset',
+        data: { player: 0, group: [102, 103, 104], max: 1, progress: 'AfterTurnBasedActions' }
+      };
     }
     if (scene === 'resolveAll' || scene === 'resolveAllStale') {
       // `ResolveAllConsent` (CR 117.3d + CR 117.4): only the epoch and the seat being
@@ -1777,7 +1795,7 @@
           : scene === 'revealAny' || scene === 'unlessRepeat' || scene === 'replacementOptional' ? 'Draw'
           : scene === 'replacement' || scene === 'replacementCompose' || scene === 'copyTarget' || scene === 'copyTargetToken' ? 'PreCombatMain'
           : scene === 'resolveAll' || scene === 'resolveAllStale' ? 'PreCombatMain'
-          : scene === 'untapChoice' || scene === 'untapSubset' ? 'Untap'
+          : scene === 'untapChoice' || scene === 'untapSubset' || scene === 'untapResume' ? 'Untap'
           : scene === 'exert' || scene === 'enlist' ? 'DeclareAttackers'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
@@ -2017,7 +2035,7 @@
         {#if scene === 'replacement' || scene === 'replacementCompose' || scene === 'replacementOptional'}<ReplacementPrompt />{/if}
         {#if scene === 'copyTarget' || scene === 'copyTargetToken'}<CopyTargetPrompt />{/if}
         {#if scene === 'resolveAll' || scene === 'resolveAllStale'}<ResolveAllConsentPrompt />{/if}
-        {#if scene === 'untapChoice'}<UntapChoicePrompt />{/if}
+        {#if scene === 'untapChoice' || scene === 'untapResume'}<UntapChoicePrompt />{/if}
         {#if scene === 'untapSubset'}<UntapSubsetPrompt />{/if}
         {#if scene === 'exert'}<ExertChoicePrompt />{/if}
         {#if scene === 'enlist'}<EnlistChoicePrompt />{/if}

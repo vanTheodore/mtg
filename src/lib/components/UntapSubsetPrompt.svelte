@@ -43,13 +43,20 @@
     data-untap-subset
     data-untap-subset-group={prompt.group.length}
     data-untap-subset-max={prompt.max}
-    data-untap-subset-chosen={picked.length}>
+    data-untap-subset-chosen={picked.length}
+    data-untap-subset-progress={prompt.progress}>
     <strong>Enderezar hasta {prompt.max} de {prompt.group.length}</strong>
     <p class="hint" data-untap-subset-rule>
       CR 502.3: un efecto limita cuántos permanentes de este tipo se enderezan a la vez, y Phase
       publica exactamente el grupo que compite por ese tope. Eliges cuáles se enderezan; el resto se
       queda girado.
     </p>
+    {#if prompt.progress === 'before-turn-based-actions'}
+      <p class="hint" data-untap-subset-resume>
+        Este paso viene de una partida guardada por una versión anterior: el motor lo reanuda desde
+        su primera acción (faseo y día/noche) antes de enderezar, no a mitad del paso.
+      </p>
+    {/if}
     <p class="hint" data-untap-subset-count>
       {picked.length === 0
         ? `Puedes enderezar hasta ${prompt.max}; si no eliges ninguno, ninguno se endereza.`

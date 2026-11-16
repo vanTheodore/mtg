@@ -96,6 +96,7 @@ const SCENES = [
   { scene: 'resolveAllStale', slug: 'resolver-todo-sin-respuesta', block: '[data-resolve-all]' },
   { scene: 'untapChoice', slug: 'no-enderezar', block: '[data-untap-choice]' },
   { scene: 'untapSubset', slug: 'tope-enderezar', block: '[data-untap-subset]' },
+  { scene: 'untapResume', slug: 'no-enderezar-partida-antigua', block: '[data-untap-choice]' },
   { scene: 'exert', slug: 'exertar-al-atacar', block: '[data-exert]' },
   { scene: 'enlist', slug: 'alistar-al-atacar', block: '[data-enlist]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },

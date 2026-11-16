@@ -2594,3 +2594,47 @@ pasa a **69** entradas en `REPRESENTED` y la prueba de contabilidad incluye los 
 build OK; en Chromium dos pruebas nuevas —el exertar con su precio y su nota de permiso, y el
 alistar con las fuerzas publicadas y el rechazo vivo— y dos escenas más en la prueba de temas
 (65 → 67 escenas, 134 jpg, presupuesto de 600 s).
+
+## Motor v0.127.0: un campo que se serializa siempre y dos que esperan su vista (importación, 16 nov 2026)
+
+La importación sube el pin de `c07324a5` a `28b2f9e4` (33 commits, release **v0.127.0**; informe
+completo en [`PHASE-UPSTREAM-2026-11-16-28B2F9E.md`](PHASE-UPSTREAM-2026-11-16-28B2F9E.md)).
+`WaitingFor` sigue con **148 variantes** —no hay ventanas nuevas—, y de las **69** que Mesa
+representa cambian tres bloques, los tres de forma aditiva y con valor por defecto.
+
+**`UntapStepProgress` se serializa siempre, así que su ausencia es un dato.** `UntapChoice` y
+`ChooseUntapSubset` ganan `progress` sin `skip_serializing_if`: todo escritor de este motor lo
+emite, de modo que un prompt que llega sin el campo viene de una compilación que ofrecía la
+determinación **antes** del faseo (CR 502.1) y de la comprobación de día/noche (CR 502.2) —que es
+también el valor por defecto de serde en el motor—. La diferencia no es cosmética: con `before` la
+respuesta **reinicia** el paso desde su primera acción; con `after` reanuda en el enderezar.
+
+Por eso la pasada 52 necesitaba un rescate y no una funcionalidad nueva: el prompt normaliza el
+campo a `after-turn-based-actions` / `before-turn-based-actions` (la ausencia leída como el valor
+por defecto del motor) y el bloque sólo dice algo en el caso que el jugador no puede deducir de la
+pantalla —una partida guardada por una versión anterior—, con una línea que explica desde dónde se
+reanuda. La decisión que se pide es la misma: enderezar o no, y qué subconjunto.
+
+**`decision_subject_id` llega, pero su vista todavía no existe.** `NamedChoice` gana
+`Option<ObjectId>` (CR 608.2c + CR 608.2d): cuando la instrucción se repite una vez por miembro de
+una población («por cada uno de esos permanentes, elige un oponente distinto»), el prompt publica
+el permanente al que corresponde la respuesta. Es de sólo lectura —la autoridad de grabación sigue
+siendo del titular y `source` no cambia— y `NamedChoice` todavía no tiene bloque propio, así que
+queda anotado para esa pasada en vez de portado a medias.
+
+Laboratorio: `/ux?scene=untapResume` (mismo `UntapChoice` que la escena 52, con `progress` anterior
+y sin nada todavía dejado girado), captura `ux-no-enderezar-partida-antigua-1440.jpg` y su par de
+tema.
+
+### Verificación de esta pasada
+
+`bun run engine:verify` en verde con **497 ficheros** y SHA-256
+`f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`; `diff -rq` de los tres
+árboles `src`, de `phase-ast/data` y de las 2317 pruebas conservadas contra el tarball de
+`28b2f9e4` sin diferencias más allá de la poda declarada (14 altas en el motor, 2 en el parser, 0
+bajas); `bun run check` 0 errores (2 avisos previos); `bun test src/lib` **616** (una nueva en
+`game/__tests__/untap-choice.test.ts`: `after`, `before` y la ausencia leída como el valor por
+defecto del motor, en las dos ventanas); build OK; en Chromium una prueba nueva —el paso guardado
+por una versión anterior con su línea de reanudación y sin «ya dejados girados»— más el atributo
+nuevo comprobado en la escena moderna, y una escena más en la prueba de temas (67 → 68 escenas,
+136 jpg, presupuesto de 600 s). `REPRESENTED` no se mueve: **69**.
