@@ -70,10 +70,12 @@
   import ResolveAllConsentPrompt from '#lib/components/ResolveAllConsentPrompt.svelte';
   import UntapChoicePrompt from '#lib/components/UntapChoicePrompt.svelte';
   import UntapSubsetPrompt from '#lib/components/UntapSubsetPrompt.svelte';
+  import ExertChoicePrompt from '#lib/components/ExertChoicePrompt.svelte';
+  import EnlistChoicePrompt from '#lib/components/EnlistChoicePrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'exert' | 'enlist';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -151,6 +153,8 @@
     { value: 'resolveAllStale', label: 'Resolver todo: sin respuestas' },
     { value: 'untapChoice', label: 'No enderezar' },
     { value: 'untapSubset', label: 'Tope de enderezar' },
+    { value: 'exert', label: 'Exertar al atacar' },
+    { value: 'enlist', label: 'Alistar al atacar' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -232,6 +236,8 @@
     resolveAllStale: 'ResolveAllConsent · propuesta que ya no admite respuestas',
     untapChoice: 'UntapChoice · CR 502.3, «puedes no enderezar»',
     untapSubset: 'ChooseUntapSubset · CR 502.3, tope por tipo',
+    exert: 'ExertChoice · CR 508.1g + CR 701.43d, coste opcional al atacar',
+    enlist: 'EnlistChoice · CR 508.1g + CR 702.154a, girar para alistar',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -907,6 +913,24 @@
         type: 'UntapChoice',
         data: { player: 0, candidates: [417], chosen_not_to_untap: [418, 205] }
       };
+    }
+    if (scene === 'exert') {
+      // `ExertChoice` (CR 508.1g + CR 701.43d): the answer is a boolean; the
+      // `permission` below binds one source incarnation and one occurrence, and the
+      // block never repeats it.
+      const permission = (id: number) => ({
+        source: { object_id: id, incarnation: 3 },
+        occurrence: { type: 'Printed', data: { base_set: 1, printed_index: 0 } }
+      });
+      return {
+        type: 'ExertChoice',
+        data: { player: 0, attacker: 100, permission: permission(100), remaining: [{ attacker: 101, permission: permission(101) }] }
+      };
+    }
+    if (scene === 'enlist') {
+      // `EnlistChoice` (CR 508.1g + CR 702.154a): `eligible` is the engine's tap set
+      // — Savannah Lions (2/1) and Elvish Mystic (1/1) under a 2/2 attacker.
+      return { type: 'EnlistChoice', data: { player: 0, attacker: 100, eligible: [101, 105], remaining: [100] } };
     }
     if (scene === 'untapSubset') {
       // `ChooseUntapSubset` (CR 502.3): a MaxUntapPerType cap leaves more eligible
@@ -1754,6 +1778,7 @@
           : scene === 'replacement' || scene === 'replacementCompose' || scene === 'copyTarget' || scene === 'copyTargetToken' ? 'PreCombatMain'
           : scene === 'resolveAll' || scene === 'resolveAllStale' ? 'PreCombatMain'
           : scene === 'untapChoice' || scene === 'untapSubset' ? 'Untap'
+          : scene === 'exert' || scene === 'enlist' ? 'DeclareAttackers'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1994,6 +2019,8 @@
         {#if scene === 'resolveAll' || scene === 'resolveAllStale'}<ResolveAllConsentPrompt />{/if}
         {#if scene === 'untapChoice'}<UntapChoicePrompt />{/if}
         {#if scene === 'untapSubset'}<UntapSubsetPrompt />{/if}
+        {#if scene === 'exert'}<ExertChoicePrompt />{/if}
+        {#if scene === 'enlist'}<EnlistChoicePrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

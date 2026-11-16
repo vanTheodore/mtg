@@ -1825,6 +1825,91 @@ export function untapSubsetAction(cards: ObjectId[]): GameAction {
 }
 
 /**
+ * CR 508.1g + CR 701.43d: as attackers are declared, the active player may pay
+ * the optional «exert this creature as it attacks» cost, one creature at a time.
+ * `attacker` is the creature being decided and `remaining` is the rest of the
+ * queue for this same declaration — the same one-at-a-time loop as `UntapChoice`.
+ *
+ * CR 701.43d: `permission` binds **one occurrence** of the ability to a source
+ * incarnation (object + incarnation, plus the printed/granted occurrence). It is
+ * deliberately opaque here: the answer is `ChooseExert { exert }`, a bare boolean,
+ * and the engine re-validates the permission it latched in its own state. That is
+ * the opposite of a `ResolveAllConsent` epoch, where the envelope carries the
+ * identity and therefore has to come from `legal.actions`: nothing the screen
+ * showed can pick the wrong occurrence, because the screen never names it.
+ */
+export type ExertPrompt = {
+  player: PlayerId;
+  attacker: ObjectId;
+  /** CR 508.1g: later exert candidates in this declaration, in the engine's order. */
+  remaining: ObjectId[];
+  /** True when the engine's opaque permission reference arrived with the prompt. */
+  permissionPublished: boolean;
+};
+export function exertPrompt(snapshot: EngineSnapshot | null): ExertPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ExertChoice') return null;
+  const data = waiting.data ?? {};
+  if (typeof data.attacker !== 'number') return null;
+  const remaining = Array.isArray(data.remaining)
+    ? (data.remaining as unknown[])
+        .map((entry) =>
+          typeof entry === 'number' ? entry : (entry as { attacker?: unknown } | null)?.attacker
+        )
+        .filter((id): id is ObjectId => typeof id === 'number')
+    : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    attacker: data.attacker as ObjectId,
+    remaining,
+    permissionPublished: data.permission != null
+  };
+}
+/** CR 701.43d: pay the exert cost for the prompted creature, or decline it. */
+export function chooseExertAction(exert: boolean): GameAction {
+  return { type: 'ChooseExert', data: { exert } };
+}
+
+/**
+ * CR 508.1g + CR 702.154a: as a creature with enlist attacks, the active player
+ * may tap **one** other untapped, nonattacking creature they control whose power
+ * is less than or equal to the attacker's. `eligible` is the engine's legal tap
+ * set for this occurrence — it already applied power, tapped and attacking — and
+ * `remaining` is the queue of later enlist occurrences in this declaration.
+ *
+ * CR 702.154a: the answer is `ChooseEnlist { target }` and `null` is a real
+ * answer: enlist taps «up to one», so declining is legal and must be offered.
+ */
+export type EnlistPrompt = {
+  player: PlayerId;
+  attacker: ObjectId;
+  eligible: ObjectId[];
+  remaining: ObjectId[];
+  /** True when the engine published a lower bound-free set with entries to tap. */
+  hasEligible: boolean;
+};
+export function enlistPrompt(snapshot: EngineSnapshot | null): EnlistPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'EnlistChoice') return null;
+  const data = waiting.data ?? {};
+  if (typeof data.attacker !== 'number') return null;
+  const ids = (value: unknown) =>
+    Array.isArray(value) ? (value as unknown[]).filter((id): id is ObjectId => typeof id === 'number') : [];
+  const eligible = ids(data.eligible);
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    attacker: data.attacker as ObjectId,
+    eligible,
+    remaining: ids(data.remaining),
+    hasEligible: eligible.length > 0
+  };
+}
+/** CR 702.154a: tap this creature for the attacker, or `null` to decline. */
+export function chooseEnlistAction(target: ObjectId | null): GameAction {
+  return { type: 'ChooseEnlist', data: { target } };
+}
+
+/**
  * CR 701.44d: several permanents explore at the same time, so the player who
  * controls them chooses **the order** — one explorer per step. The engine asks
  * with the ones this player may pick (`choosable`) and the whole queue

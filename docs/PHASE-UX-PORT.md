@@ -2547,3 +2547,50 @@ pasa a **67** entradas en `REPRESENTED` y la prueba de contabilidad incluye los 
 build OK; en Chromium dos pruebas nuevas —la pregunta permanente a permanente con su recuento
 y su memoria, y el tope que cierra las demás opciones y nombra la elegida— y dos escenas más
 en la prueba de temas (63 → 65 escenas, 130 jpg, presupuesto de 600 s).
+
+## Los dos costes opcionales de atacar: exertar y alistar (quincuagésima tercera pasada, 7 nov 2026)
+
+CR 508.1g: mientras se declaran atacantes hay costes opcionales que el motor cobra **de uno en
+uno**, y cada uno tiene su propia ventana. Se parecen en la forma —una criatura, un sí o un no,
+una cola con el resto— y no en lo que se decide:
+
+- **`ExertChoice`** (CR 701.43d): pagar «exertar esta criatura al atacar» significa que **no se
+  endereza en tu próximo paso de enderezar** (CR 701.43b). El bloque dice el precio junto al
+  nombre del atacante, porque el precio *es* la decisión; `remaining` es el resto de la cola de
+  esta misma declaración.
+- **`EnlistChoice`** (CR 702.154a): girar **otra** criatura desgirada que controles, que no ataque
+  y con fuerza menor o igual a la del atacante; a cambio el atacante recibe +X/+0 hasta el final
+  del turno. `eligible` es el conjunto que el motor ya filtró —fuerza, girada, atacante— y el
+  bloque no vuelve a filtrar ni calcula la bonificación: enseña la fuerza publicada y deja la
+  aritmética al motor.
+
+**La respuesta de exertar no lleva la habilidad, y por eso es segura.** `permission` es una
+identidad opaca —objeto, encarnación y ocurrencia— que enlaza *una* instancia de la habilidad con
+*un* objeto; el sobre que envía el cliente es `ChooseExert { exert }`, un booleano desnudo, y el
+motor vuelve a validar el permiso que él mismo guardó. Es el caso contrario al de
+`ResolveAllConsent`: allí la época viajaba en el sobre y por eso había que tomar el sobre de
+`legal.actions`; aquí la pantalla no nombra la habilidad, así que no puede nombrar la equivocada.
+El bloque lo dice en vez de imprimir ids, que es lo que un lector no podría comprobar.
+
+**Rechazar es una jugada, no un botón muerto.** Alistar gira «hasta una» criatura, así que
+`ChooseEnlist { target: null }` es una respuesta real y se ofrece como tal, también cuando
+`eligible` llega vacío: ahí el bloque sigue en pie con el rechazo y lo explica, en vez de
+desaparecer y dejar la declaración sin salida.
+
+Laboratorio: `/ux?scene=exert` (fase `DeclareAttackers`, *Grizzly Bears* como atacante con
+*Savannah Lions* en la cola y un `permission` con su encarnación y su ocurrencia) y
+`/ux?scene=enlist` (*Grizzly Bears* 2/2 con *Savannah Lions* 2/1 y *Elvish Mystic* 1/1 en el
+conjunto elegible). Capturas `ux-exertar-al-atacar-1440.jpg` y `ux-alistar-al-atacar-1440.jpg`,
+más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **615** (7 nuevas en
+`game/__tests__/exert-enlist.test.ts`: la ventana de exertar con su cola, la cola que sólo lee
+`attacker` de cada entrada pendiente —y admite ids sueltos—, el atacante ausente y las ventanas
+vecinas, los dos sobres `ChooseExert`, el conjunto de alistar con su cola, el conjunto vacío que
+sólo deja rechazar, y el rechazo como `target: null` con su clave intacta); el recuento vigilado
+pasa a **69** entradas en `REPRESENTED` y la prueba de contabilidad incluye los dos nombres;
+build OK; en Chromium dos pruebas nuevas —el exertar con su precio y su nota de permiso, y el
+alistar con las fuerzas publicadas y el rechazo vivo— y dos escenas más en la prueba de temas
+(65 → 67 escenas, 134 jpg, presupuesto de 600 s).

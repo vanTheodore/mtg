@@ -76,6 +76,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `resolveAllStale` | `ResolveAllConsent` (sin respuestas) | [claro](resolver-todo-sin-respuesta-claro.jpg) | [oscuro](resolver-todo-sin-respuesta-oscuro.jpg) |
 | `untapChoice` | `UntapChoice` («puedes no enderezar») | [claro](no-enderezar-claro.jpg) | [oscuro](no-enderezar-oscuro.jpg) |
 | `untapSubset` | `ChooseUntapSubset` (tope por tipo) | [claro](tope-enderezar-claro.jpg) | [oscuro](tope-enderezar-oscuro.jpg) |
+| `exert` | `ExertChoice` («exertar al atacar») | [claro](exertar-al-atacar-claro.jpg) | [oscuro](exertar-al-atacar-oscuro.jpg) |
+| `enlist` | `EnlistChoice` (girar para alistar) | [claro](alistar-al-atacar-claro.jpg) | [oscuro](alistar-al-atacar-oscuro.jpg) |
 | `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:

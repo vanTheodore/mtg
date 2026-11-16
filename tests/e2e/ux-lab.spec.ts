@@ -1323,6 +1323,51 @@ test('un tope de enderezar exige elegir cuáles y no deja pasar del tope', async
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('exertar se decide criatura a criatura y la respuesta no nombra la habilidad', async ({ page }) => {
+  await page.goto('/ux?scene=exert');
+  const block = page.locator('[data-exert]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-exert-attacker', '100');
+  await expect(block).toHaveAttribute('data-exert-pending', '1');
+  await expect(block).toHaveAttribute('data-exert-permission', 'published');
+  await expect(block.locator('strong')).toHaveText('Exertar · Grizzly Bears');
+  // CR 508.1g + CR 701.43b: paying the optional cost means a skipped untap.
+  await expect(block.locator('[data-exert-rule]')).toContainText('CR 508.1g');
+  await expect(block.locator('[data-exert-rule]')).toContainText('CR 701.43b');
+  await expect(block.locator('[data-exert-count]')).toContainText('Savannah Lions');
+  // The occurrence stays the engine's: the block says so instead of printing ids.
+  await expect(block.locator('[data-exert-permission-note]')).toContainText('encarnación y ocurrencia');
+  await expect(block.locator('[data-exert-accept]')).toHaveText('Exertar Grizzly Bears');
+  await expect(block.locator('[data-exert-decline]')).toHaveText('No exertar');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('alistar ofrece el conjunto del motor con su fuerza y deja rechazar', async ({ page }) => {
+  await page.goto('/ux?scene=enlist');
+  const block = page.locator('[data-enlist]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-enlist-attacker', '100');
+  await expect(block).toHaveAttribute('data-enlist-eligible', '2');
+  await expect(block).toHaveAttribute('data-enlist-pending', '1');
+  await expect(block).toHaveAttribute('data-enlist-power', '2');
+  await expect(block.locator('strong')).toHaveText('Alistar · Grizzly Bears');
+  await expect(block.locator('[data-enlist-rule]')).toContainText('CR 702.154a');
+  // The engine already applied power, tapped and attacking; the block shows the
+  // power it published and does not compute the bonus.
+  await expect(block.locator('[data-enlist-count]')).toContainText('1 instancia');
+  await expect(block.locator('[data-enlist-option]')).toHaveCount(2);
+  await expect(block.locator('[data-enlist-option]').first()).toContainText('fuerza 2');
+  await expect(block.locator('[data-enlist-option]').nth(1)).toContainText('fuerza 1');
+  // Declining is a move, not a dead end.
+  await expect(block.locator('[data-enlist-decline]')).toBeEnabled();
+  await expect(block.locator('[data-enlist-decline]')).toHaveText('No alistar');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

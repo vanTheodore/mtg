@@ -166,6 +166,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'ResolveAllConsent': return 'La mesa propone resolver todo: tu asiento decide si autoriza o sigue paso a paso.';
     case 'UntapChoice': return 'Puedes no enderezar este permanente: elige si se endereza o se queda girado.';
     case 'ChooseUntapSubset': return 'Un tope limita cuántos permanentes se enderezan: elige cuáles.';
+    case 'ExertChoice': return 'Puedes exertar esta criatura al atacar: no se endereza en tu próximo paso de enderezar.';
+    case 'EnlistChoice': return 'Puedes girar una criatura para alistar al atacante, o rechazarlo.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';
