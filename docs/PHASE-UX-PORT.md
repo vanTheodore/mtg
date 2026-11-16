@@ -2498,3 +2498,52 @@ recuento vigilado pasa a **65** entradas en `REPRESENTED` y la prueba de contabi
 incluye este nombre; build OK; en Chromium dos pruebas nuevas —el consentimiento con sus
 dos botones y la propuesta que ya no admite respuestas, que no ofrece ninguno— y dos
 escenas más en la prueba de temas (61 → 63 escenas, 126 jpg, presupuesto de 600 s).
+
+## Enderezar también se pregunta, y no de la misma forma (quincuagésima segunda pasada, 7 nov 2026)
+
+El paso de enderezar ocurre **antes** de que el jugador activo reciba prioridad (CR 502.3), y
+Phase lo parte en dos ventanas que se parecen sólo en el nombre. Tratarlas como una sola
+habría sido el error de esta pasada:
+
+- **`UntapChoice`** pregunta por **un** permanente: «puedes elegir no enderezar este
+  permanente durante tu paso de enderezar» (la clase de *Vedalken Shackles*). La pregunta se
+  repite con el resto, `candidates` trae lo que queda y `chosen_not_to_untap` lo que este
+  mismo paso ya dejó girado. La respuesta es `ChooseUntap { object_id, untap }`, un sobre por
+  permanente: no hay lista que enviar ni borrador que acumular.
+- **`ChooseUntapSubset`** es un **tope** (`MaxUntapPerType`: *Smoke*, *Stoic Angel*, *Winter
+  Orb*). `group` ya viene filtrado por el motor —los permanentes girados que compiten por el
+  tope—, `max` es el techo, y el jugador **debe** decir cuáles se enderezan; el complemento se
+  queda girado. La respuesta es el `SelectCards` compartido, y un subconjunto vacío es legal:
+  «no enderezar ninguno» es una jugada, no un error del cliente.
+
+**Por qué dos bloques y no uno.** Un solo cuadro con una casilla por permanente habría
+inventado la semántica del primero: en `UntapChoice` no hay tope ni conjunto, hay una pregunta
+por objeto y el motor vuelve a preguntar; en `ChooseUntapSubset` no hay «no enderezar este»
+individual, hay un cupo que se reparte. El primero enseña cuántos quedan y qué se ha dejado
+girado; el segundo enseña el cupo (`1 de 3 elegidos`), cierra las opciones al llegar al techo
+y nombra la elección en el botón de confirmar.
+
+**El techo es del motor, no del cliente.** El componente no calcula cuántos permanentes
+pueden enderezarse ni deduce el grupo de los tipos de carta: pinta `group` y `max` tal como
+llegan, y el único límite que aplica es el que ya publicó Phase. Si `max` fuera 0 o `group`
+estuviera vacío no hay pregunta que un jugador pueda responder, así que el prompt no se
+abre —igual que `UntapChoice` con `candidates` vacío, donde el motor ya ha pasado al
+siguiente paso—.
+
+Laboratorio: `/ux?scene=untapChoice` (fase `Untap`, *Vedalken Shackles* como candidato y
+*Smoke* + *Chandra, Torch of Defiance* como ya dejados girados) y `/ux?scene=untapSubset`
+(tres *Forest* girados bajo un tope de 1 —la escena los marca girados copiando los objetos,
+para que el campo de batalla no contradiga a la pregunta—). Capturas
+`ux-no-enderezar-1440.jpg` y `ux-tope-enderezar-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **608** (6 nuevas en
+`game/__tests__/untap-choice.test.ts`: el candidato único con su asiento y lo ya dejado
+girado, la lista vacía y las ventanas vecinas que no son esta, los dos sobres
+`ChooseUntap`, el grupo con su tope, el tope cero o el grupo vacío que no son pregunta, y el
+subconjunto que sale como `SelectCards` —copiado y también vacío—); el recuento vigilado
+pasa a **67** entradas en `REPRESENTED` y la prueba de contabilidad incluye los dos nombres;
+build OK; en Chromium dos pruebas nuevas —la pregunta permanente a permanente con su recuento
+y su memoria, y el tope que cierra las demás opciones y nombra la elegida— y dos escenas más
+en la prueba de temas (63 → 65 escenas, 130 jpg, presupuesto de 600 s).

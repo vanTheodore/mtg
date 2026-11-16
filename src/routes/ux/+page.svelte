@@ -68,10 +68,12 @@
   import ReplacementPrompt from '#lib/components/ReplacementPrompt.svelte';
   import CopyTargetPrompt from '#lib/components/CopyTargetPrompt.svelte';
   import ResolveAllConsentPrompt from '#lib/components/ResolveAllConsentPrompt.svelte';
+  import UntapChoicePrompt from '#lib/components/UntapChoicePrompt.svelte';
+  import UntapSubsetPrompt from '#lib/components/UntapSubsetPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -147,6 +149,8 @@
     { value: 'copyTargetToken', label: 'Copias de fichas' },
     { value: 'resolveAll', label: 'Resolver todo: consentir' },
     { value: 'resolveAllStale', label: 'Resolver todo: sin respuestas' },
+    { value: 'untapChoice', label: 'No enderezar' },
+    { value: 'untapSubset', label: 'Tope de enderezar' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -226,6 +230,8 @@
     copyTargetToken: 'CopyTargetChoice · CR 707.1, fuente de las fichas',
     resolveAll: 'ResolveAllConsent · CR 117.3d, el asiento pregunta',
     resolveAllStale: 'ResolveAllConsent · propuesta que ya no admite respuestas',
+    untapChoice: 'UntapChoice · CR 502.3, «puedes no enderezar»',
+    untapSubset: 'ChooseUntapSubset · CR 502.3, tope por tipo',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -493,6 +499,23 @@
   // CR 707.2: the clone is entering, so the object it becomes is not on the
   // battlefield yet — the choice is one of the permanents already there, and the
   // printed mana-value ceiling is a sentence about a list Phase already filtered.
+  // CR 502.3: the two untap questions. Vedalken Shackles is the «you may choose not
+  // to untap» class; Smoke is the MaxUntapPerType cap that forces a subset.
+  const shackles = {
+    id: 417, card_id: 417, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Vedalken Shackles',
+    card_types: { core_types: ['Artifact'] },
+    mana_cost: { type: 'Cost', shards: [], generic: 3 },
+    oracle_text:
+      'You may choose not to untap Vedalken Shackles during your untap step. {2}, {T}: Gain control of target creature with power less than or equal to the number of Islands you control for as long as Vedalken Shackles remains tapped.'
+  } as GameObject;
+  const smoke = {
+    id: 418, card_id: 418, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Smoke',
+    card_types: { core_types: ['Enchantment'] },
+    mana_cost: { type: 'Cost', shards: ['Red'], generic: 1 },
+    oracle_text: 'Players can\u2019t untap more than one creature during their untap steps.'
+  } as GameObject;
   const mockingbird = {
     id: 415, card_id: 415, owner: 0, controller: 0, zone: 'Battlefield',
     name: 'Mockingbird',
@@ -696,7 +719,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -876,6 +899,19 @@
           cost: { type: 'Cost', shards: ['White'], generic: 0 }
         }
       };
+    }
+    if (scene === 'untapChoice') {
+      // `UntapChoice` (CR 502.3): one permanent is being asked; `chosen_not_to_untap`
+      // carries what this same untap step already declined.
+      return {
+        type: 'UntapChoice',
+        data: { player: 0, candidates: [417], chosen_not_to_untap: [418, 205] }
+      };
+    }
+    if (scene === 'untapSubset') {
+      // `ChooseUntapSubset` (CR 502.3): a MaxUntapPerType cap leaves more eligible
+      // tapped lands than the cap allows, so the player picks which one untaps.
+      return { type: 'ChooseUntapSubset', data: { player: 0, group: [102, 103, 104], max: 1 } };
     }
     if (scene === 'resolveAll' || scene === 'resolveAllStale') {
       // `ResolveAllConsent` (CR 117.3d + CR 117.4): only the epoch and the seat being
@@ -1681,7 +1717,7 @@
   }
 
   function snapshot(): EngineSnapshot {
-    return {
+    const built = {
       ok: true,
       viewer: 0,
       seed: 42,
@@ -1717,6 +1753,7 @@
           : scene === 'revealAny' || scene === 'unlessRepeat' || scene === 'replacementOptional' ? 'Draw'
           : scene === 'replacement' || scene === 'replacementCompose' || scene === 'copyTarget' || scene === 'copyTargetToken' ? 'PreCombatMain'
           : scene === 'resolveAll' || scene === 'resolveAllStale' ? 'PreCombatMain'
+          : scene === 'untapChoice' || scene === 'untapSubset' ? 'Untap'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1795,6 +1832,18 @@
       },
       metrics: {}
     } as unknown as EngineSnapshot;
+    // The over-cap group has to *be* tapped: those permanents are what the cap keeps
+    // from untapping. Copies, so no other scene sees a tapped Forest.
+    if (scene === 'untapSubset') {
+      const objects = built.state.objects as Record<string, GameObject>;
+      for (const id of ['102', '103', '104']) {
+        built.state.objects = {
+          ...(built.state.objects as Record<string, GameObject>),
+          [id]: { ...objects[id], tapped: true }
+        };
+      }
+    }
+    return built;
   }
 
   // Install the fixture snapshot. The component tree reads it exactly like a
@@ -1943,6 +1992,8 @@
         {#if scene === 'replacement' || scene === 'replacementCompose' || scene === 'replacementOptional'}<ReplacementPrompt />{/if}
         {#if scene === 'copyTarget' || scene === 'copyTargetToken'}<CopyTargetPrompt />{/if}
         {#if scene === 'resolveAll' || scene === 'resolveAllStale'}<ResolveAllConsentPrompt />{/if}
+        {#if scene === 'untapChoice'}<UntapChoicePrompt />{/if}
+        {#if scene === 'untapSubset'}<UntapSubsetPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

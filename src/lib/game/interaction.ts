@@ -1749,6 +1749,82 @@ export function revokeResolveAllAction(
 }
 
 /**
+ * CR 502.3: the untap step belongs to the active player, and Phase splits the
+ * question in two shapes that are **not** the same decision:
+ *
+ *   - `UntapChoice`: one permanent at a time, «you may choose not to untap this
+ *     permanent» (Vedalken Shackles class). The answer names the permanent and a
+ *     boolean, and the engine re-prompts with the rest; `chosen_not_to_untap` is
+ *     what has been declined so far in this step.
+ *   - `ChooseUntapSubset`: a `MaxUntapPerType` cap (Smoke, Stoic Angel, Winter Orb)
+ *     leaves more eligible permanents than the cap allows, so the player **must**
+ *     pick which ones untap. The answer is a subset of `group` no larger than
+ *     `max`, and an empty subset is legal: everything stays tapped.
+ *
+ * Both are `DirectChoices` for the engine, and both are parsed by their variant —
+ * `ChooseUntap` is not shared with anything else, but `SelectCards` is shared with
+ * every card picker in the game.
+ */
+export type UntapPrompt = {
+  player: PlayerId;
+  /** Whose untap step is being asked about. */
+  candidates: ObjectId[];
+  /** CR 502.3: already declined in this step, in the engine's own order. */
+  declined: ObjectId[];
+};
+export function untapPrompt(snapshot: EngineSnapshot | null): UntapPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'UntapChoice') return null;
+  const data = waiting.data ?? {};
+  const ids = (raw: unknown) =>
+    Array.isArray(raw) ? (raw as unknown[]).filter((id): id is ObjectId => typeof id === 'number') : [];
+  const candidates = ids(data.candidates);
+  // With nothing left to ask the engine moves on by itself.
+  if (!candidates.length) return null;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    candidates,
+    declined: ids(data.chosen_not_to_untap)
+  };
+}
+/** CR 502.3: untap this one, or leave it tapped. */
+export function chooseUntapAction(objectId: ObjectId, untap: boolean): GameAction {
+  return { type: 'ChooseUntap', data: { object_id: objectId, untap } };
+}
+
+export type UntapSubsetPrompt = {
+  player: PlayerId;
+  /** The over-cap permanents competing for the cap; all are tapped and eligible. */
+  group: ObjectId[];
+  /** CR 502.3: at most this many of `group` untap. */
+  max: number;
+};
+export function untapSubsetPrompt(snapshot: EngineSnapshot | null): UntapSubsetPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ChooseUntapSubset') return null;
+  const data = waiting.data ?? {};
+  const group = Array.isArray(data.group)
+    ? (data.group as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+    : [];
+  if (!group.length) return null;
+  const max = typeof data.max === 'number' ? data.max : 0;
+  // A cap of zero asks nothing a player could answer.
+  if (max < 1) return null;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    group,
+    max
+  };
+}
+/**
+ * CR 502.3: the chosen subset, copied. The engine accepts fewer than `max` and
+ * also none at all — the complement simply stays tapped.
+ */
+export function untapSubsetAction(cards: ObjectId[]): GameAction {
+  return selectCardsAction(cards);
+}
+
+/**
  * CR 701.44d: several permanents explore at the same time, so the player who
  * controls them chooses **the order** — one explorer per step. The engine asks
  * with the ones this player may pick (`choosable`) and the whole queue

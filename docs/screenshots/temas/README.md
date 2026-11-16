@@ -73,7 +73,10 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `copyTarget` | `CopyTargetChoice` (entrar como copia) | [claro](copia-que-permanente-claro.jpg) | [oscuro](copia-que-permanente-oscuro.jpg) |
 | `copyTargetToken` | `CopyTargetChoice` (fuente de fichas) | [claro](copias-de-fichas-claro.jpg) | [oscuro](copias-de-fichas-oscuro.jpg) |
 | `resolveAll` | `ResolveAllConsent` | [claro](resolver-todo-claro.jpg) | [oscuro](resolver-todo-oscuro.jpg) |
-| `resolveAllStale` | `ResolveAllConsent` (sin respuestas) | [claro](resolver-todo-sin-respuesta-claro.jpg) | [oscuro](resolver-todo-sin-respuesta-oscuro.jpg) || `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
+| `resolveAllStale` | `ResolveAllConsent` (sin respuestas) | [claro](resolver-todo-sin-respuesta-claro.jpg) | [oscuro](resolver-todo-sin-respuesta-oscuro.jpg) |
+| `untapChoice` | `UntapChoice` («puedes no enderezar») | [claro](no-enderezar-claro.jpg) | [oscuro](no-enderezar-oscuro.jpg) |
+| `untapSubset` | `ChooseUntapSubset` (tope por tipo) | [claro](tope-enderezar-claro.jpg) | [oscuro](tope-enderezar-oscuro.jpg) |
+| `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

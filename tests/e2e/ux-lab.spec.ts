@@ -1276,6 +1276,53 @@ test('una propuesta que ya no admite respuestas no ofrece botones', async ({ pag
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('«no enderezar» se pregunta permanente a permanente y recuerda lo ya dejado girado', async ({ page }) => {
+  await page.goto('/ux?scene=untapChoice');
+  const block = page.locator('[data-untap-choice]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-untap-choice-object', '417');
+  await expect(block).toHaveAttribute('data-untap-choice-pending', '1');
+  await expect(block).toHaveAttribute('data-untap-choice-declined', '2');
+  await expect(block.locator('strong')).toHaveText('Enderezar · Vedalken Shackles');
+  // CR 502.3: the untap step is the active player's, one permanent at a time.
+  await expect(block.locator('[data-untap-choice-rule]')).toContainText('CR 502.3');
+  await expect(block.locator('[data-untap-choice-count]')).toHaveText('Es el último permanente por decidir en este paso.');
+  await expect(block.locator('[data-untap-choice-so-far]')).toContainText('Smoke, Chandra, Torch of Defiance');
+  // Both answers are the engine's, and neither is a guess.
+  await expect(block.locator('[data-untap-choice-yes]')).toHaveText('Enderezar Vedalken Shackles');
+  await expect(block.locator('[data-untap-choice-no]')).toHaveText('Dejarlo girado');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un tope de enderezar exige elegir cuáles y no deja pasar del tope', async ({ page }) => {
+  await page.goto('/ux?scene=untapSubset');
+  const block = page.locator('[data-untap-subset]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-untap-subset-group', '3');
+  await expect(block).toHaveAttribute('data-untap-subset-max', '1');
+  await expect(block.locator('strong')).toHaveText('Enderezar hasta 1 de 3');
+  await expect(block.locator('[data-untap-subset-rule]')).toContainText('CR 502.3');
+  // An empty answer is legal, so the confirm button starts usable.
+  const confirmButton = block.locator('[data-untap-subset-confirm]');
+  await expect(confirmButton).toHaveText('No enderezar ninguno');
+  await expect(confirmButton).toBeEnabled();
+
+  const options = block.locator('button[aria-pressed]');
+  await expect(options).toHaveCount(3);
+  await options.first().click();
+  // At the cap the other options close, and the confirm names the pick.
+  await expect(block).toHaveAttribute('data-untap-subset-chosen', '1');
+  await expect(options.nth(0)).toHaveAttribute('aria-pressed', 'true');
+  await expect(options.nth(1)).toBeDisabled();
+  await expect(options.nth(2)).toBeDisabled();
+  await expect(confirmButton).toHaveText('Enderezar Forest');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

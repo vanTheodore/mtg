@@ -164,6 +164,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'ReplacementChoice': return 'Un reemplazo cambia el suceso antes de que ocurra: elige cuál se aplica.';
     case 'CopyTargetChoice': return 'Una copia entra en el campo: elige el permanente que copia.';
     case 'ResolveAllConsent': return 'La mesa propone resolver todo: tu asiento decide si autoriza o sigue paso a paso.';
+    case 'UntapChoice': return 'Puedes no enderezar este permanente: elige si se endereza o se queda girado.';
+    case 'ChooseUntapSubset': return 'Un tope limita cuántos permanentes se enderezan: elige cuáles.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';
