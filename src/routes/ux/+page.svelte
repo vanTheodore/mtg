@@ -66,10 +66,11 @@
   import MeldAttackPrompt from '#lib/components/MeldAttackPrompt.svelte';
   import EntryAttackPrompt from '#lib/components/EntryAttackPrompt.svelte';
   import ReplacementPrompt from '#lib/components/ReplacementPrompt.svelte';
+  import CopyTargetPrompt from '#lib/components/CopyTargetPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -141,6 +142,8 @@
     { value: 'replacement', label: 'Reemplazos: cuál se aplica' },
     { value: 'replacementCompose', label: 'Reemplazos que se suman' },
     { value: 'replacementOptional', label: 'Reemplazo opcional' },
+    { value: 'copyTarget', label: 'Copia: qué permanente' },
+    { value: 'copyTargetToken', label: 'Copias de fichas' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -216,6 +219,8 @@
     replacement: 'ReplacementChoice · CR 616.1e, el orden importa',
     replacementCompose: 'ReplacementChoice · CR 616.1f, se componen',
     replacementOptional: 'ReplacementChoice · CR 616.1, «puedes»',
+    copyTarget: 'CopyTargetChoice · CR 707.2, entrar como copia',
+    copyTargetToken: 'CopyTargetChoice · CR 707.1, fuente de las fichas',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -480,6 +485,29 @@
   } as GameObject;
   // CR 616.1: one optional replacement («you may») shown as its two branches — the
   // dredge offer on a draw, whose decline is a real answer.
+  // CR 707.2: the clone is entering, so the object it becomes is not on the
+  // battlefield yet — the choice is one of the permanents already there, and the
+  // printed mana-value ceiling is a sentence about a list Phase already filtered.
+  const mockingbird = {
+    id: 415, card_id: 415, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Mockingbird',
+    card_types: { core_types: ['Creature'], subtypes: ['Bird'] },
+    power: 1, toughness: 1,
+    mana_cost: { type: 'Cost', shards: ['White'], generic: 1 },
+    oracle_text:
+      'Flying. You may have Mockingbird enter as a copy of target creature you control with mana value 4 or less.'
+  } as GameObject;
+  // CR 707.1: Esix substitutes token creation, so the chosen permanent is the copy
+  // source and nothing on the battlefield is transformed.
+  const esix = {
+    id: 416, card_id: 416, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Esix, Fractal Bloom',
+    card_types: { core_types: ['Creature'], subtypes: ['Fractal'], supertypes: ['Legendary'] },
+    power: 4, toughness: 4,
+    mana_cost: { type: 'Cost', shards: ['Green', 'Blue'], generic: 4 },
+    oracle_text:
+      'If you would create one or more tokens, you may instead create that many tokens that are copies of a creature you control.'
+  } as GameObject;
   const loam = {
     id: 414, card_id: 414, owner: 0, controller: 0, zone: 'Graveyard',
     name: 'Life from the Loam',
@@ -663,7 +691,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -841,6 +869,33 @@
           player: 0,
           object_id: 395,
           cost: { type: 'Cost', shards: ['White'], generic: 0 }
+        }
+      };
+    }
+    if (scene === 'copyTarget') {
+      // CR 707.2 + CR 707.9: the entering object becomes a copy and the printed
+      // ceiling (four) is part of the card, not a filter the table applies.
+      return {
+        type: 'CopyTargetChoice',
+        data: {
+          player: 0,
+          source_id: 415,
+          valid_targets: [100, 101, 105],
+          max_mana_value: 4,
+          purpose: { type: 'BecomeCopy' }
+        }
+      };
+    }
+    if (scene === 'copyTargetToken') {
+      // CR 707.1: Esix makes the chosen permanent the copy source of the tokens;
+      // there is no mana-value ceiling here, so the block must not print one.
+      return {
+        type: 'CopyTargetChoice',
+        data: {
+          player: 0,
+          source_id: 416,
+          valid_targets: [100, 101],
+          purpose: { type: 'CopyTokenSource' }
         }
       };
     }
@@ -1648,7 +1703,7 @@
           : scene === 'meld' ? 'PreCombatMain'
           : scene === 'meldAttack' || scene === 'entryAttack' ? 'DeclareAttackers'
           : scene === 'revealAny' || scene === 'unlessRepeat' || scene === 'replacementOptional' ? 'Draw'
-          : scene === 'replacement' || scene === 'replacementCompose' ? 'PreCombatMain'
+          : scene === 'replacement' || scene === 'replacementCompose' || scene === 'copyTarget' || scene === 'copyTargetToken' ? 'PreCombatMain'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -1868,6 +1923,7 @@
         {#if scene === 'meldAttack'}<MeldAttackPrompt />{/if}
         {#if scene === 'entryAttack'}<EntryAttackPrompt />{/if}
         {#if scene === 'replacement' || scene === 'replacementCompose' || scene === 'replacementOptional'}<ReplacementPrompt />{/if}
+        {#if scene === 'copyTarget' || scene === 'copyTargetToken'}<CopyTargetPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

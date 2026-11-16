@@ -162,6 +162,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'MeldAttackTargetChoice': return 'La carta fusionada entra atacando: elige a quién.';
     case 'EntryAttackTargetChoice': return 'El permanente entra atacando: elige a quién.';
     case 'ReplacementChoice': return 'Un reemplazo cambia el suceso antes de que ocurra: elige cuál se aplica.';
+    case 'CopyTargetChoice': return 'Una copia entra en el campo: elige el permanente que copia.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

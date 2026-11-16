@@ -2374,3 +2374,57 @@ sólo da la clave del motor, y la acción con el índice); build OK; en Chromium
 nuevas —el orden con las dos respuestas del motor y la rama opcional que no se anuncia
 como orden— y tres escenas más en la prueba de temas (56 → 59 escenas, 118 jpg,
 presupuesto de 600 s).
+
+## Copiar no es apuntar: una ventana, tres copias distintas (quincuagésima pasada, 7 nov 2026)
+
+`CopyTargetChoice` (CR 707.2 + CR 707.9) pregunta «¿qué permanente?» y la respuesta
+significa tres cosas según el campo `purpose`, que es del motor:
+
+- **`copy`**: el objeto que entra se convierte en copia del elegido y recibe sus valores
+  copiables —Clone, Phantasmal Image, Vesuva—;
+- **`latch`** (CR 707.2c): los valores del elegido se fijan sobre el huésped del Aura y
+  **el Aura no se convierte en copia** —Metamorphic Alteration—;
+- **`tokenSource`** (CR 707.1): el elegido es la fuente que copian las fichas de una
+  sustitución de creación de fichas —Esix, Fractal Bloom— y no se transforma nada.
+
+Pintar las tres como «elige una carta» habría sido describir mal dos de las tres.
+
+**Copiar no es apuntar.** CR 707.9: la guardia y el velo no reducen la lista, así que el
+bloque no filtra nada por su cuenta; publica exactamente `valid_targets`. Lo único que
+dice de más es lo que Phase ya dejó fuera —el propio permanente que copia y lo que la
+instrucción excluya— y lo dice como tal, sin volver a decidirlo.
+
+**El techo de maná es una frase, no un filtro.** Cuando la instrucción imprime «de valor
+de maná 4 o menos», el motor publica `max_mana_value` **y ya filtró la lista**: la mesa
+lo escribe como parte de la carta y no vuelve a descartar candidatos con un número que
+no es suyo. Ausente es «sin techo», y entonces no se pinta ninguna línea.
+
+**La respuesta es un `TargetRef`, no un id suelto.** Se manda con `ChooseTarget`, la
+misma acción que los selectores de objetivos —que ya existía para recomponer copias,
+CR 707.10c—, y por eso esta ventana se lee por su variante de `WaitingFor` y no por la
+acción.
+
+Objetos del laboratorio: `Mockingbird` (#415) como la copia que entra, con
+`Grizzly Bears` (#100), `Savannah Lions` (#101) y `Elvish Mystic` (#105) como candidatos
+y el techo de valor de maná 4 de su texto impreso; `Esix, Fractal Bloom` (#416) como la
+sustitución de fichas, sin techo. Las dos escenas usan criaturas del campo del
+espectador, así que el rival de la cinta no cambia.
+
+Laboratorio: `/ux?scene=copyTarget` y `/ux?scene=copyTargetToken`, capturas
+`ux-copia-que-permanente-1440.jpg` y `ux-copias-de-fichas-1440.jpg`, más sus pares de
+tema. La forma `latch` se pinta con el mismo bloque y está cubierta en la prueba de
+unidad: su diferencia es una frase, no una pantalla.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **593** (6 nuevas en
+`game/__tests__/copy-target-choice.test.ts`: el objeto que entra con su lista y su
+techo, las tres formas del campo `purpose` con su valor por defecto, la ventana sin nada
+que copiar o sin fuente, los candidatos no numéricos que se descartan y el techo que no
+se inventa cuando falta, el asiento por defecto y la lista que no se filtra en local); además, el
+componente reutiliza `typeLine` de la mesa para que un candidato se lea como una carta
+—«Criatura», no el DTO inglés— y `chooseCopyTargetAction`, que ya existía para recomponer
+copias, en vez de duplicar la acción (el primer intento repetía el nombre y lo cazó
+`svelte-check`); build OK; en
+Chromium dos pruebas nuevas —la copia con techo y las fichas sin él— y dos escenas más
+en la prueba de temas (59 → 61 escenas, 122 jpg, presupuesto de 600 s).

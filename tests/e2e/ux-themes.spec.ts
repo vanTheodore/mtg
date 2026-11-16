@@ -90,6 +90,8 @@ const SCENES = [
   { scene: 'replacement', slug: 'reemplazos', block: '[data-replacement]' },
   { scene: 'replacementCompose', slug: 'reemplazos-componen', block: '[data-replacement]' },
   { scene: 'replacementOptional', slug: 'reemplazo-opcional', block: '[data-replacement]' },
+  { scene: 'copyTarget', slug: 'copia-que-permanente', block: '[data-copy-target]' },
+  { scene: 'copyTargetToken', slug: 'copias-de-fichas', block: '[data-copy-target]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

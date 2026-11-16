@@ -1241,6 +1241,51 @@ test('la fusión entra atacando: se elige el destino entre los que publica Phase
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
+  await page.goto('/ux?scene=copyTarget');
+  const block = page.locator('[data-copy-target]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-copy-target-purpose', 'copy');
+  await expect(block).toHaveAttribute('data-copy-target-count', '3');
+  // CR 707.2: the clone is named as the object that is entering, not as a result.
+  await expect(block.locator('strong')).toHaveText('¿Qué permanente copia Mockingbird?');
+  await expect(block).toContainText('CR 707.2');
+  // CR 707.9: copying does not target, so the list is the engine's, unfiltered.
+  await expect(block).toContainText('CR 707.9');
+  await expect(block).toHaveAttribute('data-copy-target-ceiling', '4');
+  await expect(block.locator('[data-copy-target-ceiling-note]')).toContainText('techo de valor de maná 4');
+  for (const [id, name] of [
+    ['100', 'Grizzly Bears'],
+    ['101', 'Savannah Lions'],
+    ['105', 'Elvish Mystic']
+  ]) {
+    await expect(block.locator(`[data-copy-target-option="${id}"]`)).toContainText(name);
+  }
+  // The candidate reads like a card: the board's own Spanish type line and cost.
+  await expect(block.locator('[data-copy-target-option="100"]')).toContainText('Criatura');
+  await expect(block.locator('[data-copy-target-option="100"]')).toContainText('{1}{G}');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('las fichas copian a un permanente y no se anuncia un techo que la carta no imprime', async ({ page }) => {
+  await page.goto('/ux?scene=copyTargetToken');
+  const block = page.locator('[data-copy-target]');
+  await expect(block).toBeVisible();
+  // CR 707.1: the chosen permanent is the copy source — nothing is transformed.
+  await expect(block).toHaveAttribute('data-copy-target-purpose', 'tokenSource');
+  await expect(block.locator('strong')).toHaveText('¿De qué permanente son copia las fichas?');
+  await expect(block).toContainText('CR 707.1');
+  // No printed ceiling means no ceiling line at all.
+  await expect(block).toHaveAttribute('data-copy-target-ceiling', '');
+  await expect(block.locator('[data-copy-target-ceiling-note]')).toHaveCount(0);
+  await expect(block.locator('[data-copy-target-option="101"]')).toBeVisible();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('los reemplazos que escriben el mismo dato se eligen uno por paso', async ({ page }) => {
   await page.goto('/ux?scene=replacement');
   const block = page.locator('[data-replacement]');

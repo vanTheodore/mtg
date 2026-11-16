@@ -69,7 +69,9 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 
 | `replacement` | `ReplacementChoice` (orden, decide el último) | [claro](reemplazos-claro.jpg) | [oscuro](reemplazos-oscuro.jpg) |
 | `replacementCompose` | `ReplacementChoice` (orden, se componen) | [claro](reemplazos-componen-claro.jpg) | [oscuro](reemplazos-componen-oscuro.jpg) |
-| `replacementOptional` | `ReplacementChoice` (rama opcional) | [claro](reemplazo-opcional-claro.jpg) | [oscuro](reemplazo-opcional-oscuro.jpg) || `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
+| `replacementOptional` | `ReplacementChoice` (rama opcional) | [claro](reemplazo-opcional-claro.jpg) | [oscuro](reemplazo-opcional-oscuro.jpg) |
+| `copyTarget` | `CopyTargetChoice` (entrar como copia) | [claro](copia-que-permanente-claro.jpg) | [oscuro](copia-que-permanente-oscuro.jpg) |
+| `copyTargetToken` | `CopyTargetChoice` (fuente de fichas) | [claro](copias-de-fichas-claro.jpg) | [oscuro](copias-de-fichas-oscuro.jpg) || `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

@@ -1615,6 +1615,71 @@ export function chooseReplacementAction(index: number): GameAction {
 }
 
 /**
+ * CR 707.2 + CR 707.9: which permanent a copy effect copies. Copying does not
+ * target (CR 707.9), so hexproof and shroud do not filter `valid_targets` — the
+ * engine publishes the legal permanents and the table echoes them.
+ *
+ * The variant carries **three** purposes and the engine says which one, because
+ * the answer means something different in each:
+ *
+ *   - `copy`: the entering object becomes a copy of the chosen permanent and takes
+ *     its copiable values (Clone, Phantasmal Image, Vesuva).
+ *   - `latch` (CR 707.2c): the chosen permanent's copiable values are latched onto
+ *     the source Aura's host — the Aura itself never becomes the copy
+ *     (Metamorphic Alteration).
+ *   - `tokenSource` (CR 707.1): the chosen permanent is the copy source for a
+ *     token-creation substitution (Esix, Fractal Bloom); nothing is transformed.
+ *
+ * `maxManaValue` is a ceiling the instruction prints: the engine has already
+ * filtered `targets`, so it is a sentence, never a second filter of our own.
+ */
+export type CopyPurpose = 'copy' | 'latch' | 'tokenSource';
+export type CopyTargetPrompt = {
+  player: PlayerId;
+  /** The entering object (or the effect's own permanent) the copy belongs to. */
+  sourceId: ObjectId;
+  purpose: CopyPurpose;
+  /** The legal permanents, as Phase published them. */
+  targets: ObjectId[];
+  /** The instruction's mana-value ceiling, when it has one. */
+  maxManaValue: number | null;
+};
+/** The engine's tag for the copy purpose; an absent field is a `BecomeCopy`. */
+function copyPurpose(raw: unknown): CopyPurpose {
+  const tag =
+    typeof raw === 'string'
+      ? raw
+      : raw && typeof raw === 'object' && typeof (raw as { type?: unknown }).type === 'string'
+        ? (raw as { type: string }).type
+        : 'BecomeCopy';
+  if (tag === 'PersistChosenAttribute') return 'latch';
+  if (tag === 'CopyTokenSource') return 'tokenSource';
+  return 'copy';
+}
+export function copyTargetPrompt(snapshot: EngineSnapshot | null): CopyTargetPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'CopyTargetChoice') return null;
+  const data = waiting.data ?? {};
+  if (typeof data.source_id !== 'number') return null;
+  const targets = Array.isArray(data.valid_targets)
+    ? (data.valid_targets as unknown[]).filter((id): id is ObjectId => typeof id === 'number')
+    : [];
+  // With nothing to copy the engine would not have raised the window.
+  if (!targets.length) return null;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: data.source_id as ObjectId,
+    purpose: copyPurpose(data.purpose),
+    targets,
+    maxManaValue: typeof data.max_mana_value === 'number' ? data.max_mana_value : null
+  };
+}
+// CR 707.9: the answer is a `TargetRef`, sent with the same `ChooseTarget` the
+// target pickers use — `chooseCopyTargetAction({ Object: id })`, which the copy
+// retarget flow already owns. That shared action is exactly why this window is
+// parsed by its `WaitingFor` variant and not by the action.
+
+/**
  * CR 701.44d: several permanents explore at the same time, so the player who
  * controls them chooses **the order** — one explorer per step. The engine asks
  * with the ones this player may pick (`choosable`) and the whole queue

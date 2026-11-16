@@ -44,6 +44,7 @@
   import MeldAttackPrompt from './MeldAttackPrompt.svelte';
   import EntryAttackPrompt from './EntryAttackPrompt.svelte';
   import ReplacementPrompt from './ReplacementPrompt.svelte';
+  import CopyTargetPrompt from './CopyTargetPrompt.svelte';
   import { manaText } from '#lib/game/cards.ts';
   import { actionObjectId, attackLabel, attackTargets, blockTargets, isManaAction, isManaPrompt, isTargetPrompt, manaActions, manualCast, targetLabel } from '#lib/game/interaction.ts';
   import type { GameAction } from '#lib/engine/types.ts';
@@ -190,6 +191,8 @@
   const entryAttack = $derived(session.entryAttackPrompt);
   // CR 616.1: which replacement applies — order, optional branch or destination.
   const replacement = $derived(session.replacementPrompt);
+  // CR 707.2: which permanent a copy effect copies — three purposes, one variant.
+  const copyTarget = $derived(session.copyTargetPrompt);
   const PHASES: Record<string, string> = { Untap: 'Enderezar', Upkeep: 'Mantenimiento', Draw: 'Robar', PreCombatMain: 'Fase principal', BeginCombat: 'Inicio de combate', DeclareAttackers: 'Ataque', DeclareBlockers: 'Bloqueo', CombatDamage: 'Daño de combate', EndCombat: 'Fin de combate', PostCombatMain: 'Fase principal posterior', End: 'Final', Cleanup: 'Limpieza' };
   function manaActionsFor(id?: number) { return manaActions(s, id); }
   function play(action: GameAction) { void session.dispatch(action); }
@@ -266,6 +269,8 @@
       <EntryAttackPrompt />
     {:else if replacement && replacement.player === s.viewer}
       <ReplacementPrompt />
+    {:else if copyTarget && copyTarget.player === s.viewer}
+      <CopyTargetPrompt />
     {:else if scry && scry.player === s.viewer}
       <ScryPrompt />
     {:else if startingPlayer && startingPlayer.player === s.viewer}
