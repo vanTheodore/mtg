@@ -81,10 +81,12 @@
   import ModalFacePrompt from '#lib/components/ModalFacePrompt.svelte';
   import AlternativeCastPrompt from '#lib/components/AlternativeCastPrompt.svelte';
   import CastingVariantPrompt from '#lib/components/CastingVariantPrompt.svelte';
+  import TypeSlotPrompt from '#lib/components/TypeSlotPrompt.svelte';
+  import SplicePrompt from '#lib/components/SplicePrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -192,6 +194,12 @@
     { value: 'castVariant', label: 'Variante de lanzamiento' },
     { value: 'castVariantAuth', label: 'Permiso de cementerio' },
     { value: 'castVariantAway', label: 'Variante ajena' },
+    { value: 'typeSlot', label: 'Ranura de tipo' },
+    { value: 'typeSlotLand', label: 'Ranura de tierra' },
+    { value: 'typeSlotAway', label: 'Ranura ajena' },
+    { value: 'splice', label: 'Empalmar' },
+    { value: 'spliceHidden', label: 'Empalmar oculto' },
+    { value: 'spliceAway', label: 'Empalme ajeno' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -303,6 +311,12 @@
     castVariant: 'CastingVariantChoice · CR 601.2b, el índice ausente no es botón',
     castVariantAuth: 'CastingVariantChoice · permiso de cementerio, con su autoridad',
     castVariantAway: 'CastingVariantChoice · lo decide el otro asiento',
+    typeSlot: 'ChoosePermanentTypeSlot · CR 110.4, el tipo no publicado no es botón',
+    typeSlotLand: 'ChoosePermanentTypeSlot · CR 305.1, jugar tierra no trae permiso',
+    typeSlotAway: 'ChoosePermanentTypeSlot · lo decide el otro asiento',
+    splice: 'SpliceOffer · CR 702.47a, empalmar o no empalmar',
+    spliceHidden: 'SpliceOffer · la carta oculta no es un botón',
+    spliceAway: 'SpliceOffer · lo decide el otro asiento',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -686,6 +700,34 @@
     card_types: { core_types: ['Creature'], subtypes: ['Bird'] },
     mana_cost: { type: 'Cost', generic: 0, shards: ['White'] }
   } as GameObject;
+  // CR 110.4: Dryad Arbor is a land and a creature. The slot buttons come
+  // from legal.actions, not from these two types.
+  const dryadArbor = {
+    id: 436, card_id: 436, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Dryad Arbor',
+    card_types: { core_types: ['Land', 'Creature'], subtypes: ['Forest', 'Dryad'] },
+    power: 1, toughness: 1
+  } as GameObject;
+  // CR 702.47a: Glacial Ray is the Arcane spell being cast. Peer Through Depths
+  // and Reach Through Mists are the splice cards the engine may list.
+  const glacialRay = {
+    id: 437, card_id: 437, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Glacial Ray',
+    card_types: { core_types: ['Instant'], subtypes: ['Arcane'] },
+    mana_cost: { type: 'Cost', generic: 1, shards: ['Red'] }
+  } as GameObject;
+  const peerThroughDepths = {
+    id: 438, card_id: 438, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Peer Through Depths',
+    card_types: { core_types: ['Instant'], subtypes: ['Arcane'] },
+    mana_cost: { type: 'Cost', generic: 1, shards: ['Blue'] }
+  } as GameObject;
+  const reachThroughMists = {
+    id: 439, card_id: 439, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Reach Through Mists',
+    card_types: { core_types: ['Instant'], subtypes: ['Arcane'] },
+    mana_cost: { type: 'Cost', generic: 2, shards: ['Blue'] }
+  } as GameObject;
   const zoneSource = {
     id: 430, card_id: 430, owner: 0, controller: 0, zone: 'Stack',
     name: 'Test Spell',
@@ -917,7 +959,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, cyclonic, deepFiend, wear, lurrus, hawk, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, cyclonic, deepFiend, wear, lurrus, hawk, dryadArbor, glacialRay, peerThroughDepths, reachThroughMists, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -1395,6 +1437,32 @@
       return {
         type: 'ModalFaceChoice',
         data: { player: 0, object_id: 428, card_id: 428 }
+      };
+    }
+    if (scene.startsWith('typeSlot')) {
+      return {
+        type: 'ChoosePermanentTypeSlot',
+        data: {
+          player: scene === 'typeSlotAway' ? 1 : 0,
+          object_id: 436,
+          card_id: 436,
+          source: 434,
+          payment_mode: 'Auto',
+          available_slots: scene === 'typeSlotLand' ? ['Land'] : ['Land', 'Creature'],
+          ...(scene === 'typeSlotLand'
+            ? {}
+            : { permission: { source: 434, type_slot: 'Creature' } })
+        }
+      };
+    }
+    if (scene.startsWith('splice')) {
+      return {
+        type: 'SpliceOffer',
+        data: {
+          player: scene === 'spliceAway' ? 1 : 0,
+          pending_cast: { object_id: 437 },
+          eligible: scene === 'spliceHidden' ? [438, 0] : [438, 439]
+        }
       };
     }
     if (scene.startsWith('altCast')) {
@@ -2431,7 +2499,25 @@
             ]
           : scene === 'altCastOne'
             ? [{ type: 'ChooseAlternativeCast', data: { choice: { type: 'Normal' } } }]
-            : scene === 'castVariant' || scene === 'castVariantAway'
+            : scene === 'typeSlot' || scene === 'typeSlotAway'
+              ? [
+                  { type: 'ChoosePermanentTypeSlot', data: { slot: 'Land' } },
+                  { type: 'ChoosePermanentTypeSlot', data: { slot: 'Creature' } }
+                ]
+              : scene === 'typeSlotLand'
+                ? [{ type: 'ChoosePermanentTypeSlot', data: { slot: 'Land' } }]
+                : scene === 'splice' || scene === 'spliceAway'
+                  ? [
+                      { type: 'RespondToSpliceOffer', data: { card: 438 } },
+                      { type: 'RespondToSpliceOffer', data: { card: 439 } },
+                      { type: 'RespondToSpliceOffer', data: { card: null } }
+                    ]
+                  : scene === 'spliceHidden'
+                    ? [
+                        { type: 'RespondToSpliceOffer', data: { card: 438 } },
+                        { type: 'RespondToSpliceOffer', data: { card: 0 } }
+                      ]
+                    : scene === 'castVariant' || scene === 'castVariantAway'
               ? [
                   { type: 'ChooseCastingVariant', data: { index: 0 } },
                   { type: 'ChooseCastingVariant', data: { index: 2 } }
@@ -2658,6 +2744,8 @@
         {#if scene.startsWith('modalFace')}<ModalFacePrompt />{/if}
         {#if scene.startsWith('altCast')}<AlternativeCastPrompt />{/if}
         {#if scene.startsWith('castVariant')}<CastingVariantPrompt />{/if}
+        {#if scene.startsWith('typeSlot')}<TypeSlotPrompt />{/if}
+        {#if scene.startsWith('splice')}<SplicePrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

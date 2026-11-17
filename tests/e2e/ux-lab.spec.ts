@@ -1923,6 +1923,89 @@ test('la variante ajena se nombra y no ofrece botones', async ({ page }) => {
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('un tipo que la carta tiene y el motor no publicó no es un botón', async ({ page }) => {
+  await page.goto('/ux?scene=typeSlot');
+  const block = page.locator('[data-type-slot]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-type-slot-count', '2');
+  await expect(block).toHaveAttribute('data-type-slot-permission', 'yes');
+  await expect(block.locator('strong')).toHaveText('Elegir ranura de tipo · Dryad Arbor');
+  await expect(block.locator('[data-type-slot-source]')).toContainText('mediante Lurrus of the Dream-Den');
+  await expect(block.locator('[data-type-slot-option="Land"]')).toContainText('Tierra');
+  await expect(block.locator('[data-type-slot-option="Creature"]')).toContainText('Criatura');
+  await expect(block.locator('[data-type-slot-land]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('jugar una tierra no trae un permiso de cementerio', async ({ page }) => {
+  await page.goto('/ux?scene=typeSlotLand');
+  const block = page.locator('[data-type-slot]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-type-slot-permission', 'no');
+  await expect(block.locator('[data-type-slot-land]')).toContainText('CR 305.1');
+  await expect(block.locator('[data-type-slot-option="Land"]')).toHaveCount(1);
+  await expect(block.locator('[data-type-slot-option="Creature"]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la ranura ajena se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=typeSlotAway');
+  const block = page.locator('[data-type-slot]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-type-slot-faces]')).toContainText('Tierra');
+  await expect(block.locator('[data-type-slot-faces]')).toContainText('Criatura');
+  await expect(block.locator('[data-type-slot-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('empalmar ofrece las cartas publicadas y el no empalmar publicado', async ({ page }) => {
+  await page.goto('/ux?scene=splice');
+  const block = page.locator('[data-splice]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-splice-count', '2');
+  await expect(block.locator('strong')).toHaveText('Empalmar · Glacial Ray');
+  await expect(block.locator('[data-splice-card="438"]')).toContainText('Empalmar Peer Through Depths');
+  await expect(block.locator('[data-splice-card="439"]')).toContainText('Empalmar Reach Through Mists');
+  await expect(block.locator('[data-splice-decline]')).toContainText('No empalmar');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una carta oculta no se empalma y el declinar ausente no es un botón', async ({ page }) => {
+  await page.goto('/ux?scene=spliceHidden');
+  const block = page.locator('[data-splice]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-splice-hidden', '1');
+  await expect(block.locator('[data-splice-hidden-note]')).toContainText('1 carta oculta');
+  await expect(block.locator('[data-splice-card="438"]')).toHaveCount(1);
+  await expect(block.locator('[data-splice-card="0"]')).toHaveCount(0);
+  await expect(block.locator('[data-splice-decline]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el empalme ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=spliceAway');
+  const block = page.locator('[data-splice]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-splice-faces]')).toContainText('Peer Through Depths');
+  await expect(block.locator('[data-splice-faces]')).toContainText('Reach Through Mists');
+  await expect(block.locator('[data-splice-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

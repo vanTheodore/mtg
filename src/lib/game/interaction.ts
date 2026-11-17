@@ -2971,6 +2971,115 @@ export function castingVariantOffers(actions: GameAction[]): CastingVariantOffer
   };
 }
 
+function slotName(raw: unknown): string {
+  if (typeof raw === 'string' && raw) return raw;
+  if (raw && typeof raw === 'object' && typeof (raw as { type?: unknown }).type === 'string') {
+    return (raw as { type: string }).type;
+  }
+  return '';
+}
+
+/**
+ * CR 110.4: `WaitingFor::ChoosePermanentTypeSlot`. A multi-type card cast or
+ * played from the graveyard through a once-per-turn-per-type permission has
+ * to consume one of the slots the engine still has open. The answer is
+ * `ChoosePermanentTypeSlot { slot }`. A button exists only when that slot is
+ * already legal: rebuilding it from the card's types would offer a slot the
+ * engine had already refused. `permission` is not re-sent; its absence is a
+ * land play (CR 305.1), not a missing field this table fills in.
+ */
+export type TypeSlotPrompt = {
+  player: PlayerId;
+  objectId: ObjectId | null;
+  cardId: number | null;
+  sourceId: ObjectId | null;
+  paymentMode: string;
+  /** Published slots, in the engine's order. Junk entries are dropped; the action carries the name, not an index. */
+  slots: string[];
+  /** False when the field was omitted: serde skips `None`, and that is a land play. */
+  hasPermission: boolean;
+};
+export function typeSlotPrompt(snapshot: EngineSnapshot | null): TypeSlotPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ChoosePermanentTypeSlot') return null;
+  const data = waiting.data ?? {};
+  const slots = Array.isArray(data.available_slots)
+    ? data.available_slots.map(slotName).filter((slot) => slot.length > 0)
+    : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: typeof data.object_id === 'number' ? (data.object_id as ObjectId) : null,
+    cardId: typeof data.card_id === 'number' ? data.card_id : null,
+    sourceId: typeof data.source === 'number' ? (data.source as ObjectId) : null,
+    paymentMode: paymentModeOf(data.payment_mode),
+    slots,
+    hasPermission: data.permission !== undefined && data.permission !== null
+  };
+}
+export type TypeSlotOffers = { bySlot: Map<string, GameAction> };
+/** A slot that is not a name is not a button. The first published action wins. */
+export function typeSlotOffers(actions: GameAction[]): TypeSlotOffers {
+  const bySlot = new Map<string, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChoosePermanentTypeSlot') continue;
+    const slot = slotName(action.data?.slot);
+    if (!slot || bySlot.has(slot)) continue;
+    bySlot.set(slot, action);
+  }
+  return { bySlot };
+}
+
+/**
+ * CR 702.47a–e: `WaitingFor::SpliceOffer`. While an Arcane (or other matching)
+ * spell is being cast, its controller may reveal a splice card from hand, copy
+ * its text, and pay that card's splice cost. The prompt comes back after each
+ * acceptance until the caster declines or `eligible` is empty. The answer is
+ * `RespondToSpliceOffer { card }`: `Some` splices that card, `None` finishes.
+ * A button exists only when that action is already legal. The splice cost is
+ * not on this prompt; this table does not read it off the card.
+ */
+export type SplicePrompt = {
+  player: PlayerId;
+  spellId: ObjectId | null;
+  /** Published ids, including a `0` redaction. Order is the engine's. */
+  eligible: ObjectId[];
+};
+export function splicePrompt(snapshot: EngineSnapshot | null): SplicePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'SpliceOffer') return null;
+  const data = waiting.data ?? {};
+  const pending = (data.pending_cast ?? {}) as { object_id?: unknown };
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    spellId: typeof pending.object_id === 'number' ? (pending.object_id as ObjectId) : null,
+    eligible: Array.isArray(data.eligible)
+      ? data.eligible.filter((id): id is ObjectId => typeof id === 'number')
+      : []
+  };
+}
+export type SpliceOffers = {
+  byCard: Map<number, GameAction>;
+  decline: GameAction | null;
+};
+/**
+ * `card: null` (and a missing card) is the decline. `0` is a redacted card,
+ * not a decline, and it is not a card this seat can splice.
+ */
+export function spliceOffers(actions: GameAction[]): SpliceOffers {
+  const byCard = new Map<number, GameAction>();
+  let decline: GameAction | null = null;
+  for (const action of actions) {
+    if (action.type !== 'RespondToSpliceOffer') continue;
+    const card = action.data?.card;
+    if (card === null || card === undefined) {
+      if (!decline) decline = action;
+      continue;
+    }
+    if (typeof card === 'number' && card !== 0 && !byCard.has(card)) byCard.set(card, action);
+  }
+  return { byCard, decline };
+}
+
 /**
  * CR 508.1g + CR 701.43d: as attackers are declared, the active player may pay
  * the optional «exert this creature as it attacks» cost, one creature at a time.

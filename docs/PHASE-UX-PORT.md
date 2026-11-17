@@ -2995,3 +2995,54 @@ verde con **497** ficheros y SHA-256
 `f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
 En Chromium, siete pruebas nuevas (108 → 115 en `ux-lab`) y siete escenas más
 en la prueba de temas (88 → 95 escenas, 190 jpg, presupuesto de 960 s).
+
+## La ranura de tipo y el empalme no se reconstruyen (sexagésima pasada, 7 nov 2026)
+
+`ChoosePermanentTypeSlot` y `SpliceOffer` son las dos ventanas que siguen a la
+variante de lanzamiento. Phase ya las tiene (`PermanentTypeSlotModal`,
+`SpliceOfferModal`). Mesa no copia el cromo. Copia qué botón existe y qué sobre
+se envía.
+
+**`ChoosePermanentTypeSlot` (CR 110.4).** Una carta de varios tipos, lanzada o
+jugada desde el cementerio por un permiso de una vez por turno y por tipo,
+consume uno de los espacios que el motor todavía tiene abiertos. La acción es
+`ChoosePermanentTypeSlot { slot }`. Un botón existe sólo si `legal.actions` ya
+trae ese espacio: reconstruirlo a partir de los tipos de la carta ofrecería uno
+que el motor ya rechazó. El permiso no se reenvía. Su ausencia no es un campo
+que esta mesa rellene: es una jugada de tierra (CR 305.1). El otro asiento ve
+los espacios y no recibe botón.
+
+**`SpliceOffer` (CR 702.47a–e).** Mientras se lanza un hechizo de Arcano, su
+controlador puede revelar una carta con empalmar, copiar su texto y pagar el
+coste de empalmar de esa carta. El motor vuelve a preguntar tras cada
+aceptación, hasta que el jugador declina o `eligible` se vacía. La acción es
+`RespondToSpliceOffer { card }`: `Some` empalma esa carta, `None` termina. Un
+botón existe sólo si esa acción ya es legal. El coste de empalmar no viaja en
+este prompt; esta mesa no lo lee de la carta. Un `0` es una carta oculta, no
+un empalme (CR 400.2). El otro asiento ve las cartas y no recibe botón.
+
+Laboratorio: `/ux?scene=typeSlot` (Dryad Arbor, Tierra y Criatura, mediante
+Lurrus), `typeSlotLand` (sólo Tierra, sin permiso de cementerio),
+`typeSlotAway`, `splice` (Glacial Ray, Peer Through Depths y Reach Through
+Mists, más «No empalmar»), `spliceHidden` (la carta oculta no es botón y el
+declinar ausente tampoco) y `spliceAway`. Capturas `ux-ranura-tipo-1440.jpg`,
+`ux-ranura-tierra-1440.jpg`, `ux-ranura-ajena-1440.jpg`,
+`ux-empalmar-1440.jpg`, `ux-empalmar-oculto-1440.jpg` y
+`ux-empalme-ajeno-1440.jpg`, más sus pares de tema.
+
+`main` de Phase va 23 commits por delante del pin. No se importan: estas dos
+ventanas se leen del pin `28b2f9e4`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **669** (10 nuevas:
+5 en `type-slot.test.ts` —el espacio publicado y el permiso ausente que es una
+tierra, el espacio etiquetado, el espacio en blanco que se descarta, el botón
+que sólo existe si se publicó— y 5 en `splice.test.ts` —la carta publicada y el
+cero redactado, el campo ausente que no se inventa, el `null` que declina y el
+declinar que falta—); el recuento vigilado pasa a **80** entradas en
+`REPRESENTED` (78 → 80). El motor no se tocó: `bun run engine:verify` sigue en
+verde con **497** ficheros y SHA-256
+`f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
+En Chromium, seis pruebas nuevas (115 → 121 en `ux-lab`) y seis escenas más
+en la prueba de temas (95 → 101 escenas, 202 jpg, presupuesto de 1080 s).

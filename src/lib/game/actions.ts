@@ -19,7 +19,9 @@ const LABELS: Record<string, string> = {
   Foretell: 'Predecir',
   ChooseModalFace: 'Elegir cara',
   ChooseAlternativeCast: 'Elegir coste alternativo',
-  ChooseCastingVariant: 'Elegir variante de lanzamiento'
+  ChooseCastingVariant: 'Elegir variante de lanzamiento',
+  ChoosePermanentTypeSlot: 'Elegir ranura de tipo',
+  RespondToSpliceOffer: 'Empalmar'
 };
 
 function actionObjectId(action: GameAction): number | undefined {
@@ -184,6 +186,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'ModalFaceChoice': return 'Elige qué cara jugar o lanzar. Sólo aparecen las caras que el motor todavía ofrece.';
     case 'AlternativeCastChoice': return 'Paga el coste impreso o el alternativo que publicó el motor. La palabra clave no cambia el sobre.';
     case 'CastingVariantChoice': return 'Más de un permiso vale para este hechizo: elige el índice que publicó el motor.';
+    case 'ChoosePermanentTypeSlot': return 'Esta carta consume un espacio de tipo de los que publicó el motor.';
+    case 'SpliceOffer': return 'Puedes empalmar una carta de las que publicó el motor, o no empalmar.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';
