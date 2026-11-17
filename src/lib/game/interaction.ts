@@ -3080,6 +3080,102 @@ export function spliceOffers(actions: GameAction[]): SpliceOffers {
   return { byCard, decline };
 }
 
+export type MergeSideName = 'Top' | 'Bottom';
+
+function mergeSide(raw: unknown): MergeSideName | null {
+  return raw === 'Top' || raw === 'Bottom' ? raw : null;
+}
+
+/**
+ * CR 702.140c + CR 730.2a: `WaitingFor::MutateMergeChoice`. A mutating creature
+ * spell resolved with a legal target. Its controller chooses whether the spell
+ * goes on top of that creature or under it. The side only picks which component
+ * supplies the copiable characteristics (CR 730.2a). The merged permanent keeps
+ * the target's identity (CR 730.2c) and the union of both components' abilities
+ * (CR 702.140e). The answer is `ChooseMutateMergeSide { side }`, a plain
+ * `"Top"` or `"Bottom"`. A button exists only when that side is already legal.
+ * Rebuilding the missing side would offer a merge the engine had not published.
+ */
+export type MutateMergePrompt = {
+  player: PlayerId;
+  mergingId: ObjectId | null;
+  targetId: ObjectId | null;
+};
+export function mutateMergePrompt(snapshot: EngineSnapshot | null): MutateMergePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'MutateMergeChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    mergingId: typeof data.merging_id === 'number' ? (data.merging_id as ObjectId) : null,
+    targetId: typeof data.target_id === 'number' ? (data.target_id as ObjectId) : null
+  };
+}
+export type MutateMergeOffers = { bySide: Map<MergeSideName, GameAction> };
+/** A side that is not the plain string the engine publishes is not a button. The first action wins. */
+export function mutateMergeOffers(actions: GameAction[]): MutateMergeOffers {
+  const bySide = new Map<MergeSideName, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChooseMutateMergeSide') continue;
+    const side = mergeSide(action.data?.side);
+    if (!side || bySide.has(side)) continue;
+    bySide.set(side, action);
+  }
+  return { bySide };
+}
+
+/**
+ * CR 702.99a: `WaitingFor::CipherEncodeChoice`. A resolving Cipher spell may be
+ * exiled encoded on a creature its controller controls, or declined (the card
+ * goes to its owner's graveyard). The answer is `CipherEncode { creature }`:
+ * `Some` encodes on that host, `None` declines. A button exists only when that
+ * action is already legal. A `0` is a hidden creature, not a host (CR 400.2).
+ * While the card stays encoded, that creature may cast a copy when it deals
+ * combat damage to a player (CR 702.99c); this table does not rebuild that ability.
+ */
+export type CipherPrompt = {
+  player: PlayerId;
+  cardId: ObjectId | null;
+  /** Published ids, including a `0` redaction. Order is the engine's. */
+  creatures: ObjectId[];
+};
+export function cipherPrompt(snapshot: EngineSnapshot | null): CipherPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'CipherEncodeChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    cardId: typeof data.card_id === 'number' ? (data.card_id as ObjectId) : null,
+    creatures: Array.isArray(data.creatures)
+      ? data.creatures.filter((id): id is ObjectId => typeof id === 'number')
+      : []
+  };
+}
+export type CipherOffers = {
+  byCreature: Map<number, GameAction>;
+  decline: GameAction | null;
+};
+/**
+ * `creature: null` (and a missing creature) is the decline. `0` is a redacted
+ * creature, not a decline, and it is not a host this seat can encode on.
+ */
+export function cipherOffers(actions: GameAction[]): CipherOffers {
+  const byCreature = new Map<number, GameAction>();
+  let decline: GameAction | null = null;
+  for (const action of actions) {
+    if (action.type !== 'CipherEncode') continue;
+    const creature = action.data?.creature;
+    if (creature === null || creature === undefined) {
+      if (!decline) decline = action;
+      continue;
+    }
+    if (typeof creature === 'number' && creature !== 0 && !byCreature.has(creature)) {
+      byCreature.set(creature, action);
+    }
+  }
+  return { byCreature, decline };
+}
+
 /**
  * CR 508.1g + CR 701.43d: as attackers are declared, the active player may pay
  * the optional «exert this creature as it attacks» cost, one creature at a time.

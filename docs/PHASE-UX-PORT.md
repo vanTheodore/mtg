@@ -3046,3 +3046,52 @@ verde con **497** ficheros y SHA-256
 `f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
 En Chromium, seis pruebas nuevas (115 → 121 en `ux-lab`) y seis escenas más
 en la prueba de temas (95 → 101 escenas, 202 jpg, presupuesto de 1080 s).
+
+## El lado de la mutación y el cifrado no se reconstruyen (sexagésima primera pasada, 7 nov 2026)
+
+`MutateMergeChoice` y `CipherEncodeChoice` son las dos ventanas que siguen al
+empalme. Phase ya las tiene (`MutateMergeChoiceModal`, `CipherEncodeChoiceModal`).
+Mesa no copia el cromo. Copia qué botón existe y qué sobre se envía.
+
+**`MutateMergeChoice` (CR 702.140c + CR 730.2a).** Un hechizo de criatura con
+mutar ya tiene un objetivo legal. Su controlador elige si la carta va encima
+de esa criatura o debajo. El lado sólo decide qué componente da el nombre, los
+tipos y la fuerza (CR 730.2a). El permanente conserva la identidad del objetivo
+(CR 730.2c), se queda con las habilidades de ambos (CR 702.140e) y no vuelve a
+entrar. La acción es `ChooseMutateMergeSide { side }`, la cadena `"Top"` o
+`"Bottom"`. Un botón existe sólo si `legal.actions` ya trae ese lado:
+reconstruir el que falta ofrecería una fusión que el motor no publicó.
+
+**`CipherEncodeChoice` (CR 702.99a).** Un hechizo con cifrar, al resolverse,
+puede exiliarse cifrado en una criatura que controle su controlador, o
+declinar. Declinar manda la carta al cementerio de su propietario. La acción es
+`CipherEncode { creature }`: `Some` cifra en ese anfitrión, `None` declina. Un
+botón existe sólo si esa acción ya es legal. El coste de la habilidad cifrada
+no se reconstruye: mientras la carta siga cifrada, la criatura puede lanzar una
+copia al hacer daño de combate a un jugador (CR 702.99c), y eso lo aplica el
+motor. Un `0` es una criatura oculta, no un anfitrión (CR 400.2). El otro
+asiento ve las criaturas y no recibe botón.
+
+Laboratorio: `/ux?scene=mutate` (Gemrazer sobre Llanowar Elves, los dos lados),
+`mutateOne` (sólo encima), `mutateAway`, `cipher` (Hidden Strings, Invisible
+Stalker y Tormented Soul, más «No cifrar»), `cipherHidden` (la criatura oculta
+no es botón y el declinar ausente tampoco) y `cipherAway`. Capturas
+`ux-mutar-1440.jpg`, `ux-un-lado-1440.jpg`, `ux-mutacion-ajena-1440.jpg`,
+`ux-cifrar-1440.jpg`, `ux-cifrar-oculto-1440.jpg` y
+`ux-cifrado-ajeno-1440.jpg`, más sus pares de tema.
+
+`main` de Phase va 23 commits por delante del pin. No se importan: estas dos
+ventanas se leen del pin `28b2f9e4`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **679** (10 nuevas:
+5 en `mutate-merge.test.ts` —el hechizo y el objetivo, el campo ausente, las
+cadenas `Top` y `Bottom` y el lado etiquetado que no es un lado, el lado que no
+se publicó— y 5 en `cipher.test.ts` —el anfitrión publicado y el cero redactado,
+el campo ausente, el `null` que declina y el declinar que falta—); el recuento
+vigilado pasa a **82** entradas en `REPRESENTED` (80 → 82). El motor no se tocó:
+`bun run engine:verify` sigue en verde con **497** ficheros y SHA-256
+`f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
+En Chromium, seis pruebas nuevas (121 → 127 en `ux-lab`) y seis escenas más
+en la prueba de temas (101 → 107 escenas, 214 jpg, presupuesto de 1200 s).

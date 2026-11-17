@@ -21,7 +21,9 @@ const LABELS: Record<string, string> = {
   ChooseAlternativeCast: 'Elegir coste alternativo',
   ChooseCastingVariant: 'Elegir variante de lanzamiento',
   ChoosePermanentTypeSlot: 'Elegir ranura de tipo',
-  RespondToSpliceOffer: 'Empalmar'
+  RespondToSpliceOffer: 'Empalmar',
+  ChooseMutateMergeSide: 'Elegir lado de la mutación',
+  CipherEncode: 'Cifrar'
 };
 
 function actionObjectId(action: GameAction): number | undefined {
@@ -89,6 +91,16 @@ export function describeAction(action: GameAction, objects: Record<string, GameO
     return names.length ? `Pagar con ${names.join(' + ')}` : 'Elegir producción de maná';
   }
   if (action.type === 'ChooseReplacement') return `Elegir efecto ${Number(data.index ?? 0) + 1}`;
+  if (action.type === 'ChooseMutateMergeSide') {
+    if (data.side === 'Top') return 'Poner encima';
+    if (data.side === 'Bottom') return 'Poner debajo';
+    return base;
+  }
+  if (action.type === 'CipherEncode') {
+    if (data.creature === null || data.creature === undefined) return 'No cifrar';
+    const host = typeof data.creature === 'number' ? objects[String(data.creature)] : undefined;
+    return host?.name ? `Cifrar en ${host.name}` : base;
+  }
   return base;
 }
 
@@ -188,6 +200,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'CastingVariantChoice': return 'Más de un permiso vale para este hechizo: elige el índice que publicó el motor.';
     case 'ChoosePermanentTypeSlot': return 'Esta carta consume un espacio de tipo de los que publicó el motor.';
     case 'SpliceOffer': return 'Puedes empalmar una carta de las que publicó el motor, o no empalmar.';
+    case 'MutateMergeChoice': return 'El hechizo que muta se fusiona con el objetivo: elige el lado que publicó el motor.';
+    case 'CipherEncodeChoice': return 'Puedes cifrar esta carta en una criatura de las que publicó el motor.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

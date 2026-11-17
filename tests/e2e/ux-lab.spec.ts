@@ -2006,6 +2006,91 @@ test('el empalme ajeno se nombra y no ofrece botones', async ({ page }) => {
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('los dos lados publicados de una mutación son botones, y nombran quién pone el nombre', async ({ page }) => {
+  await page.goto('/ux?scene=mutate');
+  const block = page.locator('[data-mutate]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-mutate-count', '2');
+  await expect(block.locator('strong')).toHaveText('Mutar · Gemrazer sobre Llanowar Elves');
+  await expect(block.locator('[data-mutate-side="Top"]')).toContainText('Poner encima');
+  await expect(block.locator('[data-mutate-side="Bottom"]')).toContainText('Poner debajo');
+  await expect(block.locator('[data-mutate-note="Top"]')).toContainText('el nombre lo pone Gemrazer');
+  await expect(block.locator('[data-mutate-note="Bottom"]')).toContainText('el nombre lo conserva Llanowar Elves');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un lado que el motor no publicó no es un botón', async ({ page }) => {
+  await page.goto('/ux?scene=mutateOne');
+  const block = page.locator('[data-mutate]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-mutate-count', '1');
+  await expect(block.locator('[data-mutate-side="Top"]')).toHaveCount(1);
+  await expect(block.locator('[data-mutate-side="Bottom"]')).toHaveCount(0);
+  await expect(block.locator('[data-mutate-note="Bottom"]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la mutación ajena se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=mutateAway');
+  const block = page.locator('[data-mutate]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-mutate-faces]')).toContainText('Poner encima');
+  await expect(block.locator('[data-mutate-faces]')).toContainText('Poner debajo');
+  await expect(block.locator('[data-mutate-faces]')).toContainText('Gemrazer');
+  await expect(block.locator('[data-mutate-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('cifrar ofrece los anfitriones publicados y el no cifrar publicado', async ({ page }) => {
+  await page.goto('/ux?scene=cipher');
+  const block = page.locator('[data-cipher]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-cipher-count', '2');
+  await expect(block.locator('strong')).toHaveText('Cifrar · Hidden Strings');
+  await expect(block.locator('[data-cipher-host="443"]')).toContainText('Cifrar en Invisible Stalker');
+  await expect(block.locator('[data-cipher-host="444"]')).toContainText('Cifrar en Tormented Soul');
+  await expect(block.locator('[data-cipher-decline]')).toContainText('No cifrar');
+  await expect(block.locator('[data-cipher-decline-note]')).toContainText('cementerio de su propietario');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una criatura oculta no se cifra y el declinar ausente no es un botón', async ({ page }) => {
+  await page.goto('/ux?scene=cipherHidden');
+  const block = page.locator('[data-cipher]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-cipher-hidden', '1');
+  await expect(block.locator('[data-cipher-hidden-note]')).toContainText('1 criatura oculta');
+  await expect(block.locator('[data-cipher-host="443"]')).toHaveCount(1);
+  await expect(block.locator('[data-cipher-host="0"]')).toHaveCount(0);
+  await expect(block.locator('[data-cipher-decline]')).toHaveCount(0);
+  await expect(block.locator('[data-cipher-decline-note]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el cifrado ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=cipherAway');
+  const block = page.locator('[data-cipher]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-cipher-faces]')).toContainText('Invisible Stalker');
+  await expect(block.locator('[data-cipher-faces]')).toContainText('Tormented Soul');
+  await expect(block.locator('[data-cipher-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');
