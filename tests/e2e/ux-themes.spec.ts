@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 // (dos capturas y dos auditorías por escena), así que su presupuesto es el del
 // recorrido entero y crece con el catálogo; el límite del proyecto es para un test
 // corto. Cuando la lista crezca otra vez, este número es el que hay que mirar.
-test.describe.configure({ timeout: 600_000 });
+test.describe.configure({ timeout: 720_000 });
 
 const shotsDir = fileURLToPath(new URL('../../docs/screenshots/temas/', import.meta.url));
 
@@ -105,6 +105,14 @@ const SCENES = [
   { scene: 'phyrexian', slug: 'mana-frigio', block: '[data-phyrexian]' },
   { scene: 'combatTax', slug: 'impuesto-ataque', block: '[data-combat-tax]' },
   { scene: 'combatTaxBlock', slug: 'impuesto-bloqueo', block: '[data-combat-tax]' },
+  { scene: 'optionalCost', slug: 'potenciar', block: '[data-optional-cost]' },
+  { scene: 'optionalCostMulti', slug: 'multipotenciar', block: '[data-optional-cost]' },
+  { scene: 'optionalCostChoice', slug: 'elegir-coste', block: '[data-optional-cost]' },
+  { scene: 'optionalCostAlt', slug: 'coste-alternativo', block: '[data-optional-cost]' },
+  { scene: 'optionalCostGift', slug: 'regalo', block: '[data-optional-cost]' },
+  { scene: 'optionalCostAway', slug: 'coste-ajeno', block: '[data-optional-cost]' },
+  { scene: 'defiler', slug: 'defiler', block: '[data-defiler]' },
+  { scene: 'defilerAway', slug: 'defiler-ajeno', block: '[data-defiler]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

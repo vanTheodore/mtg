@@ -85,6 +85,14 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `phyrexian` | `PhyrexianPayment` | [claro](mana-frigio-claro.jpg) | [oscuro](mana-frigio-oscuro.jpg) |
 | `combatTax` | `CombatTaxPayment` (impuesto de ataque) | [claro](impuesto-ataque-claro.jpg) | [oscuro](impuesto-ataque-oscuro.jpg) |
 | `combatTaxBlock` | `CombatTaxPayment` (impuesto de bloqueo) | [claro](impuesto-bloqueo-claro.jpg) | [oscuro](impuesto-bloqueo-oscuro.jpg) |
+| `optionalCost` | `OptionalCostChoice` (potenciar) | [claro](potenciar-claro.jpg) | [oscuro](potenciar-oscuro.jpg) |
+| `optionalCostMulti` | `OptionalCostChoice` (multipotenciar) | [claro](multipotenciar-claro.jpg) | [oscuro](multipotenciar-oscuro.jpg) |
+| `optionalCostChoice` | `OptionalCostChoice` (elegir un coste) | [claro](elegir-coste-claro.jpg) | [oscuro](elegir-coste-oscuro.jpg) |
+| `optionalCostAlt` | `OptionalCostChoice` (coste alternativo) | [claro](coste-alternativo-claro.jpg) | [oscuro](coste-alternativo-oscuro.jpg) |
+| `optionalCostGift` | `OptionalCostChoice` (regalo) | [claro](regalo-claro.jpg) | [oscuro](regalo-oscuro.jpg) |
+| `optionalCostAway` | `OptionalCostChoice` (coste ajeno) | [claro](coste-ajeno-claro.jpg) | [oscuro](coste-ajeno-oscuro.jpg) |
+| `defiler` | `DefilerPayment` (sólo color) | [claro](defiler-claro.jpg) | [oscuro](defiler-oscuro.jpg) |
+| `defilerAway` | `DefilerPayment` (alcance omitido, ajeno) | [claro](defiler-ajeno-claro.jpg) | [oscuro](defiler-ajeno-oscuro.jpg) |
 | `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:

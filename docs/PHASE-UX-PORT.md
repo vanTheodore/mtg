@@ -2788,3 +2788,102 @@ contabilidad incluye el nombre; `bun run engine:verify` en verde con **497** fic
 pruebas nuevas —el ataque con sus dos `{W/P}`, la banda y las dos respuestas, y el bloqueo ajeno
 con los dos osos separados por controlador y sin botones— (92 → 94 en `ux-lab`) y dos escenas más
 en la prueba de temas (72 → 74 escenas, 148 jpg, presupuesto de 600 s).
+
+## El coste adicional y el descuento de Defiler comparten el sobre, no el índice (quincuagésima séptima pasada, 7 nov 2026)
+
+`OptionalCostChoice` y `DefilerPayment` se responden con el mismo sobre,
+`DecideOptionalCost { index }`, y el índice no significa lo mismo. El bloque no
+reenvía `pending_cast`, no reordena opciones y no inventa un «no pagar» donde el
+cable no lo publica. `CancelCast` es legal en las dos (CR 601.2i): todavía no se
+ha pagado nada. Un asiento que no decide ve el precio y no recibe ni un botón
+(CR 400.2).
+
+**`OptionalCostChoice` (CR 601.2b + CR 601.2h).** `AdditionalCost` llega como
+`{ type, data }`, y `optional_cost_options` fija qué índice es cada botón:
+
+- `Optional` y `Kicker`: el 0 paga el único coste vivo y el 1 lo declina. Un
+  kicker publica ese coste como `costs[0]` (`next_kicker_option`); un hermano es
+  otra ventana, no un segundo botón aquí. Declinar no cierra el lanzamiento. Una
+  lista vacía no pregunta: no hay botones, y cancelar sigue siendo legal.
+- `Choice`: un `Pay` por alternativa, en el orden publicado, y **sin** declinar.
+  Hay que pagar exactamente una (Dusk Mangler: sacrificar una criatura, descartar
+  una carta, o 4 vidas). Un coste que esta mesa no sabe nombrar sigue siendo
+  botón: quitarlo renumeraría el resto.
+- `Choice` también es el coste alternativo frente al impreso (CR 118.9).
+  `pending_cast.alternative_cost_election === Offered` —cadena o `{ type }`—
+  sólo cambia el título y la regla, no los índices. Rooftop Storm: el 0 es `{0}`
+  y el 1 es el `{6}` impreso. Rechazar la alternativa es pagar el otro índice,
+  no un botón de «no pagar».
+- `Required` no se pregunta. Si llega, el único pago es el índice 0. Una forma
+  desconocida no inventa botones.
+
+`origin` es un enumerado de unidad (una cadena en el cable), así que el bloque
+dice «regalo» sin leer la carta. Ausente es `Other`; una cadena que no está en
+la tabla queda `unknown` y se dice, no se adivina. `gift_kind` llega etiquetado
+o como cadena (`Card`, `Treasure`, `Food`, `TappedFish`, `ExtraTurn`); ausente
+es `null`, desconocido es `unknown`. `repeatable === true` es estricto —la
+cadena `"true"` no cuenta— y `times_kicked` no numérico se lee 0. Un asiento
+ausente cae al visor. El copy sale del origen, no de olfatear el texto: kicker
+CR 702.33a, casualty CR 702.153a, offspring CR 702.175a, squad CR 702.157a,
+replicate CR 702.56a, bargain CR 702.166a, teamwork CR 702.194a, gift CR 702.174a.
+Un `{W/P}` se muestra; pagarlo símbolo a símbolo es `PhyrexianPayment`, no esta
+ventana.
+
+El regalo publica un centinela de maná cero. El botón dice «Prometer el regalo»,
+no un pago de `{0}`. Prometerlo puede abrir `ChooseGiftRecipient` si hay dos o
+más oponentes elegibles; ese picker no se anida aquí. El namer (`namedAbilityCost`)
+no reutiliza el de `Unless`: un `Mana` con `type: 'Cost'` incluso a cero es `{0}`
+—`manaText` lo imprime vacío y no es un coste que falte—; `NoCost` u otra forma
+queda innombrado. `PayLife` sólo si es `Fixed`. `Sacrifice` con `requirement` no
+se pinta como «1»: el agregado y el «todos» no tienen cuenta. `Exile` sin cuenta
+fija queda innombrado; `Discard` y `Reveal` ausentes valen 1, y presentes no
+fijas quedan innombrados. `TapCreatures` nombra una cuenta o el agregado
+`TotalPower`/`GE`, y nada más. En `Composite` y `OneOf`, una parte innombrada
+innombra el todo. `Waterbend` y un tipo desconocido no se inventan, pero en un
+`Choice` el botón se queda.
+
+**`DefilerPayment` (CR 601.2b).** El descuento ya está cotizado: `life_cost` y
+`mana_reduction` son del motor, y el bloque no reprecio el hechizo ni apaga el
+botón porque las vidas no alcancen (CR 119.4: eso lo resuelve el motor, y el
+lanzamiento sigue con el coste original). El índice **no** es
+`optional_cost_options`. El dispatch de lanzamiento paga sólo con `index == 0`;
+el 1 declina y el coste original sigue. No se envía un booleano. `reach` se
+omite en el cable cuando es el defecto `SpillsToGeneric` (CR 118.7b): un campo
+ausente es ese derrame, no el límite del ciclo Defiler. `ColoredManaOnly` es el
+límite de color; cualquier otra forma queda `unknown` y se dice. El texto del
+parser es Defiler of Dreams; el fixture verde del motor (Defiler of Vigor) fija
+2 vidas y un `{G}`.
+
+La sesión no despacha un índice que el prompt no publicó: en el coste adicional,
+sólo uno de `options`; en Defiler, sólo `0 | 1`. `DecideOptionalCost` está en
+`handled` para que el panel no la ofrezca otra vez al lado de estos botones.
+
+Laboratorio: `/ux?scene=optionalCost` (Goblin Bushwhacker, kicker `{R}`),
+`optionalCostMulti` (Everflowing Chalice, multikicker `{2}` ya pagado dos veces),
+`optionalCostChoice` (Dusk Mangler, tres pagos y ningún rechazo),
+`optionalCostAlt` (el zombi de Rooftop Storm, `{0}` frente a `{6}`),
+`optionalCostGift` (Coiling Rebirth, prometer una carta), `optionalCostAway` (el
+kicker lo decide el Jugador 2), `defiler` (Grizzly Bears, 2 vidas, `{G}`, sólo
+color) y `defilerAway` (alcance omitido, `{1}{G}`, sin botones). Capturas
+`ux-potenciar-1440.jpg`, `ux-multipotenciar-1440.jpg`, `ux-elegir-coste-1440.jpg`,
+`ux-coste-alternativo-1440.jpg`, `ux-regalo-1440.jpg`, `ux-coste-ajeno-1440.jpg`,
+`ux-defiler-1440.jpg` y `ux-defiler-ajeno-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **646** (13 nuevas:
+9 en `game/__tests__/optional-cost.test.ts` —el kicker y su cita, el multikicker
+con la cuenta, el Choice sin declinar, la alternativa ofrecida, el regalo
+etiquetado, el origen ausente frente al desconocido, la lista vacía y el coste
+obligatorio, el índice desnudo, y el namer que no inventa— y 4 en
+`defiler-payment.test.ts` —la cita de sólo color, el alcance omitido frente al
+discriminante envuelto, el precio ausente, y el mismo sobre con un vecino que no
+es esta ventana—); el recuento vigilado pasa a **74** entradas en `REPRESENTED`
+(72 → 74) y la prueba de contabilidad incluye los dos nombres. El motor no se
+tocó: `bun run engine:verify` sigue en verde con **497** ficheros y SHA-256
+`f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`; build OK; en
+Chromium ocho pruebas nuevas —el kicker con sus dos respuestas, el multikicker
+ya pagado, el Choice sin rechazo, la alternativa `{0}`/`{6}`, el regalo que se
+promete, el coste ajeno sin botones, el Defiler de sólo color y el alcance
+omitido del rival— (94 → 102 en `ux-lab`) y ocho escenas más en la prueba de
+temas (74 → 82 escenas, 164 jpg, presupuesto de 720 s).

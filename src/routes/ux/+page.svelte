@@ -75,10 +75,12 @@
   import PayCostPrompt from '#lib/components/PayCostPrompt.svelte';
   import PhyrexianPaymentPrompt from '#lib/components/PhyrexianPaymentPrompt.svelte';
   import CombatTaxPrompt from '#lib/components/CombatTaxPrompt.svelte';
+  import OptionalCostPrompt from '#lib/components/OptionalCostPrompt.svelte';
+  import DefilerPaymentPrompt from '#lib/components/DefilerPaymentPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -165,6 +167,14 @@
     { value: 'phyrexian', label: 'Maná frigio' },
     { value: 'combatTax', label: 'Impuesto de ataque' },
     { value: 'combatTaxBlock', label: 'Impuesto de bloqueo' },
+    { value: 'optionalCost', label: 'Potenciar' },
+    { value: 'optionalCostMulti', label: 'Multipotenciar' },
+    { value: 'optionalCostChoice', label: 'Elegir un coste' },
+    { value: 'optionalCostAlt', label: 'Coste alternativo' },
+    { value: 'optionalCostGift', label: 'Regalo' },
+    { value: 'optionalCostAway', label: 'Coste adicional ajeno' },
+    { value: 'defiler', label: 'Descuento de Defiler' },
+    { value: 'defilerAway', label: 'Defiler ajeno' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -255,6 +265,14 @@
     phyrexian: 'PhyrexianPayment · CR 107.4f, maná o 2 vidas por símbolo',
     combatTax: 'CombatTaxPayment · CR 508.1h, impuesto de ataque fijado',
     combatTaxBlock: 'CombatTaxPayment · CR 509.1d, impuesto de bloqueo fijado',
+    optionalCost: 'OptionalCostChoice · CR 702.33a, kicker de un coste',
+    optionalCostMulti: 'OptionalCostChoice · CR 702.33c, multikicker ya pagado dos veces',
+    optionalCostChoice: 'OptionalCostChoice · CR 601.2b, hay que pagar exactamente una',
+    optionalCostAlt: 'OptionalCostChoice · CR 118.9, coste alternativo ofrecido',
+    optionalCostGift: 'OptionalCostChoice · CR 702.174a, prometer un regalo',
+    optionalCostAway: 'OptionalCostChoice · el coste lo decide el otro asiento',
+    defiler: 'DefilerPayment · CR 601.2b, descuento sólo de color',
+    defilerAway: 'DefilerPayment · alcance omitido, lo decide el otro asiento',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -531,6 +549,61 @@
     oracle_text:
       '({B/P} can be paid with either {B} or 2 life.) Target creature gets -5/-5 until end of turn.'
   } as GameObject;
+  // The spells these cast-cost windows name. They live only in `objects`, like
+  // the Phyrexian spell: the prompt names them, no pile count moves. The oracle
+  // lines are the engine's own test strings, not a paraphrase.
+  const bushwhacker = {
+    id: 420, card_id: 420, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Goblin Bushwhacker',
+    card_types: { core_types: ['Creature'], subtypes: ['Goblin', 'Warrior'] },
+    power: 1, toughness: 1, mana_cost: '{R}',
+    oracle_text:
+      'Kicker {R} (You may pay an additional {R} as you cast this spell.)\nWhen this creature enters, if it was kicked, creatures you control get +1/+0 and gain haste until end of turn.'
+  } as GameObject;
+  const chalice = {
+    id: 421, card_id: 421, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Everflowing Chalice',
+    card_types: { core_types: ['Artifact'] },
+    mana_cost: '{0}',
+    oracle_text:
+      'Multikicker {2} (You may pay an additional {2} any number of times as you cast this spell.)\nThis artifact enters with a charge counter on it for each time it was kicked.\n{T}: Add {C} for each charge counter on this artifact.'
+  } as GameObject;
+  // The pin quotes this clause and not the rest of the face. The costs the
+  // block shows come from the waiting-for, which is that clause.
+  const duskMangler = {
+    id: 422, card_id: 422, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Dusk Mangler',
+    card_types: { core_types: ['Creature'] },
+    oracle_text: 'As an additional cost to cast this spell, sacrifice a creature, discard a card, or pay 4 life.'
+  } as GameObject;
+  const coilingRebirth = {
+    id: 423, card_id: 423, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Coiling Rebirth',
+    card_types: { core_types: ['Sorcery'] },
+    oracle_text:
+      'Gift a card (You may promise an opponent a gift as you cast this spell. If you do, they draw a card before its other effects.)\nReturn target creature card from your graveyard to the battlefield. Then if the gift was promised and that creature isn\'t legendary, create a token that\'s a copy of that creature, except it\'s 1/1.'
+  } as GameObject;
+  // The spell the Defiler window names. A second Grizzly Bears, on the stack:
+  // the battlefield already has one, and the prompt looks the spell up by id.
+  const castingBears = {
+    id: 424, card_id: 424, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Grizzly Bears',
+    card_types: { core_types: ['Creature'], subtypes: ['Bear'] },
+    power: 2, toughness: 2, mana_cost: '{1}{G}'
+  } as GameObject;
+  const castingBearsAway = {
+    id: 425, card_id: 425, owner: 1, controller: 1, zone: 'Stack',
+    name: 'Grizzly Bears',
+    card_types: { core_types: ['Creature'], subtypes: ['Bear'] },
+    power: 2, toughness: 2, mana_cost: '{1}{G}'
+  } as GameObject;
+  // CR 118.9: the Rooftop Storm test's zombie, printed {6}, alternative {0}.
+  const testZombie = {
+    id: 426, card_id: 426, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Test Zombie',
+    card_types: { core_types: ['Creature'], subtypes: ['Zombie'] },
+    power: 2, toughness: 2, mana_cost: '{6}'
+  } as GameObject;
   // CR 502.3: the two untap questions. Vedalken Shackles is the «you may choose not
   // to untap» class; Smoke is the MaxUntapPerType cap that forces a subset.
   const shackles = {
@@ -751,7 +824,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -1074,6 +1147,109 @@
               assignments: [[{ object_id: 200, incarnation: 1 }, { object_id: 100, incarnation: 1 }]]
             }
           }
+        }
+      };
+    }
+    if (scene.startsWith('optionalCost') || scene.startsWith('defiler')) {
+      // `OptionalCostChoice` and `DefilerPayment` (CR 601.2b). Both answer with
+      // `DecideOptionalCost { index }`, and the index does not mean the same
+      // thing. AdditionalCost is `{ type, data }`. A kicker prompt publishes
+      // one live cost; a Choice publishes every alternative and no decline.
+      // Defiler's reach is omitted when it is the spill default.
+      const mana = (generic: number, shards: string[] = []) => ({ type: 'Cost', shards, generic });
+      const manaCost = (generic: number, shards: string[] = []) => ({ type: 'Mana', cost: mana(generic, shards) });
+      const pending = (id: number, election = 'Undecided') => ({
+        object_id: id,
+        alternative_cost_election: election
+      });
+      if (scene === 'optionalCost' || scene === 'optionalCostAway') {
+        return {
+          type: 'OptionalCostChoice',
+          data: {
+            player: scene === 'optionalCostAway' ? 1 : 0,
+            cost: { type: 'Kicker', data: { costs: [manaCost(0, ['Red'])] } },
+            times_kicked: 0,
+            origin: 'Kicker',
+            pending_cast: pending(420)
+          }
+        };
+      }
+      if (scene === 'optionalCostMulti') {
+        return {
+          type: 'OptionalCostChoice',
+          data: {
+            player: 0,
+            cost: { type: 'Kicker', data: { costs: [manaCost(2)], repeatable: true } },
+            times_kicked: 2,
+            origin: 'Kicker',
+            pending_cast: pending(421)
+          }
+        };
+      }
+      if (scene === 'optionalCostChoice') {
+        return {
+          type: 'OptionalCostChoice',
+          data: {
+            player: 0,
+            cost: {
+              type: 'Choice',
+              data: [
+                { type: 'Sacrifice', target: { type: 'Typed', type_filters: ['Creature'], controller: 'You' }, count: 1 },
+                { type: 'Discard', count: { type: 'Fixed', value: 1 } },
+                { type: 'PayLife', amount: { type: 'Fixed', value: 4 } }
+              ]
+            },
+            times_kicked: 0,
+            origin: 'Other',
+            pending_cast: pending(422)
+          }
+        };
+      }
+      if (scene === 'optionalCostAlt') {
+        // The Rooftop Storm test: alternative {0}, printed fallback {6}.
+        return {
+          type: 'OptionalCostChoice',
+          data: {
+            player: 0,
+            cost: { type: 'Choice', data: [manaCost(0), manaCost(6)] },
+            times_kicked: 0,
+            origin: 'Other',
+            pending_cast: pending(426, 'Offered')
+          }
+        };
+      }
+      if (scene === 'optionalCostGift') {
+        return {
+          type: 'OptionalCostChoice',
+          data: {
+            player: 0,
+            cost: { type: 'Optional', data: { cost: manaCost(0) } },
+            times_kicked: 0,
+            origin: 'Gift',
+            gift_kind: { type: 'Card' },
+            pending_cast: pending(423)
+          }
+        };
+      }
+      if (scene === 'defiler') {
+        return {
+          type: 'DefilerPayment',
+          data: {
+            player: 0,
+            life_cost: 2,
+            mana_reduction: mana(0, ['Green']),
+            reach: 'ColoredManaOnly',
+            pending_cast: pending(424)
+          }
+        };
+      }
+      return {
+        type: 'DefilerPayment',
+        data: {
+          player: 1,
+          life_cost: 2,
+          mana_reduction: mana(1, ['Green']),
+          pending_cast: pending(425)
         }
       };
     }
@@ -1946,6 +2122,7 @@
           : scene === 'untapChoice' || scene === 'untapSubset' || scene === 'untapResume' ? 'Untap'
           : scene === 'exert' || scene === 'enlist' ? 'DeclareAttackers'
           : scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate' || scene === 'phyrexian'
+            || scene.startsWith('optionalCost') || scene.startsWith('defiler')
             ? 'PreCombatMain'
           : scene === 'combatTax' ? 'DeclareAttackers'
           : scene === 'combatTaxBlock' ? 'DeclareBlockers'
@@ -2194,6 +2371,8 @@
         {#if scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate'}<PayCostPrompt />{/if}
         {#if scene === 'phyrexian'}<PhyrexianPaymentPrompt />{/if}
         {#if scene === 'combatTax' || scene === 'combatTaxBlock'}<CombatTaxPrompt />{/if}
+        {#if scene.startsWith('optionalCost')}<OptionalCostPrompt />{/if}
+        {#if scene.startsWith('defiler')}<DefilerPaymentPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

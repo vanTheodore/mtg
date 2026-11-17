@@ -1549,6 +1549,168 @@ test('el impuesto de bloqueo ajeno se ve y no se puede tocar', async ({ page }) 
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('potenciar muestra el coste vivo, las dos respuestas y la cancelación', async ({ page }) => {
+  await page.goto('/ux?scene=optionalCost');
+  const block = page.locator('[data-optional-cost]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-optional-cost-shape', 'kicker');
+  await expect(block).toHaveAttribute('data-optional-cost-origin', 'kicker');
+  await expect(block).toHaveAttribute('data-optional-cost-repeatable', 'false');
+  await expect(block).toHaveAttribute('data-optional-cost-kicked', '0');
+  await expect(block).toHaveAttribute('data-optional-cost-options', '2');
+  await expect(block.locator('strong')).toHaveText('Potenciar · Goblin Bushwhacker');
+  await expect(block.locator('[data-optional-cost-rule]')).toContainText('CR 702.33a');
+  await expect(block.locator('[data-optional-cost-live] .pip')).toHaveText('R');
+  await expect(block.locator('[data-optional-cost-pay]')).toHaveAttribute('data-optional-cost-pay', '0');
+  await expect(block.locator('[data-optional-cost-pay]')).toHaveText('Pagar {R}');
+  await expect(block.locator('[data-optional-cost-decline]')).toHaveAttribute('data-optional-cost-decline', '1');
+  await expect(block.locator('[data-optional-cost-decline]')).toHaveText('No pagar');
+  await expect(block.locator('[data-optional-cost-option]')).toHaveCount(0);
+  await expect(block.locator('[data-optional-cost-cancel]')).toHaveText('Cancelar el lanzamiento');
+  await expect(block.locator('[data-optional-cost-cancel-note]')).toContainText('CR 601.2i');
+  await expect(block.locator('[data-optional-cost-other]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el multikicker ya pagado dice cuántas veces y que puede volver a preguntar', async ({ page }) => {
+  await page.goto('/ux?scene=optionalCostMulti');
+  const block = page.locator('[data-optional-cost]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-optional-cost-repeatable', 'true');
+  await expect(block).toHaveAttribute('data-optional-cost-kicked', '2');
+  await expect(block.locator('strong')).toHaveText('Potenciar · Everflowing Chalice');
+  await expect(block.locator('[data-optional-cost-times]')).toHaveText('Ya pagado 2 veces.');
+  await expect(block.locator('[data-optional-cost-again]')).toContainText('CR 702.33c');
+  await expect(block.locator('[data-optional-cost-live] .pip.generic')).toHaveText('2');
+  await expect(block.locator('[data-optional-cost-pay]')).toHaveText('Pagar {2}');
+  await expect(block.locator('[data-optional-cost-decline]')).toHaveCount(1);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('elegir un coste no ofrece rechazarlos todos, y cada botón es su índice', async ({ page }) => {
+  await page.goto('/ux?scene=optionalCostChoice');
+  const block = page.locator('[data-optional-cost]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-optional-cost-shape', 'choice');
+  await expect(block).toHaveAttribute('data-optional-cost-alternative', 'false');
+  await expect(block).toHaveAttribute('data-optional-cost-options', '3');
+  await expect(block.locator('strong')).toHaveText('Elige un coste · Dusk Mangler');
+  await expect(block.locator('[data-optional-cost-rule]')).toContainText('exactamente una');
+  await expect(block.locator('[data-optional-cost-decline]')).toHaveCount(0);
+  await expect(block.locator('[data-optional-cost-pay]')).toHaveCount(0);
+  const options = block.locator('[data-optional-cost-option]');
+  await expect(options).toHaveCount(3);
+  await expect(options.nth(0)).toHaveAttribute('data-optional-cost-option', '0');
+  await expect(options.nth(0)).toHaveText('Sacrificar 1 criatura que controlas');
+  await expect(options.nth(1)).toHaveAttribute('data-optional-cost-option', '1');
+  await expect(options.nth(1)).toHaveText('Descartar 1 carta');
+  await expect(options.nth(2)).toHaveAttribute('data-optional-cost-option', '2');
+  await expect(options.nth(2)).toHaveText('4 vidas');
+  await expect(block.locator('[data-optional-cost-cancel]')).toHaveCount(1);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el coste alternativo ofrece {0} y el coste impreso, sin botón de no pagar', async ({ page }) => {
+  await page.goto('/ux?scene=optionalCostAlt');
+  const block = page.locator('[data-optional-cost]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-optional-cost-alternative', 'true');
+  await expect(block.locator('strong')).toHaveText('Coste alternativo · Test Zombie');
+  await expect(block.locator('[data-optional-cost-rule]')).toContainText('CR 118.9');
+  await expect(block.locator('[data-optional-cost-decline]')).toHaveCount(0);
+  const options = block.locator('[data-optional-cost-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveText('{0}');
+  await expect(options.nth(1).locator('.pip.generic')).toHaveText('6');
+  await expect(options.nth(1)).toHaveAttribute('data-optional-cost-option', '1');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el regalo se promete, no se paga como maná, y nombra la carta', async ({ page }) => {
+  await page.goto('/ux?scene=optionalCostGift');
+  const block = page.locator('[data-optional-cost]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-optional-cost-origin', 'gift');
+  await expect(block).toHaveAttribute('data-optional-cost-gift', 'card');
+  await expect(block.locator('strong')).toHaveText('Regalo · Coiling Rebirth');
+  await expect(block.locator('[data-optional-cost-rule]')).toContainText('CR 702.174a');
+  await expect(block.locator('[data-optional-cost-gift-kind]')).toContainText('roba una carta');
+  await expect(block.locator('[data-optional-cost-live]')).toContainText('{0}');
+  await expect(block.locator('[data-optional-cost-pay]')).toHaveText('Prometer el regalo');
+  await expect(block.locator('[data-optional-cost-decline]')).toHaveText('No prometer');
+  await expect(block.locator('[data-optional-cost-pay]')).toHaveAttribute('data-optional-cost-pay', '0');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el coste adicional ajeno se ve y no se puede tocar', async ({ page }) => {
+  await page.goto('/ux?scene=optionalCostAway');
+  const block = page.locator('[data-optional-cost]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-optional-cost-shape', 'kicker');
+  await expect(block.locator('[data-optional-cost-other]')).toContainText('Jugador 2');
+  await expect(block.locator('[data-optional-cost-other]')).toContainText('CR 400.2');
+  await expect(block.locator('[data-optional-cost-pay]')).toHaveCount(0);
+  await expect(block.locator('[data-optional-cost-decline]')).toHaveCount(0);
+  await expect(block.locator('[data-optional-cost-cancel]')).toHaveCount(0);
+  await expect(block.locator('button')).toHaveCount(0);
+  await expect(block.locator('[data-optional-cost-live] .pip')).toHaveText('R');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el descuento de Defiler muestra las vidas, el maná y el límite de color', async ({ page }) => {
+  await page.goto('/ux?scene=defiler');
+  const block = page.locator('[data-defiler]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-defiler-life', '2');
+  await expect(block).toHaveAttribute('data-defiler-reach', 'colored');
+  await expect(block.locator('strong')).toHaveText('Descuento de Defiler · Grizzly Bears');
+  await expect(block.locator('[data-defiler-rule]')).toContainText('CR 601.2b');
+  await expect(block.locator('[data-defiler-price]')).toContainText('2 vidas');
+  await expect(block.locator('[data-defiler-price] .pip')).toHaveText('G');
+  await expect(block.locator('[data-defiler-reach-note]')).toContainText('no pasa al genérico');
+  await expect(block.locator('[data-defiler-pay]')).toHaveAttribute('data-defiler-pay', '0');
+  await expect(block.locator('[data-defiler-pay]')).toHaveText('Pagar 2 vidas y reducir el coste');
+  await expect(block.locator('[data-defiler-decline]')).toHaveAttribute('data-defiler-decline', '1');
+  await expect(block.locator('[data-defiler-decline]')).toHaveText('Seguir con el coste original');
+  await expect(block.locator('[data-defiler-cancel]')).toHaveText('Cancelar el lanzamiento');
+  await expect(block.locator('[data-defiler-other]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el descuento ajeno, con el alcance omitido, se ve y no se toca', async ({ page }) => {
+  await page.goto('/ux?scene=defilerAway');
+  const block = page.locator('[data-defiler]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-defiler-reach', 'spill');
+  await expect(block).toHaveAttribute('data-defiler-life', '2');
+  await expect(block.locator('[data-defiler-reach-note]')).toContainText('SpillsToGeneric');
+  await expect(block.locator('[data-defiler-price] .pip.generic')).toHaveText('1');
+  await expect(block.locator('[data-defiler-price] .pip.green')).toHaveText('G');
+  await expect(block.locator('[data-defiler-other]')).toContainText('Jugador 2');
+  await expect(block.locator('[data-defiler-other]')).toContainText('CR 400.2');
+  await expect(block.locator('[data-defiler-pay]')).toHaveCount(0);
+  await expect(block.locator('[data-defiler-decline]')).toHaveCount(0);
+  await expect(block.locator('[data-defiler-cancel]')).toHaveCount(0);
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

@@ -70,6 +70,10 @@ export function describeAction(action: GameAction, objects: Record<string, GameO
   if (action.type === 'SelectTargets' && Array.isArray(data.targets)) return `Elegir ${data.targets.length} objetivo(s)`;
   if (action.type === 'ChooseTarget') return data.target ? 'Confirmar objetivo' : 'Sin objetivo';
   if (action.type === 'CancelCast') return 'Cancelar lanzamiento';
+  if (action.type === 'DecideOptionalCost') {
+    const index = action.data?.index;
+    return typeof index === 'number' ? `Elegir la opción ${index + 1} del coste` : 'Elegir opción de coste';
+  }
   if (action.type === 'UntapLandForMana') return `Deshacer maná de ${obj?.name ?? 'la fuente'}`;
   if (action.type === 'BackToManaPayment') return 'Volver al pago';
   if (action.type === 'PayManaAbilityMana' || action.type === 'ChooseManaColor') {
@@ -171,6 +175,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'PayCost': return 'Un coste se paga eligiendo objetos de los que publica el motor.';
     case 'PhyrexianPayment': return 'El maná frigio se paga con maná de su color o con 2 vidas por símbolo.';
     case 'CombatTaxPayment': return 'Un impuesto de combate ya fijado por el motor: pagas el total o la declaración se descarta entera.';
+    case 'OptionalCostChoice': return 'Un coste adicional del lanzamiento: pagas lo que publica el motor, o eliges una alternativa si hay que pagar exactamente una.';
+    case 'DefilerPayment': return 'Puedes pagar vidas para reducir el coste de maná. El motor ya fijó las vidas y el descuento.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

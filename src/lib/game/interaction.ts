@@ -2259,6 +2259,311 @@ export function payCombatTaxAction(accept: boolean): GameAction {
 }
 
 /**
+ * CR 601.2b: what one published `AbilityCost` is called, plus the mana object
+ * when the cost *is* mana so the block can draw the pips the engine counted.
+ *
+ * A cost this table cannot name comes back unnamed. Printing a guessed number
+ * would be a second price. `Sacrifice` with a `requirement` (an aggregate, or
+ * "sacrifice all") is unnamed on purpose: the flattened count default is 1,
+ * and 1 would be a lie about a cost that is not a count.
+ */
+export type NamedAbilityCost = { label: string | null; mana: unknown | null };
+function joinEs(parts: string[], conjunction: 'y' | 'o'): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} ${conjunction} ${parts[parts.length - 1]}`;
+}
+function cardCountLabel(verb: 'Descartar' | 'Exiliar' | 'Revelar' | 'Moler', count: number): string | null {
+  if (count < 1) return null;
+  return `${verb} ${count} ${count === 1 ? 'carta' : 'cartas'}`;
+}
+export function namedAbilityCost(raw: unknown): NamedAbilityCost {
+  const cost = (raw ?? {}) as Record<string, unknown>;
+  const type = typeof cost.type === 'string' ? cost.type : '';
+  if (type === 'Mana') {
+    const text = manaText(cost.cost);
+    const mana = cost.cost && typeof cost.cost === 'object' ? cost.cost : null;
+    if (text) return { label: text, mana };
+    // `ManaCost::zero()` is a real published cost (`{0}`), not a missing one.
+    // `manaText` prints it empty; the block must not treat that as unnamed.
+    if (mana && (mana as { type?: unknown }).type === 'Cost') return { label: '{0}', mana };
+    return { label: null, mana: null };
+  }
+  if (type === 'PayLife') {
+    const amount = cost.amount as { type?: string; value?: number } | undefined;
+    if (amount?.type === 'Fixed' && typeof amount.value === 'number') {
+      return { label: `${amount.value} ${amount.value === 1 ? 'vida' : 'vidas'}`, mana: null };
+    }
+    return { label: null, mana: null };
+  }
+  if (type === 'Sacrifice') {
+    // Aggregate and "all" ride `requirement`. A missing count is not 1 then.
+    if (cost.requirement !== undefined) return { label: null, mana: null };
+    const count = fixedCount(cost.count) ?? 1;
+    if (count < 1) return { label: null, mana: null };
+    const noun = filterNoun(cost.target) ?? (count === 1 ? 'permanente' : 'permanentes');
+    return { label: `Sacrificar ${count} ${noun}`, mana: null };
+  }
+  if (type === 'Discard' || type === 'Exile' || type === 'Reveal') {
+    if (cost.count !== undefined && fixedCount(cost.count) === undefined) return { label: null, mana: null };
+    const count = fixedCount(cost.count) ?? (type === 'Exile' ? null : 1);
+    if (count === null) return { label: null, mana: null };
+    const verb = type === 'Discard' ? 'Descartar' : type === 'Exile' ? 'Exiliar' : 'Revelar';
+    return { label: cardCountLabel(verb, count), mana: null };
+  }
+  if (type === 'Tap') return { label: 'Girar un permanente', mana: null };
+  if (type === 'Exert') return { label: 'Exertar esta criatura', mana: null };
+  if (type === 'Mill') {
+    const count = typeof cost.count === 'number' ? cost.count : null;
+    return { label: count === null ? null : cardCountLabel('Moler', count), mana: null };
+  }
+  if (type === 'Blight') {
+    const count = typeof cost.count === 'number' ? cost.count : null;
+    if (count === null || count < 1) return { label: null, mana: null };
+    return { label: `Poner ${count} ${count === 1 ? 'contador −1/−1' : 'contadores −1/−1'} en una criatura que controlas`, mana: null };
+  }
+  if (type === 'PayEnergy') {
+    const amount = cost.amount as { type?: string; value?: number } | undefined;
+    if (amount?.type === 'Fixed' && typeof amount.value === 'number' && amount.value >= 0) {
+      return { label: `Pagar ${amount.value} de energía`, mana: null };
+    }
+    return { label: null, mana: null };
+  }
+  if (type === 'CollectEvidence') {
+    const amount = typeof cost.amount === 'number' ? cost.amount : null;
+    if (amount === null || amount < 1) return { label: null, mana: null };
+    return { label: `Reunir pruebas con valor de maná total ${amount} o más`, mana: null };
+  }
+  if (type === 'ReturnToHand') {
+    const count = typeof cost.count === 'number' ? cost.count : null;
+    if (count === null || count < 1) return { label: null, mana: null };
+    const noun = filterNoun(cost.filter) ?? (count === 1 ? 'permanente' : 'permanentes');
+    return { label: `Devolver ${count} ${noun} a la mano`, mana: null };
+  }
+  if (type === 'TapCreatures') {
+    const requirement = (cost.requirement ?? {}) as Record<string, unknown>;
+    const kind = typeof requirement.requirement === 'string' ? requirement.requirement : '';
+    const owns = (cost.filter as { controller?: unknown } | undefined)?.controller === 'You' ? ' que controlas' : '';
+    if (kind === 'count' || (kind === '' && cost.requirement === undefined)) {
+      const count = typeof requirement.count === 'number' ? requirement.count : kind === '' ? 1 : null;
+      if (count === null || count < 1) return { label: null, mana: null };
+      const noun = count === 1 ? 'criatura' : 'criaturas';
+      return { label: `Girar ${count} ${noun}${owns}`, mana: null };
+    }
+    if (
+      kind === 'aggregate'
+      && requirement.stat === 'TotalPower'
+      && requirement.comparator === 'GE'
+      && typeof requirement.value === 'number'
+    ) {
+      return { label: `Girar criaturas${owns} con fuerza total ${requirement.value} o más`, mana: null };
+    }
+    return { label: null, mana: null };
+  }
+  if (type === 'Composite' || type === 'OneOf') {
+    const parts = Array.isArray(cost.costs) ? cost.costs : null;
+    if (!parts?.length) return { label: null, mana: null };
+    const named = parts.map((part) => namedAbilityCost(part).label);
+    if (named.some((label) => !label)) return { label: null, mana: null };
+    return { label: joinEs(named as string[], type === 'Composite' ? 'y' : 'o'), mana: null };
+  }
+  return { label: null, mana: null };
+}
+
+/**
+ * CR 601.2b + CR 601.2h: `WaitingFor::OptionalCostChoice`. The caster is
+ * announcing an additional cost, and the answer is `DecideOptionalCost { index }`.
+ *
+ * The index means whatever `optional_cost_options` says, and nothing else:
+ *   - `Optional` / `Kicker`: 0 pays the one live cost, 1 declines it. A kicker
+ *     prompt publishes that live cost as `costs[0]` (`next_kicker_option`); a
+ *     later sibling is another window, not another button in this one.
+ *   - `Choice`: one pay per alternative, in the published order, and no
+ *     decline. The caster must pay exactly one (Dusk Mangler's "sacrifice a
+ *     creature, discard a card, or pay 4 life"). Dropping an entry would
+ *     renumber the rest, so a cost this table cannot name is still a button.
+ *   - `Required` is not prompted. If it arrives, the only payment is index 0.
+ *
+ * `origin` is a unit enum (a string on the wire) so the block can say "regalo"
+ * without reading the card. `gift_kind` is internally tagged and only present
+ * for Gift. `repeatable` is the bool the engine writes for `Repeatable` and
+ * omits for `Once`. `times_kicked` is how many payments of this cost are
+ * already announced, not a number the block may recompute.
+ *
+ * `CancelCast` is legal: the window carries `pending_cast` and
+ * `allows_cancel_cast` is true (CR 601.2i). Nothing has been paid yet.
+ */
+export type OptionalCostShape = 'optional' | 'kicker' | 'choice' | 'required' | 'unknown';
+export type OptionalCostOriginName =
+  | 'kicker'
+  | 'casualty'
+  | 'offspring'
+  | 'squad'
+  | 'replicate'
+  | 'bargain'
+  | 'teamwork'
+  | 'gift'
+  | 'other'
+  | 'unknown';
+export type GiftKindName = 'card' | 'treasure' | 'food' | 'tapped-fish' | 'extra-turn' | 'unknown';
+export type OptionalCostOptionView = {
+  /** The index `DecideOptionalCost` must send. Not a display ordinal. */
+  index: number;
+  kind: 'pay' | 'decline';
+  label: string | null;
+  /** The mana object, when this pay option is mana. Decline has none. */
+  mana: unknown | null;
+};
+export type OptionalCostPrompt = {
+  player: PlayerId;
+  shape: OptionalCostShape;
+  origin: OptionalCostOriginName;
+  /** CR 702.33c / CR 702.56a / CR 702.157a: the same cost may be paid again. */
+  repeatable: boolean;
+  /** Payments of this cost already announced. Zero when the field is absent. */
+  timesKicked: number;
+  /** `null` when the engine did not publish a gift kind. */
+  giftKind: GiftKindName | null;
+  /**
+   * CR 118.9: `pending_cast.alternative_cost_election` is `Offered`, so this
+   * Choice is an alternative-cost offer. Index 0 accepts it; any other index
+   * declines it. The block still sends the published index, not a rewritten one.
+   */
+  alternativeOffered: boolean;
+  spellId: ObjectId | null;
+  options: OptionalCostOptionView[];
+};
+const OPTIONAL_COST_ORIGINS: Record<string, OptionalCostOriginName> = {
+  Kicker: 'kicker',
+  Casualty: 'casualty',
+  Offspring: 'offspring',
+  Squad: 'squad',
+  Replicate: 'replicate',
+  Bargain: 'bargain',
+  Teamwork: 'teamwork',
+  Gift: 'gift',
+  Other: 'other'
+};
+const GIFT_KINDS: Record<string, GiftKindName> = {
+  Card: 'card',
+  Treasure: 'treasure',
+  Food: 'food',
+  TappedFish: 'tapped-fish',
+  ExtraTurn: 'extra-turn'
+};
+function payOption(index: number, raw: unknown): OptionalCostOptionView {
+  const named = namedAbilityCost(raw);
+  return { index, kind: 'pay', label: named.label, mana: named.mana };
+}
+export function optionalCostPrompt(snapshot: EngineSnapshot | null): OptionalCostPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'OptionalCostChoice') return null;
+  const data = waiting.data ?? {};
+  const body = (data.cost ?? {}) as { type?: unknown; data?: unknown };
+  const shapeName = typeof body.type === 'string' ? body.type : '';
+  const shape: OptionalCostShape =
+    shapeName === 'Optional' ? 'optional'
+    : shapeName === 'Kicker' ? 'kicker'
+    : shapeName === 'Choice' ? 'choice'
+    : shapeName === 'Required' ? 'required'
+    : 'unknown';
+  const payload = body.data;
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? (payload as Record<string, unknown>)
+    : {};
+  let options: OptionalCostOptionView[] = [];
+  if (shape === 'optional') {
+    options = [payOption(0, record.cost), { index: 1, kind: 'decline', label: null, mana: null }];
+  } else if (shape === 'kicker') {
+    // `costs.first()` is the live cost. A second entry is not index 2.
+    const costs = Array.isArray(record.costs) ? record.costs : [];
+    if (costs.length) {
+      options = [payOption(0, costs[0]), { index: 1, kind: 'decline', label: null, mana: null }];
+    }
+  } else if (shape === 'choice') {
+    const costs = Array.isArray(payload) ? payload : [];
+    options = costs.map((cost, index) => payOption(index, cost));
+  } else if (shape === 'required') {
+    options = [payOption(0, payload)];
+  }
+  const originRaw = data.origin;
+  const origin: OptionalCostOriginName =
+    originRaw === undefined || originRaw === null
+      ? 'other'
+      : OPTIONAL_COST_ORIGINS[taggedName(originRaw)] ?? 'unknown';
+  const giftRaw = data.gift_kind;
+  const giftKind: GiftKindName | null =
+    giftRaw === undefined || giftRaw === null
+      ? null
+      : GIFT_KINDS[taggedName(giftRaw)] ?? 'unknown';
+  const pending = (data.pending_cast ?? {}) as { object_id?: unknown; alternative_cost_election?: unknown };
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    shape,
+    origin,
+    repeatable: record.repeatable === true,
+    timesKicked: typeof data.times_kicked === 'number' && Number.isFinite(data.times_kicked) ? data.times_kicked : 0,
+    giftKind,
+    alternativeOffered: taggedName(pending.alternative_cost_election) === 'Offered',
+    spellId: typeof pending.object_id === 'number' ? (pending.object_id as ObjectId) : null,
+    options
+  };
+}
+/** CR 601.2b: one published index. The same envelope answers a Defiler prompt. */
+export function decideOptionalCostAction(index: number): GameAction {
+  return { type: 'DecideOptionalCost', data: { index } };
+}
+
+/**
+ * CR 601.2b: `WaitingFor::DefilerPayment`. A matching Defiler lets the caster
+ * pay life to reduce the mana cost of a colored permanent spell. The price is
+ * the engine's: `life_cost` and `mana_reduction` are already locked, and
+ * `reach` says whether an unmatched colored unit spills into generic mana
+ * (CR 118.7b) or is lost (the Defiler cycle's "only the amount of [color]
+ * mana you pay").
+ *
+ * The answer is still `DecideOptionalCost { index }`, but the index is **not**
+ * `optional_cost_options`. The casting dispatch maps `index == 0` to pay and
+ * anything else is not this window's decline: the candidate list is exactly
+ * 0 (pay) and 1 (decline). Insufficient life is the engine's refusal, not a
+ * button this table may switch off.
+ *
+ * `reach` is omitted on the wire when it is the default `SpillsToGeneric`.
+ * A missing field is that default, not "colored only" — a real Defiler
+ * publishes `ColoredManaOnly` and a guess here would apply the wrong rule.
+ *
+ * `CancelCast` is legal, same as `OptionalCostChoice` (CR 601.2i).
+ */
+export type DefilerReachName = 'spill' | 'colored' | 'unknown';
+export type DefilerPaymentPrompt = {
+  player: PlayerId;
+  /** `null` when the engine did not publish a number. Not zero, and not 2. */
+  lifeCost: number | null;
+  /** The reduction object, or `null` when it was not published. */
+  manaReduction: unknown | null;
+  reach: DefilerReachName;
+  spellId: ObjectId | null;
+};
+export function defilerPaymentPrompt(snapshot: EngineSnapshot | null): DefilerPaymentPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'DefilerPayment') return null;
+  const data = waiting.data ?? {};
+  const reachRaw = data.reach;
+  const reachName = reachRaw === undefined || reachRaw === null ? 'SpillsToGeneric' : taggedName(reachRaw);
+  const reach: DefilerReachName =
+    reachName === 'SpillsToGeneric' ? 'spill'
+    : reachName === 'ColoredManaOnly' ? 'colored'
+    : 'unknown';
+  const pending = (data.pending_cast ?? {}) as { object_id?: unknown };
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    lifeCost: typeof data.life_cost === 'number' && Number.isFinite(data.life_cost) ? data.life_cost : null,
+    manaReduction: data.mana_reduction === undefined ? null : data.mana_reduction,
+    reach,
+    spellId: typeof pending.object_id === 'number' ? (pending.object_id as ObjectId) : null
+  };
+}
+
+/**
  * CR 508.1g + CR 701.43d: as attackers are declared, the active player may pay
  * the optional «exert this creature as it attacks» cost, one creature at a time.
  * `attacker` is the creature being decided and `remaining` is the rest of the
