@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, payCostPrompt as readPayCost, payCostAction, comparatorHolds, phyrexianPaymentPrompt as readPhyrexian, phyrexianChoicesAction, combatTaxPrompt as readCombatTax, payCombatTaxAction, optionalCostPrompt as readOptionalCost, decideOptionalCostAction, defilerPaymentPrompt as readDefiler, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, payCostPrompt as readPayCost, payCostAction, comparatorHolds, phyrexianPaymentPrompt as readPhyrexian, phyrexianChoicesAction, combatTaxPrompt as readCombatTax, payCombatTaxAction, optionalCostPrompt as readOptionalCost, decideOptionalCostAction, defilerPaymentPrompt as readDefiler, zoneChoicePrompt as readZoneChoice, zoneChoiceReady as isZoneChoiceReady, modalFacePrompt as readModalFace, modalFaceOffers, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -212,6 +212,7 @@ class GameSession {
     this.modeEntry = null;
     this.searched = [];
     this.dug = [];
+    this.zonePick = [];
     this.revealPick = null;
     this.pairPick = null;
     this.hostPick = null;
@@ -920,6 +921,50 @@ class GameSession {
   cancelDefiler() {
     if (!this.defilerPrompt) return;
     void this.dispatch(cancelCastAction());
+  }
+
+  /**
+   * CR 608.2d: the tracked-set pick. The session refuses an id the prompt did
+   * not publish, and a hidden `0` is not a card.
+   */
+  get zoneChoicePrompt() {
+    return readZoneChoice(this.snapshot);
+  }
+  zonePick = $state<ObjectId[]>([]);
+  get zoneChoiceReady() {
+    const prompt = this.zoneChoicePrompt;
+    return prompt ? isZoneChoiceReady(prompt, this.zonePick, this.snapshot?.state.objects ?? {}) : false;
+  }
+  toggleZoneChoice(id: ObjectId) {
+    const prompt = this.zoneChoicePrompt;
+    if (!prompt || prompt.count === null || id === 0) return;
+    const next = togglePick(prompt.cards.filter((card) => card !== 0), this.zonePick, id, prompt.count);
+    if (next !== this.zonePick) this.zonePick = next;
+  }
+  confirmZoneChoice() {
+    if (!this.zoneChoicePrompt || !this.zoneChoiceReady) return;
+    const cards = [...this.zonePick];
+    this.zonePick = [];
+    void this.dispatch(selectCardsAction(cards));
+  }
+
+  /**
+   * CR 712.12: the face buttons are the published actions. A rebuilt
+   * `ChooseModalFace` is not dispatched, and cancel only when `CancelCast`
+   * is itself legal.
+   */
+  get modalFacePrompt() {
+    return readModalFace(this.snapshot);
+  }
+  answerModalFace(action: GameAction) {
+    const published = modalFaceOffers(this.snapshot?.legal.actions ?? []);
+    if (action !== published.front && action !== published.back) return;
+    void this.dispatch(action);
+  }
+  cancelModalFace() {
+    const cancel = modalFaceOffers(this.snapshot?.legal.actions ?? []).cancel;
+    if (!cancel) return;
+    void this.dispatch(cancel);
   }
 
   /** CR 115.7: repointing a spell (or ability) that is already on the stack. */
@@ -1783,7 +1828,7 @@ class GameSession {
     const start = performance.now();
     if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
     if (this.snapshot?.revision !== reply.revision) {
-      this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = [];
+      this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = []; this.zonePick = [];
       this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.revealPicks = []; this.pairPick = null; this.untapSubsetPick = []; this.payCostPick = []; this.phyrexianPick = [];
       this.scryKeep = [];
       this.tapPick = [];

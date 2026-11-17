@@ -1711,6 +1711,116 @@ test('el descuento ajeno, con el alcance omitido, se ve y no se toca', async ({ 
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('elegir de una zona pide exactamente una y no deja confirmar antes', async ({ page }) => {
+  await page.goto('/ux?scene=zoneChoice');
+  const block = page.locator('[data-zone-choice]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-zone-choice-count', '1');
+  await expect(block).toHaveAttribute('data-zone-choice-up-to', 'false');
+  await expect(block).toHaveAttribute('data-zone-choice-constraint', 'none');
+  await expect(block.locator('strong')).toHaveText('Elegir cartas · Test Spell');
+  await expect(block.locator('[data-zone-choice-rule]')).toContainText('exactamente 1');
+  await expect(block.locator('[data-zone-choice-confirm]')).toBeDisabled();
+  await block.locator('[data-zone-choice-card="396"]').click();
+  await expect(block.locator('[data-zone-choice-card="396"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(block.locator('[data-zone-choice-confirm]')).toBeEnabled();
+  await expect(block.locator('[data-zone-choice-confirm]')).toHaveText('Confirmar (1/1)');
+  await expect(block.locator('[data-zone-choice-other]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('los tipos distintos apagan el confirmar cuando la asignación no cabe', async ({ page }) => {
+  await page.goto('/ux?scene=zoneChoiceTypes');
+  const block = page.locator('[data-zone-choice]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-zone-choice-up-to', 'true');
+  await expect(block).toHaveAttribute('data-zone-choice-constraint', 'distinct-types');
+  await expect(block).toHaveAttribute('data-zone-choice-role', 'produce');
+  await expect(block.locator('[data-zone-choice-reciprocal]')).toContainText('publica el conjunto');
+  await expect(block.locator('[data-zone-choice-confirm]')).toHaveText('No elegir ninguna');
+  await expect(block.locator('[data-zone-choice-confirm]')).toBeEnabled();
+  await block.locator('[data-zone-choice-card="353"]').click();
+  await block.locator('[data-zone-choice-card="396"]').click();
+  await expect(block.locator('[data-zone-choice-confirm]')).toBeDisabled();
+  await block.locator('[data-zone-choice-card="396"]').click();
+  await block.locator('[data-zone-choice-card="341"]').click();
+  await expect(block.locator('[data-zone-choice-confirm]')).toBeEnabled();
+  await expect(block.locator('[data-zone-choice-confirm]')).toHaveText('Confirmar (2/2)');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la zona ajena se ve redactada y no se puede tocar', async ({ page }) => {
+  await page.goto('/ux?scene=zoneChoiceAway');
+  const block = page.locator('[data-zone-choice]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-zone-choice-hidden', '3');
+  await expect(block).toHaveAttribute('data-zone-choice-cards', '3');
+  await expect(block.locator('[data-zone-choice-hidden-slot]')).toHaveCount(3);
+  await expect(block.locator('[data-zone-choice-other]')).toContainText('Jugador 2');
+  await expect(block.locator('[data-zone-choice-other]')).toContainText('CR 400.2');
+  await expect(block.locator('[data-zone-choice-card]')).toHaveCount(0);
+  await expect(block.locator('[data-zone-choice-confirm]')).toHaveCount(0);
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('elegir una cara sólo ofrece las acciones que publicó el motor', async ({ page }) => {
+  await page.goto('/ux?scene=modalFace');
+  const block = page.locator('[data-modal-face]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Elige una cara');
+  await expect(block.locator('[data-modal-face-rule]')).toHaveText('Elige qué cara jugar o lanzar.');
+  await expect(block.locator('[data-modal-face-front]')).toHaveAttribute('data-modal-face-front', 'false');
+  await expect(block.locator('[data-modal-face-front]')).toContainText('Lanzar Valki, God of Lies');
+  await expect(block.locator('[data-modal-face-front]')).toContainText('Frontal');
+  await expect(block.locator('[data-modal-face-back]')).toHaveAttribute('data-modal-face-back', 'true');
+  await expect(block.locator('[data-modal-face-back]')).toContainText('Lanzar Tibalt, Cosmic Impostor');
+  await expect(block.locator('[data-modal-face-back]')).toContainText('Trasera');
+  await expect(block.locator('[data-modal-face-cancel]')).toHaveCount(0);
+  await expect(block.locator('[data-modal-face-other]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una resolución ofrece la cara publicada, el coste añadido y cancelar', async ({ page }) => {
+  await page.goto('/ux?scene=modalFaceOne');
+  const block = page.locator('[data-modal-face]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-modal-face-payment', 'Manual');
+  await expect(block.locator('[data-modal-face-front]')).toHaveCount(0);
+  await expect(block.locator('[data-modal-face-back]')).toContainText('Lanzar Tibalt, Cosmic Impostor');
+  await expect(block.locator('[data-modal-face-cost]')).toContainText('añade este maná');
+  await expect(block.locator('[data-modal-face-cost] .pip.generic')).toHaveText('2');
+  await expect(block.locator('[data-modal-face-mode]')).toContainText('Manual');
+  await expect(block.locator('[data-modal-face-cancel]')).toHaveText('Cancelar');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la cara ajena se nombra como jugar y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=modalFaceAway');
+  const block = page.locator('[data-modal-face]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-modal-face-faces]')).toContainText('Jugar Barkchannel Pathway');
+  await expect(block.locator('[data-modal-face-faces]')).toContainText('Jugar Tidechannel Pathway');
+  await expect(block.locator('[data-modal-face-other]')).toContainText('Jugador 2');
+  await expect(block.locator('[data-modal-face-front]')).toHaveCount(0);
+  await expect(block.locator('[data-modal-face-back]')).toHaveCount(0);
+  await expect(block.locator('[data-modal-face-cancel]')).toHaveCount(0);
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

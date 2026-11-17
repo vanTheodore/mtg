@@ -2887,3 +2887,56 @@ ya pagado, el Choice sin rechazo, la alternativa `{0}`/`{6}`, el regalo que se
 promete, el coste ajeno sin botones, el Defiler de sólo color y el alcance
 omitido del rival— (94 → 102 en `ux-lab`) y ocho escenas más en la prueba de
 temas (74 → 82 escenas, 164 jpg, presupuesto de 720 s).
+
+## Elegir de una zona y elegir una cara no se reconstruyen (quincuagésima octava pasada, 7 nov 2026)
+
+`ChooseFromZoneChoice` y `ModalFaceChoice` ya tienen modal en el cliente React
+de Phase (`CardChoiceModal` / `ModalFaceModal`). Mesa no copia ese cromo. Copia
+la decisión: qué botón existe, qué sobre se envía y qué no se comprueba aquí.
+
+**`ChooseFromZoneChoice` (CR 608.2d).** El conjunto ya viene filtrado. La
+respuesta es `SelectCards { cards }`, el mismo sobre que una búsqueda. La puerta
+de confirmar es la del modal de Phase, no una segunda lectura de la carta:
+
+- sin `up_to`, exactamente `count`; con `up_to`, de cero a `count`. Cero es una
+  jugada, y el botón lo dice.
+- `DistinctCardTypes` exige una asignación inyectiva a las categorías publicadas
+  (`canAssignDistinctCardTypes`). Un instantáneo no cabe en «artefacto o
+  criatura» aunque quepan dos cartas. Quitar una carta del botón renumeraría
+  nada: aquí se eligen ids, no índices, pero un id que el cable no publicó no se
+  puede pulsar.
+- `TotalManaValue` se nombra (`≤ 6`) y **no** se comprueba aquí. Lo rechaza el
+  motor al confirmar, igual que el modal de Phase.
+- una restricción desconocida no se convierte en un filtro. Un `count` ausente
+  no se lee como 1: no hay confirmación.
+- un `0` es la redacción de una zona oculta (CR 400.2), no una carta. El asiento
+  que no elige ve cuántas se ocultaron y no recibe botón. `reciprocal_role` se
+  nombra (`Produce` / `Consume`) y no cambia el sobre.
+
+**`ModalFaceChoice` (CR 712.12 / CR 712.11b).** Phase no reconstruye la acción
+desde la carta. Un botón de cara existe sólo si `legal.actions` ya trae ese
+`ChooseModalFace { back_face }`. Cancelar existe sólo si `CancelCast` está
+publicado: un lanzamiento ordinario no se cancela desde aquí; una elección de
+resolución sí, y puede ofrecer una sola cara. Una tierra se juega; un hechizo
+se lanza. El coste añadido de resolución se imprime, no se suma. El otro asiento
+ve las caras y no recibe botón.
+
+Laboratorio: `/ux?scene=zoneChoice` (exactamente una de Shock, Giant Growth y
+Grizzly Bears), `zoneChoiceTypes` (hasta dos, artefacto o criatura, la mitad que
+publica el conjunto), `zoneChoiceAway` (tres ceros, sin botones), `modalFace`
+(Valki // Tibalt, las dos caras, sin cancelar), `modalFaceOne` (sólo Tibalt,
+`{2}` añadido, pago `Manual`, cancelar) y `modalFaceAway` (las dos pathways, se
+juegan, sin botones). Capturas `ux-elegir-zona-1440.jpg`,
+`ux-elegir-tipos-1440.jpg`, `ux-zona-ajena-1440.jpg`, `ux-elegir-cara-1440.jpg`,
+`ux-una-cara-1440.jpg` y `ux-cara-ajena-1440.jpg`, más sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **653** (7 nuevas:
+4 en `zone-choice.test.ts` —la cuenta exacta y el cero que no es carta, la
+asignación de tipos, el tope de maná que no se cierra aquí, el count ausente—
+y 3 en `modal-face.test.ts` —las dos caras publicadas, la cara única con cancelar
+y coste añadido, y un `back_face` que no es booleano—); el recuento vigilado pasa
+a **76** entradas en `REPRESENTED` (74 → 76). El motor no se tocó: `bun run
+engine:verify` sigue en verde con **497** ficheros y SHA-256
+`f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.

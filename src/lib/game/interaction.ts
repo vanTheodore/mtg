@@ -2564,6 +2564,181 @@ export function defilerPaymentPrompt(snapshot: EngineSnapshot | null): DefilerPa
 }
 
 /**
+ * CR 608.2d: `WaitingFor::ChooseFromZoneChoice`. The player picks from a
+ * tracked set the engine already filtered. The answer is `SelectCards`, the
+ * same envelope as a search, and the confirm gate is the one Phase's
+ * `ChooseFromZoneModal` uses:
+ *
+ *   - `up_to` false: exactly `count`. `up_to` true: `0..=count`.
+ *   - `DistinctCardTypes`: the chosen cards must admit an injective assignment
+ *     onto the published categories (`canAssignDistinctCardTypes`).
+ *   - `TotalManaValue`: the engine checks the sum on submission. This table
+ *     does not.
+ *
+ * A card id of `0` is the visibility redaction of a hidden zone, not a card
+ * to click. Dropping a real id would be a different set; a zero is not real.
+ */
+export type ZoneConstraint =
+  | { kind: 'none' }
+  | { kind: 'distinct-types'; categories: string[] }
+  | { kind: 'total-mana'; comparator: string; value: number }
+  | { kind: 'unknown' };
+export type ZoneReciprocal = 'produce' | 'consume' | 'unknown' | null;
+export type ZoneChoicePrompt = {
+  player: PlayerId;
+  /** Published ids, including `0` placeholders. Order is the engine's. */
+  cards: ObjectId[];
+  count: number | null;
+  upTo: boolean;
+  constraint: ZoneConstraint;
+  sourceId: ObjectId | null;
+  reciprocal: ZoneReciprocal;
+};
+function zoneConstraint(raw: unknown): ZoneConstraint {
+  if (raw === undefined || raw === null) return { kind: 'none' };
+  if (!raw || typeof raw !== 'object') return { kind: 'unknown' };
+  const body = raw as { type?: unknown; categories?: unknown; comparator?: unknown; value?: unknown };
+  if (body.type === 'DistinctCardTypes') {
+    const categories = Array.isArray(body.categories)
+      ? body.categories.filter((entry): entry is string => typeof entry === 'string')
+      : [];
+    return { kind: 'distinct-types', categories };
+  }
+  if (body.type === 'TotalManaValue' && typeof body.comparator === 'string' && typeof body.value === 'number') {
+    return { kind: 'total-mana', comparator: body.comparator, value: body.value };
+  }
+  return { kind: 'unknown' };
+}
+function zoneReciprocal(raw: unknown): ZoneReciprocal {
+  if (raw === undefined || raw === null) return null;
+  const name = taggedName(raw);
+  if (name === 'Produce') return 'produce';
+  if (name === 'Consume') return 'consume';
+  return 'unknown';
+}
+export function zoneChoicePrompt(snapshot: EngineSnapshot | null): ZoneChoicePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ChooseFromZoneChoice') return null;
+  const data = waiting.data ?? {};
+  const cards = Array.isArray(data.cards)
+    ? data.cards.filter((id): id is ObjectId => typeof id === 'number')
+    : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    cards,
+    count: typeof data.count === 'number' && Number.isFinite(data.count) ? data.count : null,
+    upTo: data.up_to === true,
+    constraint: zoneConstraint(data.constraint),
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+    reciprocal: zoneReciprocal(data.reciprocal_role)
+  };
+}
+/**
+ * Phase's confirm gate for `DistinctCardTypes`: an injective assignment of
+ * the chosen cards onto the published categories. An empty pick is valid
+ * here; the count gate is separate. A card this snapshot does not carry
+ * cannot be assigned.
+ */
+export function canAssignDistinctCardTypes(
+  objects: Record<string, { card_types?: { core_types?: string[] } } | undefined>,
+  selectedIds: ObjectId[],
+  categories: string[]
+): boolean {
+  if (selectedIds.length === 0) return true;
+  if (selectedIds.length > categories.length) return false;
+  const cardOptions = selectedIds.map((id) => {
+    const types = objects[String(id)]?.card_types?.core_types;
+    if (!types) return null;
+    return categories
+      .map((category, index) => (types.includes(category) ? index : -1))
+      .filter((index) => index >= 0);
+  });
+  if (cardOptions.some((options) => !options || options.length === 0)) return false;
+  const sorted = [...cardOptions]
+    .filter((options): options is number[] => Array.isArray(options))
+    .sort((a, b) => a.length - b.length);
+  const used = new Array<boolean>(categories.length).fill(false);
+  const assign = (index: number): boolean => {
+    if (index === sorted.length) return true;
+    for (const categoryIndex of sorted[index]) {
+      if (used[categoryIndex]) continue;
+      used[categoryIndex] = true;
+      if (assign(index + 1)) return true;
+      used[categoryIndex] = false;
+    }
+    return false;
+  };
+  return assign(0);
+}
+/** Whether Phase's modal would enable confirm for this pick. */
+export function zoneChoiceReady(
+  prompt: ZoneChoicePrompt,
+  selected: ObjectId[],
+  objects: Record<string, { card_types?: { core_types?: string[] } } | undefined>
+): boolean {
+  if (prompt.count === null) return false;
+  if (selected.some((id) => id === 0 || !prompt.cards.includes(id))) return false;
+  if (new Set(selected).size !== selected.length) return false;
+  const countValid = prompt.upTo ? selected.length <= prompt.count : selected.length === prompt.count;
+  if (!countValid) return false;
+  if (prompt.constraint.kind === 'distinct-types') {
+    return canAssignDistinctCardTypes(objects, selected, prompt.constraint.categories);
+  }
+  return true;
+}
+
+/**
+ * CR 712.12 / CR 712.11b: `WaitingFor::ModalFaceChoice`. The player picks which
+ * face to play or cast. Phase's modal does not rebuild the action: a face
+ * button exists only when `legal.actions` already contains that
+ * `ChooseModalFace`, and cancel exists only when `CancelCast` does. A
+ * resolution-owned choice may offer one side. An ordinary cast offers both
+ * faces that are still legal, and no cancel.
+ */
+export type ModalFacePrompt = {
+  player: PlayerId;
+  objectId: ObjectId | null;
+  cardId: number | null;
+  /** `Auto` when the field is absent: that is serde's default, not a guess. */
+  paymentMode: string;
+  /** Mana added to the elected face, or `null` when the engine published none. */
+  additionalCost: unknown | null;
+};
+export function modalFacePrompt(snapshot: EngineSnapshot | null): ModalFacePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ModalFaceChoice') return null;
+  const data = waiting.data ?? {};
+  const mode = data.payment_mode;
+  const paymentMode = typeof mode === 'string'
+    ? mode
+    : mode && typeof mode === 'object' && typeof (mode as { type?: unknown }).type === 'string'
+      ? (mode as { type: string }).type
+      : 'Auto';
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: typeof data.object_id === 'number' ? (data.object_id as ObjectId) : null,
+    cardId: typeof data.card_id === 'number' ? data.card_id : null,
+    paymentMode,
+    additionalCost: data.resolution_additional_cost === undefined ? null : data.resolution_additional_cost
+  };
+}
+export type ModalFaceOffers = {
+  front: GameAction | null;
+  back: GameAction | null;
+  cancel: GameAction | null;
+};
+/** The published actions, not rebuilt ones. A missing `back_face` is not a face. */
+export function modalFaceOffers(actions: GameAction[]): ModalFaceOffers {
+  const faces = actions.filter((action) => action.type === 'ChooseModalFace');
+  const face = (back: boolean) => faces.find((action) => action.data?.back_face === back) ?? null;
+  return {
+    front: face(false),
+    back: face(true),
+    cancel: actions.find((action) => action.type === 'CancelCast') ?? null
+  };
+}
+
+/**
  * CR 508.1g + CR 701.43d: as attackers are declared, the active player may pay
  * the optional «exert this creature as it attacks» cost, one creature at a time.
  * `attacker` is the creature being decided and `remaining` is the rest of the

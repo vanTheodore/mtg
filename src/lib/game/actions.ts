@@ -16,7 +16,8 @@ const LABELS: Record<string, string> = {
   ChooseReplacement: 'Elegir efecto de reemplazo',
   PayManaAbilityMana: 'Pagar maná',
   Equip: 'Equipar',
-  Foretell: 'Predecir'
+  Foretell: 'Predecir',
+  ChooseModalFace: 'Elegir cara'
 };
 
 function actionObjectId(action: GameAction): number | undefined {
@@ -177,6 +178,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'CombatTaxPayment': return 'Un impuesto de combate ya fijado por el motor: pagas el total o la declaración se descarta entera.';
     case 'OptionalCostChoice': return 'Un coste adicional del lanzamiento: pagas lo que publica el motor, o eliges una alternativa si hay que pagar exactamente una.';
     case 'DefilerPayment': return 'Puedes pagar vidas para reducir el coste de maná. El motor ya fijó las vidas y el descuento.';
+    case 'ChooseFromZoneChoice': return 'Elige cartas del conjunto que publica el motor: ni una más, ni un tipo que no quepa.';
+    case 'ModalFaceChoice': return 'Elige qué cara jugar o lanzar. Sólo aparecen las caras que el motor todavía ofrece.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

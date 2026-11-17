@@ -93,6 +93,12 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `optionalCostAway` | `OptionalCostChoice` (coste ajeno) | [claro](coste-ajeno-claro.jpg) | [oscuro](coste-ajeno-oscuro.jpg) |
 | `defiler` | `DefilerPayment` (sólo color) | [claro](defiler-claro.jpg) | [oscuro](defiler-oscuro.jpg) |
 | `defilerAway` | `DefilerPayment` (alcance omitido, ajeno) | [claro](defiler-ajeno-claro.jpg) | [oscuro](defiler-ajeno-oscuro.jpg) |
+| `zoneChoice` | `ChooseFromZoneChoice` (exactamente una) | [claro](elegir-zona-claro.jpg) | [oscuro](elegir-zona-oscuro.jpg) |
+| `zoneChoiceTypes` | `ChooseFromZoneChoice` (tipos distintos) | [claro](elegir-tipos-claro.jpg) | [oscuro](elegir-tipos-oscuro.jpg) |
+| `zoneChoiceAway` | `ChooseFromZoneChoice` (conjunto redactado) | [claro](zona-ajena-claro.jpg) | [oscuro](zona-ajena-oscuro.jpg) |
+| `modalFace` | `ModalFaceChoice` (las dos caras) | [claro](elegir-cara-claro.jpg) | [oscuro](elegir-cara-oscuro.jpg) |
+| `modalFaceOne` | `ModalFaceChoice` (una cara y cancelar) | [claro](una-cara-claro.jpg) | [oscuro](una-cara-oscuro.jpg) |
+| `modalFaceAway` | `ModalFaceChoice` (cara ajena) | [claro](cara-ajena-claro.jpg) | [oscuro](cara-ajena-oscuro.jpg) |
 | `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
