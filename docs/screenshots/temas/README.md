@@ -83,6 +83,8 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `payCostHidden` | `PayCost` (candidatos redactados) | [claro](coste-sin-candidatos-claro.jpg) | [oscuro](coste-sin-candidatos-oscuro.jpg) |
 | `payCostAggregate` | `PayCost` (girar por fuerza) | [claro](coste-por-fuerza-claro.jpg) | [oscuro](coste-por-fuerza-oscuro.jpg) |
 | `phyrexian` | `PhyrexianPayment` | [claro](mana-frigio-claro.jpg) | [oscuro](mana-frigio-oscuro.jpg) |
+| `combatTax` | `CombatTaxPayment` (impuesto de ataque) | [claro](impuesto-ataque-claro.jpg) | [oscuro](impuesto-ataque-oscuro.jpg) |
+| `combatTaxBlock` | `CombatTaxPayment` (impuesto de bloqueo) | [claro](impuesto-bloqueo-claro.jpg) | [oscuro](impuesto-bloqueo-oscuro.jpg) |
 | `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:

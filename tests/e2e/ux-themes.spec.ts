@@ -103,6 +103,8 @@ const SCENES = [
   { scene: 'payCostHidden', slug: 'coste-sin-candidatos', block: '[data-pay-cost]' },
   { scene: 'payCostAggregate', slug: 'coste-por-fuerza', block: '[data-pay-cost]' },
   { scene: 'phyrexian', slug: 'mana-frigio', block: '[data-phyrexian]' },
+  { scene: 'combatTax', slug: 'impuesto-ataque', block: '[data-combat-tax]' },
+  { scene: 'combatTaxBlock', slug: 'impuesto-bloqueo', block: '[data-combat-tax]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

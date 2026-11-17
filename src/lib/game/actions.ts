@@ -170,6 +170,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'EnlistChoice': return 'Puedes girar una criatura para alistar al atacante, o rechazarlo.';
     case 'PayCost': return 'Un coste se paga eligiendo objetos de los que publica el motor.';
     case 'PhyrexianPayment': return 'El maná frigio se paga con maná de su color o con 2 vidas por símbolo.';
+    case 'CombatTaxPayment': return 'Un impuesto de combate ya fijado por el motor: pagas el total o la declaración se descarta entera.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

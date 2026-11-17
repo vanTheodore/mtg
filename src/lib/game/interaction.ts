@@ -2126,6 +2126,139 @@ export function phyrexianChoicesAction(choices: ('mana' | 'life')[]): GameAction
 }
 
 /**
+ * CR 508.1d + CR 508.1h + CR 509.1c + CR 509.1d: a combat declaration the engine
+ * already validated and priced, paused before anything is tapped or committed.
+ *
+ * `context` says which side of combat owes the money — `Attacking` (CR 508.1h:
+ * Ghostly Prison, Propaganda, Sphere of Safety, Norn's Annex) or `Blocking`
+ * (CR 509.1d: the defending player determines the total). It is internally
+ * tagged (`#[serde(tag = "type")]`), so the wire form is `{ type: "Attacking" }`,
+ * not a bare string. `total_cost` is the locked-in aggregate and `per_creature`
+ * the breakdown the engine computed for this exact proposal: the block prints
+ * both and never re-prices them, because a second price would be a second
+ * opinion about a number the engine already froze (CR 508.1i–j, CR 509.1e–f).
+ *
+ * `pending` is the paused declaration itself, snapshotted as incarnation
+ * references (CR 508.1k + CR 400.7): a creature that left and re-entered during
+ * the pause is a new object and is dropped on accept, and a band or a block
+ * pair is part of what the accept commits. The answer is a bare boolean —
+ * `PayCombatTax { accept }` — so the block names the creatures for the player's
+ * benefit and never for the engine's.
+ */
+export type CombatTaxContextName = 'attacking' | 'blocking' | 'unknown';
+export type CombatTaxCreatureView = {
+  /** The taxed creature, by the id the engine published. */
+  id: ObjectId;
+  /** Its own share of the locked-in total, as the engine computed it. */
+  cost: unknown;
+  /** CR 508.1d: the defender this attacker was declared against, when published. */
+  target: AttackTarget | null;
+};
+export type CombatTaxPendingView =
+  | { kind: 'attack'; attackers: CombatTaxCreatureView[]; bands: ObjectId[][] }
+  | { kind: 'block'; pairs: [ObjectId, ObjectId][] }
+  | { kind: 'unknown' };
+export type CombatTaxPrompt = {
+  player: PlayerId;
+  context: CombatTaxContextName;
+  /** The locked-in aggregate, exactly as the engine published it. */
+  totalCost: unknown;
+  /** The per-creature breakdown, in the engine's order. */
+  perCreature: CombatTaxCreatureView[];
+  pending: CombatTaxPendingView;
+};
+const COMBAT_TAX_CONTEXTS: Record<string, CombatTaxContextName> = {
+  Attacking: 'attacking',
+  Blocking: 'blocking'
+};
+/**
+ * `CombatTaxContext` is a unit enum with `#[serde(tag = "type")]`, so the engine
+ * writes `{ type: "Attacking" }`. A bare discriminant is accepted too: a
+ * flattened projection must not become `unknown` and invent a third side of
+ * combat. Anything else stays `unknown` and the block says so.
+ */
+const taggedName = (value: unknown): string =>
+  typeof value === 'string'
+    ? value
+    : value && typeof value === 'object' && typeof (value as { type?: unknown }).type === 'string'
+      ? (value as { type: string }).type
+      : '';
+const incarnationId = (value: unknown): ObjectId | null =>
+  typeof value === 'number'
+    ? (value as ObjectId)
+    : value && typeof value === 'object' && typeof (value as { object_id?: unknown }).object_id === 'number'
+      ? ((value as { object_id: number }).object_id as ObjectId)
+      : null;
+const attackTargetOf = (value: unknown): AttackTarget | null => {
+  if (!value || typeof value !== 'object') return null;
+  const target = value as { type?: unknown; data?: unknown };
+  if (target.type === 'Player' && typeof target.data === 'number') {
+    return { type: 'Player', data: target.data as PlayerId };
+  }
+  if ((target.type === 'Planeswalker' || target.type === 'Battle') && typeof target.data === 'number') {
+    return { type: target.type, data: target.data as ObjectId };
+  }
+  return null;
+};
+export function combatTaxPrompt(snapshot: EngineSnapshot | null): CombatTaxPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'CombatTaxPayment') return null;
+  const data = waiting.data ?? {};
+  const rawBreakdown = Array.isArray(data.per_creature) ? (data.per_creature as unknown[]) : [];
+  const perCreature: CombatTaxCreatureView[] = rawBreakdown.flatMap((entry) => {
+    if (!Array.isArray(entry)) return [];
+    const id = incarnationId(entry[0]);
+    if (id === null) return [];
+    return [{ id, cost: entry[1] ?? null, target: null }];
+  });
+  const rawPending = (data.pending ?? {}) as { type?: unknown; data?: unknown };
+  const pendingData = (rawPending.data ?? {}) as Record<string, unknown>;
+  let pending: CombatTaxPendingView = { kind: 'unknown' };
+  if (rawPending.type === 'Attack') {
+    const attacks = Array.isArray(pendingData.attacks) ? (pendingData.attacks as unknown[]) : [];
+    const attackers: CombatTaxCreatureView[] = attacks.flatMap((entry) => {
+      if (!Array.isArray(entry)) return [];
+      const id = incarnationId(entry[0]);
+      if (id === null) return [];
+      return [{ id, cost: null, target: attackTargetOf(entry[1]) }];
+    });
+    const bands = Array.isArray(pendingData.bands)
+      ? (pendingData.bands as unknown[]).map((band) =>
+          Array.isArray(band)
+            ? (band as unknown[]).flatMap((member) => {
+                const id = incarnationId(member);
+                return id === null ? [] : [id];
+              })
+            : []
+        )
+      : [];
+    pending = { kind: 'attack', attackers, bands };
+  } else if (rawPending.type === 'Block') {
+    const assignments = Array.isArray(pendingData.assignments)
+      ? (pendingData.assignments as unknown[])
+      : [];
+    const pairs: [ObjectId, ObjectId][] = assignments.flatMap((entry) => {
+      if (!Array.isArray(entry)) return [];
+      const blocker = incarnationId(entry[0]);
+      const attacker = incarnationId(entry[1]);
+      return blocker === null || attacker === null ? [] : [[blocker, attacker]];
+    });
+    pending = { kind: 'block', pairs };
+  }
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    context: COMBAT_TAX_CONTEXTS[taggedName(data.context)] ?? 'unknown',
+    totalCost: data.total_cost ?? null,
+    perCreature,
+    pending
+  };
+}
+/** CR 508.1d: pay the locked-in total and commit the declaration, or decline it whole. */
+export function payCombatTaxAction(accept: boolean): GameAction {
+  return { type: 'PayCombatTax', data: { accept } };
+}
+
+/**
  * CR 508.1g + CR 701.43d: as attackers are declared, the active player may pay
  * the optional «exert this creature as it attacks» cost, one creature at a time.
  * `attacker` is the creature being decided and `remaining` is the rest of the

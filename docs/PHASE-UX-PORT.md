@@ -2729,3 +2729,62 @@ cuatro pruebas nuevas —el sacrificio con su contrato y el techo que cierra la 
 coste ajeno con marcadores y sin botones, el agregado que sólo enciende el botón al llegar a 4, y
 el frigio símbolo a símbolo con las opciones imposibles apagadas y el vector incompleto sin
 confirmar— y cuatro escenas más en la prueba de temas (68 → 72 escenas, 144 jpg).
+
+## El impuesto de combate ya está fijado: se paga entero o se descarta entero (quincuagésima sexta pasada, 7 nov 2026)
+
+`CombatTaxPayment` no es un coste que el jugador componga. Ghostly Prison, Propaganda, Sphere of
+Safety, Norn's Annex: la declaración ya está validada y el precio ya está congelado, y la ventana
+existe porque el motor se detuvo **antes** de girar nada y **antes** de comprometer la declaración
+(CR 508.1d + CR 508.1h en el ataque, CR 509.1c + CR 509.1d en el bloqueo). El bloque imprime ese
+precio y no lo vuelve a calcular: un segundo número sería una segunda opinión sobre una cifra que
+el motor ya fijó (CR 508.1i–j, CR 509.1e–f).
+
+**La respuesta es un booleano, y por eso no hay lista que enviar.** `PayCombatTax { accept }` no
+nombra criaturas. Aceptar paga el total bloqueado por la autoridad de maná y confirma la
+declaración en pausa; rechazar **descarta la propuesta entera** y reconstruye el prompt de ataque
+o de bloqueo, para que el jugador declare otra vez con un precio nuevo. No hay un «quito sólo
+esta». El botón de rechazar lo dice, y está vivo: rechazar es una jugada, no un callejón.
+
+**Lo que se va a comprometer se nombra, y no se reenvía.** `pending` es la declaración en pausa,
+fotografiada como referencias de encarnación (CR 508.1k + CR 400.7): una criatura que salió y
+volvió durante la pausa es otro objeto y el motor la descarta al aceptar. El bloque enseña
+atacantes y destinos, o cada par bloqueadora/atacante, y las bandas (CR 702.22c). Si dos
+permanentes se llaman igual, el controlador publicado los separa —dos *Grizzly Bears*, uno por
+lado, no son la misma criatura—. Nada de eso vuelve en el sobre.
+
+**El contexto llega etiquetado, no como palabra suelta.** `CombatTaxContext` es una unidad con
+`#[serde(tag = "type")]`, así que el cable es `{ type: "Attacking" }` o `{ type: "Blocking" }`.
+Leer la cadena `"Attacking"` y nada más dejaba la ventana en «impuesto de combate» aunque el
+motor hubiera dicho de qué lado era. Una cadena pelada se acepta por si un escritor aplana el
+discriminante; cualquier otra forma queda `unknown` y el bloque lo dice, en vez de adivinar.
+
+**`{W/P}` no puede desaparecer.** Norn's Annex cobra `PhyrexianWhite`, y `mana_value()` cuenta 1
+por símbolo. `manaText` y `manaPips` sólo conocían W/U/B/R/G/C, así que el híbrido, el híbrido
+genérico, el frigio y el frigio híbrido se caían del pip: el motor había cobrado un coste que la
+mesa pintaba vacío. Ahora el símbolo es el de `ManaCostShard::symbol()` —`{W/P}`, `{W/U}`,
+`{2/W}`, `{W/U/P}`, `{C/W}`, `{S}`, `{X}`, `{Z}`— y un *shard* que la tabla no conoce se imprime
+igual, no se esconde. El texto de la pip sigue siendo el símbolo; el lector de pantalla oye
+«blanco o 2 vidas».
+
+**El impuesto ajeno se ve y no se toca.** El precio y la declaración en pausa son públicos
+(CR 400.2). Si le toca a otro asiento, el bloque sigue en pie, dice de quién es la decisión y no
+ofrece ni un botón. La consecuencia de rechazar y el botón de rechazar no comparten selector: el
+párrafo es `data-combat-tax-consequence` y el botón, el único `data-combat-tax-decline`.
+
+Laboratorio: `/ux?scene=combatTax` (dos atacantes, `{W/P}` cada uno, total `{W/P}{W/P}`, una banda,
+un jugador y un planeswalker) y `/ux?scene=combatTaxBlock` (el Jugador 2 bloquea, coste genérico
+`{2}`, sin botones). Capturas `ux-impuesto-ataque-1440.jpg` y `ux-impuesto-bloqueo-1440.jpg`, más
+sus pares de tema.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **633** (6 nuevas en
+`game/__tests__/combat-tax.test.ts`: el ataque con su cita, su instantánea y su banda, el bloqueo
+con el par roto descartado, el contexto etiquetado frente a la cadena y a lo desconocido, la cita
+sin desglose que sigue preguntando, el booleano desnudo, y los símbolos híbridos y frigios que ya
+no se caen); el recuento vigilado pasa a **72** entradas en `REPRESENTED` (71 → 72) y la prueba de
+contabilidad incluye el nombre; `bun run engine:verify` en verde con **497** ficheros y SHA-256
+`f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`; build OK; en Chromium dos
+pruebas nuevas —el ataque con sus dos `{W/P}`, la banda y las dos respuestas, y el bloqueo ajeno
+con los dos osos separados por controlador y sin botones— (92 → 94 en `ux-lab`) y dos escenas más
+en la prueba de temas (72 → 74 escenas, 148 jpg, presupuesto de 600 s).

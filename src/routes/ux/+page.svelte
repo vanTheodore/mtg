@@ -74,10 +74,11 @@
   import EnlistChoicePrompt from '#lib/components/EnlistChoicePrompt.svelte';
   import PayCostPrompt from '#lib/components/PayCostPrompt.svelte';
   import PhyrexianPaymentPrompt from '#lib/components/PhyrexianPaymentPrompt.svelte';
+  import CombatTaxPrompt from '#lib/components/CombatTaxPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -162,6 +163,8 @@
     { value: 'payCostHidden', label: 'Pagar un coste: no lo ves' },
     { value: 'payCostAggregate', label: 'Pagar un coste: girar por fuerza' },
     { value: 'phyrexian', label: 'Maná frigio' },
+    { value: 'combatTax', label: 'Impuesto de ataque' },
+    { value: 'combatTaxBlock', label: 'Impuesto de bloqueo' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -250,6 +253,8 @@
     payCostHidden: 'PayCost · CR 400.2, candidatos redactados para el rival',
     payCostAggregate: 'PayCost · CR 208.1, girar criaturas por fuerza total',
     phyrexian: 'PhyrexianPayment · CR 107.4f, maná o 2 vidas por símbolo',
+    combatTax: 'CombatTaxPayment · CR 508.1h, impuesto de ataque fijado',
+    combatTaxBlock: 'CombatTaxPayment · CR 509.1d, impuesto de bloqueo fijado',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -1011,6 +1016,64 @@
             { shard_index: 1, color: 'Black', options: 'ManaOnly' },
             { shard_index: 2, color: 'Blue', options: 'LifeOnly' }
           ]
+        }
+      };
+    }
+    if (scene === 'combatTax' || scene === 'combatTaxBlock') {
+      // `CombatTaxPayment` (CR 508.1d + CR 508.1h + CR 509.1c + CR 509.1d): the
+      // declaration is already validated and priced, and the price is the
+      // engine's — the total and the per-creature breakdown it computed for this
+      // proposal. `context` is internally tagged (`#[serde(tag = "type")]`), so
+      // the wire form is `{ type }`, not a bare string. `pending` is the paused
+      // declaration, snapshotted as incarnation references (CR 508.1k + CR 400.7).
+      //
+      // The attack scene uses Norn's Annex's shard, `PhyrexianWhite` (`{W/P}`,
+      // mana value 1 each): a hybrid/Phyrexian cost must render, not vanish.
+      // The block scene is the generic `{2}` shape and belongs to the other
+      // seat, so the block stays visible but offers no button.
+      const generic = (amount: number) => ({ type: 'Cost', shards: [] as string[], generic: amount });
+      const phyrexian = (count: number) => ({
+        type: 'Cost',
+        shards: Array.from({ length: count }, () => 'PhyrexianWhite'),
+        generic: 0
+      });
+      if (scene === 'combatTax') {
+        return {
+          type: 'CombatTaxPayment',
+          data: {
+            player: 0,
+            context: { type: 'Attacking' },
+            total_cost: phyrexian(2),
+            per_creature: [
+              [100, phyrexian(1)],
+              [101, phyrexian(1)]
+            ],
+            pending: {
+              type: 'Attack',
+              data: {
+                attacks: [
+                  [{ object_id: 100, incarnation: 1 }, { type: 'Player', data: 1 }],
+                  [{ object_id: 101, incarnation: 1 }, { type: 'Planeswalker', data: 205 }]
+                ],
+                bands: [[{ object_id: 100, incarnation: 1 }, { object_id: 101, incarnation: 1 }]]
+              }
+            }
+          }
+        };
+      }
+      return {
+        type: 'CombatTaxPayment',
+        data: {
+          player: 1,
+          context: { type: 'Blocking' },
+          total_cost: generic(2),
+          per_creature: [[200, generic(2)]],
+          pending: {
+            type: 'Block',
+            data: {
+              assignments: [[{ object_id: 200, incarnation: 1 }, { object_id: 100, incarnation: 1 }]]
+            }
+          }
         }
       };
     }
@@ -1884,6 +1947,8 @@
           : scene === 'exert' || scene === 'enlist' ? 'DeclareAttackers'
           : scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate' || scene === 'phyrexian'
             ? 'PreCombatMain'
+          : scene === 'combatTax' ? 'DeclareAttackers'
+          : scene === 'combatTaxBlock' ? 'DeclareBlockers'
           : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
           : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
@@ -2128,6 +2193,7 @@
         {#if scene === 'enlist'}<EnlistChoicePrompt />{/if}
         {#if scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate'}<PayCostPrompt />{/if}
         {#if scene === 'phyrexian'}<PhyrexianPaymentPrompt />{/if}
+        {#if scene === 'combatTax' || scene === 'combatTaxBlock'}<CombatTaxPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

@@ -1489,6 +1489,66 @@ test('el maná frigio se responde símbolo a símbolo y sólo cierra con todos',
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('el impuesto de ataque muestra el precio fijado, la banda y las dos respuestas', async ({ page }) => {
+  await page.goto('/ux?scene=combatTax');
+  const block = page.locator('[data-combat-tax]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-combat-tax-context', 'attacking');
+  await expect(block).toHaveAttribute('data-combat-tax-creatures', '2');
+  await expect(block).toHaveAttribute('data-combat-tax-pending', 'attack');
+  await expect(block).toHaveAttribute('data-combat-tax-bands', '1');
+  await expect(block.locator('strong')).toHaveText('Impuesto de ataque');
+  // CR 508.1d + CR 508.1h: the quote is locked; declining discards the whole proposal.
+  await expect(block.locator('[data-combat-tax-rule]')).toContainText('CR 508.1d');
+  await expect(block.locator('[data-combat-tax-rule]')).toContainText('CR 508.1h');
+  // Norn's Annex publishes `{W/P}` (`PhyrexianWhite`). A missing pip would be a second price.
+  await expect(block.locator('[data-combat-tax-total] .pip.phyrexian')).toHaveText(['W/P', 'W/P']);
+  await expect(block.locator('[data-combat-tax-total] .sr-only')).toContainText('blanco o 2 vidas');
+  await expect(block.locator('.row')).toHaveCount(2);
+  await expect(block.locator('.row').first()).toContainText('Grizzly Bears');
+  await expect(block.locator('.row').nth(1)).toContainText('Savannah Lions');
+  await expect(block.locator('[data-combat-tax-pending-list]')).toContainText('Grizzly Bears → Jugador 2');
+  await expect(block.locator('[data-combat-tax-pending-list]')).toContainText('Savannah Lions → Chandra, Torch of Defiance');
+  await expect(block.locator('[data-combat-tax-pending-list]')).toContainText('1 banda');
+  await expect(block.locator('[data-combat-tax-pending-list]')).toContainText('CR 702.22c');
+  await expect(block.locator('[data-combat-tax-consequence]')).toContainText('descarta la declaración entera');
+  // The consequence and the button must not share a selector: strict mode would see two.
+  await expect(block.locator('[data-combat-tax-decline]')).toHaveCount(1);
+  await expect(block.locator('[data-combat-tax-accept]')).toHaveText('Pagar y completar la declaración');
+  await expect(block.locator('[data-combat-tax-decline]')).toHaveText('Rechazar y volver a declarar');
+  await expect(block.locator('[data-combat-tax-accept]')).toBeEnabled();
+  await expect(block.locator('[data-combat-tax-decline]')).toBeEnabled();
+  await expect(block.locator('[data-combat-tax-other]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el impuesto de bloqueo ajeno se ve y no se puede tocar', async ({ page }) => {
+  await page.goto('/ux?scene=combatTaxBlock');
+  const block = page.locator('[data-combat-tax]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-combat-tax-context', 'blocking');
+  await expect(block).toHaveAttribute('data-combat-tax-creatures', '1');
+  await expect(block).toHaveAttribute('data-combat-tax-pending', 'block');
+  await expect(block).toHaveAttribute('data-combat-tax-bands', '0');
+  await expect(block.locator('strong')).toHaveText('Impuesto de bloqueo');
+  await expect(block.locator('[data-combat-tax-rule]')).toContainText('CR 509.1d');
+  await expect(block.locator('[data-combat-tax-total] .pip.generic')).toHaveText('2');
+  // Two creatures share a name; the controller is what separates them.
+  await expect(block.locator('[data-combat-tax-pending-list]')).toContainText(
+    'Grizzly Bears (Jugador 2) bloquea a Grizzly Bears (Jugador 1)'
+  );
+  await expect(block.locator('[data-combat-tax-other]')).toContainText('Jugador 2');
+  await expect(block.locator('[data-combat-tax-other]')).toContainText('CR 400.2');
+  await expect(block.locator('[data-combat-tax-accept]')).toHaveCount(0);
+  await expect(block.locator('[data-combat-tax-decline]')).toHaveCount(0);
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');
