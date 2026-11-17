@@ -2727,6 +2727,34 @@ export type ModalFaceOffers = {
   back: GameAction | null;
   cancel: GameAction | null;
 };
+/**
+ * CR 118.9: the quality an Emerge cost sacrifices, from the engine's
+ * description. The typed cost filter is not a second reading of that quality.
+ */
+export function emergeSacrificeLabel(description: unknown): string | null {
+  if (!description || typeof description !== 'object') return null;
+  const body = description as { type?: unknown; quality?: unknown };
+  if (body.type !== 'EmergeSacrifice' || !body.quality || typeof body.quality !== 'object') return null;
+  const quality = body.quality as { type?: unknown; data?: unknown };
+  if (quality.type === 'Subtype') {
+    return typeof quality.data === 'string' && quality.data ? `un permanente ${quality.data}` : null;
+  }
+  const named: Record<string, string> = {
+    Artifact: 'un artefacto',
+    Battle: 'una batalla',
+    Card: 'una carta',
+    Creature: 'una criatura',
+    Enchantment: 'un encantamiento',
+    Instant: 'un instantáneo',
+    Kindred: 'un permanente tribal',
+    Land: 'una tierra',
+    Permanent: 'un permanente',
+    Planeswalker: 'un planeswalker',
+    Sorcery: 'un conjuro'
+  };
+  return typeof quality.type === 'string' ? named[quality.type] ?? null : null;
+}
+
 /** The published actions, not rebuilt ones. A missing `back_face` is not a face. */
 export function modalFaceOffers(actions: GameAction[]): ModalFaceOffers {
   const faces = actions.filter((action) => action.type === 'ChooseModalFace');
@@ -2734,6 +2762,211 @@ export function modalFaceOffers(actions: GameAction[]): ModalFaceOffers {
   return {
     front: face(false),
     back: face(true),
+    cancel: actions.find((action) => action.type === 'CancelCast') ?? null
+  };
+}
+
+function paymentModeOf(raw: unknown): string {
+  if (typeof raw === 'string' && raw) return raw;
+  if (raw && typeof raw === 'object' && typeof (raw as { type?: unknown }).type === 'string') {
+    return (raw as { type: string }).type;
+  }
+  return 'Auto';
+}
+
+/**
+ * CR 118.9: `WaitingFor::AlternativeCastChoice`. The caster pays the printed
+ * mana cost or the keyword-granted alternative. The keyword lives on the
+ * prompt and only chooses the words; the action is `ChooseAlternativeCast`
+ * with `Normal` or `Alternative`, and a button exists only when that action
+ * is already legal. Rebuilding the missing side would offer a cost the engine
+ * had not published. `CancelCast` is not part of this candidate set; it is
+ * offered only if a later writer actually publishes it.
+ */
+export type AlternativeCastPrompt = {
+  player: PlayerId;
+  objectId: ObjectId | null;
+  cardId: number | null;
+  /** Engine discriminant. Empty when the wire did not name one. */
+  keyword: string;
+  paymentMode: string;
+  normalCost: unknown | null;
+  /** `null` when the alternative has no mana portion. A published `{0}` stays. */
+  alternativeCost: unknown | null;
+  additionalCost: unknown | null;
+  additionalDescription: unknown | null;
+};
+export function alternativeCastPrompt(snapshot: EngineSnapshot | null): AlternativeCastPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'AlternativeCastChoice') return null;
+  const data = waiting.data ?? {};
+  const keyword = data.keyword;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: typeof data.object_id === 'number' ? (data.object_id as ObjectId) : null,
+    cardId: typeof data.card_id === 'number' ? data.card_id : null,
+    keyword: keyword && typeof keyword === 'object' && typeof (keyword as { type?: unknown }).type === 'string'
+      ? (keyword as { type: string }).type
+      : typeof keyword === 'string' ? keyword : '',
+    paymentMode: paymentModeOf(data.payment_mode),
+    normalCost: data.normal_cost === undefined ? null : data.normal_cost,
+    alternativeCost: data.alternative_cost === undefined || data.alternative_cost === null ? null : data.alternative_cost,
+    additionalCost: data.alternative_additional_cost === undefined || data.alternative_additional_cost === null
+      ? null
+      : data.alternative_additional_cost,
+    additionalDescription: data.alternative_additional_cost_description === undefined
+      || data.alternative_additional_cost_description === null
+      ? null
+      : data.alternative_additional_cost_description
+  };
+}
+export type AlternativeCastOffers = {
+  normal: GameAction | null;
+  alternative: GameAction | null;
+  cancel: GameAction | null;
+};
+/** A choice that is not the tagged `Normal` / `Alternative` is not a button. */
+export function alternativeCastOffers(actions: GameAction[]): AlternativeCastOffers {
+  const choices = actions.filter((action) => action.type === 'ChooseAlternativeCast');
+  const choice = (type: string) => choices.find((action) => {
+    const picked = action.data?.choice;
+    return !!picked && typeof picked === 'object' && (picked as { type?: unknown }).type === type;
+  }) ?? null;
+  return {
+    normal: choice('Normal'),
+    alternative: choice('Alternative'),
+    cancel: actions.find((action) => action.type === 'CancelCast') ?? null
+  };
+}
+
+/**
+ * The discriminant of a `CastingVariant`. Unit variants arrive as a string;
+ * struct variants arrive externally tagged (`{ GraveyardPermission: {…} }`).
+ * An internally tagged `{ type }` is accepted too, so a neighbour writer cannot
+ * hide the name. Anything else is unnamed, not guessed.
+ */
+export function castingVariantName(raw: unknown): string {
+  if (typeof raw === 'string' && raw) return raw;
+  if (!raw || typeof raw !== 'object') return '';
+  const body = raw as Record<string, unknown>;
+  if (typeof body.type === 'string' && body.type) return body.type;
+  const keys = Object.keys(body);
+  return keys.length === 1 && keys[0] ? keys[0] : '';
+}
+function faceName(raw: unknown): string {
+  if (typeof raw === 'string') return raw;
+  if (raw && typeof raw === 'object' && typeof (raw as { type?: unknown }).type === 'string') {
+    return (raw as { type: string }).type;
+  }
+  return '';
+}
+export type CastingAuthority = {
+  sourceId: ObjectId | null;
+  frequency: string;
+  slotType: string | null;
+  extraMode: string | null;
+  extraCost: unknown | null;
+  counter: string | null;
+};
+function castingAuthority(raw: unknown): CastingAuthority | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const body = raw as Record<string, unknown>;
+  const announcement = (body.announcement && typeof body.announcement === 'object'
+    ? body.announcement
+    : {}) as Record<string, unknown>;
+  const permission = (announcement.permission && typeof announcement.permission === 'object'
+    ? announcement.permission
+    : {}) as Record<string, unknown>;
+  const extra = body.extra_cost && typeof body.extra_cost === 'object'
+    ? body.extra_cost as Record<string, unknown>
+    : null;
+  const slot = announcement.slot_type;
+  const counter = body.enters_with_counter;
+  return {
+    sourceId: typeof permission.source === 'number' ? permission.source as ObjectId : null,
+    frequency: typeof body.frequency === 'string' ? body.frequency
+      : body.frequency && typeof body.frequency === 'object' && typeof (body.frequency as { type?: unknown }).type === 'string'
+        ? (body.frequency as { type: string }).type
+        : '',
+    slotType: typeof slot === 'string' ? slot
+      : slot && typeof slot === 'object' && typeof (slot as { type?: unknown }).type === 'string'
+        ? (slot as { type: string }).type
+        : null,
+    extraMode: extra
+      ? typeof extra.mode === 'string' ? extra.mode
+        : extra.mode && typeof extra.mode === 'object' && typeof (extra.mode as { type?: unknown }).type === 'string'
+          ? (extra.mode as { type: string }).type
+          : null
+      : null,
+    extraCost: extra ? extra.cost ?? null : null,
+    counter: typeof counter === 'string' ? counter
+      : counter && typeof counter === 'object' && typeof (counter as { type?: unknown }).type === 'string'
+        ? (counter as { type: string }).type
+        : null
+  };
+}
+
+/**
+ * CR 601.2b: `WaitingFor::CastingVariantChoice`. More than one cast permission
+ * applies to the same spell from the same zone. The options are the engine's,
+ * in its order, and the answer is the index of one of them. A button exists
+ * only when `legal.actions` already contains that index: dropping an option
+ * here would renumber the rest, and rebuilding a missing index would offer a
+ * permission the engine had already refused.
+ */
+export type CastingVariantOption = {
+  index: number;
+  variant: string;
+  face: string;
+  manaCost: unknown | null;
+  additionalCost: unknown | null;
+  authority: CastingAuthority | null;
+};
+export type CastingVariantPrompt = {
+  player: PlayerId;
+  objectId: ObjectId | null;
+  cardId: number | null;
+  paymentMode: string;
+  options: CastingVariantOption[];
+};
+export function castingVariantPrompt(snapshot: EngineSnapshot | null): CastingVariantPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'CastingVariantChoice') return null;
+  const data = waiting.data ?? {};
+  const raw = Array.isArray(data.options) ? data.options : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: typeof data.object_id === 'number' ? (data.object_id as ObjectId) : null,
+    cardId: typeof data.card_id === 'number' ? data.card_id : null,
+    paymentMode: paymentModeOf(data.payment_mode),
+    options: raw.map((entry, index) => {
+      const option = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+      return {
+        index,
+        variant: castingVariantName(option.variant),
+        face: faceName(option.face),
+        manaCost: option.mana_cost === undefined ? null : option.mana_cost,
+        additionalCost: option.additional_cost === undefined || option.additional_cost === null ? null : option.additional_cost,
+        authority: castingAuthority(option.authority)
+      };
+    })
+  };
+}
+export type CastingVariantOffers = {
+  byIndex: Map<number, GameAction>;
+  cancel: GameAction | null;
+};
+/** An index that is not a finite number is not an option. */
+export function castingVariantOffers(actions: GameAction[]): CastingVariantOffers {
+  const byIndex = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChooseCastingVariant') continue;
+    const index = action.data?.index;
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) continue;
+    if (!byIndex.has(index)) byIndex.set(index, action);
+  }
+  return {
+    byIndex,
     cancel: actions.find((action) => action.type === 'CancelCast') ?? null
   };
 }

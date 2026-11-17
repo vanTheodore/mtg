@@ -99,6 +99,13 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `modalFace` | `ModalFaceChoice` (las dos caras) | [claro](elegir-cara-claro.jpg) | [oscuro](elegir-cara-oscuro.jpg) |
 | `modalFaceOne` | `ModalFaceChoice` (una cara y cancelar) | [claro](una-cara-claro.jpg) | [oscuro](una-cara-oscuro.jpg) |
 | `modalFaceAway` | `ModalFaceChoice` (cara ajena) | [claro](cara-ajena-claro.jpg) | [oscuro](cara-ajena-oscuro.jpg) |
+| `altCast` | `AlternativeCastChoice` (sobrecarga) | [claro](sobrecarga-claro.jpg) | [oscuro](sobrecarga-oscuro.jpg) |
+| `altCastEmerge` | `AlternativeCastChoice` (emerger) | [claro](emerger-claro.jpg) | [oscuro](emerger-oscuro.jpg) |
+| `altCastOne` | `AlternativeCastChoice` (una sola vía) | [claro](una-via-claro.jpg) | [oscuro](una-via-oscuro.jpg) |
+| `altCastAway` | `AlternativeCastChoice` (ajeno) | [claro](coste-alternativo-ajeno-claro.jpg) | [oscuro](coste-alternativo-ajeno-oscuro.jpg) |
+| `castVariant` | `CastingVariantChoice` (índice ausente) | [claro](variante-lanzamiento-claro.jpg) | [oscuro](variante-lanzamiento-oscuro.jpg) |
+| `castVariantAuth` | `CastingVariantChoice` (permiso) | [claro](permiso-cementerio-claro.jpg) | [oscuro](permiso-cementerio-oscuro.jpg) |
+| `castVariantAway` | `CastingVariantChoice` (ajena) | [claro](variante-ajena-claro.jpg) | [oscuro](variante-ajena-oscuro.jpg) |
 | `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:

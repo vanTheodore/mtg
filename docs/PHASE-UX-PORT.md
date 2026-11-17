@@ -2940,3 +2940,58 @@ y coste añadido, y un `back_face` que no es booleano—); el recuento vigilado 
 a **76** entradas en `REPRESENTED` (74 → 76). El motor no se tocó: `bun run
 engine:verify` sigue en verde con **497** ficheros y SHA-256
 `f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
+
+## El coste alternativo y la variante no se reconstruyen (quincuagésima novena pasada, 7 nov 2026)
+
+`AlternativeCastChoice` y `CastingVariantChoice` son las dos ventanas que
+siguen a la cara modal en la cadena de lanzamiento. Phase ya las tiene
+(`AlternativeCostModal`, `CastingVariantModal`). Mesa no copia el cromo. Copia
+qué botón existe y qué sobre se envía.
+
+**`AlternativeCastChoice` (CR 118.9).** La palabra clave vive en el prompt y
+sólo elige las palabras. La acción es siempre `ChooseAlternativeCast` con
+`Normal` o `Alternative`. Un botón existe sólo si `legal.actions` ya trae esa
+vía: reconstruir la que falta ofrecería un coste que el motor no publicó.
+`CancelCast` no forma parte de este conjunto de candidatos; aparece sólo si un
+escritor lo publica. Un coste alternativo sin porción de maná se queda ausente;
+un `{0}` publicado sigue siendo un coste. El sacrificio de emerger (CR 702.119a)
+sale de la descripción del motor, no de releer el filtro del coste. El otro
+asiento ve los dos precios y no recibe botón.
+
+**`CastingVariantChoice` (CR 601.2b).** Más de un permiso vale para el mismo
+hechizo desde la misma zona. Las opciones conservan el índice del motor, y un
+botón existe sólo si `legal.actions` ya trae ese `ChooseCastingVariant`. Quitar
+una opción de la lista renumeraría el resto; reconstruir un índice ausente
+ofrecería un permiso que el motor ya rechazó. Una variante unitaria llega como
+cadena; una de estructura, etiquetada por fuera (`{ GraveyardPermission: {…} }`).
+Una desconocida se nombra con la palabra del motor, no con un jinete inventado.
+La autoridad del cementerio —fuente, coste extra, frecuencia, contador— se
+imprime tal como llegó. `Right` es el nombre de la cara trasera; el resto, el
+de la cara que este asiento ya ve.
+
+Laboratorio: `/ux?scene=altCast` (Cyclonic Rift, `{1}{U}` o sobrecarga `{6}{U}`),
+`altCastEmerge` (Elder Deep-Fiend, el sacrificio es «una criatura»),
+`altCastOne` (sólo la vía normal, pago `Manual`), `altCastAway`,
+`castVariant` (Wear // Tear: el índice 1 no es botón), `castVariantAuth`
+(Lurrus, 2 vidas además, una vez este turno) y `castVariantAway`. Capturas
+`ux-sobrecarga-1440.jpg`, `ux-emerger-1440.jpg`, `ux-una-via-1440.jpg`,
+`ux-coste-alternativo-ajeno-1440.jpg`, `ux-variante-lanzamiento-1440.jpg`,
+`ux-permiso-cementerio-1440.jpg` y `ux-variante-ajena-1440.jpg`, más sus pares
+de tema.
+
+`main` de Phase va 23 commits por delante del pin. No se importan: estas dos
+ventanas se leen del pin `28b2f9e4`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **659** (6 nuevas:
+3 en `alternative-cast.test.ts` —las dos vías publicadas y la cadena que no es
+una elección, el maná ausente frente al sacrificio nombrado, el `{0}` y el
+cancelar que sólo existe si se publicó— y 3 en `casting-variant.test.ts` —el
+índice que no se reconstruye, la autoridad del cementerio, la variante
+desconocida que se nombra—); el recuento vigilado pasa a **78** entradas en
+`REPRESENTED` (76 → 78). El motor no se tocó: `bun run engine:verify` sigue en
+verde con **497** ficheros y SHA-256
+`f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
+En Chromium, siete pruebas nuevas (108 → 115 en `ux-lab`) y siete escenas más
+en la prueba de temas (88 → 95 escenas, 190 jpg, presupuesto de 960 s).

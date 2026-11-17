@@ -73,7 +73,7 @@ test('every represented name is a real variant of the pinned engine', () => {
 
 test('the represented set is exactly the number the docs publish', () => {
   // If a pass adds a view, it adds the name here and this number, together.
-  expect(represented().length).toBe(76);
+  expect(represented().length).toBe(78);
   // Duplicates would silently undercount the coverage.
   expect(new Set(represented()).size).toBe(represented().length);
 });
@@ -83,7 +83,7 @@ test('the last passes are registered, not just rendered', () => {
   // exist: the block drew fine in the lab because `/ux` mounts components itself,
   // so nothing caught the missing names.
   const names = represented();
-  for (const name of ['EntryAttackTargetChoice', 'ReplacementChoice', 'CopyTargetChoice', 'ResolveAllConsent', 'UntapChoice', 'ChooseUntapSubset', 'ExertChoice', 'EnlistChoice', 'PayCost', 'PhyrexianPayment', 'CombatTaxPayment', 'OptionalCostChoice', 'DefilerPayment', 'ChooseFromZoneChoice', 'ModalFaceChoice']) {
+  for (const name of ['EntryAttackTargetChoice', 'ReplacementChoice', 'CopyTargetChoice', 'ResolveAllConsent', 'UntapChoice', 'ChooseUntapSubset', 'ExertChoice', 'EnlistChoice', 'PayCost', 'PhyrexianPayment', 'CombatTaxPayment', 'OptionalCostChoice', 'DefilerPayment', 'ChooseFromZoneChoice', 'ModalFaceChoice', 'AlternativeCastChoice', 'CastingVariantChoice']) {
     expect(names).toContain(name);
   }
 });

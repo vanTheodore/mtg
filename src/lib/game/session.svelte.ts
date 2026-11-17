@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, payCostPrompt as readPayCost, payCostAction, comparatorHolds, phyrexianPaymentPrompt as readPhyrexian, phyrexianChoicesAction, combatTaxPrompt as readCombatTax, payCombatTaxAction, optionalCostPrompt as readOptionalCost, decideOptionalCostAction, defilerPaymentPrompt as readDefiler, zoneChoicePrompt as readZoneChoice, zoneChoiceReady as isZoneChoiceReady, modalFacePrompt as readModalFace, modalFaceOffers, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, payCostPrompt as readPayCost, payCostAction, comparatorHolds, phyrexianPaymentPrompt as readPhyrexian, phyrexianChoicesAction, combatTaxPrompt as readCombatTax, payCombatTaxAction, optionalCostPrompt as readOptionalCost, decideOptionalCostAction, defilerPaymentPrompt as readDefiler, zoneChoicePrompt as readZoneChoice, zoneChoiceReady as isZoneChoiceReady, modalFacePrompt as readModalFace, modalFaceOffers, alternativeCastPrompt as readAlternativeCast, alternativeCastOffers, castingVariantPrompt as readCastingVariant, castingVariantOffers, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -963,6 +963,43 @@ class GameSession {
   }
   cancelModalFace() {
     const cancel = modalFaceOffers(this.snapshot?.legal.actions ?? []).cancel;
+    if (!cancel) return;
+    void this.dispatch(cancel);
+  }
+
+  /**
+   * CR 118.9: printed cost or the keyword alternative. Only a published
+   * `ChooseAlternativeCast` is dispatched, and cancel only when `CancelCast`
+   * is itself legal.
+   */
+  get alternativeCastPrompt() {
+    return readAlternativeCast(this.snapshot);
+  }
+  answerAlternativeCast(action: GameAction) {
+    const published = alternativeCastOffers(this.snapshot?.legal.actions ?? []);
+    if (action !== published.normal && action !== published.alternative) return;
+    void this.dispatch(action);
+  }
+  cancelAlternativeCast() {
+    const cancel = alternativeCastOffers(this.snapshot?.legal.actions ?? []).cancel;
+    if (!cancel) return;
+    void this.dispatch(cancel);
+  }
+
+  /**
+   * CR 601.2b: one published index. A rebuilt `ChooseCastingVariant` is not
+   * dispatched, including an index the option list does not have.
+   */
+  get castingVariantPrompt() {
+    return readCastingVariant(this.snapshot);
+  }
+  answerCastingVariant(action: GameAction) {
+    const published = castingVariantOffers(this.snapshot?.legal.actions ?? []);
+    if (![...published.byIndex.values()].includes(action)) return;
+    void this.dispatch(action);
+  }
+  cancelCastingVariant() {
+    const cancel = castingVariantOffers(this.snapshot?.legal.actions ?? []).cancel;
     if (!cancel) return;
     void this.dispatch(cancel);
   }

@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 // (dos capturas y dos auditorías por escena), así que su presupuesto es el del
 // recorrido entero y crece con el catálogo; el límite del proyecto es para un test
 // corto. Cuando la lista crezca otra vez, este número es el que hay que mirar.
-test.describe.configure({ timeout: 840_000 });
+test.describe.configure({ timeout: 960_000 });
 
 const shotsDir = fileURLToPath(new URL('../../docs/screenshots/temas/', import.meta.url));
 
@@ -119,6 +119,13 @@ const SCENES = [
   { scene: 'modalFace', slug: 'elegir-cara', block: '[data-modal-face]' },
   { scene: 'modalFaceOne', slug: 'una-cara', block: '[data-modal-face]' },
   { scene: 'modalFaceAway', slug: 'cara-ajena', block: '[data-modal-face]' },
+  { scene: 'altCast', slug: 'sobrecarga', block: '[data-alt-cast]' },
+  { scene: 'altCastEmerge', slug: 'emerger', block: '[data-alt-cast]' },
+  { scene: 'altCastOne', slug: 'una-via', block: '[data-alt-cast]' },
+  { scene: 'altCastAway', slug: 'coste-alternativo-ajeno', block: '[data-alt-cast]' },
+  { scene: 'castVariant', slug: 'variante-lanzamiento', block: '[data-cast-variant]' },
+  { scene: 'castVariantAuth', slug: 'permiso-cementerio', block: '[data-cast-variant]' },
+  { scene: 'castVariantAway', slug: 'variante-ajena', block: '[data-cast-variant]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

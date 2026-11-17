@@ -1821,6 +1821,108 @@ test('la cara ajena se nombra como jugar y no ofrece botones', async ({ page }) 
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('la sobrecarga ofrece las dos vías publicadas y no inventa cancelar', async ({ page }) => {
+  await page.goto('/ux?scene=altCast');
+  const block = page.locator('[data-alt-cast]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-alt-cast-keyword', 'Overload');
+  await expect(block.locator('strong')).toHaveText('Elegir coste de lanzamiento · Cyclonic Rift');
+  await expect(block.locator('[data-alt-cast-rule]')).toContainText('CR 702.96a');
+  await expect(block.locator('[data-alt-cast-normal]')).toContainText('Lanzar normalmente');
+  await expect(block.locator('[data-alt-cast-alternative]')).toContainText('Lanzar con Sobrecarga');
+  await expect(block.locator('[data-alt-cast-cancel]')).toHaveCount(0);
+  await expect(block.locator('[data-alt-cast-other]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('emerger nombra el sacrificio que publicó el motor, no un filtro', async ({ page }) => {
+  await page.goto('/ux?scene=altCastEmerge');
+  const block = page.locator('[data-alt-cast]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-alt-cast-keyword', 'Emerge');
+  await expect(block.locator('[data-alt-cast-rule]')).toContainText('una criatura');
+  await expect(block.locator('[data-alt-cast-rule]')).not.toContainText('permanente que cumpla');
+  await expect(block.locator('[data-alt-cast-alternative]')).toContainText('Lanzar con Emerger');
+  await expect(block.locator('[data-alt-cast-alternative]')).toContainText('una criatura');
+  await expect(block.locator('[data-alt-cast-alternative]')).not.toContainText('Sacrificar');
+  await expect(block.locator('[data-alt-cast-normal]')).toBeVisible();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una vía que el motor no publicó no se reconstruye', async ({ page }) => {
+  await page.goto('/ux?scene=altCastOne');
+  const block = page.locator('[data-alt-cast]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-alt-cast-payment', 'Manual');
+  await expect(block.locator('[data-alt-cast-mode]')).toContainText('Manual');
+  await expect(block.locator('[data-alt-cast-normal]')).toBeVisible();
+  await expect(block.locator('[data-alt-cast-alternative]')).toHaveCount(0);
+  await expect(block.locator('[data-alt-cast-cancel]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el coste alternativo ajeno se ve y no se toca', async ({ page }) => {
+  await page.goto('/ux?scene=altCastAway');
+  const block = page.locator('[data-alt-cast]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-alt-cast-other]')).toContainText('Jugador 2');
+  await expect(block.locator('[data-alt-cast-other]')).toContainText('CR 400.2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una variante cuyo índice no está publicado no es un botón', async ({ page }) => {
+  await page.goto('/ux?scene=castVariant');
+  const block = page.locator('[data-cast-variant]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-cast-variant-count', '3');
+  await expect(block.locator('strong')).toHaveText('Elegir lanzamiento · Wear');
+  await expect(block.locator('[data-cast-variant-option="0"]')).toContainText('Lanzar normalmente Wear');
+  await expect(block.locator('[data-cast-variant-option="1"]')).toHaveCount(0);
+  await expect(block.locator('[data-cast-variant-option="2"]')).toContainText('Lanzar con Fusión Wear');
+  await expect(block.locator('[data-cast-variant-cancel]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el permiso de cementerio nombra la fuente y el coste añadido', async ({ page }) => {
+  await page.goto('/ux?scene=castVariantAuth');
+  const block = page.locator('[data-cast-variant]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-cast-variant-option="0"]')).toContainText("Lanzar desde el cementerio Healer's Hawk");
+  await expect(block.locator('[data-cast-variant-option="0"] [data-cast-variant-authority]')).toContainText('mediante Lurrus of the Dream-Den');
+  await expect(block.locator('[data-cast-variant-option="0"] [data-cast-variant-authority]')).toContainText('además: 2 vidas');
+  await expect(block.locator('[data-cast-variant-option="0"] [data-cast-variant-authority]')).toContainText('una vez este turno');
+  await expect(block.locator('[data-cast-variant-option="1"]')).toContainText('Lanzar con Flashback');
+  await expect(block.locator('[data-cast-variant-option="1"] [data-cast-variant-authority]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la variante ajena se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=castVariantAway');
+  const block = page.locator('[data-cast-variant]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-cast-variant-faces]')).toContainText('Lanzar normalmente Wear');
+  await expect(block.locator('[data-cast-variant-faces]')).toContainText('Tear');
+  await expect(block.locator('[data-cast-variant-faces]')).toContainText('Lanzar con Fusión Wear');
+  await expect(block.locator('[data-cast-variant-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

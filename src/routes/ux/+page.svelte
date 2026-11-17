@@ -79,10 +79,12 @@
   import DefilerPaymentPrompt from '#lib/components/DefilerPaymentPrompt.svelte';
   import ChooseFromZonePrompt from '#lib/components/ChooseFromZonePrompt.svelte';
   import ModalFacePrompt from '#lib/components/ModalFacePrompt.svelte';
+  import AlternativeCastPrompt from '#lib/components/AlternativeCastPrompt.svelte';
+  import CastingVariantPrompt from '#lib/components/CastingVariantPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -183,6 +185,13 @@
     { value: 'modalFace', label: 'Elegir una cara' },
     { value: 'modalFaceOne', label: 'Una sola cara' },
     { value: 'modalFaceAway', label: 'Cara ajena' },
+    { value: 'altCast', label: 'Sobrecarga' },
+    { value: 'altCastEmerge', label: 'Emerger' },
+    { value: 'altCastOne', label: 'Una sola vía' },
+    { value: 'altCastAway', label: 'Coste alternativo ajeno' },
+    { value: 'castVariant', label: 'Variante de lanzamiento' },
+    { value: 'castVariantAuth', label: 'Permiso de cementerio' },
+    { value: 'castVariantAway', label: 'Variante ajena' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -287,6 +296,13 @@
     modalFace: 'ModalFaceChoice · CR 712.11b, las dos caras que el motor ofrece',
     modalFaceOne: 'ModalFaceChoice · una cara, coste añadido y cancelar',
     modalFaceAway: 'ModalFaceChoice · CR 712.12, la cara la elige el otro asiento',
+    altCast: 'AlternativeCastChoice · CR 702.96a, las dos vías publicadas',
+    altCastEmerge: 'AlternativeCastChoice · CR 702.119a, el sacrificio lo nombra el motor',
+    altCastOne: 'AlternativeCastChoice · sólo la vía que legal.actions publicó',
+    altCastAway: 'AlternativeCastChoice · lo decide el otro asiento',
+    castVariant: 'CastingVariantChoice · CR 601.2b, el índice ausente no es botón',
+    castVariantAuth: 'CastingVariantChoice · permiso de cementerio, con su autoridad',
+    castVariantAway: 'CastingVariantChoice · lo decide el otro asiento',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -635,6 +651,41 @@
       card_types: { core_types: ['Land'] }
     }
   } as GameObject;
+  // CR 702.96a: Cyclonic Rift. Printed {1}{U}, overload {6}{U}. The buttons
+  // come from legal.actions, not from these two costs.
+  const cyclonic = {
+    id: 431, card_id: 431, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Cyclonic Rift',
+    card_types: { core_types: ['Instant'] },
+    mana_cost: { type: 'Cost', generic: 1, shards: ['Blue'] }
+  } as GameObject;
+  // CR 702.119a: Elder Deep-Fiend. The emerge sacrifice quality is the
+  // description on the prompt, not a filter read off this object.
+  const deepFiend = {
+    id: 432, card_id: 432, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Elder Deep-Fiend',
+    card_types: { core_types: ['Creature'], subtypes: ['Eldrazi', 'Octopus'] },
+    mana_cost: { type: 'Cost', generic: 8, shards: [] }
+  } as GameObject;
+  // Wear // Tear. Left face is the object's name; right face is the back.
+  const wear = {
+    id: 433, card_id: 433, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Wear',
+    card_types: { core_types: ['Instant'] },
+    mana_cost: { type: 'Cost', generic: 1, shards: ['Red'] },
+    back_face: { name: 'Tear', card_types: { core_types: ['Instant'] } }
+  } as GameObject;
+  const lurrus = {
+    id: 434, card_id: 434, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Lurrus of the Dream-Den',
+    card_types: { core_types: ['Creature'], subtypes: ['Cat', 'Nightmare'] }
+  } as GameObject;
+  const hawk = {
+    id: 435, card_id: 435, owner: 0, controller: 0, zone: 'Graveyard',
+    name: "Healer's Hawk",
+    card_types: { core_types: ['Creature'], subtypes: ['Bird'] },
+    mana_cost: { type: 'Cost', generic: 0, shards: ['White'] }
+  } as GameObject;
   const zoneSource = {
     id: 430, card_id: 430, owner: 0, controller: 0, zone: 'Stack',
     name: 'Test Spell',
@@ -866,7 +917,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, cyclonic, deepFiend, wear, lurrus, hawk, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -1344,6 +1395,114 @@
       return {
         type: 'ModalFaceChoice',
         data: { player: 0, object_id: 428, card_id: 428 }
+      };
+    }
+    if (scene.startsWith('altCast')) {
+      const printed = { type: 'Cost', generic: 1, shards: ['Blue'] };
+      const overload = { type: 'Cost', generic: 6, shards: ['Blue'] };
+      if (scene === 'altCastAway') {
+        return {
+          type: 'AlternativeCastChoice',
+          data: {
+            player: 1,
+            object_id: 431,
+            card_id: 431,
+            keyword: { type: 'Overload' },
+            normal_cost: printed,
+            alternative_cost: overload
+          }
+        };
+      }
+      if (scene === 'altCastEmerge') {
+        return {
+          type: 'AlternativeCastChoice',
+          data: {
+            player: 0,
+            object_id: 432,
+            card_id: 432,
+            keyword: { type: 'Emerge' },
+            normal_cost: { type: 'Cost', generic: 8, shards: [] },
+            alternative_cost: { type: 'Cost', generic: 5, shards: ['Blue', 'Blue'] },
+            alternative_additional_cost: { type: 'Sacrifice', count: 1 },
+            alternative_additional_cost_description: { type: 'EmergeSacrifice', quality: { type: 'Creature' } }
+          }
+        };
+      }
+      if (scene === 'altCastOne') {
+        return {
+          type: 'AlternativeCastChoice',
+          data: {
+            player: 0,
+            object_id: 431,
+            card_id: 431,
+            keyword: { type: 'Overload' },
+            payment_mode: 'Manual',
+            normal_cost: printed,
+            alternative_cost: overload
+          }
+        };
+      }
+      return {
+        type: 'AlternativeCastChoice',
+        data: {
+          player: 0,
+          object_id: 431,
+          card_id: 431,
+          keyword: { type: 'Overload' },
+          normal_cost: printed,
+          alternative_cost: overload
+        }
+      };
+    }
+    if (scene.startsWith('castVariant')) {
+      const wearCost = { type: 'Cost', generic: 1, shards: ['Red'] };
+      const tearCost = { type: 'Cost', generic: 0, shards: ['White'] };
+      const fuseCost = { type: 'Cost', generic: 1, shards: ['Red', 'White'] };
+      if (scene === 'castVariantAuth') {
+        return {
+          type: 'CastingVariantChoice',
+          data: {
+            player: 0,
+            object_id: 435,
+            card_id: 435,
+            options: [
+              {
+                variant: { GraveyardPermission: { source: 434, frequency: 'OncePerTurn' } },
+                face: 'Current',
+                mana_cost: { type: 'Cost', generic: 0, shards: ['White'] },
+                authority: {
+                  announcement: {
+                    permission: { source: 434, grant: { type: 'Static', index: 0 } },
+                    grant_digest: 'aa'
+                  },
+                  frequency: 'OncePerTurn',
+                  extra_cost: {
+                    cost: { type: 'PayLife', amount: { type: 'Fixed', value: 2 } },
+                    mode: 'Additional'
+                  }
+                }
+              },
+              {
+                variant: 'Flashback',
+                face: 'Current',
+                mana_cost: { type: 'Cost', generic: 1, shards: ['White'] }
+              }
+            ]
+          }
+        };
+      }
+      return {
+        type: 'CastingVariantChoice',
+        data: {
+          player: scene === 'castVariantAway' ? 1 : 0,
+          object_id: 433,
+          card_id: 433,
+          options: [
+            { variant: 'Normal', face: 'Left', mana_cost: wearCost },
+            { variant: 'Normal', face: 'Right', mana_cost: tearCost },
+            { variant: 'Fuse', face: 'Current', mana_cost: fuseCost }
+          ]
+        }
       };
     }
     if (scene === 'exert') {
@@ -2217,6 +2376,7 @@
           : scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate' || scene === 'phyrexian'
             || scene.startsWith('optionalCost') || scene.startsWith('defiler')
             || scene.startsWith('zoneChoice') || scene.startsWith('modalFace')
+            || scene.startsWith('altCast') || scene.startsWith('castVariant')
             ? 'PreCombatMain'
           : scene === 'combatTax' ? 'DeclareAttackers'
           : scene === 'combatTaxBlock' ? 'DeclareBlockers'
@@ -2264,7 +2424,24 @@
         blocker_assignment_pairs: scene === 'combat' ? [[201, 100]] : []
       },
       legal: {
-        actions: scene === 'modalFace'
+        actions: scene === 'altCast' || scene === 'altCastEmerge' || scene === 'altCastAway'
+          ? [
+              { type: 'ChooseAlternativeCast', data: { choice: { type: 'Normal' } } },
+              { type: 'ChooseAlternativeCast', data: { choice: { type: 'Alternative' } } }
+            ]
+          : scene === 'altCastOne'
+            ? [{ type: 'ChooseAlternativeCast', data: { choice: { type: 'Normal' } } }]
+            : scene === 'castVariant' || scene === 'castVariantAway'
+              ? [
+                  { type: 'ChooseCastingVariant', data: { index: 0 } },
+                  { type: 'ChooseCastingVariant', data: { index: 2 } }
+                ]
+              : scene === 'castVariantAuth'
+                ? [
+                    { type: 'ChooseCastingVariant', data: { index: 0 } },
+                    { type: 'ChooseCastingVariant', data: { index: 1 } }
+                  ]
+                : scene === 'modalFace'
           ? [
               { type: 'ChooseModalFace', data: { back_face: false } },
               { type: 'ChooseModalFace', data: { back_face: true } }
@@ -2479,6 +2656,8 @@
         {#if scene.startsWith('defiler')}<DefilerPaymentPrompt />{/if}
         {#if scene.startsWith('zoneChoice')}<ChooseFromZonePrompt />{/if}
         {#if scene.startsWith('modalFace')}<ModalFacePrompt />{/if}
+        {#if scene.startsWith('altCast')}<AlternativeCastPrompt />{/if}
+        {#if scene.startsWith('castVariant')}<CastingVariantPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />
