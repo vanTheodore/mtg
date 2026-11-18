@@ -15,12 +15,13 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, payCostPrompt as readPayCost, payCostAction, comparatorHolds, phyrexianPaymentPrompt as readPhyrexian, phyrexianChoicesAction, combatTaxPrompt as readCombatTax, payCombatTaxAction, optionalCostPrompt as readOptionalCost, decideOptionalCostAction, defilerPaymentPrompt as readDefiler, zoneChoicePrompt as readZoneChoice, zoneChoiceReady as isZoneChoiceReady, modalFacePrompt as readModalFace, modalFaceOffers, alternativeCastPrompt as readAlternativeCast, alternativeCastOffers, castingVariantPrompt as readCastingVariant, castingVariantOffers, typeSlotPrompt as readTypeSlot, typeSlotOffers, splicePrompt as readSplice, spliceOffers, mutateMergePrompt as readMutateMerge, mutateMergeOffers, cipherPrompt as readCipher, cipherOffers, costOrderPrompt as readCostOrder, costOrderOffers, resolutionPaymentPrompt as readResolutionPayment, resolutionPaymentOffers, giftRecipientPrompt as readGiftRecipient, giftRecipientOffers, topOrBottomPrompt as readTopOrBottom, topOrBottomOffers, clashPrompt as readClash, clashOffers, clashPlacementPrompt as readClashPlacement, sideboardPrompt as readSideboard, sideboardOffers, playDrawPrompt as readPlayDraw, playDrawOffers, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, payCostPrompt as readPayCost, payCostAction, comparatorHolds, phyrexianPaymentPrompt as readPhyrexian, phyrexianChoicesAction, combatTaxPrompt as readCombatTax, payCombatTaxAction, optionalCostPrompt as readOptionalCost, decideOptionalCostAction, defilerPaymentPrompt as readDefiler, zoneChoicePrompt as readZoneChoice, zoneChoiceReady as isZoneChoiceReady, modalFacePrompt as readModalFace, modalFaceOffers, alternativeCastPrompt as readAlternativeCast, alternativeCastOffers, castingVariantPrompt as readCastingVariant, castingVariantOffers, typeSlotPrompt as readTypeSlot, typeSlotOffers, splicePrompt as readSplice, spliceOffers, mutateMergePrompt as readMutateMerge, mutateMergeOffers, cipherPrompt as readCipher, cipherOffers, costOrderPrompt as readCostOrder, costOrderOffers, resolutionPaymentPrompt as readResolutionPayment, resolutionPaymentOffers, giftRecipientPrompt as readGiftRecipient, giftRecipientOffers, topOrBottomPrompt as readTopOrBottom, topOrBottomOffers, clashPrompt as readClash, clashOffers, clashPlacementPrompt as readClashPlacement, sideboardPrompt as readSideboard, sideboardOffers, playDrawPrompt as readPlayDraw, playDrawOffers, bottomOrderPrompt as readBottomOrder, bottomOrderPile, bottomOrderAction, isBottomOrderPermutation, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
   payAmountKey, parseAmount, payAmountPrompt as readPayAmountPrompt, submitPayAmount,
-  xPrompt as readXPrompt
+  xPrompt as readXPrompt,
+  type BottomOrderPrompt
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
 
@@ -1179,6 +1180,62 @@ class GameSession {
   answerPlayDraw(action: GameAction) {
     const published = playDrawOffers(this.snapshot?.legal.actions ?? []);
     if (action !== published.play && action !== published.draw) return;
+    void this.dispatch(action);
+  }
+
+  /**
+   * CR 608.2d: the order is the answer. The pile starts as the published one and
+   * only ever holds those ids, in some order; a card the wire did not publish
+   * cannot be added because `moveBottomOrder` refuses it.
+   */
+  get bottomOrderPrompt() {
+    return readBottomOrder(this.snapshot);
+  }
+  bottomOrder = $state<ObjectId[]>([]);
+  /** Identifies the pause the working order belongs to. */
+  bottomOrderKey = $state('');
+  bottomOrderKeyFor(prompt: BottomOrderPrompt): string {
+    return `${prompt.kind}:${prompt.player}:${prompt.sourceId ?? 0}:${prompt.cards.join(',')}`;
+  }
+  /**
+   * Seeds the working order for a new pause. It is an `$effect` writer, never a
+   * reader: a `$derived` that assigned here would be a state mutation during
+   * derivation, which Svelte 5 rejects (`state_unsafe_mutation`).
+   */
+  seedBottomOrder(prompt: BottomOrderPrompt) {
+    const key = this.bottomOrderKeyFor(prompt);
+    if (key === this.bottomOrderKey) return;
+    this.bottomOrderKey = key;
+    this.bottomOrder = bottomOrderPile(prompt);
+  }
+  /**
+   * Read-only: the working order while it still is a permutation of the
+   * published pile, and the published pile itself otherwise. Nothing here writes
+   * state, so it is safe inside a `$derived`.
+   */
+  bottomOrderFor(prompt: BottomOrderPrompt): ObjectId[] {
+    if (this.bottomOrderKeyFor(prompt) !== this.bottomOrderKey) return bottomOrderPile(prompt);
+    return isBottomOrderPermutation(prompt, this.bottomOrder) ? this.bottomOrder : bottomOrderPile(prompt);
+  }
+  /** `+1` moves the card later (towards the bottom); `-1` moves it earlier. */
+  moveBottomOrder(id: ObjectId, delta: -1 | 1) {
+    const prompt = this.bottomOrderPrompt;
+    if (!prompt) return;
+    const current = this.bottomOrderFor(prompt);
+    const from = current.indexOf(id);
+    if (from === -1) return;
+    const to = from + delta;
+    if (to < 0 || to >= current.length) return;
+    const next = [...current];
+    next.splice(from, 1);
+    next.splice(to, 0, id);
+    this.bottomOrder = next;
+  }
+  submitBottomOrder() {
+    const prompt = this.bottomOrderPrompt;
+    if (!prompt) return;
+    const action = bottomOrderAction(prompt, this.bottomOrderFor(prompt));
+    if (!action) return;
     void this.dispatch(action);
   }
 

@@ -2453,6 +2453,77 @@ test('la elección ajena de jugar o robar se nombra y no ofrece botones', async 
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('el fondo del estruendo empieza en el orden del motor y se puede mover', async ({ page }) => {
+  await page.goto('/ux?scene=bottomRipple');
+  const block = page.locator('[data-bottom-order]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-bottom-order-kind', 'ripple');
+  await expect(block).toHaveAttribute('data-bottom-order-count', '2');
+  await expect(block.locator('strong')).toHaveText('Ordenar el fondo del estruendo');
+  await expect(block.locator('[data-bottom-order-rule]')).toContainText('estruendo era de 4');
+  const rows = block.locator('[data-bottom-order-row]');
+  await expect(rows).toHaveCount(2);
+  // CR 702.60a: the pile starts as the engine's order, not sorted by name.
+  await expect(rows.nth(0)).toHaveAttribute('data-bottom-order-row', '531');
+  await expect(rows.nth(0)).toContainText('Reach Through Mists');
+  await expect(rows.nth(1)).toHaveAttribute('data-bottom-order-row', '532');
+  // The first row cannot move earlier and the last cannot move later.
+  await expect(block.locator('[data-bottom-order-earlier="531"]')).toBeDisabled();
+  await expect(block.locator('[data-bottom-order-later="532"]')).toBeDisabled();
+  await expect(block.locator('[data-bottom-order-submit]')).toContainText('este orden');
+
+  // Moving keeps both published cards and changes only their order.
+  await block.locator('[data-bottom-order-later="531"]').click();
+  await expect(rows.nth(0)).toHaveAttribute('data-bottom-order-row', '532');
+  await expect(block.locator('[data-bottom-order-earlier="532"]')).toBeDisabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('las otras dos ventanas de fondo conservan su propio motivo', async ({ page }) => {
+  await page.goto('/ux?scene=bottomReveal');
+  let block = page.locator('[data-bottom-order]');
+  await expect(block).toHaveAttribute('data-bottom-order-kind', 'reveal-until');
+  await expect(block.locator('strong')).toHaveText('Ordenar el fondo de lo revelado');
+  // Only Ripple carries a count; the other two never print one.
+  await expect(block.locator('[data-bottom-order-rule]')).not.toContainText('estruendo era de');
+
+  await page.goto('/ux?scene=bottomDig');
+  block = page.locator('[data-bottom-order]');
+  await expect(block).toHaveAttribute('data-bottom-order-kind', 'dig');
+  await expect(block.locator('strong')).toHaveText('Ordenar el fondo de lo mirado');
+  await expect(block.locator('[data-bottom-order-rule]')).toContainText('CR 701.20e');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una pila vacía no inventa cartas ni deja enviar', async ({ page }) => {
+  await page.goto('/ux?scene=bottomEmpty');
+  const block = page.locator('[data-bottom-order]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-bottom-order-count', '0');
+  await expect(block.locator('[data-bottom-order-row]')).toHaveCount(0);
+  await expect(block.locator('[data-bottom-order-submit]')).toBeDisabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el orden ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=bottomAway');
+  const block = page.locator('[data-bottom-order]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-bottom-order-faces]')).toContainText('Reach Through Mists');
+  await expect(block.locator('[data-bottom-order-faces]')).toContainText('Peer Through Depths');
+  await expect(block.locator('[data-bottom-order-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

@@ -164,6 +164,11 @@ const SCENES = [
   { scene: 'playDraw', slug: 'jugar-o-robar', block: '[data-play-draw]' },
   { scene: 'playDrawDraw', slug: 'solo-robar', block: '[data-play-draw]' },
   { scene: 'playDrawAway', slug: 'jugar-robar-ajeno', block: '[data-play-draw]' },
+  { scene: 'bottomRipple', slug: 'fondo-estruendo', block: '[data-bottom-order]' },
+  { scene: 'bottomReveal', slug: 'fondo-revelado', block: '[data-bottom-order]' },
+  { scene: 'bottomDig', slug: 'fondo-mirado', block: '[data-bottom-order]' },
+  { scene: 'bottomEmpty', slug: 'fondo-vacio', block: '[data-bottom-order]' },
+  { scene: 'bottomAway', slug: 'fondo-ajeno', block: '[data-bottom-order]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

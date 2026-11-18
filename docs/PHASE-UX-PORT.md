@@ -3314,3 +3314,64 @@ se imprime, y jugar o robar es el booleano publicado sin reconstruir el que
 falta); el recuento vigilado pasa a **90** entradas en `REPRESENTED` (88 → 90).
 El motor no se tocó: `bun run engine:verify` sigue en verde con **497** ficheros
 y SHA-256 `f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
+
+## El orden del fondo es la respuesta, y las tres ventanas comparten vocabulario (sexagésima sexta pasada, 18 nov 2026)
+
+`RippleBottomOrder`, `RevealUntilBottomOrder` y `DigBottomOrder` son tres pausas
+distintas que piden lo mismo: el controlador anuncia el orden en que una pila
+revelada va al fondo de la biblioteca. La respuesta es **una sola** —
+`SelectCards { cards }` — y el motor la acepta sólo como permutación exacta de la
+pila publicada. Por eso el orden *es* el dato: esta mesa no reordena, no ordena
+alfabéticamente y no añade una carta que el cable no publicó.
+
+**`RippleBottomOrder` (CR 702.60a).** Las cartas reveladas que no se lanzaron van
+al fondo. El prompt publica la pila (`cards`), la fuente y, para el texto, la `N`
+del estruendo (`count`); `final_cast` es el hilado interno del motor y no es una
+elección. La pila arranca en el orden del motor y sólo se mueve entre esas cartas.
+
+**`RevealUntilBottomOrder` (CR 701.20a).** Lo que no se quedó va al fondo, en el
+orden que elija el controlador. `clear_markers` y los campos de la instantánea
+del revelado son del motor: no se pintan.
+
+**`DigBottomOrder` (CR 701.20e).** El resto de lo mirado, en el orden que elija
+el controlador.
+
+Las tres están en el mismo brazo del motor, con la misma validación: longitud
+igual, sin repetidas y todas dentro de la pila. Los botones de la ventana son
+«Antes» y «Después» por carta; el primero no puede subir más y el último no puede
+bajar más, así que el orden nunca sale de la pila. El botón de enviar se apaga
+mientras el orden no sea una permutación de lo publicado. El otro asiento ve la
+pila y no recibe botón.
+
+Laboratorio: `/ux?scene=bottomRipple` (Glacial Ray, Reach Through Mists y Peer
+Through Depths, estruendo de 4), `bottomReveal`, `bottomDig`, `bottomEmpty` (pila
+vacía: no inventa cartas) y `bottomAway`. Capturas `ux-fondo-estruendo-1440.jpg`,
+`ux-fondo-revelado-1440.jpg`, `ux-fondo-mirado-1440.jpg`,
+`ux-fondo-vacio-1440.jpg` y `ux-fondo-ajeno-1440.jpg`, más sus pares de tema.
+
+### Una trampa de Svelte 5, anotada
+
+Sembrar la pila de trabajo dentro de un `$derived` rompe la escena entera: Svelte
+5 prohíbe mutar estado al derivar (`state_unsafe_mutation`) y la ruta responde
+500. El sembrado vive en un `$effect`, y la lectura —`bottomOrderFor`— no escribe
+nada: devuelve la pila de trabajo sólo si sigue siendo una permutación de la
+publicada, y si no, la publicada.
+
+### El pin sigue en `28b2f9e4`, y upstream ya está en v0.128.0
+
+`main` de Phase pasó de 23 a **38** commits por delante del pin, con release
+**v0.128.0**. El enum sigue en **148** variantes, pero **no es el mismo enum**:
+`SpellCopyOrderChoice` desapareció y en su lugar está `MemberOrderChoice` (misma
+forma más `purpose`, con valor por defecto). Ninguna de las 90 ventanas que Mesa
+ya representaba cambia de forma: lo comprobé comparando los bloques del enum
+publicado contra los del pin, y la única diferencia está en nombres que Mesa no
+había portado. El pin no se mueve en esta pasada.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **720** (6
+nuevas en `bottom-order.test.ts`: las tres ventanas conservan su motivo, una
+carta no publicada no entra en la pila, la acción es la permutación exacta, la
+`N` sólo la lleva el estruendo y una pila vacía no inventa cartas); el recuento
+vigilado pasa a **93** entradas en `REPRESENTED` (90 → 93). El motor no se tocó:
+`bun run engine:verify` sigue en verde con el mismo SHA.

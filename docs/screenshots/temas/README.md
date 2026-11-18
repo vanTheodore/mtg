@@ -119,6 +119,11 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `playDraw` | `BetweenGamesChoosePlayDraw` | [claro](jugar-o-robar-claro.jpg) | [oscuro](jugar-o-robar-oscuro.jpg) |
 | `playDrawDraw` | `BetweenGamesChoosePlayDraw` (sólo robar) | [claro](solo-robar-claro.jpg) | [oscuro](solo-robar-oscuro.jpg) |
 | `playDrawAway` | `BetweenGamesChoosePlayDraw` (ajena) | [claro](jugar-robar-ajeno-claro.jpg) | [oscuro](jugar-robar-ajeno-oscuro.jpg) |
+| `bottomRipple` | `RippleBottomOrder` | [claro](fondo-estruendo-claro.jpg) | [oscuro](fondo-estruendo-oscuro.jpg) |
+| `bottomReveal` | `RevealUntilBottomOrder` | [claro](fondo-revelado-claro.jpg) | [oscuro](fondo-revelado-oscuro.jpg) |
+| `bottomDig` | `DigBottomOrder` | [claro](fondo-mirado-claro.jpg) | [oscuro](fondo-mirado-oscuro.jpg) |
+| `bottomEmpty` | `DigBottomOrder` (pila vacía) | [claro](fondo-vacio-claro.jpg) | [oscuro](fondo-vacio-oscuro.jpg) |
+| `bottomAway` | `RippleBottomOrder` (ajeno) | [claro](fondo-ajeno-claro.jpg) | [oscuro](fondo-ajeno-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

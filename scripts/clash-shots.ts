@@ -30,7 +30,12 @@ const SHOTS = [
   { scene: 'sideboardAway', file: 'ux-ajuste-ajeno-1440.jpg', block: '[data-sideboard]' },
   { scene: 'playDraw', file: 'ux-jugar-o-robar-1440.jpg', block: '[data-play-draw]' },
   { scene: 'playDrawDraw', file: 'ux-solo-robar-1440.jpg', block: '[data-play-draw]' },
-  { scene: 'playDrawAway', file: 'ux-jugar-robar-ajeno-1440.jpg', block: '[data-play-draw]' }
+  { scene: 'playDrawAway', file: 'ux-jugar-robar-ajeno-1440.jpg', block: '[data-play-draw]' },
+  { scene: 'bottomRipple', file: 'ux-fondo-estruendo-1440.jpg', block: '[data-bottom-order]' },
+  { scene: 'bottomReveal', file: 'ux-fondo-revelado-1440.jpg', block: '[data-bottom-order]' },
+  { scene: 'bottomDig', file: 'ux-fondo-mirado-1440.jpg', block: '[data-bottom-order]' },
+  { scene: 'bottomEmpty', file: 'ux-fondo-vacio-1440.jpg', block: '[data-bottom-order]' },
+  { scene: 'bottomAway', file: 'ux-fondo-ajeno-1440.jpg', block: '[data-bottom-order]' }
 ];
 
 mkdirSync(outDir, { recursive: true });

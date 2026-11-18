@@ -3520,6 +3520,72 @@ export function topOrBottomOffers(actions: GameAction[]): TopOrBottomOffers {
   return { top, bottom };
 }
 
+export type BottomOrderPrompt = {
+  /** Which window this is; the three share a shape but not a cause. */
+  kind: 'ripple' | 'reveal-until' | 'dig';
+  player: PlayerId;
+  sourceId: ObjectId | null;
+  /**
+   * CR 608.2d: the cards whose bottom order the controller announces, in the
+   * engine's order. The answer must be a permutation of exactly these ids.
+   */
+  cards: ObjectId[];
+  /** `Ripple N`: how many cards the reveal would show, for the wording only. */
+  rippleCount: number | null;
+};
+/**
+ * CR 702.60a + CR 701.20a + CR 701.20e: the three windows that ask the
+ * controller to announce the bottom-placement order of a revealed pile —
+ * Ripple's uncast cards, a reveal-until's leftovers, and a dig's rest pile.
+ *
+ * All three are answered with the same `SelectCards { cards: order }`, and the
+ * engine validates the answer as a permutation of the published pile. So the
+ * order IS the answer: this table never re-sorts the cards, and it never adds
+ * one the wire did not publish.
+ */
+export function bottomOrderPrompt(snapshot: EngineSnapshot | null): BottomOrderPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting) return null;
+  const type = waiting.type;
+  const kind =
+    type === 'RippleBottomOrder' ? 'ripple'
+    : type === 'RevealUntilBottomOrder' ? 'reveal-until'
+    : type === 'DigBottomOrder' ? 'dig'
+    : null;
+  if (!kind) return null;
+  const data = waiting.data ?? {};
+  return {
+    kind,
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+    cards: Array.isArray(data.cards)
+      ? (data.cards as unknown[]).filter((id): id is ObjectId => typeof id === 'number' && Number.isInteger(id) && id > 0)
+      : [],
+    rippleCount:
+      kind === 'ripple' && typeof data.count === 'number' && Number.isInteger(data.count) && data.count >= 0
+        ? data.count
+        : null
+  };
+}
+/** The published deck order, as the pile arrived; a copy, so callers cannot mutate the prompt. */
+export function bottomOrderPile(prompt: BottomOrderPrompt): ObjectId[] {
+  return [...prompt.cards];
+}
+/**
+ * A permutation of exactly the published pile — the engine's own admission test.
+ * `new Set` would hide a duplicate, so the check is on the length and the
+ * membership, like `handle_*` does with `cards.contains`.
+ */
+export function isBottomOrderPermutation(prompt: BottomOrderPrompt, order: ObjectId[]): boolean {
+  if (order.length !== prompt.cards.length) return false;
+  if (new Set(order).size !== order.length) return false;
+  return order.every((id) => prompt.cards.includes(id));
+}
+/** The button's action, or `null` when `order` is not the published permutation. */
+export function bottomOrderAction(prompt: BottomOrderPrompt, order: ObjectId[]): GameAction | null {
+  return isBottomOrderPermutation(prompt, order) ? selectCardsAction(order) : null;
+}
+
 export type SideboardPrompt = {
   player: PlayerId;
   gameNumber: number | null;
