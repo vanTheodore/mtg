@@ -3520,6 +3520,121 @@ export function topOrBottomOffers(actions: GameAction[]): TopOrBottomOffers {
   return { top, bottom };
 }
 
+export type SideboardPrompt = {
+  player: PlayerId;
+  gameNumber: number | null;
+  /** CR 100.2a: the engine's own floor, clamped to what was registered. */
+  minMainDeckSize: number | null;
+  /** CR 100.4a: the cap; `0` is a format with no sideboard. Absent is no cap. */
+  maxSideboardSize: number | null;
+  /** The published score, only when all three counters are integers. */
+  score: { p0: number; p1: number; draws: number } | null;
+};
+/**
+ * CR 100.2b + CR 100.4a: `WaitingFor::BetweenGamesSideboard`. Between games the
+ * player submits their main deck and sideboard. The bounds are the engine's own
+ * acceptance predicate (`sideboard_submission_bounds`, the same function
+ * `handle_submit_sideboard` validates against), so this table prints them and
+ * does not derive a deck size. `0` for the sideboard cap is a format that
+ * forbids one (the Commander family), not a missing value.
+ *
+ * The answer is `SubmitSideboard { main, sideboard }`: the submission, not a
+ * one-card swap. A `Minimum` deck-size rule means the deck may legally grow, so
+ * this table never says the counts have to match.
+ */
+export function sideboardPrompt(snapshot: EngineSnapshot | null): SideboardPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'BetweenGamesSideboard') return null;
+  const data = waiting.data ?? {};
+  const score = data.score as { p0_wins?: unknown; p1_wins?: unknown; draws?: unknown } | undefined;
+  const counts = [score?.p0_wins, score?.p1_wins, score?.draws];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    gameNumber: typeof data.game_number === 'number' ? data.game_number : null,
+    minMainDeckSize:
+      typeof data.min_main_deck_size === 'number' && data.min_main_deck_size >= 0
+        ? data.min_main_deck_size
+        : null,
+    maxSideboardSize:
+      typeof data.max_sideboard_size === 'number' && data.max_sideboard_size >= 0
+        ? data.max_sideboard_size
+        : null,
+    score:
+      counts.every((value) => typeof value === 'number' && Number.isInteger(value) && value >= 0)
+        ? { p0: score!.p0_wins as number, p1: score!.p1_wins as number, draws: score!.draws as number }
+        : null
+  };
+}
+export type SideboardOffers = {
+  /** The submission as the engine published it; there is no second one. */
+  submit: GameAction | null;
+  mainCount: number | null;
+  sideboardCount: number | null;
+};
+/** A submission is the published action's own lists; absent or malformed gives `null` counts. */
+export function sideboardOffers(actions: GameAction[]): SideboardOffers {
+  const submit = actions.find((action) => action.type === 'SubmitSideboard') ?? null;
+  const count = (value: unknown): number | null => {
+    if (!Array.isArray(value)) return null;
+    let total = 0;
+    for (const entry of value) {
+      const n = (entry as { count?: unknown } | null)?.count;
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < 0) return null;
+      total += n;
+    }
+    return total;
+  };
+  return {
+    submit,
+    mainCount: count(submit?.data?.main),
+    sideboardCount: count(submit?.data?.sideboard)
+  };
+}
+
+export type PlayDrawPrompt = {
+  player: PlayerId;
+  gameNumber: number | null;
+  score: { p0: number; p1: number; draws: number } | null;
+};
+/**
+ * CR 103.1: `WaitingFor::BetweenGamesChoosePlayDraw`. The designated chooser
+ * decides whether they take the first turn of the next game. The answer is
+ * `ChoosePlayDraw { play_first }`, copied from `legal.actions`; a boolean the
+ * wire did not publish is not a button. `play_first: true` is the chooser going
+ * first, not "the first player in the log".
+ */
+export function playDrawPrompt(snapshot: EngineSnapshot | null): PlayDrawPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'BetweenGamesChoosePlayDraw') return null;
+  const data = waiting.data ?? {};
+  const score = data.score as { p0_wins?: unknown; p1_wins?: unknown; draws?: unknown } | undefined;
+  const counts = [score?.p0_wins, score?.p1_wins, score?.draws];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    gameNumber: typeof data.game_number === 'number' ? data.game_number : null,
+    score:
+      counts.every((value) => typeof value === 'number' && Number.isInteger(value) && value >= 0)
+        ? { p0: score!.p0_wins as number, p1: score!.p1_wins as number, draws: score!.draws as number }
+        : null
+  };
+}
+export type PlayDrawOffers = {
+  play: GameAction | null;
+  draw: GameAction | null;
+};
+/** A choice that is not the published boolean is not a button. The first action wins. */
+export function playDrawOffers(actions: GameAction[]): PlayDrawOffers {
+  let play: GameAction | null = null;
+  let draw: GameAction | null = null;
+  for (const action of actions) {
+    if (action.type !== 'ChoosePlayDraw') continue;
+    const choice = action.data?.play_first;
+    if (choice === true && !play) play = action;
+    if (choice === false && !draw) draw = action;
+  }
+  return { play, draw };
+}
+
 export type ClashPrompt = {
   player: PlayerId;
   /** CR 701.30b: the opponents the wire published, in the engine's order. */

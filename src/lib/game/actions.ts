@@ -28,7 +28,9 @@ const LABELS: Record<string, string> = {
   ChooseResolutionOptionalPaymentBranch: 'Elegir pago opcional',
   ChooseGiftRecipient: 'Elegir destinatario',
   ChooseTopOrBottom: 'Elegir posición en la biblioteca',
-  ChooseClashOpponent: 'Elegir oponente del choque'
+  ChooseClashOpponent: 'Elegir oponente del choque',
+  SubmitSideboard: 'Entregar el mazo',
+  ChoosePlayDraw: 'Elegir jugar o robar'
 };
 
 function actionObjectId(action: GameAction): number | undefined {
@@ -115,6 +117,16 @@ export function describeAction(action: GameAction, objects: Record<string, GameO
   if (action.type === 'ChooseGiftRecipient') {
     const opponent = data.opponent;
     return typeof opponent === 'number' ? `Elegir al Jugador ${opponent + 1}` : base;
+  }
+  if (action.type === 'ChoosePlayDraw') {
+    if (data.play_first === true) return 'Jugar primero';
+    if (data.play_first === false) return 'Robar primero';
+    return base;
+  }
+  if (action.type === 'SubmitSideboard') {
+    const main = Array.isArray(data.main) ? data.main.length : 0;
+    const side = Array.isArray(data.sideboard) ? data.sideboard.length : 0;
+    return main === 0 && side === 0 ? base : `Entregar ${main + side} entradas de mazo`;
   }
   if (action.type === 'ChooseClashOpponent') {
     const opponent = data.opponent;
@@ -232,6 +244,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'TopOrBottomChoice': return 'Eliges arriba o abajo de la biblioteca. Arriba es la posición que ya fijó el efecto; abajo es el fondo.';
     case 'ClashChooseOpponent': return 'Eliges con qué oponente chocar. Los candidatos son los que publicó el motor; no se reordenan.';
     case 'ClashCardPlacement': return 'Colocas la carta revelada del choque arriba o abajo. Las colocaciones se aplican juntas al final.';
+    case 'BetweenGamesSideboard': return 'Entregas el mazo principal y el banquillo. Los límites son los del formato que publicó el motor.';
+    case 'BetweenGamesChoosePlayDraw': return 'El jugador designado decide si empieza la próxima partida o la empieza el otro.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

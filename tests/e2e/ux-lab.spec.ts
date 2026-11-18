@@ -2373,6 +2373,86 @@ test('la colocación ajena del choque se nombra y no ofrece botones', async ({ p
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('el ajuste entre partidas imprime el suelo y el tope que publicó el motor', async ({ page }) => {
+  await page.goto('/ux?scene=sideboard');
+  const block = page.locator('[data-sideboard]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-sideboard-min', '60');
+  await expect(block).toHaveAttribute('data-sideboard-max', '15');
+  await expect(block.locator('strong')).toHaveText('Ajustar el mazo entre partidas');
+  await expect(block.locator('[data-sideboard-score]')).toContainText('Partida 2');
+  await expect(block.locator('[data-sideboard-score]')).toContainText('Jugador 1 1');
+  await expect(block.locator('[data-sideboard-bounds]')).toContainText('al menos 60 cartas');
+  await expect(block.locator('[data-sideboard-bounds]')).toContainText('hasta 15 cartas');
+  // CR 100.2b: the counts are the published submission's own lists.
+  await expect(block.locator('[data-sideboard-main]')).toContainText('28 cartas');
+  await expect(block.locator('[data-sideboard-side]')).toContainText('3 cartas');
+  await expect(block.locator('[data-sideboard-submit]')).toContainText('Entregar este mazo');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un formato sin banquillo lo dice y no pide un cambio uno a uno', async ({ page }) => {
+  await page.goto('/ux?scene=sideboardNoSide');
+  const block = page.locator('[data-sideboard]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-sideboard-max', '0');
+  await expect(block.locator('[data-sideboard-bounds]')).toContainText('no tiene banquillo');
+  // CR 100.4a: the published submission is still the one action.
+  await expect(block.locator('[data-sideboard-submit]')).toHaveCount(1);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el ajuste ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=sideboardAway');
+  const block = page.locator('[data-sideboard]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-sideboard-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('jugar o robar son los booleanos que publicó el motor', async ({ page }) => {
+  await page.goto('/ux?scene=playDraw');
+  const block = page.locator('[data-play-draw]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Elige si juegas o robas');
+  await expect(block.locator('[data-play-draw-score]')).toContainText('Marcador');
+  await expect(block.locator('[data-play-draw-play]')).toContainText('Jugar primero');
+  await expect(block.locator('[data-play-draw-draw]')).toContainText('Robar primero');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('robar no reconstruye el jugar que el cable no publicó', async ({ page }) => {
+  await page.goto('/ux?scene=playDrawDraw');
+  const block = page.locator('[data-play-draw]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-play-draw-draw]')).toHaveCount(1);
+  await expect(block.locator('[data-play-draw-play]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la elección ajena de jugar o robar se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=playDrawAway');
+  const block = page.locator('[data-play-draw]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toContainText('Jugador 2');
+  await expect(block.locator('[data-play-draw-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

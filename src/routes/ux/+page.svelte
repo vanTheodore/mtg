@@ -91,10 +91,12 @@
   import TopOrBottomPrompt from '#lib/components/TopOrBottomPrompt.svelte';
   import ClashOpponentPrompt from '#lib/components/ClashOpponentPrompt.svelte';
   import ClashPlacementPrompt from '#lib/components/ClashPlacementPrompt.svelte';
+  import SideboardPrompt from '#lib/components/SideboardPrompt.svelte';
+  import PlayDrawPrompt from '#lib/components/PlayDrawPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -234,6 +236,12 @@
     { value: 'clashPlace', label: 'Colocar la carta' },
     { value: 'clashPlaceHidden', label: 'Carta oculta' },
     { value: 'clashPlaceAway', label: 'Colocación ajena' },
+    { value: 'sideboard', label: 'Ajustar el mazo' },
+    { value: 'sideboardNoSide', label: 'Sin banquillo' },
+    { value: 'sideboardAway', label: 'Ajuste ajeno' },
+    { value: 'playDraw', label: 'Jugar o robar' },
+    { value: 'playDrawDraw', label: 'Robar primero' },
+    { value: 'playDrawAway', label: 'Elección ajena' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -377,6 +385,12 @@
     clashPlace: 'ClashCardPlacement · CR 701.30c, arriba o abajo, se aplican juntas',
     clashPlaceHidden: 'ClashCardPlacement · la carta oculta no se nombra',
     clashPlaceAway: 'ClashCardPlacement · lo decide el otro asiento',
+    sideboard: 'BetweenGamesSideboard · CR 100.2b, el suelo y el tope son del motor',
+    sideboardNoSide: 'BetweenGamesSideboard · CR 100.4a, un formato sin banquillo',
+    sideboardAway: 'BetweenGamesSideboard · lo decide el otro asiento',
+    playDraw: 'BetweenGamesChoosePlayDraw · CR 103.1, jugar o robar',
+    playDrawDraw: 'BetweenGamesChoosePlayDraw · sólo robar publicado',
+    playDrawAway: 'BetweenGamesChoosePlayDraw · lo decide el otro asiento',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -1663,6 +1677,28 @@
         }
       };
     }
+    if (scene.startsWith('sideboard')) {
+      return {
+        type: 'BetweenGamesSideboard',
+        data: {
+          player: scene === 'sideboardAway' ? 1 : 0,
+          game_number: 2,
+          score: { p0_wins: 1, p1_wins: 0, draws: 0 },
+          min_main_deck_size: 60,
+          max_sideboard_size: scene === 'sideboardNoSide' ? 0 : 15
+        }
+      };
+    }
+    if (scene.startsWith('playDraw')) {
+      return {
+        type: 'BetweenGamesChoosePlayDraw',
+        data: {
+          player: scene === 'playDrawAway' ? 1 : 0,
+          game_number: 2,
+          score: { p0_wins: 1, p1_wins: 0, draws: 0 }
+        }
+      };
+    }
     if (scene.startsWith('clashPlace')) {
       return {
         type: 'ClashCardPlacement',
@@ -2806,7 +2842,24 @@
                                     ]
                                   : scene === 'giftOne'
                                     ? [{ type: 'ChooseGiftRecipient', data: { opponent: 1 } }]
-                                    : scene === 'clash' || scene === 'clashAway'
+                                    : scene === 'sideboard' || scene === 'sideboardNoSide' || scene === 'sideboardAway'
+                                      ? [
+                                          {
+                                            type: 'SubmitSideboard',
+                                            data: {
+                                              main: [{ name: 'Forest', count: 24 }, { name: 'Grizzly Bears', count: 4 }],
+                                              sideboard: [{ name: 'Naturalize', count: 3 }]
+                                            }
+                                          }
+                                        ]
+                                      : scene === 'playDraw' || scene === 'playDrawAway'
+                                        ? [
+                                            { type: 'ChoosePlayDraw', data: { play_first: true } },
+                                            { type: 'ChoosePlayDraw', data: { play_first: false } }
+                                          ]
+                                        : scene === 'playDrawDraw'
+                                          ? [{ type: 'ChoosePlayDraw', data: { play_first: false } }]
+                                          : scene === 'clash' || scene === 'clashAway'
                                       ? [
                                           { type: 'ChooseClashOpponent', data: { opponent: 2 } },
                                           { type: 'ChooseClashOpponent', data: { opponent: 1 } }
@@ -3074,6 +3127,8 @@
         {#if scene.startsWith('topBottom')}<TopOrBottomPrompt />{/if}
         {#if scene.startsWith('clashPlace')}<ClashPlacementPrompt />{/if}
         {#if scene.startsWith('clash')}<ClashOpponentPrompt />{/if}
+        {#if scene.startsWith('sideboard')}<SideboardPrompt />{/if}
+        {#if scene.startsWith('playDraw')}<PlayDrawPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

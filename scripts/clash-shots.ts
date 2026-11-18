@@ -24,7 +24,13 @@ const SHOTS = [
   { scene: 'clashAway', file: 'ux-choque-ajeno-1440.jpg', block: '[data-clash]' },
   { scene: 'clashPlace', file: 'ux-colocar-choque-1440.jpg', block: '[data-clash-placement]' },
   { scene: 'clashPlaceHidden', file: 'ux-colocar-oculta-1440.jpg', block: '[data-clash-placement]' },
-  { scene: 'clashPlaceAway', file: 'ux-colocacion-ajena-1440.jpg', block: '[data-clash-placement]' }
+  { scene: 'clashPlaceAway', file: 'ux-colocacion-ajena-1440.jpg', block: '[data-clash-placement]' },
+  { scene: 'sideboard', file: 'ux-ajustar-mazo-1440.jpg', block: '[data-sideboard]' },
+  { scene: 'sideboardNoSide', file: 'ux-sin-banquillo-1440.jpg', block: '[data-sideboard]' },
+  { scene: 'sideboardAway', file: 'ux-ajuste-ajeno-1440.jpg', block: '[data-sideboard]' },
+  { scene: 'playDraw', file: 'ux-jugar-o-robar-1440.jpg', block: '[data-play-draw]' },
+  { scene: 'playDrawDraw', file: 'ux-solo-robar-1440.jpg', block: '[data-play-draw]' },
+  { scene: 'playDrawAway', file: 'ux-jugar-robar-ajeno-1440.jpg', block: '[data-play-draw]' }
 ];
 
 mkdirSync(outDir, { recursive: true });

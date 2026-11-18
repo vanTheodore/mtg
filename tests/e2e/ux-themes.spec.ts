@@ -158,6 +158,12 @@ const SCENES = [
   { scene: 'clashPlace', slug: 'colocar-choque', block: '[data-clash-placement]' },
   { scene: 'clashPlaceHidden', slug: 'colocar-oculta', block: '[data-clash-placement]' },
   { scene: 'clashPlaceAway', slug: 'colocacion-ajena', block: '[data-clash-placement]' },
+  { scene: 'sideboard', slug: 'ajustar-mazo', block: '[data-sideboard]' },
+  { scene: 'sideboardNoSide', slug: 'sin-banquillo', block: '[data-sideboard]' },
+  { scene: 'sideboardAway', slug: 'ajuste-ajeno', block: '[data-sideboard]' },
+  { scene: 'playDraw', slug: 'jugar-o-robar', block: '[data-play-draw]' },
+  { scene: 'playDrawDraw', slug: 'solo-robar', block: '[data-play-draw]' },
+  { scene: 'playDrawAway', slug: 'jugar-robar-ajeno', block: '[data-play-draw]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

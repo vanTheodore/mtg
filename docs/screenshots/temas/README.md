@@ -113,6 +113,12 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `clashPlace` | `ClashCardPlacement` | [claro](colocar-choque-claro.jpg) | [oscuro](colocar-choque-oscuro.jpg) |
 | `clashPlaceHidden` | `ClashCardPlacement` (carta oculta) | [claro](colocar-oculta-claro.jpg) | [oscuro](colocar-oculta-oscuro.jpg) |
 | `clashPlaceAway` | `ClashCardPlacement` (ajena) | [claro](colocacion-ajena-claro.jpg) | [oscuro](colocacion-ajena-oscuro.jpg) |
+| `sideboard` | `BetweenGamesSideboard` | [claro](ajustar-mazo-claro.jpg) | [oscuro](ajustar-mazo-oscuro.jpg) |
+| `sideboardNoSide` | `BetweenGamesSideboard` (sin banquillo) | [claro](sin-banquillo-claro.jpg) | [oscuro](sin-banquillo-oscuro.jpg) |
+| `sideboardAway` | `BetweenGamesSideboard` (ajeno) | [claro](ajuste-ajeno-claro.jpg) | [oscuro](ajuste-ajeno-oscuro.jpg) |
+| `playDraw` | `BetweenGamesChoosePlayDraw` | [claro](jugar-o-robar-claro.jpg) | [oscuro](jugar-o-robar-oscuro.jpg) |
+| `playDrawDraw` | `BetweenGamesChoosePlayDraw` (sólo robar) | [claro](solo-robar-claro.jpg) | [oscuro](solo-robar-oscuro.jpg) |
+| `playDrawAway` | `BetweenGamesChoosePlayDraw` (ajena) | [claro](jugar-robar-ajeno-claro.jpg) | [oscuro](jugar-robar-ajeno-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

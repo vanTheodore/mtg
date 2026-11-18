@@ -3266,3 +3266,51 @@ verde con **497** ficheros y SHA-256
 `f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
 En Chromium, seis pruebas nuevas en `ux-lab` (141 → 147) y seis escenas más en
 la prueba de temas.
+
+## Entre partidas se entrega una lista y se elige un lado, y ninguno de los dos se deriva (sexagésima quinta pasada, 18 nov 2026)
+
+`BetweenGamesSideboard` y `BetweenGamesChoosePlayDraw` son las dos pausas de
+entre partidas (CR 100.2b + CR 100.4a, CR 103.1). Phase no tiene modal para
+ninguna de las dos: las lista en `DialogHost` y en `waitingForRegistry` como
+ventanas de diálogo, sin cromo propio. Mesa las trata como el resto.
+
+**`BetweenGamesSideboard` (CR 100.2b + CR 100.4a).** Entre partidas el jugador
+entrega su mazo principal y su banquillo. La acción es `SubmitSideboard { main,
+sideboard }`: la entrega, no un intercambio carta a carta. El suelo
+(`min_main_deck_size`) y el tope del banquillo (`max_sideboard_size`) los
+publica el motor desde `sideboard_submission_bounds`, que es la misma función
+contra la que `handle_submit_sideboard` valida: esta mesa los **imprime** y no
+deriva un tamaño de mazo. Bajo una regla `Minimum` el mazo puede crecer
+legalmente, así que el bloque no pide que los recuentos coincidan. Un tope `0`
+es un formato que **prohíbe** el banquillo (la familia Commander), no un valor
+ausente; la ausencia del campo es «sin tope». Los recuentos que se enseñan son
+las listas de la propia acción publicada. El otro asiento ve la pausa y no
+recibe botón.
+
+**`BetweenGamesChoosePlayDraw` (CR 103.1).** El jugador designado decide si
+toma el primer turno de la próxima partida. La acción es `ChoosePlayDraw {
+play_first }`, copiada de `legal.actions`; un booleano que el cable no publicó no
+es botón. `play_first: true` es que **el que elige** empieza, no «el primer
+jugador del registro». El otro asiento ve la elección y no recibe botón.
+
+Laboratorio: `/ux?scene=sideboard` (suelo 60, tope 15, 28 y 3 cartas
+publicadas), `sideboardNoSide` (tope 0: un formato sin banquillo),
+`sideboardAway`, `playDraw` (jugar o robar), `playDrawDraw` (sólo robar
+publicado) y `playDrawAway`. Capturas `ux-ajustar-mazo-1440.jpg`,
+`ux-sin-banquillo-1440.jpg`, `ux-ajuste-ajeno-1440.jpg`,
+`ux-jugar-o-robar-1440.jpg`, `ux-solo-robar-1440.jpg` y
+`ux-jugar-robar-ajeno-1440.jpg`, más sus pares de tema.
+
+`main` de Phase va 23 commits por delante del pin. No se importan: estas dos
+ventanas se leen del pin `28b2f9e4`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **714** (8
+nuevas en `between-games.test.ts`: el suelo, el tope y el marcador son los
+publicados, el banquillo prohibido es `0` y el tope ausente no es `0`, la
+entrega es la acción publicada con sus propias listas, un marcador malformado no
+se imprime, y jugar o robar es el booleano publicado sin reconstruir el que
+falta); el recuento vigilado pasa a **90** entradas en `REPRESENTED` (88 → 90).
+El motor no se tocó: `bun run engine:verify` sigue en verde con **497** ficheros
+y SHA-256 `f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
