@@ -87,10 +87,12 @@
   import CipherPrompt from '#lib/components/CipherPrompt.svelte';
   import CostOrderPrompt from '#lib/components/CostOrderPrompt.svelte';
   import ResolutionPaymentPrompt from '#lib/components/ResolutionPaymentPrompt.svelte';
+  import GiftRecipientPrompt from '#lib/components/GiftRecipientPrompt.svelte';
+  import TopOrBottomPrompt from '#lib/components/TopOrBottomPrompt.svelte';
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -216,6 +218,14 @@
     { value: 'resPay', label: 'Pago opcional' },
     { value: 'resPayOne', label: 'Un solo pago' },
     { value: 'resPayAway', label: 'Pago ajeno' },
+    { value: 'gift', label: 'Destinatario del regalo' },
+    { value: 'giftOne', label: 'Un solo destinatario' },
+    { value: 'giftCost', label: 'A quién afecta el coste' },
+    { value: 'giftAway', label: 'Regalo ajeno' },
+    { value: 'topBottom', label: 'Arriba o abajo' },
+    { value: 'topBottomNth', label: 'La segunda o abajo' },
+    { value: 'topBottomOne', label: 'Sólo arriba' },
+    { value: 'topBottomAway', label: 'Posición ajena' },
     { value: 'revealAny', label: 'Revelar cualquier número' },
     { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
@@ -345,6 +355,14 @@
     resPay: 'ResolutionOptionalPaymentChoice · CR 118.12, el índice no se renumera',
     resPayOne: 'ResolutionOptionalPaymentChoice · el declinar ausente no es botón',
     resPayAway: 'ResolutionOptionalPaymentChoice · lo decide el otro asiento',
+    gift: 'ChooseGiftRecipient · CR 702.174a, el oponente no publicado no es botón',
+    giftOne: 'ChooseGiftRecipient · sólo el oponente que legal.actions publicó',
+    giftCost: 'ChooseGiftRecipient · CR 601.2h, el coste actúa sobre el elegido',
+    giftAway: 'ChooseGiftRecipient · lo decide el otro asiento',
+    topBottom: 'TopOrBottomChoice · CR 608.2d, arriba o abajo',
+    topBottomNth: 'TopOrBottomChoice · la segunda desde arriba, no la cima',
+    topBottomOne: 'TopOrBottomChoice · el fondo ausente no es botón',
+    topBottomAway: 'TopOrBottomChoice · lo decide el otro asiento',
     revealAny: 'RevealChoice · CR 107.1c, cualquier número',
     unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
@@ -805,6 +823,20 @@
     name: 'Fire Covenant',
     card_types: { core_types: ['Instant'] }
   } as GameObject;
+  // CR 702.174a: Generous Gift is the spell whose recipient is chosen. The
+  // buttons come from legal.actions, not from reordering these seats.
+  const generousGift = {
+    id: 447, card_id: 447, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Generous Gift',
+    card_types: { core_types: ['Instant'] }
+  } as GameObject;
+  // CR 608.2d: Banishing Light is the permanent whose owner chooses the
+  // library position. The buttons are the published booleans.
+  const banishingLight = {
+    id: 448, card_id: 448, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Banishing Light',
+    card_types: { core_types: ['Enchantment'] }
+  } as GameObject;
   const zoneSource = {
     id: 430, card_id: 430, owner: 0, controller: 0, zone: 'Stack',
     name: 'Test Spell',
@@ -1036,7 +1068,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, cyclonic, deepFiend, wear, lurrus, hawk, dryadArbor, glacialRay, peerThroughDepths, reachThroughMists, gemrazer, llanowarElves, hiddenStrings, invisibleStalker, tormentedSoul, altarsReap, fireCovenant, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, cyclonic, deepFiend, wear, lurrus, hawk, dryadArbor, glacialRay, peerThroughDepths, reachThroughMists, gemrazer, llanowarElves, hiddenStrings, invisibleStalker, tormentedSoul, altarsReap, fireCovenant, generousGift, banishingLight, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -1573,6 +1605,33 @@
               locked_cost: { type: 'Cost', generic: 1, shards: ['Red', 'Blue'] }
             }
           ]
+        }
+      };
+    }
+    if (scene.startsWith('gift')) {
+      const effectCost = {
+        type: 'EffectCost',
+        cost: { type: 'EffectCost', data: { effect: { type: 'GainLife', amount: { type: 'Fixed', value: 3 } } } }
+      };
+      return {
+        type: 'ChooseGiftRecipient',
+        data: {
+          player: scene === 'giftAway' ? 1 : 0,
+          candidates: scene === 'giftOne' ? [1] : [2, 1],
+          ...(scene === 'giftCost'
+            ? { purpose: effectCost }
+            : { gift_kind: { type: 'Card' } }),
+          pending_cast: { object_id: 447 }
+        }
+      };
+    }
+    if (scene.startsWith('topBottom')) {
+      return {
+        type: 'TopOrBottomChoice',
+        data: {
+          player: scene === 'topBottomAway' ? 1 : 0,
+          object_id: 448,
+          ...(scene === 'topBottomNth' ? { top_position: { type: 'NthFromTop', n: 2 } } : {})
         }
       };
     }
@@ -2691,7 +2750,22 @@
                                 ]
                               : scene === 'resPayOne'
                                 ? [{ type: 'ChooseResolutionOptionalPaymentBranch', data: { choice: { type: 'Pay', data: { index: 0 } } } }]
-                                : scene === 'cipherHidden'
+                                : scene === 'gift' || scene === 'giftCost' || scene === 'giftAway'
+                                  ? [
+                                      { type: 'ChooseGiftRecipient', data: { opponent: 2 } },
+                                      { type: 'ChooseGiftRecipient', data: { opponent: 1 } },
+                                      { type: 'CancelCast' }
+                                    ]
+                                  : scene === 'giftOne'
+                                    ? [{ type: 'ChooseGiftRecipient', data: { opponent: 1 } }]
+                                    : scene === 'topBottom' || scene === 'topBottomNth' || scene === 'topBottomAway'
+                                      ? [
+                                          { type: 'ChooseTopOrBottom', data: { top: true } },
+                                          { type: 'ChooseTopOrBottom', data: { top: false } }
+                                        ]
+                                      : scene === 'topBottomOne'
+                                        ? [{ type: 'ChooseTopOrBottom', data: { top: true } }]
+                                        : scene === 'cipherHidden'
                           ? [
                               { type: 'CipherEncode', data: { creature: 443 } },
                               { type: 'CipherEncode', data: { creature: 0 } }
@@ -2934,6 +3008,8 @@
         {#if scene.startsWith('cipher')}<CipherPrompt />{/if}
         {#if scene.startsWith('costOrder')}<CostOrderPrompt />{/if}
         {#if scene.startsWith('resPay')}<ResolutionPaymentPrompt />{/if}
+        {#if scene.startsWith('gift')}<GiftRecipientPrompt />{/if}
+        {#if scene.startsWith('topBottom')}<TopOrBottomPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />

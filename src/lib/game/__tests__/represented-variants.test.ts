@@ -73,7 +73,7 @@ test('every represented name is a real variant of the pinned engine', () => {
 
 test('the represented set is exactly the number the docs publish', () => {
   // If a pass adds a view, it adds the name here and this number, together.
-  expect(represented().length).toBe(84);
+  expect(represented().length).toBe(86);
   // Duplicates would silently undercount the coverage.
   expect(new Set(represented()).size).toBe(represented().length);
 });

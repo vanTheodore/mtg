@@ -3146,3 +3146,56 @@ vigilado pasa a **84** entradas en `REPRESENTED` (82 → 84). El motor no se toc
 `f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
 En Chromium, seis pruebas nuevas (127 → 133 en `ux-lab`) y seis escenas más
 en la prueba de temas (107 → 113 escenas, 226 jpg, presupuesto de 1320 s).
+
+## El destinatario y la posición en la biblioteca no se reconstruyen (sexagésima tercera pasada, 7 nov 2026)
+
+`ChooseGiftRecipient` y `TopOrBottomChoice` son las dos ventanas que siguen al
+pago al resolver en lo que el cable ya sabe responder. Phase ya las tiene
+(`GiftRecipientModal`, `TopOrBottomChoiceModal`). Mesa no copia el cromo. Copia
+qué botón existe y qué sobre se envía.
+
+**`ChooseGiftRecipient` (CR 601.2 + CR 115.10a).** Mientras se lanza, el
+lanzador elige un oponente. `purpose` dice para qué: el destinatario del
+regalo prometido (CR 702.174a; un `purpose` ausente es regalo) o el oponente
+sobre el que actúa un coste de efecto (CR 601.2h, «haz que un oponente gane N
+vidas»). La acción es `ChooseGiftRecipient { opponent }`, copiada de
+`legal.actions`. Un botón existe sólo si ese oponente ya es legal. El orden de
+los candidatos es el del motor: esta mesa no lo reordena. `CancelCast` aparece
+sólo si está publicado. El tipo de regalo que esta mesa no sabe nombrar se
+dice sin nombre, no se reescribe. Las vidas se imprimen sólo cuando la
+cantidad es un número fijo; una cantidad que esta mesa no resuelve no se
+inventa. El otro asiento ve los candidatos y no recibe botón.
+
+**`TopOrBottomChoice` (CR 608.2d).** El jugador que designa el efecto elige la
+posición en la biblioteca. `top: true` coloca el objeto en la `top_position`
+publicada: omitida es la cima, `NthFromTop` es la n-ésima desde arriba.
+`top: false` es siempre el fondo. La acción es `ChooseTopOrBottom { top }`,
+copiada de `legal.actions`. Un botón existe sólo si ese booleano ya es legal.
+Una posición que esta mesa no sabe colocar no se relabela como la cima. El
+otro asiento ve las caras publicadas y no recibe botón.
+
+Laboratorio: `/ux?scene=gift` (Generous Gift, Jugador 3 y luego Jugador 2, más
+cancelar), `giftOne` (sólo el Jugador 2), `giftCost` (3 vidas, sin regalo),
+`giftAway`, `topBottom` (Banishing Light, arriba o abajo), `topBottomNth` (la
+segunda desde arriba), `topBottomOne` (sólo arriba) y `topBottomAway`.
+Capturas `ux-destinatario-1440.jpg`, `ux-un-destinatario-1440.jpg`,
+`ux-coste-oponente-1440.jpg`, `ux-regalo-ajeno-1440.jpg`,
+`ux-arriba-o-abajo-1440.jpg`, `ux-la-segunda-1440.jpg`,
+`ux-solo-arriba-1440.jpg` y `ux-posicion-ajena-1440.jpg`, más sus pares de
+tema.
+
+`main` de Phase va 23 commits por delante del pin. No se importan: estas dos
+ventanas se leen del pin `28b2f9e4`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **699** (10 nuevas:
+5 en `gift-recipient.test.ts` —el propósito ausente es regalo, las vidas fijas,
+el oponente en blanco y el cancelar que sólo existe si se publicó— y 5 en
+`top-or-bottom.test.ts` —la posición omitida es la cima, la n publicada, la
+posición que no se relabela y el booleano que falta—); el recuento vigilado
+pasa a **86** entradas en `REPRESENTED` (84 → 86). El motor no se tocó:
+`bun run engine:verify` sigue en verde con **497** ficheros y SHA-256
+`f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
+En Chromium, ocho pruebas nuevas (133 → 141 en `ux-lab`) y ocho escenas más
+en la prueba de temas (113 → 121 escenas, 242 jpg, presupuesto de 1410 s).

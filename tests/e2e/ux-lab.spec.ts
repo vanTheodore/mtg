@@ -2179,6 +2179,118 @@ test('el pago ajeno se nombra y no ofrece botones', async ({ page }) => {
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('el destinatario es un oponente publicado, y el orden no se reordena', async ({ page }) => {
+  await page.goto('/ux?scene=gift');
+  const block = page.locator('[data-gift-recipient]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-gift-recipient-purpose', 'gift');
+  await expect(block).toHaveAttribute('data-gift-recipient-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir destinatario del regalo');
+  await expect(block.locator('[data-gift-recipient-spell]')).toHaveText('Generous Gift');
+  await expect(block.locator('[data-gift-recipient-gift]')).toContainText('roba una carta');
+  const options = block.locator('[data-gift-recipient-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-gift-recipient-option', '2');
+  await expect(options.nth(0)).toContainText('Jugador 3');
+  await expect(options.nth(1)).toHaveAttribute('data-gift-recipient-option', '1');
+  await expect(block.locator('[data-gift-recipient-cancel]')).toContainText('Cancelar lanzamiento');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un oponente no publicado no es botón y el cancelar ausente tampoco', async ({ page }) => {
+  await page.goto('/ux?scene=giftOne');
+  const block = page.locator('[data-gift-recipient]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-gift-recipient-option]')).toHaveCount(1);
+  await expect(block.locator('[data-gift-recipient-option="1"]')).toContainText('Jugador 2');
+  await expect(block.locator('[data-gift-recipient-option="2"]')).toHaveCount(0);
+  await expect(block.locator('[data-gift-recipient-cancel]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el coste de efecto nombra las vidas y no inventa un regalo', async ({ page }) => {
+  await page.goto('/ux?scene=giftCost');
+  const block = page.locator('[data-gift-recipient]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-gift-recipient-purpose', 'effect-cost');
+  await expect(block.locator('strong')).toHaveText('Elegir a quién afecta el coste');
+  await expect(block.locator('[data-gift-recipient-spell]')).toHaveText('Generous Gift');
+  await expect(block.locator('[data-gift-recipient-cost]')).toContainText('gana 3 vidas');
+  await expect(block.locator('[data-gift-recipient-gift]')).toHaveCount(0);
+  await expect(block.locator('[data-gift-recipient-option]')).toHaveCount(2);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el regalo ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=giftAway');
+  const block = page.locator('[data-gift-recipient]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-gift-recipient-faces]')).toContainText('Jugador 3');
+  await expect(block.locator('[data-gift-recipient-faces]')).toContainText('Jugador 2');
+  await expect(block.locator('[data-gift-recipient-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('arriba o abajo son los booleanos que publicó el motor', async ({ page }) => {
+  await page.goto('/ux?scene=topBottom');
+  const block = page.locator('[data-top-bottom]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-top-bottom-side', 'top');
+  await expect(block.locator('strong')).toHaveText('Elegir posición en la biblioteca');
+  await expect(block.locator('[data-top-bottom-card]')).toHaveText('Banishing Light');
+  await expect(block.locator('[data-top-bottom-top]')).toContainText('Arriba de la biblioteca');
+  await expect(block.locator('[data-top-bottom-bottom]')).toContainText('Abajo de la biblioteca');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la segunda desde arriba no se relabela como la cima', async ({ page }) => {
+  await page.goto('/ux?scene=topBottomNth');
+  const block = page.locator('[data-top-bottom]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-top-bottom-side', 'nth');
+  await expect(block.locator('[data-top-bottom-top]')).toContainText('La segunda desde arriba');
+  await expect(block.locator('[data-top-bottom-top]')).not.toContainText('Arriba de la biblioteca');
+  await expect(block.locator('[data-top-bottom-bottom]')).toHaveCount(1);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el fondo no publicado no es botón', async ({ page }) => {
+  await page.goto('/ux?scene=topBottomOne');
+  const block = page.locator('[data-top-bottom]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-top-bottom-top]')).toHaveCount(1);
+  await expect(block.locator('[data-top-bottom-bottom]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la posición ajena se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=topBottomAway');
+  const block = page.locator('[data-top-bottom]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-top-bottom-faces]')).toContainText('Arriba de la biblioteca');
+  await expect(block.locator('[data-top-bottom-faces]')).toContainText('Abajo de la biblioteca');
+  await expect(block.locator('[data-top-bottom-other-seat]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

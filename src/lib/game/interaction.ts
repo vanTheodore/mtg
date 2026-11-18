@@ -3370,6 +3370,156 @@ export function resolutionPaymentOffers(actions: GameAction[]): ResolutionPaymen
   return { byIndex, decline };
 }
 
+export type GiftPurposeKind = 'gift' | 'effect-cost' | 'unknown';
+export type GiftRecipientPrompt = {
+  player: PlayerId;
+  /** Published opponent ids, in the engine's order. A blank id is not a seat. */
+  candidates: PlayerId[];
+  /**
+   * Absent `purpose` is Gift (the engine default). `effect-cost` is the
+   * opponent a life-gain cost acts on. Anything else is unnamed.
+   */
+  purpose: GiftPurposeKind;
+  /** `null` when the engine did not publish a gift kind. */
+  giftKind: GiftKindName | null;
+  /**
+   * The printed life the chosen opponent gains, when `purpose` is an effect
+   * cost and the amount is a fixed number. Not a quantity this table resolves.
+   */
+  lifeGain: number | null;
+  spellId: ObjectId | null;
+};
+function lifeGainAmount(raw: unknown): number | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const cost = raw as { type?: unknown; data?: { effect?: { type?: unknown; amount?: unknown } } };
+  if (cost.type !== 'EffectCost') return null;
+  const effect = cost.data?.effect;
+  if (!effect || effect.type !== 'GainLife') return null;
+  const amount = effect.amount as { type?: string; value?: number } | undefined;
+  if (!amount || amount.type !== 'Fixed' || typeof amount.value !== 'number' || !Number.isInteger(amount.value) || amount.value < 0) {
+    return null;
+  }
+  return amount.value;
+}
+/**
+ * CR 601.2 + CR 115.10a: `WaitingFor::ChooseGiftRecipient`. While casting, the
+ * caster chooses one opponent. `purpose` says why: the promised gift's
+ * recipient (CR 702.174a; an absent purpose is Gift) or the opponent an
+ * effect-as-cost acts on (CR 601.2h, "have an opponent gain N life"). The
+ * answer is `ChooseGiftRecipient { opponent }`, copied from `legal.actions`.
+ * A button exists only when that opponent is already legal. Candidate order
+ * is the engine's; this table does not re-sort it. `CancelCast` appears only
+ * when it is legal. A gift kind this table cannot name is still said to be
+ * unnamed, not rewritten into a kind the wire did not carry.
+ */
+export function giftRecipientPrompt(snapshot: EngineSnapshot | null): GiftRecipientPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ChooseGiftRecipient') return null;
+  const data = waiting.data ?? {};
+  const purposeName = data.purpose === undefined || data.purpose === null ? 'Gift' : taggedName(data.purpose);
+  const purpose: GiftPurposeKind =
+    purposeName === 'Gift' ? 'gift'
+    : purposeName === 'EffectCost' ? 'effect-cost'
+    : 'unknown';
+  const giftRaw = data.gift_kind;
+  const giftKind: GiftKindName | null =
+    giftRaw === undefined || giftRaw === null ? null : GIFT_KINDS[taggedName(giftRaw)] ?? 'unknown';
+  const pending = (data.pending_cast ?? {}) as { object_id?: unknown };
+  const purposeBody = data.purpose && typeof data.purpose === 'object'
+    ? (data.purpose as { cost?: unknown }).cost
+    : undefined;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    candidates: Array.isArray(data.candidates)
+      ? data.candidates.filter((id): id is PlayerId => typeof id === 'number' && Number.isInteger(id) && id >= 0)
+      : [],
+    purpose,
+    giftKind,
+    lifeGain: purpose === 'effect-cost' ? lifeGainAmount(purposeBody) : null,
+    spellId: typeof pending.object_id === 'number' ? (pending.object_id as ObjectId) : null
+  };
+}
+export type GiftRecipientOffers = {
+  byOpponent: Map<number, GameAction>;
+  cancel: GameAction | null;
+};
+/** An opponent that is not a published integer is not a button. The first action wins. */
+export function giftRecipientOffers(actions: GameAction[]): GiftRecipientOffers {
+  const byOpponent = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChooseGiftRecipient') continue;
+    const opponent = action.data?.opponent;
+    if (typeof opponent !== 'number' || !Number.isInteger(opponent) || opponent < 0) continue;
+    if (!byOpponent.has(opponent)) byOpponent.set(opponent, action);
+  }
+  return {
+    byOpponent,
+    cancel: actions.find((action) => action.type === 'CancelCast') ?? null
+  };
+}
+
+export type LibrarySide = 'top' | 'nth' | 'other' | 'unknown';
+export type TopOrBottomPrompt = {
+  player: PlayerId;
+  objectId: ObjectId | null;
+  /**
+   * Where `top: true` places the object. An omitted position is the top.
+   * `nth` is "n from the top"; `other` is a position this table can name
+   * only as not-the-bottom. `top: false` is always the bottom.
+   */
+  side: LibrarySide;
+  /** The published n, only when the position is `NthFromTop`. */
+  nth: number | null;
+};
+/**
+ * CR 608.2d: `WaitingFor::TopOrBottomChoice`. The effect-designated player
+ * chooses the library position. `top: true` places the object at the
+ * published `top_position` (omitted means the top; `NthFromTop` is n from
+ * the top). `top: false` is always the bottom. The answer is
+ * `ChooseTopOrBottom { top }`, copied from `legal.actions`. A button exists
+ * only when that boolean is already legal. A position this table cannot
+ * place is not relabeled as the top.
+ */
+export function topOrBottomPrompt(snapshot: EngineSnapshot | null): TopOrBottomPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'TopOrBottomChoice') return null;
+  const data = waiting.data ?? {};
+  const raw = data.top_position;
+  const name = raw === undefined || raw === null ? 'Top' : taggedName(raw);
+  const nthRaw = raw && typeof raw === 'object' ? (raw as { n?: unknown }).n : undefined;
+  const nth = name === 'NthFromTop' && typeof nthRaw === 'number' && Number.isInteger(nthRaw) && nthRaw >= 1
+    ? nthRaw
+    : null;
+  const side: LibrarySide =
+    name === 'Top' ? 'top'
+    : name === 'NthFromTop' && nth !== null ? 'nth'
+    : name === 'NthFromTop' ? 'unknown'
+    : name ? 'other'
+    : 'unknown';
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: typeof data.object_id === 'number' ? (data.object_id as ObjectId) : null,
+    side,
+    nth
+  };
+}
+export type TopOrBottomOffers = {
+  top: GameAction | null;
+  bottom: GameAction | null;
+};
+/** A choice that is not the published boolean is not a button. The first action wins. */
+export function topOrBottomOffers(actions: GameAction[]): TopOrBottomOffers {
+  let top: GameAction | null = null;
+  let bottom: GameAction | null = null;
+  for (const action of actions) {
+    if (action.type !== 'ChooseTopOrBottom') continue;
+    const choice = action.data?.top;
+    if (choice === true && !top) top = action;
+    if (choice === false && !bottom) bottom = action;
+  }
+  return { top, bottom };
+}
+
 /**
  * CR 508.1g + CR 701.43d: as attackers are declared, the active player may pay
  * the optional «exert this creature as it attacks» cost, one creature at a time.

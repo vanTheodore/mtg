@@ -25,7 +25,9 @@ const LABELS: Record<string, string> = {
   ChooseMutateMergeSide: 'Elegir lado de la mutación',
   CipherEncode: 'Cifrar',
   OrderCostReductions: 'Elegir orden de reducción',
-  ChooseResolutionOptionalPaymentBranch: 'Elegir pago opcional'
+  ChooseResolutionOptionalPaymentBranch: 'Elegir pago opcional',
+  ChooseGiftRecipient: 'Elegir destinatario',
+  ChooseTopOrBottom: 'Elegir posición en la biblioteca'
 };
 
 function actionObjectId(action: GameAction): number | undefined {
@@ -107,6 +109,15 @@ export function describeAction(action: GameAction, objects: Record<string, GameO
     const choice = data.choice as { type?: string; data?: { index?: number } } | undefined;
     if (choice?.type === 'Decline') return 'No pagar';
     if (choice?.type === 'Pay' && typeof choice.data?.index === 'number') return `Pagar índice ${choice.data.index}`;
+    return base;
+  }
+  if (action.type === 'ChooseGiftRecipient') {
+    const opponent = data.opponent;
+    return typeof opponent === 'number' ? `Elegir al Jugador ${opponent + 1}` : base;
+  }
+  if (action.type === 'ChooseTopOrBottom') {
+    if (data.top === true) return 'Arriba de la biblioteca';
+    if (data.top === false) return 'Abajo de la biblioteca';
     return base;
   }
   return base;
@@ -212,6 +223,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'CipherEncodeChoice': return 'Puedes cifrar esta carta en una criatura de las que publicó el motor.';
     case 'OrderCostReductions': return 'Varias reducciones fijan totales distintos: elige el que publicó el motor. Esta mesa no reordena.';
     case 'ResolutionOptionalPaymentChoice': return 'Puedes pagar una rama de las que publicó el motor, o no pagar si el cable lo ofrece.';
+    case 'ChooseGiftRecipient': return 'Eliges un oponente de los que publicó el motor: el destinatario del regalo, o a quién afecta el coste.';
+    case 'TopOrBottomChoice': return 'Eliges arriba o abajo de la biblioteca. Arriba es la posición que ya fijó el efecto; abajo es el fondo.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';
