@@ -1,10 +1,27 @@
 import { tick } from 'svelte';
 import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
-import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId } from '#lib/engine/types.ts';
+import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId, type PlayerId, type TargetRef } from '#lib/engine/types.ts';
 import {
-  attackDeclaration, attackTargets, blockDeclaration, blockTargets, discardSelection,
-  discardPrompt as readDiscardPrompt, manaActions, nextBlockAssignment, objectTarget,
-  playerTarget, secondActivation, targetAction
+  attackDeclaration, attackTargets, blockDeclaration, blockTargets, cancelCastAction, chooseXAction,
+  decideOptionalEffect, decideTribute, defaultOrder, defaultX, digPrompt as readDigPrompt, digReady as isDigReady,
+  discardSelection,
+  discardPrompt as readDiscardPrompt, manaActions,
+  modeChoicePrompt as readModeChoice, modeConfirmable, modeSelectAction, modeSingleChoice,
+  modeToggle, moveInOrder, nextBlockAssignment, objectTarget, orderTriggersAction, parseX,
+  optionalEffectPrompt as readOptionalEffect, playerTarget, rememberOptionalEffect,
+  choosePair, chooseTokenHost, chooseUnlessCostBranch, pairPrompt as readPairPrompt,
+  unlessBranchPrompt as readUnlessBranch,
+  tokenHostPrompt as readTokenHost, tributePrompt as readTribute, payUnlessCost,
+  wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
+  startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
+  scryPrompt as readScry, scryAction,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, payCostPrompt as readPayCost, payCostAction, comparatorHolds, phyrexianPaymentPrompt as readPhyrexian, phyrexianChoicesAction, combatTaxPrompt as readCombatTax, payCombatTaxAction, optionalCostPrompt as readOptionalCost, decideOptionalCostAction, defilerPaymentPrompt as readDefiler, zoneChoicePrompt as readZoneChoice, zoneChoiceReady as isZoneChoiceReady, modalFacePrompt as readModalFace, modalFaceOffers, alternativeCastPrompt as readAlternativeCast, alternativeCastOffers, castingVariantPrompt as readCastingVariant, castingVariantOffers, typeSlotPrompt as readTypeSlot, typeSlotOffers, splicePrompt as readSplice, spliceOffers, mutateMergePrompt as readMutateMerge, mutateMergeOffers, cipherPrompt as readCipher, cipherOffers, costOrderPrompt as readCostOrder, costOrderOffers, resolutionPaymentPrompt as readResolutionPayment, resolutionPaymentOffers, giftRecipientPrompt as readGiftRecipient, giftRecipientOffers, topOrBottomPrompt as readTopOrBottom, topOrBottomOffers, clashPrompt as readClash, clashOffers, clashPlacementPrompt as readClashPlacement, sideboardPrompt as readSideboard, sideboardOffers, playDrawPrompt as readPlayDraw, playDrawOffers, bottomOrderPrompt as readBottomOrder, bottomOrderPile, bottomOrderAction, isBottomOrderPermutation, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
+  unlessPrompt as readUnless,
+  searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
+  selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
+  payAmountKey, parseAmount, payAmountPrompt as readPayAmountPrompt, submitPayAmount,
+  xPrompt as readXPrompt,
+  type BottomOrderPrompt
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
 
@@ -190,6 +207,34 @@ class GameSession {
     this.blocks = {};
     this.attackPicker = null;
     this.choosing = [];
+    this.xEntry = null;
+    this.payEntry = null;
+    this.orderEntry = null;
+    this.modeEntry = null;
+    this.searched = [];
+    this.dug = [];
+    this.zonePick = [];
+    this.revealPick = null;
+    this.pairPick = null;
+    this.hostPick = null;
+    this.branchPick = null;
+    this.scryKeep = [];
+    this.tapPick = [];
+    this.multiPick = [];
+    this.splitAmount = {};
+    this.movePick = {};
+    this.removePick = {};
+    this.pilePick = [];
+    this.retargetPick = {};
+    this.choosePick = [];
+    this.proliferatePick = [];
+    this.timeTravelPick = [];
+    this.categoryPick = {};
+    this.copyChosenPick = [];
+    this.keepPowerPick = [];
+    this.keepExactPick = [];
+    this.optionalRemember = false;
+    this.optionalSameCard = false;
     this.history = [];
     this.lifeChanges = {};
     this.lastMetrics = null;
@@ -291,12 +336,1756 @@ class GameSession {
     if (has) this.choosing = this.choosing.filter((x) => x !== id);
     else if (this.choosing.length < prompt.count) this.choosing = [...this.choosing, id];
   }
+  /** True while the current discard answer is one the engine will accept. */
+  get discardReady() {
+    const prompt = this.discardPrompt;
+    if (!prompt) return false;
+    return prompt.upTo ? this.choosing.length <= prompt.count : this.choosing.length === prompt.count;
+  }
   confirmDiscard() {
     const prompt = this.discardPrompt;
-    if (!prompt || this.choosing.length !== prompt.count) return;
+    if (!prompt || !this.discardReady) return;
     const cards = [...this.choosing];
     this.choosing = [];
     void this.dispatch(discardSelection(cards));
+  }
+
+  /** CR 702.122a / CR 702.171a: tap creatures until their contribution adds up. */
+  get tapPowerPrompt() {
+    return readTapPower(this.snapshot);
+  }
+  tapPick = $state<ObjectId[]>([]);
+  toggleTapPick(id: ObjectId) {
+    const picked = this.tapPick;
+    this.tapPick = picked.includes(id) ? picked.filter((card) => card !== id) : [...picked, id];
+  }
+  /** CR 702.122a: the sum of the engine's contributions for the picked creatures. */
+  get tapTotal(): number | null {
+    const prompt = this.tapPowerPrompt;
+    return prompt ? tapPowerTotal(prompt, this.tapPick) : null;
+  }
+  get tapReady(): boolean {
+    const prompt = this.tapPowerPrompt;
+    if (!prompt) return false;
+    const total = this.tapTotal;
+    // Without a published contribution there is no sum to claim: Phase decides.
+    if (total === null) return this.tapPick.length > 0;
+    return total >= prompt.required;
+  }
+  confirmTapPick() {
+    const prompt = this.tapPowerPrompt;
+    if (!prompt || !this.tapPick.length) return;
+    const ids = this.tapPick;
+    this.tapPick = [];
+    void this.dispatch(tapPowerAction(prompt, ids));
+  }
+
+  /** CR 122.5 + CR 608.2d: which counters leave the source and where they land. */
+  get moveCountersPrompt() {
+    return readMoveCounters(this.snapshot);
+  }
+  /** Amounts keyed by `type|destination`; the validator forbids repeated pairs. */
+  movePick = $state<Record<string, number>>({});
+  moveAmount(type: string, destination: ObjectId): number {
+    return this.movePick[`${type}|${destination}`] ?? 0;
+  }
+  /** What is left of one counter type after the picks. */
+  moveRemaining(type: string): number {
+    const prompt = this.moveCountersPrompt;
+    const offer = prompt?.available.find((entry) => entry.type === type);
+    if (!prompt || !offer) return 0;
+    const spent = prompt.destinations.reduce((sum, id) => sum + this.moveAmount(type, id), 0);
+    return Math.max(0, offer.count - spent);
+  }
+  setMove(type: string, destination: ObjectId, amount: number) {
+    const prompt = this.moveCountersPrompt;
+    if (!prompt) return;
+    const offer = prompt.available.find((entry) => entry.type === type);
+    if (!offer) return;
+    const others = prompt.destinations
+      .filter((id) => id !== destination)
+      .reduce((sum, id) => sum + this.moveAmount(type, id), 0);
+    // The engine's ceiling is per counter type, not global.
+    const clamped = Math.max(0, Math.min(Math.trunc(amount), offer.count - others));
+    this.movePick = { ...this.movePick, [`${type}|${destination}`]: clamped };
+  }
+  get moveSelections(): { destinationId: ObjectId; counterType: string; count: number }[] {
+    const prompt = this.moveCountersPrompt;
+    if (!prompt) return [];
+    return prompt.available.flatMap((offer) =>
+      prompt.destinations
+        .map((id) => ({ destinationId: id, counterType: offer.type, count: this.moveAmount(offer.type, id) }))
+        .filter((entry) => entry.count > 0)
+    );
+  }
+  /** Moving nothing is legal: the text says "may move any number". */
+  confirmMoveCounters() {
+    const prompt = this.moveCountersPrompt;
+    if (!prompt) return;
+    const selections = this.moveSelections;
+    this.movePick = {};
+    void this.dispatch(moveCountersAction(selections));
+  }
+
+  /** CR 107.1c + CR 608.2d: counters leaving the source, one amount per kind. */
+  get removeCountersPrompt() {
+    return readRemoveCounters(this.snapshot);
+  }
+  /** Amounts keyed by counter type; the validator forbids repeated kinds. */
+  removePick = $state<Record<string, number>>({});
+  removeAmount(type: string): number {
+    return this.removePick[type] ?? 0;
+  }
+  get removeTotal(): number {
+    return Object.values(this.removePick).reduce((sum, count) => sum + count, 0);
+  }
+  /** CR 608.2d: what is left of "up to N"; `null` is the uncapped "any number". */
+  get removeBudget(): number | null {
+    const prompt = this.removeCountersPrompt;
+    if (!prompt || prompt.maxTotal === null) return null;
+    return Math.max(0, prompt.maxTotal - this.removeTotal);
+  }
+  /** The per-kind ceiling the engine published: what is actually on the source. */
+  removeAvailable(type: string): number {
+    return this.removeCountersPrompt?.available.find((entry) => entry.type === type)?.count ?? 0;
+  }
+  setRemove(type: string, amount: number) {
+    const prompt = this.removeCountersPrompt;
+    if (!prompt) return;
+    const offer = prompt.available.find((entry) => entry.type === type);
+    if (!offer) return;
+    const current = this.removeAmount(type);
+    // Two ceilings, both the engine's: the counters of that kind, and — when the
+    // text says "up to N" — the budget still free after the other kinds.
+    const budget = this.removeBudget;
+    const ceiling = budget === null ? offer.count : Math.min(offer.count, current + budget);
+    const clamped = Math.max(0, Math.min(Math.trunc(amount), ceiling));
+    this.removePick = { ...this.removePick, [type]: clamped };
+  }
+  /** Steps one kind by ±1 so the block never asks the player for a number. */
+  stepRemove(type: string, delta: number) {
+    this.setRemove(type, this.removeAmount(type) + delta);
+  }
+  get removeSelections(): CounterRemovalSelection[] {
+    const prompt = this.removeCountersPrompt;
+    if (!prompt) return [];
+    return prompt.available
+      .map((offer) => ({ counterType: offer.type, count: this.removeAmount(offer.type) }))
+      .filter((entry) => entry.count > 0);
+  }
+  get removeReady(): boolean {
+    // CR 107.1c: zero is a legal number of counters, so the empty set confirms.
+    return this.removeCountersPrompt !== null;
+  }
+  confirmRemoveCounters() {
+    const prompt = this.removeCountersPrompt;
+    if (!prompt) return;
+    const selections = this.removeSelections;
+    this.removePick = {};
+    void this.dispatch(removeCountersAction(selections));
+  }
+
+  /**
+   * CR 707.10c: the copy target walk. The engine answers **one slot per action**
+   * and re-prompts (or finishes), so there is no partial answer to cache here: the
+   * decided prefix is `picks`, which arrives in the payload. Caching a local copy
+   * would be a second bookkeeper for something the engine already narrates.
+   */
+  get copyRetargetPrompt() {
+    return readCopyRetarget(this.snapshot);
+  }
+  /** `null` keeps the position's announced target (CR 707.10c). */
+  answerCopySlot(target: TargetRef | null) {
+    void this.dispatch(chooseCopyTargetAction(target));
+  }
+  /** CR 707.10c: legal only while the engine says `can_keep_rest`. */
+  keepRemainingCopyTargets() {
+    void this.dispatch(keepCopyTargetsAction());
+  }
+  /** CR 601.2c + CR 115.1: which opponent announces the next target group. */
+  chooseCopyAnnouncer(player: PlayerId) {
+    void this.dispatch(chooseCopyAnnouncerAction(player));
+  }
+
+  /**
+   * CR 701.38: the vote session. Like the copy walk, the engine advances it — a
+   * ballot is tallied, the next voter (or the same voter's next ballot) is asked —
+   * so the answer goes out one ballot at a time and there is no draft to hold.
+   */
+  get votePrompt() {
+    return readVote(this.snapshot);
+  }
+  /** CR 701.38a: named ballot, by the canonical option the engine matches. */
+  castVote(option: string) {
+    void this.dispatch(voteAction(option));
+  }
+  /** CR 701.38b: object-pool ballot, by index. */
+  castVoteCandidate(index: number) {
+    void this.dispatch(voteCandidateAction(index));
+  }
+
+  /**
+   * CR 701.44d: several permanents explore at once and their controller orders
+   * them, one per step. Like the copy walk, the engine asks again after each pick,
+   * so the choice goes out immediately and there is no draft to keep.
+   */
+  get explorePrompt() {
+    return readExplore(this.snapshot);
+  }
+  chooseExplorer(id: ObjectId) {
+    void this.dispatch(exploreAction(id));
+  }
+
+  /**
+   * CR 700.3: the two-pile flow. Stage 1 and 3 are one answer each, but stage 2 is
+   * a **draft** — the subject builds pile A before submitting it — so this is the
+   * one part of the family that needs local state, cleared with the others.
+   */
+  get separatePilesPrompt() {
+    return readSeparatePiles(this.snapshot);
+  }
+  /** Pile A under construction; pile B is whatever stays out (CR 700.3a). */
+  pilePick = $state<ObjectId[]>([]);
+  pileIsPicked(id: ObjectId): boolean {
+    return this.pilePick.includes(id);
+  }
+  togglePileCard(id: ObjectId) {
+    const prompt = this.separatePilesPrompt;
+    if (!prompt || prompt.stage !== 'partition' || !prompt.eligible.includes(id)) return;
+    this.pilePick = this.pilePick.includes(id)
+      ? this.pilePick.filter((entry) => entry !== id)
+      : [...this.pilePick, id];
+  }
+  /** CR 700.3d: either pile may be empty, so an empty pile A is a legal answer. */
+  get pileReady(): boolean {
+    return this.separatePilesPrompt?.stage === 'partition';
+  }
+  confirmPilePartition() {
+    if (!this.pileReady) return;
+    const pileA = this.pilePick;
+    this.pilePick = [];
+    void this.dispatch(submitPilePartitionAction(pileA));
+  }
+  /** CR 700.3: the multi-player stage — who partitions. */
+  choosePileOpponent(player: PlayerId) {
+    void this.dispatch(choosePileOpponentAction(player));
+  }
+  /** CR 700.3: the chooser picks a side; the engine then asks for the next subject. */
+  choosePile(side: PileSide) {
+    void this.dispatch(choosePileAction(side));
+  }
+
+  /**
+   * CR 702.94a: the first card drawn this turn carries miracle, and Phase offers
+   * the reveal. Accepting only reveals it — the miracle trigger then goes on the
+   * stack and the cast arrives later as its own offer (CR 608.2g), so there is no
+   * draft state to keep between the two.
+   */
+  get miraclePrompt() {
+    return readMiracle(this.snapshot);
+  }
+  revealMiracle() {
+    const prompt = this.miraclePrompt;
+    if (!prompt) return;
+    const card = this.snapshot?.state.objects?.[String(prompt.objectId)];
+    // The engine matches the action against the offered object by `card_id`; a
+    // card the viewer cannot see is not a card they can offer, so nothing is sent.
+    if (!card || typeof card.card_id !== 'number') return;
+    void this.dispatch(castAsMiracleAction(prompt.objectId, card.card_id));
+  }
+  declineMiracle() {
+    if (!this.miraclePrompt) return;
+    void this.dispatch(declineMiracleAction());
+  }
+
+  /**
+   * CR 608.2g: the umbrella cast offer — nine shapes, one question. Each shape
+   * answers with its own action, so the block asks this getter which one it has
+   * instead of guessing from the card alone.
+   */
+  get castOfferPrompt() {
+    return readCastOffer(this.snapshot);
+  }
+  /** CR 715.3a: creature face (`true`) or Adventure half (`false`). */
+  chooseAdventureFace(creature: boolean) {
+    void this.dispatch(adventureFaceAction(creature));
+  }
+  /** The card the offer names, when it names exactly one. */
+  private offeredCard(): { id: ObjectId; cardId: number } | null {
+    const prompt = this.castOfferPrompt;
+    if (!prompt || prompt.objectId === null) return null;
+    const card = this.snapshot?.state.objects?.[String(prompt.objectId)];
+    if (!card || typeof card.card_id !== 'number') return null;
+    return { id: prompt.objectId, cardId: card.card_id };
+  }
+  /** CR 702.94a / CR 702.35a: cast the single offered card at its latched cost. */
+  castOfferedCard() {
+    const prompt = this.castOfferPrompt;
+    const card = this.offeredCard();
+    if (!prompt || !card) return;
+    if (prompt.shape === 'miracle') void this.dispatch(castAsMiracleAction(card.id, card.cardId));
+    else if (prompt.shape === 'madness') void this.dispatch(castAsMadnessAction(card.id, card.cardId));
+  }
+  /** CR 702.85a / CR 701.57a / CR 702.60a / CR 609.4b: cast or decline. */
+  answerCastOffer(cast: boolean) {
+    const prompt = this.castOfferPrompt;
+    if (!prompt) return;
+    const shapes: CastOfferShape[] = ['cascade', 'discover', 'ripple', 'graveyardPaid'];
+    if (!shapes.includes(prompt.shape)) return;
+    void this.dispatch(castOfferChoiceAction(prompt.shape, cast));
+  }
+  /** Paradigm: cast a copy of one of the offered exiled sources. */
+  castParadigmCopy(source: ObjectId) {
+    void this.dispatch(castParadigmCopyAction(source));
+  }
+  passParadigmOffer() {
+    void this.dispatch(passParadigmOfferAction());
+  }
+  /** CR 608.2c: cast one candidate of the window, or close it with no cast. */
+  castFreeCandidate(selection: ObjectId) {
+    void this.dispatch(castFreeCandidateAction(selection));
+  }
+  finishFreeCastWindow() {
+    void this.dispatch(finishFreeCastWindowAction());
+  }
+
+  /**
+   * CR 701.42: the meld pair. The engine only asks when more than one permanent
+   * could be the other half, and it freezes the referents, so the answer names both
+   * objects — a card name would not say which copy.
+   */
+  get meldPrompt() {
+    return readMeld(this.snapshot);
+  }
+  chooseMeldPair(choice: { sourceId: ObjectId; partnerId: ObjectId }) {
+    void this.dispatch(chooseMeldPairAction(choice.sourceId, choice.partnerId));
+  }
+
+  /**
+   * CR 508.4: the melded creature enters attacking, so one destination is chosen
+   * out of the ones the engine published. With a single destination the engine
+   * does not ask at all.
+   */
+  get meldAttackPrompt() {
+    return readMeldAttack(this.snapshot);
+  }
+  chooseMeldAttackTarget(target: AttackTarget) {
+    void this.dispatch(chooseEntryAttackTargetAction(target));
+  }
+
+  /** CR 508.4: any permanent that enters already attacking, not just a melded one. */
+  get entryAttackPrompt() {
+    return readEntryAttack(this.snapshot);
+  }
+  /**
+   * Same action as the melded window — the engine shares `ChooseEntryAttackTarget`
+   * between the two variants — so the button only has to say which target.
+   */
+  chooseEntryAttackTarget(target: AttackTarget) {
+    void this.dispatch(chooseEntryAttackTargetAction(target));
+  }
+
+  /** CR 616.1: which replacement applies, or which branch of an optional one. */
+  get replacementPrompt() {
+    return readReplacement(this.snapshot);
+  }
+  chooseReplacement(index: number) {
+    if (!this.replacementPrompt) return;
+    void this.dispatch(chooseReplacementAction(index));
+  }
+
+  /** CR 707.2 + CR 707.9: which permanent a copy effect copies. */
+  get copyTargetPrompt() {
+    return readCopyTargetChoice(this.snapshot);
+  }
+  chooseCopySource(id: ObjectId) {
+    if (!this.copyTargetPrompt) return;
+    // CR 707.9: copying does not target, but the answer still travels as a `TargetRef`.
+    void this.dispatch(chooseCopyTargetAction({ Object: id }));
+  }
+
+  /** CR 117.3d + CR 117.4: the table's «resolve all» consent prompt. */
+  get resolveAllPrompt() {
+    return readResolveAll(this.snapshot);
+  }
+  /**
+   * The answer is the engine's own envelope: the epoch that arrives late must be
+   * refused, so nothing here rebuilds it from the state on screen.
+   */
+  answerResolveAll(grant: boolean) {
+    const action = grant ? grantResolveAllAction(this.snapshot) : declineResolveAllAction(this.snapshot);
+    if (!action) return;
+    void this.dispatch(action);
+  }
+  revokeResolveAll(representative: PlayerId) {
+    const action = revokeResolveAllAction(this.snapshot, representative);
+    if (!action) return;
+    void this.dispatch(action);
+  }
+
+  /** CR 502.3: «you may choose not to untap», one permanent at a time. */
+  get untapPrompt() {
+    return readUntap(this.snapshot);
+  }
+  chooseUntap(id: ObjectId, untap: boolean) {
+    if (!this.untapPrompt) return;
+    void this.dispatch(chooseUntapAction(id, untap));
+  }
+
+  /** CR 502.3: which permanents untap under a MaxUntapPerType cap. */
+  get untapSubsetPrompt() {
+    return readUntapSubset(this.snapshot);
+  }
+  /** Marked permanents, at most the cap. Fewer are legal, and none are too. */
+  untapSubsetPick = $state<ObjectId[]>([]);
+  get untapSubsetReady() {
+    const prompt = this.untapSubsetPrompt;
+    if (!prompt) return false;
+    return this.untapSubsetPick.length <= prompt.max && this.untapSubsetPick.every((id) => prompt.group.includes(id));
+  }
+  toggleUntapSubset(id: ObjectId) {
+    const prompt = this.untapSubsetPrompt;
+    if (!prompt) return;
+    if (this.untapSubsetPick.includes(id)) {
+      this.untapSubsetPick = this.untapSubsetPick.filter((entry) => entry !== id);
+      return;
+    }
+    if (this.untapSubsetPick.length >= prompt.max) return;
+    this.untapSubsetPick = [...this.untapSubsetPick, id];
+  }
+  confirmUntapSubset() {
+    if (!this.untapSubsetReady) return;
+    const cards = this.untapSubsetPick;
+    this.untapSubsetPick = [];
+    void this.dispatch(untapSubsetAction(cards));
+  }
+
+  /** CR 508.1g + CR 701.43d: exert this attacker, one at a time. */
+  get exertPrompt() {
+    return readExert(this.snapshot);
+  }
+  answerExert(exert: boolean) {
+    if (!this.exertPrompt) return;
+    void this.dispatch(chooseExertAction(exert));
+  }
+
+  /** CR 508.1g + CR 702.154a: tap a creature for the attacker, or decline. */
+  get enlistPrompt() {
+    return readEnlist(this.snapshot);
+  }
+  answerEnlist(target: ObjectId | null) {
+    if (!this.enlistPrompt) return;
+    void this.dispatch(chooseEnlistAction(target));
+  }
+
+  /** CR 118.3 + CR 601.2b: a cost paid by choosing objects. */
+  get payCostPrompt() {
+    return readPayCost(this.snapshot);
+  }
+  payCostPick = $state<ObjectId[]>([]);
+  payCostIsPicked(id: ObjectId): boolean {
+    return this.payCostPick.includes(id);
+  }
+  /**
+   * CR 118.3 + CR 208.1: the answer is legal when it sits inside `[min_count,
+   * count]` **and**, for an aggregate cost, when the published powers already reach
+   * the threshold. Unpublished powers leave that half to the engine instead of
+   * guessing (CR 208.1 needs a number the client may not have).
+   */
+  get payCostAggregateHolds(): boolean | null {
+    const prompt = this.payCostPrompt;
+    if (!prompt?.tapAggregate) return null;
+    const total = this.payCostPower;
+    if (total === null) return null;
+    return comparatorHolds(prompt.tapAggregate.comparator, total, prompt.tapAggregate.value);
+  }
+  get payCostReady(): boolean {
+    const prompt = this.payCostPrompt;
+    if (!prompt) return false;
+    if (!this.payCostPick.every((id) => prompt.choices.includes(id))) return false;
+    if (this.payCostPick.length < prompt.minCount || this.payCostPick.length > prompt.count) return false;
+    return this.payCostAggregateHolds !== false;
+  }
+  /** CR 208.1: total power of the picked creatures, `null` if any is unpublished. */
+  get payCostPower(): number | null {
+    let total = 0;
+    for (const id of this.payCostPick) {
+      const power = this.powerOf(id);
+      if (power === undefined) return null;
+      total += power;
+    }
+    return total;
+  }
+  togglePayCost(id: ObjectId) {
+    const prompt = this.payCostPrompt;
+    if (!prompt) return;
+    if (this.payCostPick.includes(id)) {
+      this.payCostPick = this.payCostPick.filter((entry) => entry !== id);
+      return;
+    }
+    // CR 118.3: never past the ceiling; the floor is checked at confirm time.
+    if (this.payCostPick.length >= prompt.count) return;
+    this.payCostPick = [...this.payCostPick, id];
+  }
+  confirmPayCost() {
+    if (!this.payCostReady) return;
+    const cards = this.payCostPick;
+    this.payCostPick = [];
+    void this.dispatch(payCostAction(cards));
+  }
+
+  /**
+   * CR 107.4f: one answer per Phyrexian shard, in the published order. There is no
+   * partial state: the vector is complete or it is not an answer.
+   */
+  get phyrexianPrompt() {
+    return readPhyrexian(this.snapshot);
+  }
+  phyrexianPick = $state<('mana' | 'life')[]>([]);
+  /** The choice for one shard, or `null` while that shard has no answer yet. */
+  phyrexianChoiceAt(index: number): 'mana' | 'life' | null {
+    return this.phyrexianPick[index] ?? null;
+  }
+  setPhyrexianChoice(index: number, choice: 'mana' | 'life') {
+    const prompt = this.phyrexianPrompt;
+    if (!prompt || !prompt.shards.some((shard) => shard.index === index)) return;
+    const next = [...this.phyrexianPick];
+    next[index] = choice;
+    this.phyrexianPick = next;
+  }
+  get phyrexianReady(): boolean {
+    const prompt = this.phyrexianPrompt;
+    if (!prompt) return false;
+    // CR 107.4f: `shards.len()` entries, each one legal for its shard's options.
+    return prompt.shards.every((shard, position) => {
+      const choice = this.phyrexianPick[position];
+      if (!choice) return false;
+      if (shard.options === 'mana-only') return choice === 'mana';
+      if (shard.options === 'life-only') return choice === 'life';
+      return true;
+    });
+  }
+  confirmPhyrexian() {
+    const prompt = this.phyrexianPrompt;
+    if (!prompt || !this.phyrexianReady) return;
+    const choices = prompt.shards.map((_, position) => this.phyrexianPick[position]!);
+    this.phyrexianPick = [];
+    void this.dispatch(phyrexianChoicesAction(choices));
+  }
+  cancelPhyrexian() {
+    if (!this.phyrexianPrompt) return;
+    this.phyrexianPick = [];
+    void this.dispatch(cancelCastAction());
+  }
+
+  /**
+   * CR 508.1d + CR 508.1h + CR 509.1c + CR 509.1d: the locked-in combat tax.
+   * The answer is a bare boolean, so there is no pick to hold: pay and the
+   * declaration commits, decline and the whole proposal is rebuilt.
+   */
+  get combatTaxPrompt() {
+    return readCombatTax(this.snapshot);
+  }
+  answerCombatTax(accept: boolean) {
+    if (!this.combatTaxPrompt) return;
+    void this.dispatch(payCombatTaxAction(accept));
+  }
+
+  /**
+   * CR 601.2b: one published index. The session refuses an index the prompt
+   * did not offer, so a stale click cannot pay a cost that is no longer there.
+   */
+  get optionalCostPrompt() {
+    return readOptionalCost(this.snapshot);
+  }
+  answerOptionalCost(index: number) {
+    const prompt = this.optionalCostPrompt;
+    if (!prompt || !prompt.options.some((option) => option.index === index)) return;
+    void this.dispatch(decideOptionalCostAction(index));
+  }
+  cancelOptionalCost() {
+    if (!this.optionalCostPrompt) return;
+    void this.dispatch(cancelCastAction());
+  }
+
+  /**
+   * CR 601.2b: Defiler. Index 0 pays, index 1 declines — not the optional-cost
+   * list. Any other index is not an answer this window publishes.
+   */
+  get defilerPrompt() {
+    return readDefiler(this.snapshot);
+  }
+  answerDefiler(index: 0 | 1) {
+    if (!this.defilerPrompt) return;
+    void this.dispatch(decideOptionalCostAction(index));
+  }
+  cancelDefiler() {
+    if (!this.defilerPrompt) return;
+    void this.dispatch(cancelCastAction());
+  }
+
+  /**
+   * CR 608.2d: the tracked-set pick. The session refuses an id the prompt did
+   * not publish, and a hidden `0` is not a card.
+   */
+  get zoneChoicePrompt() {
+    return readZoneChoice(this.snapshot);
+  }
+  zonePick = $state<ObjectId[]>([]);
+  get zoneChoiceReady() {
+    const prompt = this.zoneChoicePrompt;
+    return prompt ? isZoneChoiceReady(prompt, this.zonePick, this.snapshot?.state.objects ?? {}) : false;
+  }
+  toggleZoneChoice(id: ObjectId) {
+    const prompt = this.zoneChoicePrompt;
+    if (!prompt || prompt.count === null || id === 0) return;
+    const next = togglePick(prompt.cards.filter((card) => card !== 0), this.zonePick, id, prompt.count);
+    if (next !== this.zonePick) this.zonePick = next;
+  }
+  confirmZoneChoice() {
+    if (!this.zoneChoicePrompt || !this.zoneChoiceReady) return;
+    const cards = [...this.zonePick];
+    this.zonePick = [];
+    void this.dispatch(selectCardsAction(cards));
+  }
+
+  /**
+   * CR 712.12: the face buttons are the published actions. A rebuilt
+   * `ChooseModalFace` is not dispatched, and cancel only when `CancelCast`
+   * is itself legal.
+   */
+  get modalFacePrompt() {
+    return readModalFace(this.snapshot);
+  }
+  answerModalFace(action: GameAction) {
+    const published = modalFaceOffers(this.snapshot?.legal.actions ?? []);
+    if (action !== published.front && action !== published.back) return;
+    void this.dispatch(action);
+  }
+  cancelModalFace() {
+    const cancel = modalFaceOffers(this.snapshot?.legal.actions ?? []).cancel;
+    if (!cancel) return;
+    void this.dispatch(cancel);
+  }
+
+  /**
+   * CR 118.9: printed cost or the keyword alternative. Only a published
+   * `ChooseAlternativeCast` is dispatched, and cancel only when `CancelCast`
+   * is itself legal.
+   */
+  get alternativeCastPrompt() {
+    return readAlternativeCast(this.snapshot);
+  }
+  answerAlternativeCast(action: GameAction) {
+    const published = alternativeCastOffers(this.snapshot?.legal.actions ?? []);
+    if (action !== published.normal && action !== published.alternative) return;
+    void this.dispatch(action);
+  }
+  cancelAlternativeCast() {
+    const cancel = alternativeCastOffers(this.snapshot?.legal.actions ?? []).cancel;
+    if (!cancel) return;
+    void this.dispatch(cancel);
+  }
+
+  /**
+   * CR 601.2b: one published index. A rebuilt `ChooseCastingVariant` is not
+   * dispatched, including an index the option list does not have.
+   */
+  get castingVariantPrompt() {
+    return readCastingVariant(this.snapshot);
+  }
+  answerCastingVariant(action: GameAction) {
+    const published = castingVariantOffers(this.snapshot?.legal.actions ?? []);
+    if (![...published.byIndex.values()].includes(action)) return;
+    void this.dispatch(action);
+  }
+  cancelCastingVariant() {
+    const cancel = castingVariantOffers(this.snapshot?.legal.actions ?? []).cancel;
+    if (!cancel) return;
+    void this.dispatch(cancel);
+  }
+
+  /**
+   * CR 110.4: one published slot. A type rebuilt from the card is not
+   * dispatched, and the permission is not re-sent.
+   */
+  get typeSlotPrompt() {
+    return readTypeSlot(this.snapshot);
+  }
+  answerTypeSlot(action: GameAction) {
+    const published = typeSlotOffers(this.snapshot?.legal.actions ?? []);
+    if (![...published.bySlot.values()].includes(action)) return;
+    void this.dispatch(action);
+  }
+
+  /**
+   * CR 702.47a: splice one published card, or decline only when `card: null`
+   * is itself legal. A rebuilt id is not dispatched.
+   */
+  get splicePrompt() {
+    return readSplice(this.snapshot);
+  }
+  answerSplice(action: GameAction) {
+    const published = spliceOffers(this.snapshot?.legal.actions ?? []);
+    if (![...published.byCard.values()].includes(action)) return;
+    void this.dispatch(action);
+  }
+  declineSplice() {
+    const decline = spliceOffers(this.snapshot?.legal.actions ?? []).decline;
+    if (!decline) return;
+    void this.dispatch(decline);
+  }
+
+  /**
+   * CR 702.140c: one published side. A side rebuilt as the other half of the
+   * pair is not dispatched.
+   */
+  get mutateMergePrompt() {
+    return readMutateMerge(this.snapshot);
+  }
+  answerMutateMerge(action: GameAction) {
+    const published = mutateMergeOffers(this.snapshot?.legal.actions ?? []);
+    if (![...published.bySide.values()].includes(action)) return;
+    void this.dispatch(action);
+  }
+
+  /**
+   * CR 702.99a: encode on one published host, or decline only when
+   * `creature: null` is itself legal. A rebuilt id is not dispatched.
+   */
+  get cipherPrompt() {
+    return readCipher(this.snapshot);
+  }
+  answerCipher(action: GameAction) {
+    const published = cipherOffers(this.snapshot?.legal.actions ?? []);
+    if (![...published.byCreature.values()].includes(action)) return;
+    void this.dispatch(action);
+  }
+  declineCipher() {
+    const decline = cipherOffers(this.snapshot?.legal.actions ?? []).decline;
+    if (!decline) return;
+    void this.dispatch(decline);
+  }
+
+  /**
+   * CR 601.2f: one published election. A reordered list, or a hybrid the
+   * outcome did not carry, is not dispatched. Cancel exists only when published.
+   */
+  get costOrderPrompt() {
+    return readCostOrder(this.snapshot);
+  }
+  answerCostOrder(action: GameAction) {
+    const published = costOrderOffers(this.snapshot?.legal.actions ?? []);
+    if (![...published.byKey.values()].includes(action)) return;
+    void this.dispatch(action);
+  }
+  cancelCostOrder() {
+    const cancel = costOrderOffers(this.snapshot?.legal.actions ?? []).cancel;
+    if (!cancel) return;
+    void this.dispatch(cancel);
+  }
+
+  /**
+   * CR 118.12: pay one published index, or decline only when the tagged
+   * `Decline` is itself legal. A renumbered index is not dispatched.
+   */
+  get resolutionPaymentPrompt() {
+    return readResolutionPayment(this.snapshot);
+  }
+  answerResolutionPayment(action: GameAction) {
+    const published = resolutionPaymentOffers(this.snapshot?.legal.actions ?? []);
+    if (![...published.byIndex.values()].includes(action)) return;
+    void this.dispatch(action);
+  }
+  declineResolutionPayment() {
+    const decline = resolutionPaymentOffers(this.snapshot?.legal.actions ?? []).decline;
+    if (!decline) return;
+    void this.dispatch(decline);
+  }
+
+  /**
+   * CR 115.10a: one published opponent. A seat the wire did not offer is not
+   * dispatched. Cancel exists only when published.
+   */
+  get giftRecipientPrompt() {
+    return readGiftRecipient(this.snapshot);
+  }
+  answerGiftRecipient(action: GameAction) {
+    const published = giftRecipientOffers(this.snapshot?.legal.actions ?? []);
+    if (![...published.byOpponent.values()].includes(action)) return;
+    void this.dispatch(action);
+  }
+  cancelGiftRecipient() {
+    const cancel = giftRecipientOffers(this.snapshot?.legal.actions ?? []).cancel;
+    if (!cancel) return;
+    void this.dispatch(cancel);
+  }
+
+  /**
+   * CR 608.2d: the published boolean. A side the wire did not offer is not
+   * dispatched, and a missing position is not rewritten into the top.
+   */
+  get topOrBottomPrompt() {
+    return readTopOrBottom(this.snapshot);
+  }
+  answerTopOrBottom(action: GameAction) {
+    const published = topOrBottomOffers(this.snapshot?.legal.actions ?? []);
+    if (action !== published.top && action !== published.bottom) return;
+    void this.dispatch(action);
+  }
+
+  /**
+   * CR 701.30b: one published opponent. A seat the wire did not offer is not
+   * dispatched, and this window has no cancel: the engine publishes none.
+   */
+  get clashPrompt() {
+    return readClash(this.snapshot);
+  }
+  answerClashOpponent(action: GameAction) {
+    const published = clashOffers(this.snapshot?.legal.actions ?? []).byOpponent;
+    if (![...published.values()].includes(action)) return;
+    void this.dispatch(action);
+  }
+
+  /**
+   * CR 701.30c: the same published `ChooseTopOrBottom` boolean as the library
+   * position window; the engine's `ClashCardPlacement` arm accepts it.
+   */
+  get clashPlacementPrompt() {
+    return readClashPlacement(this.snapshot);
+  }
+  answerClashPlacement(action: GameAction) {
+    const published = topOrBottomOffers(this.snapshot?.legal.actions ?? []);
+    if (action !== published.top && action !== published.bottom) return;
+    void this.dispatch(action);
+  }
+
+  /**
+   * CR 100.2b: the submission the engine published. The counts printed are that
+   * action's own lists, not a deck this table builds.
+   */
+  get sideboardPrompt() {
+    return readSideboard(this.snapshot);
+  }
+  submitSideboard() {
+    const submit = sideboardOffers(this.snapshot?.legal.actions ?? []).submit;
+    if (!submit) return;
+    void this.dispatch(submit);
+  }
+
+  /** CR 103.1: the published boolean; a side the wire did not offer is not sent. */
+  get playDrawPrompt() {
+    return readPlayDraw(this.snapshot);
+  }
+  answerPlayDraw(action: GameAction) {
+    const published = playDrawOffers(this.snapshot?.legal.actions ?? []);
+    if (action !== published.play && action !== published.draw) return;
+    void this.dispatch(action);
+  }
+
+  /**
+   * CR 608.2d: the order is the answer. The pile starts as the published one and
+   * only ever holds those ids, in some order; a card the wire did not publish
+   * cannot be added because `moveBottomOrder` refuses it.
+   */
+  get bottomOrderPrompt() {
+    return readBottomOrder(this.snapshot);
+  }
+  bottomOrder = $state<ObjectId[]>([]);
+  /** Identifies the pause the working order belongs to. */
+  bottomOrderKey = $state('');
+  bottomOrderKeyFor(prompt: BottomOrderPrompt): string {
+    return `${prompt.kind}:${prompt.player}:${prompt.sourceId ?? 0}:${prompt.cards.join(',')}`;
+  }
+  /**
+   * Seeds the working order for a new pause. It is an `$effect` writer, never a
+   * reader: a `$derived` that assigned here would be a state mutation during
+   * derivation, which Svelte 5 rejects (`state_unsafe_mutation`).
+   */
+  seedBottomOrder(prompt: BottomOrderPrompt) {
+    const key = this.bottomOrderKeyFor(prompt);
+    if (key === this.bottomOrderKey) return;
+    this.bottomOrderKey = key;
+    this.bottomOrder = bottomOrderPile(prompt);
+  }
+  /**
+   * Read-only: the working order while it still is a permutation of the
+   * published pile, and the published pile itself otherwise. Nothing here writes
+   * state, so it is safe inside a `$derived`.
+   */
+  bottomOrderFor(prompt: BottomOrderPrompt): ObjectId[] {
+    if (this.bottomOrderKeyFor(prompt) !== this.bottomOrderKey) return bottomOrderPile(prompt);
+    return isBottomOrderPermutation(prompt, this.bottomOrder) ? this.bottomOrder : bottomOrderPile(prompt);
+  }
+  /** `+1` moves the card later (towards the bottom); `-1` moves it earlier. */
+  moveBottomOrder(id: ObjectId, delta: -1 | 1) {
+    const prompt = this.bottomOrderPrompt;
+    if (!prompt) return;
+    const current = this.bottomOrderFor(prompt);
+    const from = current.indexOf(id);
+    if (from === -1) return;
+    const to = from + delta;
+    if (to < 0 || to >= current.length) return;
+    const next = [...current];
+    next.splice(from, 1);
+    next.splice(to, 0, id);
+    this.bottomOrder = next;
+  }
+  submitBottomOrder() {
+    const prompt = this.bottomOrderPrompt;
+    if (!prompt) return;
+    const action = bottomOrderAction(prompt, this.bottomOrderFor(prompt));
+    if (!action) return;
+    void this.dispatch(action);
+  }
+
+  /** CR 115.7: repointing a spell (or ability) that is already on the stack. */
+  get retargetPrompt() {
+    return readRetarget(this.snapshot);
+  }
+  /** Position → replacement; a position absent from the map keeps its target. */
+  retargetPick = $state<Record<number, TargetRef>>({});
+  retargetPicked(index: number): TargetRef | undefined {
+    return this.retargetPick[index];
+  }
+  /**
+   * Only what that position admits is selectable — the per-position pool is the
+   * engine's own admission set, so the UI cannot offer a target it would reject.
+   */
+  retargetCandidates(index: number): TargetRef[] {
+    const prompt = this.retargetPrompt;
+    if (!prompt) return [];
+    const pool = prompt.pools[index] ?? prompt.union;
+    const declared = prompt.current[index];
+    // The declared target is its own alternative only where the announced object
+    // is gone: naming that id elects the object that came back (CR 400.7).
+    if (!declared || prompt.keepDistinct[index]) return pool;
+    return pool.filter((ref) => splitKey(ref) !== splitKey(declared));
+  }
+  setRetarget(index: number, target: TargetRef | null) {
+    const prompt = this.retargetPrompt;
+    if (!prompt) return;
+    if (!target) {
+      const next = { ...this.retargetPick };
+      delete next[index];
+      this.retargetPick = next;
+      return;
+    }
+    if (!this.retargetCandidates(index).some((ref) => splitKey(ref) === splitKey(target))) return;
+    // "Change the target" names one new target: there is nothing else to keep.
+    this.retargetPick = prompt.scope === 'single' ? { [index]: target } : { ...this.retargetPick, [index]: target };
+  }
+  /** One entry per position, in the prompt's order; `null` is the engine's keep. */
+  get retargetSelections(): (TargetRef | null)[] {
+    const prompt = this.retargetPrompt;
+    if (!prompt) return [];
+    return prompt.current.map((_, index) => this.retargetPick[index] ?? null);
+  }
+  get retargetReady(): boolean {
+    const prompt = this.retargetPrompt;
+    if (!prompt) return false;
+    return prompt.scope === 'single' ? Object.keys(this.retargetPick).length === 1 : true;
+  }
+  get retargetChanged(): number {
+    return Object.keys(this.retargetPick).length;
+  }
+  confirmRetarget() {
+    if (!this.retargetReady) return;
+    const newTargets = this.retargetSelections;
+    this.retargetPick = {};
+    void this.dispatch(retargetAction(newTargets));
+  }
+
+  /** CR 608.2c + CR 115.10a: a set of permanents (or a damage recipient). */
+  get chooseObjectsPrompt() {
+    return readChooseObjects(this.snapshot);
+  }
+  /** Picks by `targetKey`, in the order they were made. */
+  choosePick = $state<string[]>([]);
+  chooseIsPicked(target: TargetRef): boolean {
+    return this.choosePick.includes(splitKey(target));
+  }
+  get chooseSelected(): TargetRef[] {
+    const prompt = this.chooseObjectsPrompt;
+    if (!prompt) return [];
+    return this.choosePick
+      .map((key) => prompt.eligible.find((target) => splitKey(target) === key))
+      .filter((target): target is TargetRef => !!target);
+  }
+  toggleChooseObject(target: TargetRef) {
+    const prompt = this.chooseObjectsPrompt;
+    if (!prompt) return;
+    const key = splitKey(target);
+    if (this.choosePick.includes(key)) {
+      this.choosePick = this.choosePick.filter((entry) => entry !== key);
+      return;
+    }
+    // The ceiling is the engine's: never hold more than it will accept.
+    if (this.choosePick.length >= prompt.max) return;
+    if (!prompt.eligible.some((entry) => splitKey(entry) === key)) return;
+    this.choosePick = [...this.choosePick, key];
+  }
+  get chooseReady(): boolean {
+    const prompt = this.chooseObjectsPrompt;
+    if (!prompt) return false;
+    return this.choosePick.length >= prompt.min && this.choosePick.length <= prompt.max;
+  }
+  confirmChooseObjects() {
+    if (!this.chooseReady) return;
+    const targets = this.chooseSelected;
+    this.choosePick = [];
+    void this.dispatch(chooseObjectsAction(targets));
+  }
+
+  /** CR 701.34a: any number of the objects that already have a counter. */
+  get proliferatePrompt() {
+    return readProliferate(this.snapshot);
+  }
+  proliferatePick = $state<string[]>([]);
+  proliferateIsPicked(target: TargetRef): boolean {
+    return this.proliferatePick.includes(splitKey(target));
+  }
+  get proliferateSelected(): TargetRef[] {
+    const prompt = this.proliferatePrompt;
+    if (!prompt) return [];
+    return this.proliferatePick
+      .map((key) => prompt.eligible.find((target) => splitKey(target) === key))
+      .filter((target): target is TargetRef => !!target);
+  }
+  toggleProliferate(target: TargetRef) {
+    const prompt = this.proliferatePrompt;
+    if (!prompt) return;
+    const key = splitKey(target);
+    if (this.proliferatePick.includes(key)) {
+      this.proliferatePick = this.proliferatePick.filter((entry) => entry !== key);
+      return;
+    }
+    if (!prompt.eligible.some((entry) => splitKey(entry) === key)) return;
+    this.proliferatePick = [...this.proliferatePick, key];
+  }
+  confirmProliferate() {
+    const prompt = this.proliferatePrompt;
+    if (!prompt) return;
+    const targets = this.proliferateSelected;
+    this.proliferatePick = [];
+    void this.dispatch(selectTargetsAction(targets));
+  }
+
+  /** CR 701.56a: the same list twice — first which to remove from, then which to add to. */
+  get timeTravelPrompt() {
+    return readTimeTravel(this.snapshot);
+  }
+  timeTravelPick = $state<string[]>([]);
+  timeTravelIsPicked(target: TargetRef): boolean {
+    return this.timeTravelPick.includes(splitKey(target));
+  }
+  get timeTravelSelected(): TargetRef[] {
+    const prompt = this.timeTravelPrompt;
+    if (!prompt) return [];
+    return this.timeTravelPick
+      .map((key) => prompt.eligible.find((target) => splitKey(target) === key))
+      .filter((target): target is TargetRef => !!target);
+  }
+  toggleTimeTravel(target: TargetRef) {
+    const prompt = this.timeTravelPrompt;
+    if (!prompt) return;
+    const key = splitKey(target);
+    if (this.timeTravelPick.includes(key)) {
+      this.timeTravelPick = this.timeTravelPick.filter((entry) => entry !== key);
+      return;
+    }
+    if (!prompt.eligible.some((entry) => splitKey(entry) === key)) return;
+    this.timeTravelPick = [...this.timeTravelPick, key];
+  }
+  confirmTimeTravel() {
+    const prompt = this.timeTravelPrompt;
+    if (!prompt) return;
+    const targets = this.timeTravelSelected;
+    // The next phase (or priority) arrives with the new snapshot, which clears the picks.
+    this.timeTravelPick = [];
+    void this.dispatch(selectTargetsAction(targets));
+  }
+
+  /** CR 101.4: one permanent per type category kept, the rest sacrificed. */
+  get categoryPrompt() {
+    return readCategory(this.snapshot);
+  }
+  /** Category index → the permanent kept for it; absent means "nothing to keep". */
+  categoryPick = $state<Record<number, ObjectId>>({});
+  categoryPicked(index: number): ObjectId | undefined {
+    return this.categoryPick[index];
+  }
+  setCategoryPick(index: number, id: ObjectId | null) {
+    const prompt = this.categoryPrompt;
+    if (!prompt) return;
+    const next = { ...this.categoryPick };
+    if (id === null) {
+      delete next[index];
+      this.categoryPick = next;
+      return;
+    }
+    // Each slot admits exactly what its own category published, and one pick.
+    if (!prompt.categories[index]?.eligible.includes(id)) return;
+    this.categoryPick = { ...next, [index]: id };
+  }
+  /** One slot per category, in the prompt's order; `null` where it offered none. */
+  get categoryChoices(): (ObjectId | null)[] {
+    const prompt = this.categoryPrompt;
+    if (!prompt) return [];
+    return prompt.categories.map((_, index) => this.categoryPick[index] ?? null);
+  }
+  /** Distinct permanents kept: two categories can name the same artifact creature. */
+  get categoryKeptCount(): number {
+    return new Set(Object.values(this.categoryPick)).size;
+  }
+  get categoryReady(): boolean {
+    const prompt = this.categoryPrompt;
+    if (!prompt) return false;
+    return prompt.categories.every(({ eligible }, index) => !eligible.length || this.categoryPick[index] !== undefined);
+  }
+  confirmCategory() {
+    if (!this.categoryReady) return;
+    const choices = this.categoryChoices;
+    this.categoryPick = {};
+    void this.dispatch(categoryAction(choices));
+  }
+
+  /** CR 707.2: an ordered pick — the first is copied, the second scales the copy. */
+  get copyChosenPrompt() {
+    return readCopyChosen(this.snapshot);
+  }
+  /** Object ids in the order the player picked them; order is the rule. */
+  copyChosenPick = $state<ObjectId[]>([]);
+  copyChosenRank(id: ObjectId): number {
+    return this.copyChosenPick.indexOf(id);
+  }
+  toggleCopyChosen(id: ObjectId) {
+    const prompt = this.copyChosenPrompt;
+    if (!prompt) return;
+    if (this.copyChosenPick.includes(id)) {
+      // Removing an earlier pick re-ranks the ones after it, which is the point.
+      this.copyChosenPick = this.copyChosenPick.filter((entry) => entry !== id);
+      return;
+    }
+    if (this.copyChosenPick.length >= prompt.max) return;
+    if (!prompt.eligible.includes(id)) return;
+    this.copyChosenPick = [...this.copyChosenPick, id];
+  }
+  get copyChosenReady(): boolean {
+    const prompt = this.copyChosenPrompt;
+    if (!prompt) return false;
+    return this.copyChosenPick.length >= prompt.min && this.copyChosenPick.length <= prompt.max;
+  }
+  confirmCopyChosen() {
+    if (!this.copyChosenReady) return;
+    const ids = this.copyChosenPick;
+    this.copyChosenPick = [];
+    void this.dispatch(copyChosenAction(ids));
+  }
+
+  /** CR 107.1c: keep a subset whose combined power fits the cap. */
+  get keepPowerPrompt() {
+    return readKeepPower(this.snapshot);
+  }
+  /** CR 208.3: the power the engine publishes for that creature, if it does. */
+  powerOf(id: ObjectId): number | undefined {
+    const value = (this.snapshot?.state.objects[String(id)] as { power?: unknown } | undefined)?.power;
+    return typeof value === 'number' ? value : undefined;
+  }
+  keepPowerPick = $state<ObjectId[]>([]);
+  keepPowerIsPicked(id: ObjectId): boolean {
+    return this.keepPowerPick.includes(id);
+  }
+  /** Sum of the picked powers; `null` when any of them is unpublished. */
+  get keepPowerTotal(): number | null {
+    let total = 0;
+    for (const id of this.keepPowerPick) {
+      const power = this.powerOf(id);
+      if (power === undefined) return null;
+      total += power;
+    }
+    return total;
+  }
+  /** True when that creature still fits under the cap (CR 208.3). */
+  keepPowerFits(id: ObjectId): boolean {
+    const prompt = this.keepPowerPrompt;
+    if (!prompt) return false;
+    const total = this.keepPowerTotal;
+    const power = this.powerOf(id);
+    // Without a published power the screen cannot promise it fits; it lets the
+    // engine be the one to refuse.
+    if (total === null || power === undefined) return true;
+    return total + power <= prompt.cap;
+  }
+  toggleKeepPower(id: ObjectId) {
+    const prompt = this.keepPowerPrompt;
+    if (!prompt) return;
+    if (this.keepPowerPick.includes(id)) {
+      this.keepPowerPick = this.keepPowerPick.filter((entry) => entry !== id);
+      return;
+    }
+    if (!prompt.eligible.includes(id) || !this.keepPowerFits(id)) return;
+    this.keepPowerPick = [...this.keepPowerPick, id];
+  }
+  /** Zero is a legal answer, and it sacrifices everything: nothing blocks here. */
+  confirmKeepPower() {
+    const prompt = this.keepPowerPrompt;
+    if (!prompt) return;
+    const kept = this.keepPowerPick;
+    this.keepPowerPick = [];
+    void this.dispatch(keepPowerAction(kept));
+  }
+
+  /** CR 101.4 + CR 609.3: exactly the number the engine resolved, all distinct. */
+  get keepExactPrompt() {
+    return readKeepExact(this.snapshot);
+  }
+  keepExactPick = $state<ObjectId[]>([]);
+  keepExactIsPicked(id: ObjectId): boolean {
+    return this.keepExactPick.includes(id);
+  }
+  get keepExactRemaining(): number {
+    const prompt = this.keepExactPrompt;
+    return prompt ? Math.max(0, prompt.requiredCount - this.keepExactPick.length) : 0;
+  }
+  toggleKeepExact(id: ObjectId) {
+    const prompt = this.keepExactPrompt;
+    if (!prompt) return;
+    if (this.keepExactPick.includes(id)) {
+      this.keepExactPick = this.keepExactPick.filter((entry) => entry !== id);
+      return;
+    }
+    // The ceiling is the engine's own number; it is not derived from the pool.
+    if (this.keepExactPick.length >= prompt.requiredCount) return;
+    if (!prompt.eligible.includes(id)) return;
+    this.keepExactPick = [...this.keepExactPick, id];
+  }
+  get keepExactReady(): boolean {
+    const prompt = this.keepExactPrompt;
+    if (!prompt) return false;
+    return this.keepExactPick.length === prompt.requiredCount;
+  }
+  confirmKeepExact() {
+    if (!this.keepExactReady) return;
+    const kept = this.keepExactPick;
+    this.keepExactPick = [];
+    void this.dispatch(keepExactAction(kept));
+  }
+
+  /** CR 601.2d / CR 608.2d: how much of an amount each recipient gets. */
+  get distributePrompt() {
+    return readDistribute(this.snapshot);
+  }
+  /** Portions by `TargetRef` key; a recipient absent from the map gets zero. */
+  splitAmount = $state<Record<string, number>>({});
+  get splitEntries(): [TargetRef, number][] {
+    const prompt = this.distributePrompt;
+    if (!prompt) return [];
+    return prompt.targets
+      .filter((target) => (this.splitAmount[splitKey(target)] ?? 0) > 0)
+      .map((target) => [target, this.splitAmount[splitKey(target)] ?? 0]);
+  }
+  get splitTotal(): number {
+    return this.splitEntries.reduce((sum, [, amount]) => sum + amount, 0);
+  }
+  setSplit(target: TargetRef, amount: number) {
+    const prompt = this.distributePrompt;
+    if (!prompt) return;
+    // The window is the engine's: never below zero, never above what is left —
+    // the validator requires the portions to sum to exactly `total`.
+    const clamped = Math.max(0, Math.min(Math.trunc(amount), prompt.total));
+    this.splitAmount = { ...this.splitAmount, [splitKey(target)]: clamped };
+  }
+  get splitReady(): boolean {
+    const prompt = this.distributePrompt;
+    if (!prompt) return false;
+    if (prompt.unit === 'even') return evenSplit(prompt.total, prompt.targets.length) !== null;
+    if (this.splitTotal !== prompt.total) return false;
+    // CR 601.2d: an announce-time division names every target with at least one.
+    if (prompt.scope === 'announced') {
+      return prompt.targets.every((target) => (this.splitAmount[splitKey(target)] ?? 0) >= 1);
+    }
+    return true;
+  }
+  confirmSplit() {
+    const prompt = this.distributePrompt;
+    if (!prompt || !this.splitReady) return;
+    const entries: [TargetRef, number][] =
+      prompt.unit === 'even'
+        ? (evenSplit(prompt.total, prompt.targets.length) ?? []).map((amount, index) => [prompt.targets[index], amount])
+        : this.splitEntries;
+    this.splitAmount = {};
+    void this.dispatch(distributeAction(entries));
+  }
+
+  /** CR 601.2c: the set of targets a multi-target spell or ability asks for. */
+  get multiTargetPrompt() {
+    return readMultiTarget(this.snapshot);
+  }
+  multiPick = $state<ObjectId[]>([]);
+  toggleMultiPick(id: ObjectId) {
+    const prompt = this.multiTargetPrompt;
+    const picked = this.multiPick;
+    if (!prompt) return;
+    if (picked.includes(id)) {
+      this.multiPick = picked.filter((card) => card !== id);
+      return;
+    }
+    // CR 601.2c: the window is the engine's; above it the extra target is not a
+    // choice the engine would take, so the row stops accepting one.
+    if (picked.length >= prompt.max) return;
+    this.multiPick = [...picked, id];
+  }
+  get multiReady(): boolean {
+    const prompt = this.multiTargetPrompt;
+    if (!prompt) return false;
+    return this.multiPick.length >= prompt.min && this.multiPick.length <= prompt.max;
+  }
+  confirmMultiPick() {
+    if (!this.multiReady) return;
+    const ids = this.multiPick;
+    this.multiPick = [];
+    void this.dispatch(multiTargetAction(ids));
+  }
+
+  /** CR 702.184a: which single creature pays the station cost. */
+  get stationPrompt() {
+    return readStation(this.snapshot);
+  }
+  stationTo(creatureId: ObjectId) {
+    const prompt = this.stationPrompt;
+    if (!prompt) return;
+    void this.dispatch(stationAction(prompt.spacecraftId, creatureId));
+  }
+
+  /** CR 702.6a: which permanent the equipment attaches to. */
+  get equipPrompt() {
+    return readEquip(this.snapshot);
+  }
+  equipTo(targetId: ObjectId) {
+    const prompt = this.equipPrompt;
+    if (!prompt) return;
+    void this.dispatch(equipAction(prompt.equipmentId, targetId));
+  }
+
+  /** CR 701.22a / CR 701.25a: look at the top N and keep any of it on top. */
+  get scryPrompt() {
+    return readScry(this.snapshot);
+  }
+  /** The keep-on-top cards, in the order they will sit on the library. */
+  scryKeep = $state<ObjectId[]>([]);
+  toggleScryKeep(id: ObjectId) {
+    const kept = this.scryKeep;
+    this.scryKeep = kept.includes(id) ? kept.filter((card) => card !== id) : [...kept, id];
+  }
+  /** Order matters: the first kept card ends up on the very top. */
+  moveScryKeep(id: ObjectId, direction: -1 | 1) {
+    const kept = [...this.scryKeep];
+    const at = kept.indexOf(id);
+    const to = at + direction;
+    if (at < 0 || to < 0 || to >= kept.length) return;
+    [kept[at], kept[to]] = [kept[to]!, kept[at]!];
+    this.scryKeep = kept;
+  }
+  confirmScry() {
+    const cards = this.scryKeep;
+    this.scryKeep = [];
+    void this.dispatch(scryAction(cards));
+  }
+
+  /** CR 103.1: the roll winner names who takes the first turn. */
+  get startingPlayerPrompt() {
+    return readStartingPlayer(this.snapshot);
+  }
+  startWith(player: number) {
+    void this.dispatch(chooseStartingPlayer(player));
+  }
+
+  /** CR 702.21b: which permanents pay the ward cost. */
+  get wardSacrificePrompt() {
+    return readWardSacrifice(this.snapshot);
+  }
+  payWard(cards: ObjectId[]) {
+    void this.dispatch(wardSacrificeAction(cards));
+  }
+
+  /** CR 702.104a: an opponent decides whether the tribute is paid. */
+  get tributePrompt() {
+    return readTribute(this.snapshot);
+  }
+  decideTribute(pay: boolean) {
+    void this.dispatch(decideTribute(pay));
+  }
+
+  /** CR 118.12a: which sub-cost of a disjunctive unless-cost to pay. */
+  get unlessBranchPrompt() {
+    return readUnlessBranch(this.snapshot);
+  }
+  /** Position in `costs`; the engine identifies a branch by index, not by shape. */
+  branchPick = $state<number | null>(null);
+  pickBranch(index: number) {
+    this.branchPick = this.branchPick === index ? null : index;
+  }
+  confirmBranch() {
+    const index = this.branchPick;
+    if (index === null || !this.unlessBranchPrompt) return;
+    this.branchPick = null;
+    void this.dispatch(chooseUnlessCostBranch(index));
+  }
+  declineBranch() {
+    this.branchPick = null;
+    void this.dispatch(chooseUnlessCostBranch(null));
+  }
+
+  /** Alchemy batch entry: which of the stamped creatures receives the token. */
+  get tokenHostPrompt() {
+    return readTokenHost(this.snapshot);
+  }
+  /** Index into `hosts`, because a `TargetRef` is an object, not a key. */
+  hostPick = $state<number | null>(null);
+  toggleHost(index: number) {
+    if (!this.tokenHostPrompt) return;
+    this.hostPick = this.hostPick === index ? null : index;
+  }
+  get hostReady() {
+    const prompt = this.tokenHostPrompt;
+    return prompt !== null && this.hostPick !== null && prompt.hosts[this.hostPick] !== undefined;
+  }
+  confirmHost() {
+    const prompt = this.tokenHostPrompt;
+    const index = this.hostPick;
+    if (!prompt || index === null) return;
+    const host = prompt.hosts[index];
+    if (!host) return;
+    this.hostPick = null;
+    void this.dispatch(chooseTokenHost(host));
+  }
+
+  /** CR 702.95a: which creature becomes the soulbond partner, or none. */
+  get pairPrompt() {
+    return readPairPrompt(this.snapshot);
+  }
+  pairPick = $state<ObjectId | null>(null);
+  get pairReady() {
+    const prompt = this.pairPrompt;
+    return prompt !== null && prompt.choices.includes(this.pairPick ?? -1);
+  }
+  togglePair(id: ObjectId) {
+    if (!this.pairPrompt) return;
+    this.pairPick = this.pairPick === id ? null : id;
+  }
+  confirmPair() {
+    if (!this.pairReady) return;
+    const partner = this.pairPick;
+    this.pairPick = null;
+    void this.dispatch(choosePair(partner));
+  }
+  /** CR 608.2d: the pairing is optional, so declining is an answer. */
+  declinePair() {
+    if (!this.pairPrompt) return;
+    this.pairPick = null;
+    void this.dispatch(choosePair(null));
+  }
+
+  /** CR 118.12: pay the unless-cost, or let the effect happen. */
+  get unlessPrompt() {
+    return readUnless(this.snapshot);
+  }
+  decideUnless(pay: boolean) {
+    if (!this.unlessPrompt) return;
+    void this.dispatch(payUnlessCost(pay));
+  }
+
+  /** CR 701.20a: which card (or cards) the player shows, or none. */
+  get revealPrompt() {
+    return readRevealPrompt(this.snapshot);
+  }
+  /** The marked cards. One pick reads as a single id; "any number" reads as a set. */
+  revealPick = $state<ObjectId | null>(null);
+  revealPicks = $state<ObjectId[]>([]);
+  get revealMax() {
+    const prompt = this.revealPrompt;
+    if (!prompt) return 0;
+    return prompt.cardinality.kind === 'any' ? prompt.cards.length : prompt.cardinality.count;
+  }
+  get revealChosen(): ObjectId[] {
+    const prompt = this.revealPrompt;
+    if (!prompt) return [];
+    if (prompt.cardinality.kind === 'any') return this.revealPicks;
+    return this.revealPick === null ? [] : [this.revealPick];
+  }
+  get revealReady() {
+    const prompt = this.revealPrompt;
+    if (!prompt) return false;
+    const chosen = this.revealChosen;
+    // CR 107.1c: "any number" admits zero, so it is ready as soon as it is offered.
+    if (prompt.cardinality.kind === 'any') return chosen.every((id) => prompt.cards.includes(id));
+    return chosen.length === prompt.cardinality.count && chosen.every((id) => prompt.cards.includes(id));
+  }
+  toggleReveal(id: ObjectId) {
+    const prompt = this.revealPrompt;
+    if (!prompt) return;
+    if (prompt.cardinality.kind === 'exactly' && prompt.cardinality.count === 1) {
+      // One card: marking another replaces the first instead of adding to it.
+      this.revealPick = this.revealPick === id ? null : id;
+      return;
+    }
+    const marked = this.revealPicks.includes(id)
+      ? this.revealPicks.filter((entry) => entry !== id)
+      : this.revealPicks.length >= this.revealMax ? this.revealPicks : [...this.revealPicks, id];
+    this.revealPicks = marked;
+  }
+  confirmReveal() {
+    if (!this.revealReady) return;
+    const chosen = this.revealChosen;
+    this.revealPick = null;
+    this.revealPicks = [];
+    void this.dispatch(revealCardsAction(chosen));
+  }
+  /** CR 701.20a: revealing nothing — only when the engine offered the decline. */
+  declineReveal() {
+    const prompt = this.revealPrompt;
+    if (!prompt?.optional) return;
+    this.revealPick = null;
+    this.revealPicks = [];
+    void this.dispatch(revealAction(null));
+  }
+
+  /** CR 608.2d: an optional instruction the controller may decline. */
+  get optionalEffectPrompt() {
+    return readOptionalEffect(this.snapshot);
+  }
+  /** CR 603.5: the "do not ask again" boxes, reset with every new prompt. */
+  optionalRemember = $state(false);
+  optionalSameCard = $state(false);
+  decideOptional(accept: boolean) {
+    const prompt = this.optionalEffectPrompt;
+    if (!prompt) return;
+    // Read both boxes before clearing them: the dispatch below is what sends them.
+    const remembered = prompt.rememberable && this.optionalRemember;
+    const sameCard = prompt.sameCardAvailable && this.optionalSameCard;
+    this.optionalRemember = false;
+    this.optionalSameCard = false;
+    void this.dispatch(remembered
+      ? rememberOptionalEffect(accept, sameCard)
+      : decideOptionalEffect(accept));
+  }
+
+  /** CR 701.20e: cards looked at, of which the player keeps some. */
+  get digPrompt() {
+    return readDigPrompt(this.snapshot);
+  }
+  dug = $state<ObjectId[]>([]);
+  get digReady() {
+    const prompt = this.digPrompt;
+    return prompt ? isDigReady(prompt, this.dug) : false;
+  }
+  toggleDig(id: ObjectId) {
+    const prompt = this.digPrompt;
+    if (!prompt) return;
+    const next = togglePick(prompt.selectable, this.dug, id, prompt.count);
+    if (next !== this.dug) this.dug = next;
+  }
+  confirmDig() {
+    if (!this.digPrompt || !this.digReady) return;
+    const cards = [...this.dug];
+    this.dug = [];
+    void this.dispatch(selectCardsAction(cards));
+  }
+
+  /** CR 701.23: a search whose searcher must pick from the offered cards. */
+  get searchPrompt() {
+    return readSearchPrompt(this.snapshot);
+  }
+  /** The cards marked for the search. Cleared whenever the position moves on. */
+  searched = $state<ObjectId[]>([]);
+  get searchReady() {
+    const prompt = this.searchPrompt;
+    return prompt ? isSearchReady(prompt, this.searched) : false;
+  }
+  toggleSearch(id: ObjectId) {
+    const prompt = this.searchPrompt;
+    if (!prompt) return;
+    const next = togglePick(prompt.cards, this.searched, id, prompt.count);
+    if (next !== this.searched) this.searched = next;
+  }
+  confirmSearch() {
+    if (!this.searchPrompt || !this.searchReady) return;
+    const cards = [...this.searched];
+    this.searched = [];
+    void this.dispatch(selectCardsAction(cards));
+  }
+
+  /** CR 700.2: the modal spell or ability waiting for its modes. */
+  get modeChoicePrompt() {
+    return readModeChoice(this.snapshot);
+  }
+  /**
+   * The modes being chosen, keyed to the prompt: two modal spells in a row (or
+   * a mode prompt re-entering for the same card) start from an empty choice,
+   * never from the previous spell's answer.
+   */
+  private modeEntry = $state<{ key: string; selected: number[] } | null>(null);
+  private get modeKey() {
+    const prompt = this.modeChoicePrompt;
+    if (!prompt) return '';
+    const revision = this.snapshot?.revision ?? 0;
+    return `${revision}:${prompt.kind}:${prompt.objectId ?? ''}:${prompt.descriptions.length}`;
+  }
+  get modes() {
+    if (!this.modeChoicePrompt) return [];
+    return this.modeEntry?.key === this.modeKey ? this.modeEntry.selected : [];
+  }
+  get modesReady() {
+    const prompt = this.modeChoicePrompt;
+    return prompt ? modeConfirmable(prompt, this.modes) : false;
+  }
+  toggleMode(index: number) {
+    const prompt = this.modeChoicePrompt;
+    if (!prompt) return;
+    // A one-of-one modal answers with the click itself, exactly like Phase's
+    // single candidate; the row never waits for a confirmation.
+    if (modeSingleChoice(prompt)) {
+      void this.dispatch(modeSelectAction([index]));
+      return;
+    }
+    const next = modeToggle(prompt, this.modes, index);
+    if (next !== this.modes) this.modeEntry = { key: this.modeKey, selected: next };
+  }
+  clearModes() {
+    if (this.modeChoicePrompt) this.modeEntry = { key: this.modeKey, selected: [] };
+  }
+  confirmModes() {
+    const prompt = this.modeChoicePrompt;
+    if (!prompt || !this.modesReady) return;
+    const indices = [...this.modes];
+    this.modeEntry = null;
+    void this.dispatch(modeSelectAction(indices));
+  }
+
+  /** CR 603.3b: the player whose simultaneous triggers need an order. */
+  get triggerOrderPrompt() {
+    return readTriggerOrder(this.snapshot);
+  }
+  /**
+   * The permutation being built, keyed to the prompt it belongs to: successive
+   * CR 603.3b groups can have the same size, so a new prompt must start from
+   * the engine's own order instead of inheriting the previous arrangement.
+   */
+  private orderEntry = $state<{ key: string; order: number[] } | null>(null);
+  private get orderKey() {
+    const prompt = this.triggerOrderPrompt;
+    if (!prompt) return '';
+    const revision = this.snapshot?.revision ?? 0;
+    const ids = prompt.triggers.map((trigger) => trigger.sourceId).join(',');
+    return `${revision}:${ids}`;
+  }
+  get triggerOrder() {
+    const prompt = this.triggerOrderPrompt;
+    if (!prompt) return [];
+    return this.orderEntry?.key === this.orderKey ? this.orderEntry.order : defaultOrder(prompt.triggers.length);
+  }
+  moveTrigger(from: number, to: number) {
+    const prompt = this.triggerOrderPrompt;
+    if (!prompt) return;
+    const next = moveInOrder(this.triggerOrder, from, to);
+    if (next !== this.triggerOrder) this.orderEntry = { key: this.orderKey, order: next };
+  }
+  confirmTriggerOrder() {
+    const prompt = this.triggerOrderPrompt;
+    if (!prompt) return;
+    void this.dispatch(orderTriggersAction(this.triggerOrder));
+  }
+
+  /** CR 107.3a: the value of X the caster is announcing, as Phase published it. */
+  get chooseXPrompt() {
+    return readXPrompt(this.snapshot);
+  }
+  /**
+   * The typed entry, keyed to the prompt it belongs to. A successor prompt —
+   * another spell, a narrower window — starts from the engine's minimum again
+   * instead of inheriting a value chosen for someone else's X.
+   */
+  private xEntry = $state<{ key: string; raw: string } | null>(null);
+  private get xKey() {
+    const prompt = this.chooseXPrompt;
+    if (!prompt) return '';
+    const revision = this.snapshot?.revision ?? 0;
+    return `${revision}:${prompt.objectId ?? ''}:${prompt.min}:${prompt.max}`;
+  }
+  get xRaw() {
+    const prompt = this.chooseXPrompt;
+    if (!prompt) return '0';
+    return this.xEntry?.key === this.xKey ? this.xEntry.raw : String(defaultX(prompt));
+  }
+  setXRaw(raw: string) {
+    const prompt = this.chooseXPrompt;
+    if (prompt) this.xEntry = { key: this.xKey, raw };
+  }
+  /**
+   * Steppers RECOVER an out-of-range entry towards the window; they never
+   * clamp a submission. They step from the digits the player typed, so a
+   * refused 99 does not throw away readable input.
+   */
+  stepX(delta: number) {
+    const prompt = this.chooseXPrompt;
+    if (!prompt) return;
+    const digits = /^\d+$/.test(this.xRaw) ? Number(this.xRaw) : defaultX(prompt);
+    this.setXRaw(String(Math.min(Math.max(digits + delta, prompt.min), prompt.max)));
+  }
+  /** The announced value, or `null` while the entry is not one Phase would take. */
+  get xValue() {
+    const prompt = this.chooseXPrompt;
+    return prompt ? parseX(this.xRaw, prompt.min, prompt.max) : null;
+  }
+  confirmX() {
+    const value = this.xValue;
+    if (value === null) return;
+    void this.dispatch(chooseXAction(value));
+  }
+  cancelCast() {
+    void this.dispatch(cancelCastAction());
+  }
+
+  /**
+   * CR 107.1c + CR 118.1: an amount the engine asks for, inside a window the
+   * engine owns. The box starts at the engine's minimum and is reset per prompt
+   * (`payAmountKey`), because the engine mints consecutive prompts that share a
+   * `source_id` and differ only in `player`.
+   */
+  get payAmountPrompt() {
+    return readPayAmountPrompt(this.snapshot);
+  }
+  private payEntry = $state<{ key: string; raw: string } | null>(null);
+  private get payKey() {
+    const prompt = this.payAmountPrompt;
+    if (!prompt) return '';
+    return `${this.snapshot?.revision ?? 0}:${payAmountKey(prompt)}`;
+  }
+  get payRaw() {
+    const prompt = this.payAmountPrompt;
+    if (!prompt) return '0';
+    return this.payEntry?.key === this.payKey ? this.payEntry.raw : String(prompt.min);
+  }
+  setPayRaw(raw: string) {
+    if (this.payAmountPrompt) this.payEntry = { key: this.payKey, raw };
+  }
+  /** Steppers recover an out-of-range entry; the submission is never clamped. */
+  stepPay(delta: number) {
+    const prompt = this.payAmountPrompt;
+    if (!prompt) return;
+    const digits = /^\d+$/.test(this.payRaw) ? Number(this.payRaw) : prompt.min;
+    this.setPayRaw(String(Math.min(Math.max(digits + delta, prompt.min), prompt.max)));
+  }
+  /** The amount Phase would accept, or `null` while the entry is not one. */
+  get payValue() {
+    const prompt = this.payAmountPrompt;
+    return prompt ? parseAmount(this.payRaw, prompt.min, prompt.max) : null;
+  }
+  confirmPay() {
+    const value = this.payValue;
+    if (value === null) return;
+    void this.dispatch(submitPayAmount(value));
   }
 
   private async apply(reply: EngineReply) {
@@ -311,7 +2100,23 @@ class GameSession {
     const start = performance.now();
     if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
     if (this.snapshot?.revision !== reply.revision) {
-      this.attacks = {}; this.blocks = {}; this.choosing = [];
+      this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = []; this.zonePick = [];
+      this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.revealPicks = []; this.pairPick = null; this.untapSubsetPick = []; this.payCostPick = []; this.phyrexianPick = [];
+      this.scryKeep = [];
+      this.tapPick = [];
+      this.multiPick = [];
+      this.splitAmount = {};
+      this.movePick = {};
+      this.removePick = {};
+      this.pilePick = [];
+      this.retargetPick = {};
+      this.choosePick = [];
+      this.proliferatePick = [];
+      this.timeTravelPick = [];
+      this.categoryPick = {};
+      this.copyChosenPick = [];
+      this.keepPowerPick = [];
+      this.keepExactPick = [];
       this.history = [...summarizeEvents(reply.events ?? [], reply.state.objects, reply.revision, () => ++this.historyId), ...this.history].slice(0, 40);
       for (const raw of reply.events ?? []) {
         const e = raw as { type?: string; data?: { player_id?: number; amount?: number } };

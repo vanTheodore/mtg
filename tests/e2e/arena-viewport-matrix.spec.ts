@@ -493,7 +493,12 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
       await settle(page);
     }
     await expect(page.locator('.hand-zone'), `la mano no está montada a ${where}`).toBeVisible({ timeout: 30_000 });
-    const atStart = await page.evaluate(() => {
+    // La mano se desmonta mientras el dispositivo cambia de asiento: es la
+    // promesa de privacidad del propio tablero (`{#if !needsHandoff}`), no un
+    // fallo de maquetación. Entre la espera de arriba y esta medición cabe un
+    // traspaso, así que la medición se repite —liquidando el traspaso— en vez de
+    // acusar al tamaño de la ventana de algo que decide el reparto de asientos.
+    const measureStart = () => page.evaluate(() => {
       const region = document.querySelector<HTMLElement>('main.layout');
       const app = document.querySelector<HTMLElement>('.app');
       const handEl = document.querySelector<HTMLElement>('.hand-zone');
@@ -534,6 +539,12 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
         lastHit: lb ? hit === last || !!last?.contains(hit) : false
       };
     });
+    let atStart = await measureStart();
+    for (let attempt = 0; attempt < 3 && atStart.missing; attempt += 1) {
+      await driver.settleSeat();
+      await settle(page);
+      atStart = await measureStart();
+    }
 
     expect(atStart.missing, `la escena no tiene lo que hay que medir a ${where}`).toBe('');
     expect(atStart.debt, `el escritorio vuelve a ser un documento a ${where}`).toBe(0);

@@ -4,8 +4,8 @@
 // `--test`), so one implementation serves both without shipping guard code in a release build.
 // MEASURED, not assumed — the alternative already in this tree is `test_support.rs` / `support.rs`,
 // twin files kept equal by a comment asking a human to remember.
+#![recursion_limit = "512"]
 #[path = "../../src/source_census.rs"]
-mod source_census;
 
 mod abdel_adrian_animate_dead_altar_board;
 mod abigale_integration;
@@ -30,6 +30,7 @@ mod betor_lifelink_counters_repro;
 mod bishop_of_binding_where_x_exiled_card_power;
 mod blitz_em_dash_graveyard_cast;
 mod blizzard_brawl_snow_indestructible;
+mod board_wipe_co_departure_scaling;
 mod bring_to_light_free_cast_2880;
 mod cartographers_hawk_relative_damage_recipient;
 mod case_solve_condition;
@@ -68,6 +69,7 @@ mod descendants_fury_sacrificed_referent_4795;
 mod do_this_only_once_each_turn;
 mod doran_attack_block_pump;
 mod double_strike_first_strike_trigger_removes_attacker;
+mod draw_from_general_post_replacement;
 mod dreadhorde_arcanist_ceiling_4943;
 mod dyadrine_counter_selection;
 mod emissary_green;
@@ -128,6 +130,7 @@ mod issue_3303_adeline_tapped_attacking;
 mod issue_3313_assault_formation;
 mod issue_3314_killian;
 mod issue_3648_ninjutsu_combat_flow;
+mod issue_3873_teferi_ageless_insight_multi_draw;
 mod issue_3878_go_shintai_combat_damage;
 mod issue_3883_kari_zev_ragavan;
 mod issue_3993_delve_cancel_payment;
@@ -150,6 +153,7 @@ mod issue_6858_draw_that_many_discard;
 mod issue_6877_departed_triggering_spell;
 mod issue_7386_ozolith_combat_counter_move;
 mod issue_8024_terminal_rest_captures;
+mod issue_8065_nightmare_shepherd;
 mod issue_836_hero_of_bladehold_battle_cry;
 mod issue_8485_maze_of_ith_defender;
 mod issue_879_obsessive_pursuit;
@@ -169,6 +173,7 @@ mod min_blocker_floor_block_candidates_7183;
 mod mindblade_render_warrior_intervening_if_2867;
 mod mjolnir_hammer_double_damage;
 mod morkrut_ashaya_self_sacrifice;
+mod mox_diamond_discard_cost_2853;
 mod mr_foxglove_defending_hand_minus_yours_draw;
 mod ms_marvel_power_exceeds_base;
 mod msh_wave5a_group2_conditions;
@@ -288,5 +293,6 @@ mod controller_anaphor_binds_through_context;
 
 mod resolution_progress_contract;
 
+mod ignite_memories_random_reveal;
 mod risky_move_gain_control_trigger;
 mod token_attack_destination;

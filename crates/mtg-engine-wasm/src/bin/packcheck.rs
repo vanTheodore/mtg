@@ -16,6 +16,7 @@
 //! merges them into one flat catalog before the engine sees it, so the check
 //! merges them the same way. A later pack never overwrites an earlier one.
 use engine::database::CardDatabase;
+use engine::database::combo_table::ComboTable;
 use engine::game::deck_loading::{resolve_deck_list, DeckList};
 use engine::game::engine::{apply_with_rejection, start_game_with_starting_player};
 use engine::game::visibility::filter_state_for_viewer;
@@ -116,7 +117,7 @@ fn main() {
     }
 
     let resolve_started = Instant::now();
-    let payload = resolve_deck_list(&db, &decks);
+    let payload = resolve_deck_list(&db, &ComboTable::default(), &decks);
     let resolved_player: u32 = payload.player.main_deck.iter().map(|entry| entry.count).sum();
     let resolved_opponent: u32 = payload.opponent.main_deck.iter().map(|entry| entry.count).sum();
 

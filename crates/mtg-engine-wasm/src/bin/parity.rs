@@ -2,6 +2,7 @@
 //! It drives the same Phase engine twice (direct API vs wrapper ABI) with the
 //! same catalog, decks, seed and action sequence, then diffs viewer projections.
 use engine::database::CardDatabase;
+use engine::database::combo_table::ComboTable;
 use engine::game::deck_loading::{resolve_deck_list, DeckList};
 use engine::game::engine::{apply_with_rejection, start_game_with_starting_player};
 use engine::game::visibility::filter_state_for_viewer;
@@ -51,7 +52,7 @@ fn main() {
     // Direct engine path.
     let direct_db = CardDatabase::from_json_str(&catalog_text).unwrap();
     let mut direct = GameState::new(FormatConfig::limited(), 2, seed);
-    let payload = resolve_deck_list(&direct_db, &decks);
+    let payload = resolve_deck_list(&direct_db, &ComboTable::default(), &decks);
     load_and_hydrate_decks(&mut direct, &payload, Some(&direct_db));
     start_game_with_starting_player(&mut direct, PlayerId(0));
 

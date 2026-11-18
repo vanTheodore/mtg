@@ -16,7 +16,21 @@ const LABELS: Record<string, string> = {
   ChooseReplacement: 'Elegir efecto de reemplazo',
   PayManaAbilityMana: 'Pagar maná',
   Equip: 'Equipar',
-  Foretell: 'Predecir'
+  Foretell: 'Predecir',
+  ChooseModalFace: 'Elegir cara',
+  ChooseAlternativeCast: 'Elegir coste alternativo',
+  ChooseCastingVariant: 'Elegir variante de lanzamiento',
+  ChoosePermanentTypeSlot: 'Elegir ranura de tipo',
+  RespondToSpliceOffer: 'Empalmar',
+  ChooseMutateMergeSide: 'Elegir lado de la mutación',
+  CipherEncode: 'Cifrar',
+  OrderCostReductions: 'Elegir orden de reducción',
+  ChooseResolutionOptionalPaymentBranch: 'Elegir pago opcional',
+  ChooseGiftRecipient: 'Elegir destinatario',
+  ChooseTopOrBottom: 'Elegir posición en la biblioteca',
+  ChooseClashOpponent: 'Elegir oponente del choque',
+  SubmitSideboard: 'Entregar el mazo',
+  ChoosePlayDraw: 'Elegir jugar o robar'
 };
 
 function actionObjectId(action: GameAction): number | undefined {
@@ -70,6 +84,10 @@ export function describeAction(action: GameAction, objects: Record<string, GameO
   if (action.type === 'SelectTargets' && Array.isArray(data.targets)) return `Elegir ${data.targets.length} objetivo(s)`;
   if (action.type === 'ChooseTarget') return data.target ? 'Confirmar objetivo' : 'Sin objetivo';
   if (action.type === 'CancelCast') return 'Cancelar lanzamiento';
+  if (action.type === 'DecideOptionalCost') {
+    const index = action.data?.index;
+    return typeof index === 'number' ? `Elegir la opción ${index + 1} del coste` : 'Elegir opción de coste';
+  }
   if (action.type === 'UntapLandForMana') return `Deshacer maná de ${obj?.name ?? 'la fuente'}`;
   if (action.type === 'BackToManaPayment') return 'Volver al pago';
   if (action.type === 'PayManaAbilityMana' || action.type === 'ChooseManaColor') {
@@ -80,6 +98,45 @@ export function describeAction(action: GameAction, objects: Record<string, GameO
     return names.length ? `Pagar con ${names.join(' + ')}` : 'Elegir producción de maná';
   }
   if (action.type === 'ChooseReplacement') return `Elegir efecto ${Number(data.index ?? 0) + 1}`;
+  if (action.type === 'ChooseMutateMergeSide') {
+    if (data.side === 'Top') return 'Poner encima';
+    if (data.side === 'Bottom') return 'Poner debajo';
+    return base;
+  }
+  if (action.type === 'CipherEncode') {
+    if (data.creature === null || data.creature === undefined) return 'No cifrar';
+    const host = typeof data.creature === 'number' ? objects[String(data.creature)] : undefined;
+    return host?.name ? `Cifrar en ${host.name}` : base;
+  }
+  if (action.type === 'ChooseResolutionOptionalPaymentBranch') {
+    const choice = data.choice as { type?: string; data?: { index?: number } } | undefined;
+    if (choice?.type === 'Decline') return 'No pagar';
+    if (choice?.type === 'Pay' && typeof choice.data?.index === 'number') return `Pagar índice ${choice.data.index}`;
+    return base;
+  }
+  if (action.type === 'ChooseGiftRecipient') {
+    const opponent = data.opponent;
+    return typeof opponent === 'number' ? `Elegir al Jugador ${opponent + 1}` : base;
+  }
+  if (action.type === 'ChoosePlayDraw') {
+    if (data.play_first === true) return 'Jugar primero';
+    if (data.play_first === false) return 'Robar primero';
+    return base;
+  }
+  if (action.type === 'SubmitSideboard') {
+    const main = Array.isArray(data.main) ? data.main.length : 0;
+    const side = Array.isArray(data.sideboard) ? data.sideboard.length : 0;
+    return main === 0 && side === 0 ? base : `Entregar ${main + side} entradas de mazo`;
+  }
+  if (action.type === 'ChooseClashOpponent') {
+    const opponent = data.opponent;
+    return typeof opponent === 'number' ? `Chocar con el Jugador ${opponent + 1}` : base;
+  }
+  if (action.type === 'ChooseTopOrBottom') {
+    if (data.top === true) return 'Arriba de la biblioteca';
+    if (data.top === false) return 'Abajo de la biblioteca';
+    return base;
+  }
   return base;
 }
 
@@ -137,6 +194,58 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'ManaPayment': case 'ManaAbilityManaPayment': case 'ManaSourceSelection': return 'Produce maná con las fuentes resaltadas y confirma el pago.';
     case 'PayManaAbilityMana': case 'ChooseManaColor': return 'Elige qué maná producir o gastar.';
     case 'ChooseReplacement': return 'Varios efectos de reemplazo aplican; elige el orden.';
+    case 'StationTarget': return 'Gira una criatura tuya: la nave carga con su fuerza.';
+    case 'MultiTargetSelection': return 'Elige los objetivos del hechizo o habilidad.';
+    case 'DistributeAmong': return 'Reparte la cantidad entre los objetivos: no puede sobrar ni faltar.';
+    case 'MoveCountersDistribution': return 'Elige cuántos contadores se mueven y a qué permanentes.';
+    case 'RetargetChoice': return 'Cambia los objetivos de un hechizo que ya está en la pila.';
+    case 'ChooseObjectsSelection': return 'Elige los permanentes que el efecto tratará como «esos»; no son objetivos.';
+    case 'ProliferateChoice': return 'Elige quién ya lleva contadores: cada uno recibe otro de cada clase.';
+    case 'TimeTravelChoice': return 'Quita o pon contadores de tiempo: primero una mitad, después la otra.';
+    case 'CategoryChoice': return 'Conserva un permanente de cada tipo: el resto se sacrifica.';
+    case 'EachPlayerCopyChosenSelection': return 'Elige en orden: la primera criatura se copia, la segunda escala la copia.';
+    case 'KeepWithinTotalPowerChoice': return 'Conserva criaturas hasta un tope de fuerza: el resto se sacrifica.';
+    case 'KeepExactPermanentsChoice': return 'Conserva exactamente los permanentes que pide el motor: el resto se sacrifica.';
+    case 'RemoveCountersChoice': return 'Quita contadores de un permanente hasta el tope que publique el motor.';
+    case 'CopyRetarget': return 'Elige los objetivos de una copia: cada ranura, una respuesta; las demás pueden quedarse.';
+    case 'VoteChoice': return 'Emite tu voto: el recuento se aplica cuando hayan votado todos.';
+    case 'ExploreChoice': return 'Elige qué permanente explora ahora: el orden lo decides tú.';
+    case 'SeparatePilesChooseOpponent': return 'Elige qué oponente separa los objetos en dos montones.';
+    case 'SeparatePilesPartition': return 'Separa en dos montones: el otro se queda con lo que dejes fuera.';
+    case 'SeparatePilesChoice': return 'Elige un montón: el elegido recibe el efecto.';
+    case 'MiracleReveal': return 'Revela la primera carta que robaste y lánzala por su coste de milagro, o déjala en la mano.';
+    case 'CastOffer': return 'Puedes lanzar esta carta durante la resolución: elige si la lanzas o qué haces con ella.';
+    case 'MeldPairChoice': return 'Elige qué mitad se fusiona: Phase nombra las dos cartas y el resultado.';
+    case 'MeldAttackTargetChoice': return 'La carta fusionada entra atacando: elige a quién.';
+    case 'EntryAttackTargetChoice': return 'El permanente entra atacando: elige a quién.';
+    case 'ReplacementChoice': return 'Un reemplazo cambia el suceso antes de que ocurra: elige cuál se aplica.';
+    case 'CopyTargetChoice': return 'Una copia entra en el campo: elige el permanente que copia.';
+    case 'ResolveAllConsent': return 'La mesa propone resolver todo: tu asiento decide si autoriza o sigue paso a paso.';
+    case 'UntapChoice': return 'Puedes no enderezar este permanente: elige si se endereza o se queda girado.';
+    case 'ChooseUntapSubset': return 'Un tope limita cuántos permanentes se enderezan: elige cuáles.';
+    case 'ExertChoice': return 'Puedes exertar esta criatura al atacar: no se endereza en tu próximo paso de enderezar.';
+    case 'EnlistChoice': return 'Puedes girar una criatura para alistar al atacante, o rechazarlo.';
+    case 'PayCost': return 'Un coste se paga eligiendo objetos de los que publica el motor.';
+    case 'PhyrexianPayment': return 'El maná frigio se paga con maná de su color o con 2 vidas por símbolo.';
+    case 'CombatTaxPayment': return 'Un impuesto de combate ya fijado por el motor: pagas el total o la declaración se descarta entera.';
+    case 'OptionalCostChoice': return 'Un coste adicional del lanzamiento: pagas lo que publica el motor, o eliges una alternativa si hay que pagar exactamente una.';
+    case 'DefilerPayment': return 'Puedes pagar vidas para reducir el coste de maná. El motor ya fijó las vidas y el descuento.';
+    case 'ChooseFromZoneChoice': return 'Elige cartas del conjunto que publica el motor: ni una más, ni un tipo que no quepa.';
+    case 'ModalFaceChoice': return 'Elige qué cara jugar o lanzar. Sólo aparecen las caras que el motor todavía ofrece.';
+    case 'AlternativeCastChoice': return 'Paga el coste impreso o el alternativo que publicó el motor. La palabra clave no cambia el sobre.';
+    case 'CastingVariantChoice': return 'Más de un permiso vale para este hechizo: elige el índice que publicó el motor.';
+    case 'ChoosePermanentTypeSlot': return 'Esta carta consume un espacio de tipo de los que publicó el motor.';
+    case 'SpliceOffer': return 'Puedes empalmar una carta de las que publicó el motor, o no empalmar.';
+    case 'MutateMergeChoice': return 'El hechizo que muta se fusiona con el objetivo: elige el lado que publicó el motor.';
+    case 'CipherEncodeChoice': return 'Puedes cifrar esta carta en una criatura de las que publicó el motor.';
+    case 'OrderCostReductions': return 'Varias reducciones fijan totales distintos: elige el que publicó el motor. Esta mesa no reordena.';
+    case 'ResolutionOptionalPaymentChoice': return 'Puedes pagar una rama de las que publicó el motor, o no pagar si el cable lo ofrece.';
+    case 'ChooseGiftRecipient': return 'Eliges un oponente de los que publicó el motor: el destinatario del regalo, o a quién afecta el coste.';
+    case 'TopOrBottomChoice': return 'Eliges arriba o abajo de la biblioteca. Arriba es la posición que ya fijó el efecto; abajo es el fondo.';
+    case 'ClashChooseOpponent': return 'Eliges con qué oponente chocar. Los candidatos son los que publicó el motor; no se reordenan.';
+    case 'ClashCardPlacement': return 'Colocas la carta revelada del choque arriba o abajo. Las colocaciones se aplican juntas al final.';
+    case 'BetweenGamesSideboard': return 'Entregas el mazo principal y el banquillo. Los límites son los del formato que publicó el motor.';
+    case 'BetweenGamesChoosePlayDraw': return 'El jugador designado decide si empieza la próxima partida o la empieza el otro.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

@@ -90,7 +90,11 @@ export interface GameObject {
   toughness?: number | string | null;
   damage_marked?: number;
   printed_ref?: { oracle_id: string; face_name: string } | null;
-  back_face?: { name?: string } | null;
+  back_face?: {
+    name?: string;
+    mana_cost?: unknown;
+    card_types?: { core_types?: string[]; subtypes?: string[]; supertypes?: string[] };
+  } | null;
   display_source?: string;
   token_image_ref?: TokenImageRef | null;
   token_art?: TokenArtDescriptor | null;

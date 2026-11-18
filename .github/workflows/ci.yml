@@ -75,7 +75,14 @@ jobs:
         env:
           CARGO_TARGET_DIR: target-wasm
           CARGO_LOCKED: "1"
-        run: bun run engine:build
+        run: |
+          set -o pipefail
+          bun run engine:build 2>&1 | tee /tmp/wasm-build.log
+      # Cargo's failure is an exit code plus a job log behind a blob download
+      # that is unreachable on some networks; the annotation is plain JSON.
+      - name: Annotate Rust errors
+        if: failure()
+        run: bun scripts/rust-annotations.ts /tmp/wasm-build.log
       - name: Record artifact identity
         run: |
           set -euo pipefail
@@ -111,11 +118,20 @@ jobs:
       - name: Direct Phase API vs wrapper ABI
         env:
           CARGO_TARGET_DIR: target-native
-        run: bun run engine:parity
+        run: |
+          set -o pipefail
+          bun run engine:parity 2>&1 | tee /tmp/parity.log
       - name: Explicit mana, casting, combat, target, trigger and endgame scenarios
         env:
           CARGO_TARGET_DIR: target-native
-        run: bun run engine:scenarios
+        run: |
+          set -o pipefail
+          bun run engine:scenarios 2>&1 | tee /tmp/scenarios.log
+      - name: Annotate Rust errors
+        if: failure()
+        run: |
+          bun scripts/rust-annotations.ts /tmp/parity.log
+          bun scripts/rust-annotations.ts /tmp/scenarios.log
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -150,18 +166,18 @@ jobs:
         with:
           name: mtg-engine-wasm
           path: static/wasm
-      - run: bun --bun playwright test
-      # Playwright names one directory per failing test inside `test-results`.
-      # Repeating those names as check annotations keeps the failure readable
-      # without opening the 15 MB artifact: the HTML report, the traces and the
-      # job log all live behind a download, the annotations are plain JSON.
+      # The JSON report feeds the annotation step below: the directory names
+      # alone say which test broke, the message says why. `list` keeps the
+      # readable console output.
+      - run: bun --bun playwright test --reporter=list,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/report.json
+      # The HTML report, the traces and the job log live behind an artifact
+      # download that some networks cannot reach; annotations are plain JSON on
+      # the API, so every failure is repeated there with its error message.
       - name: Annotate failing Playwright tests
         if: failure()
-        run: |
-          shopt -s nullglob
-          for dir in test-results/*/; do
-            echo "::error title=Prueba de Chromium fallida::$(basename "$dir")"
-          done
+        run: bun scripts/e2e-annotations.ts
       - if: always()
         uses: actions/upload-artifact@v4
         with:

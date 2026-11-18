@@ -25,14 +25,231 @@
   import { session } from '#lib/game/session.svelte.ts';
   import { attackTargets } from '#lib/game/interaction.ts';
   import AttackTargetPicker from '#lib/components/AttackTargetPicker.svelte';
+  import DiscardPrompt from '#lib/components/DiscardPrompt.svelte';
+  import ChooseXPrompt from '#lib/components/ChooseXPrompt.svelte';
+  import TriggerOrderPrompt from '#lib/components/TriggerOrderPrompt.svelte';
+  import ModeChoicePrompt from '#lib/components/ModeChoicePrompt.svelte';
+  import SearchPrompt from '#lib/components/SearchPrompt.svelte';
+  import DigPrompt from '#lib/components/DigPrompt.svelte';
+  import OptionalEffectPrompt from '#lib/components/OptionalEffectPrompt.svelte';
+  import PayAmountPrompt from '#lib/components/PayAmountPrompt.svelte';
+  import RevealPrompt from '#lib/components/RevealPrompt.svelte';
+  import UnlessPrompt from '#lib/components/UnlessPrompt.svelte';
+  import PairPrompt from '#lib/components/PairPrompt.svelte';
+  import TokenHostPrompt from '#lib/components/TokenHostPrompt.svelte';
+  import UnlessBranchPrompt from '#lib/components/UnlessBranchPrompt.svelte';
+  import TributePrompt from '#lib/components/TributePrompt.svelte';
+  import WardSacrificePrompt from '#lib/components/WardSacrificePrompt.svelte';
+  import StartingPlayerPrompt from '#lib/components/StartingPlayerPrompt.svelte';
+  import ScryPrompt from '#lib/components/ScryPrompt.svelte';
+  import TapPowerPrompt from '#lib/components/TapPowerPrompt.svelte';
+  import EquipPrompt from '#lib/components/EquipPrompt.svelte';
+  import StationPrompt from '#lib/components/StationPrompt.svelte';
+  import MultiTargetPrompt from '#lib/components/MultiTargetPrompt.svelte';
+  import DistributePrompt from '#lib/components/DistributePrompt.svelte';
+  import MoveCountersPrompt from '#lib/components/MoveCountersPrompt.svelte';
+  import RetargetPrompt from '#lib/components/RetargetPrompt.svelte';
+  import ChooseObjectsPrompt from '#lib/components/ChooseObjectsPrompt.svelte';
+  import ProliferatePrompt from '#lib/components/ProliferatePrompt.svelte';
+  import TimeTravelPrompt from '#lib/components/TimeTravelPrompt.svelte';
+  import CategoryPrompt from '#lib/components/CategoryPrompt.svelte';
+  import CopyChosenPrompt from '#lib/components/CopyChosenPrompt.svelte';
+  import KeepPowerPrompt from '#lib/components/KeepPowerPrompt.svelte';
+  import KeepExactPrompt from '#lib/components/KeepExactPrompt.svelte';
+  import RemoveCountersPrompt from '#lib/components/RemoveCountersPrompt.svelte';
+  import CopyRetargetPrompt from '#lib/components/CopyRetargetPrompt.svelte';
+  import VotePrompt from '#lib/components/VotePrompt.svelte';
+  import ExploreChoicePrompt from '#lib/components/ExploreChoicePrompt.svelte';
+  import MiracleRevealPrompt from '#lib/components/MiracleRevealPrompt.svelte';
+  import CastOfferPrompt from '#lib/components/CastOfferPrompt.svelte';
+  import MeldPairPrompt from '#lib/components/MeldPairPrompt.svelte';
+  import MeldAttackPrompt from '#lib/components/MeldAttackPrompt.svelte';
+  import EntryAttackPrompt from '#lib/components/EntryAttackPrompt.svelte';
+  import ReplacementPrompt from '#lib/components/ReplacementPrompt.svelte';
+  import CopyTargetPrompt from '#lib/components/CopyTargetPrompt.svelte';
+  import ResolveAllConsentPrompt from '#lib/components/ResolveAllConsentPrompt.svelte';
+  import UntapChoicePrompt from '#lib/components/UntapChoicePrompt.svelte';
+  import UntapSubsetPrompt from '#lib/components/UntapSubsetPrompt.svelte';
+  import ExertChoicePrompt from '#lib/components/ExertChoicePrompt.svelte';
+  import EnlistChoicePrompt from '#lib/components/EnlistChoicePrompt.svelte';
+  import PayCostPrompt from '#lib/components/PayCostPrompt.svelte';
+  import PhyrexianPaymentPrompt from '#lib/components/PhyrexianPaymentPrompt.svelte';
+  import CombatTaxPrompt from '#lib/components/CombatTaxPrompt.svelte';
+  import OptionalCostPrompt from '#lib/components/OptionalCostPrompt.svelte';
+  import DefilerPaymentPrompt from '#lib/components/DefilerPaymentPrompt.svelte';
+  import ChooseFromZonePrompt from '#lib/components/ChooseFromZonePrompt.svelte';
+  import ModalFacePrompt from '#lib/components/ModalFacePrompt.svelte';
+  import AlternativeCastPrompt from '#lib/components/AlternativeCastPrompt.svelte';
+  import CastingVariantPrompt from '#lib/components/CastingVariantPrompt.svelte';
+  import TypeSlotPrompt from '#lib/components/TypeSlotPrompt.svelte';
+  import SplicePrompt from '#lib/components/SplicePrompt.svelte';
+  import MutateMergePrompt from '#lib/components/MutateMergePrompt.svelte';
+  import CipherPrompt from '#lib/components/CipherPrompt.svelte';
+  import CostOrderPrompt from '#lib/components/CostOrderPrompt.svelte';
+  import ResolutionPaymentPrompt from '#lib/components/ResolutionPaymentPrompt.svelte';
+  import GiftRecipientPrompt from '#lib/components/GiftRecipientPrompt.svelte';
+  import TopOrBottomPrompt from '#lib/components/TopOrBottomPrompt.svelte';
+  import ClashOpponentPrompt from '#lib/components/ClashOpponentPrompt.svelte';
+  import ClashPlacementPrompt from '#lib/components/ClashPlacementPrompt.svelte';
+  import SideboardPrompt from '#lib/components/SideboardPrompt.svelte';
+  import PlayDrawPrompt from '#lib/components/PlayDrawPrompt.svelte';
+  import BottomOrderPrompt from '#lib/components/BottomOrderPrompt.svelte';
+  import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
     { value: 'attackers', label: 'Declarar atacantes' },
     { value: 'damage', label: 'Asignación de daño' },
+    { value: 'cleanup', label: 'Limpieza: descartar' },
+    { value: 'discard', label: 'Descartar dos cartas' },
+    { value: 'discardUpTo', label: 'Descartar hasta dos' },
+    { value: 'chooseX', label: 'Elegir X' },
+    { value: 'triggerOrder', label: 'Ordenar disparos' },
+    { value: 'modeChoice', label: 'Elegir modos' },
+    { value: 'search', label: 'Buscar en la biblioteca' },
+    { value: 'dig', label: 'Mirar y guardar' },
+    { value: 'optional', label: 'Efecto opcional' },
+    { value: 'pay', label: 'Pagar una cantidad' },
+    { value: 'opponent', label: 'Decide un oponente' },
+    { value: 'reveal', label: 'Revelar una carta' },
+    { value: 'unless', label: 'Pagar o aceptar' },
+    { value: 'pair', label: 'Emparejar (soulbond)' },
+    { value: 'host', label: 'Destinatario de una ficha' },
+    { value: 'branches', label: 'Pagar uno de dos costes' },
+    { value: 'tribute', label: 'Tributo: lo paga un oponente' },
+    { value: 'ward', label: 'Guardia: un permanente' },
+    { value: 'wardPower', label: 'Guardia: poder total' },
+    { value: 'startingPlayer', label: 'Quién empieza' },
+    { value: 'scry', label: 'Adivinar (scry)' },
+    { value: 'surveil', label: 'Vigilar (surveil)' },
+    { value: 'crew', label: 'Tripular (crew)' },
+    { value: 'saddle', label: 'Montar (saddle)' },
+    { value: 'equip', label: 'Equipar' },
+    { value: 'station', label: 'Estación (station)' },
+    { value: 'multiTarget', label: 'Objetivos: hasta dos' },
+    { value: 'multiTargetExact', label: 'Objetivos: exactamente dos' },
+    { value: 'distribute', label: 'Reparto: 5 entre candidatos' },
+    { value: 'distributeAnnounced', label: 'Reparto: todos los objetivos' },
+    { value: 'moveCounters', label: 'Mover contadores' },
+    { value: 'retarget', label: 'Cambiar objetivos: todos' },
+    { value: 'retargetSingle', label: 'Cambiar objetivos: uno' },
+    { value: 'chooseObjects', label: 'Elegir permanentes: cualquiera' },
+    { value: 'chooseObjectsRecipient', label: 'Elegir receptor del daño' },
+    { value: 'proliferate', label: 'Proliferar' },
+    { value: 'timeTravelRemove', label: 'Viaje en el tiempo: quitar' },
+    { value: 'timeTravelAdd', label: 'Viaje en el tiempo: poner' },
+    { value: 'category', label: 'Conservar uno de cada tipo' },
+    { value: 'categoryForAll', label: 'Conservar por todos' },
+    { value: 'copyChosen', label: 'Copiar la elegida' },
+    { value: 'copyChosenNeighbor', label: 'Copiar del vecino' },
+    { value: 'keepPower', label: 'Conservar por fuerza' },
+    { value: 'keepPowerForAll', label: 'Conservar por fuerza: todos' },
+    { value: 'keepExact', label: 'Conservar exactos' },
+    { value: 'keepExactVow', label: 'Conservar exactos con voto' },
+    { value: 'removeCounters', label: 'Quitar contadores' },
+    { value: 'removeCountersCapped', label: 'Quitar contadores con tope' },
+    { value: 'copyRetarget', label: 'Objetivos de la copia' },
+    { value: 'copyAnnounce', label: 'La copia anuncia objetivos' },
+    { value: 'vote', label: 'Votación' },
+    { value: 'voteObject', label: 'Votación sobre permanentes' },
+    { value: 'explore', label: 'Quién explora' },
+    { value: 'exploreShared', label: 'Explorar entre dos jugadores' },
+    { value: 'pilePartition', label: 'Separar en dos montones' },
+    { value: 'pileChoice', label: 'Elegir un montón' },
+    { value: 'miracle', label: 'Milagro' },
+    { value: 'castOffer', label: 'Lanzar: milagro' },
+    { value: 'castOfferCascade', label: 'Lanzar: cascada' },
+    { value: 'castOfferWindow', label: 'Lanzar: ventana gratuita' },
+    { value: 'meld', label: 'Fusionar dos mitades' },
+    { value: 'meldAttack', label: 'A quién ataca la fusión' },
+    { value: 'entryAttack', label: 'A quién ataca quien entra' },
+    { value: 'replacement', label: 'Reemplazos: cuál se aplica' },
+    { value: 'replacementCompose', label: 'Reemplazos que se suman' },
+    { value: 'replacementOptional', label: 'Reemplazo opcional' },
+    { value: 'copyTarget', label: 'Copia: qué permanente' },
+    { value: 'copyTargetToken', label: 'Copias de fichas' },
+    { value: 'resolveAll', label: 'Resolver todo: consentir' },
+    { value: 'resolveAllStale', label: 'Resolver todo: sin respuestas' },
+    { value: 'untapChoice', label: 'No enderezar' },
+    { value: 'untapSubset', label: 'Tope de enderezar' },
+    { value: 'untapResume', label: 'No enderezar: partida antigua' },
+    { value: 'exert', label: 'Exertar al atacar' },
+    { value: 'enlist', label: 'Alistar al atacar' },
+    { value: 'payCost', label: 'Pagar un coste: sacrificar' },
+    { value: 'payCostHidden', label: 'Pagar un coste: no lo ves' },
+    { value: 'payCostAggregate', label: 'Pagar un coste: girar por fuerza' },
+    { value: 'phyrexian', label: 'Maná frigio' },
+    { value: 'combatTax', label: 'Impuesto de ataque' },
+    { value: 'combatTaxBlock', label: 'Impuesto de bloqueo' },
+    { value: 'optionalCost', label: 'Potenciar' },
+    { value: 'optionalCostMulti', label: 'Multipotenciar' },
+    { value: 'optionalCostChoice', label: 'Elegir un coste' },
+    { value: 'optionalCostAlt', label: 'Coste alternativo' },
+    { value: 'optionalCostGift', label: 'Regalo' },
+    { value: 'optionalCostAway', label: 'Coste adicional ajeno' },
+    { value: 'defiler', label: 'Descuento de Defiler' },
+    { value: 'defilerAway', label: 'Defiler ajeno' },
+    { value: 'zoneChoice', label: 'Elegir de una zona' },
+    { value: 'zoneChoiceTypes', label: 'Elegir tipos distintos' },
+    { value: 'zoneChoiceAway', label: 'Zona ajena' },
+    { value: 'modalFace', label: 'Elegir una cara' },
+    { value: 'modalFaceOne', label: 'Una sola cara' },
+    { value: 'modalFaceAway', label: 'Cara ajena' },
+    { value: 'altCast', label: 'Sobrecarga' },
+    { value: 'altCastEmerge', label: 'Emerger' },
+    { value: 'altCastOne', label: 'Una sola vía' },
+    { value: 'altCastAway', label: 'Coste alternativo ajeno' },
+    { value: 'castVariant', label: 'Variante de lanzamiento' },
+    { value: 'castVariantAuth', label: 'Permiso de cementerio' },
+    { value: 'castVariantAway', label: 'Variante ajena' },
+    { value: 'typeSlot', label: 'Ranura de tipo' },
+    { value: 'typeSlotLand', label: 'Ranura de tierra' },
+    { value: 'typeSlotAway', label: 'Ranura ajena' },
+    { value: 'splice', label: 'Empalmar' },
+    { value: 'spliceHidden', label: 'Empalmar oculto' },
+    { value: 'spliceAway', label: 'Empalme ajeno' },
+    { value: 'mutate', label: 'Mutar' },
+    { value: 'mutateOne', label: 'Un solo lado' },
+    { value: 'mutateAway', label: 'Mutación ajena' },
+    { value: 'cipher', label: 'Cifrar' },
+    { value: 'cipherHidden', label: 'Cifrar oculto' },
+    { value: 'cipherAway', label: 'Cifrado ajeno' },
+    { value: 'costOrder', label: 'Orden de reducción' },
+    { value: 'costOrderOne', label: 'Un solo total' },
+    { value: 'costOrderAway', label: 'Orden ajena' },
+    { value: 'resPay', label: 'Pago opcional' },
+    { value: 'resPayOne', label: 'Un solo pago' },
+    { value: 'resPayAway', label: 'Pago ajeno' },
+    { value: 'gift', label: 'Destinatario del regalo' },
+    { value: 'giftOne', label: 'Un solo destinatario' },
+    { value: 'giftCost', label: 'A quién afecta el coste' },
+    { value: 'giftAway', label: 'Regalo ajeno' },
+    { value: 'topBottom', label: 'Arriba o abajo' },
+    { value: 'topBottomNth', label: 'La segunda o abajo' },
+    { value: 'topBottomOne', label: 'Sólo arriba' },
+    { value: 'topBottomAway', label: 'Posición ajena' },
+    { value: 'clash', label: 'Oponente del choque' },
+    { value: 'clashOne', label: 'Un solo oponente' },
+    { value: 'clashAway', label: 'Choque ajeno' },
+    { value: 'clashPlace', label: 'Colocar la carta' },
+    { value: 'clashPlaceHidden', label: 'Carta oculta' },
+    { value: 'clashPlaceAway', label: 'Colocación ajena' },
+    { value: 'sideboard', label: 'Ajustar el mazo' },
+    { value: 'sideboardNoSide', label: 'Sin banquillo' },
+    { value: 'sideboardAway', label: 'Ajuste ajeno' },
+    { value: 'playDraw', label: 'Jugar o robar' },
+    { value: 'playDrawDraw', label: 'Robar primero' },
+    { value: 'playDrawAway', label: 'Elección ajena' },
+    { value: 'bottomRipple', label: 'Fondo del estruendo' },
+    { value: 'bottomReveal', label: 'Fondo de lo revelado' },
+    { value: 'bottomDig', label: 'Fondo de lo mirado' },
+    { value: 'bottomEmpty', label: 'Sin cartas al fondo' },
+    { value: 'bottomAway', label: 'Orden ajeno' },
+    { value: 'revealAny', label: 'Revelar cualquier número' },
+    { value: 'unlessRepeat', label: 'Mantenimiento acumulativo' },
     { value: 'idle', label: 'Mesa sin líneas' }
   ];
   const isScene = (value: string | null): value is Scene => SCENES.some((entry) => entry.value === value);
@@ -40,6 +257,153 @@
     targets: 'TargetSelection · pila con un hechizo',
     combat: 'DeclareBlockers · un bloqueo asignado',
     attackers: 'DeclareAttackers · un atacante con dos destinos',
+    cleanup: 'DiscardToHandSize · limpieza de fin de turno',
+    discard: 'DiscardChoice · descartar exactamente dos',
+    discardUpTo: 'DiscardChoice · descartar hasta dos',
+    chooseX: 'ChooseXValue · X entre 0 y 5',
+    triggerOrder: 'OrderTriggers · tres disparos simultáneos',
+    modeChoice: 'ModeChoice · hechizo modal, dos de tres modos',
+    search: 'SearchChoice · tutor de una criatura',
+    dig: 'DigChoice · mirar tres, guardar una',
+    optional: 'OptionalEffectChoice · «puedes robar una carta»',
+    pay: 'PayAmountChoice · ventana de vida 1–4',
+    opponent: 'OpponentMayChoice · deciden los oponentes en orden de turno',
+    reveal: 'RevealChoice · revelar una tierra o no revelar',
+    unless: 'UnlessPayment · pagar {3} o contrahechizo',
+    pair: 'PairChoice · emparejar con otra criatura o no emparejar',
+    host: 'ChooseTokenHost · una ficha elige entre dos criaturas',
+    branches: 'UnlessPaymentChooseCost · sacrificar o descartar',
+    tribute: 'TributeChoice · un oponente decide si se paga',
+    ward: 'WardSacrificeChoice · CR 702.21b, un permanente por vuelta',
+    wardPower: 'WardSacrificeChoice · CR 118.12a, poder total mínimo',
+    startingPlayer: 'ChooseStartingPlayer · CR 103.1, la tirada elige',
+    scry: 'ScryChoice · CR 701.22a, lo que no se queda va al fondo',
+    surveil: 'SurveilChoice · CR 701.25a, lo que no se queda va al cementerio',
+    crew: 'CrewVehicle · CR 702.122a, girar criaturas por su aportación',
+    saddle: 'SaddleMount · CR 702.171a, montar no es tripular',
+    equip: 'EquipTarget · CR 702.6a, elegir a quién se anexa',
+    station: 'StationTarget · CR 702.184a, una criatura, un número',
+    multiTarget: 'MultiTargetSelection · CR 601.2c, hasta dos de tres',
+    multiTargetExact: 'MultiTargetSelection · CR 601.2c, cuenta fija',
+    distribute: 'DistributeAmong · CR 608.2d, se puede dejar fuera',
+    distributeAnnounced: 'DistributeAmong · CR 601.2d, todos reciben',
+    moveCounters: 'MoveCountersDistribution · CR 122.5, salen del origen',
+    retarget: 'RetargetChoice · CR 115.7a, un pozo por posición',
+    retargetSingle: 'RetargetChoice · CR 115.7a, «change the target»',
+    chooseObjects: 'ChooseObjectsSelection · CR 608.2c, «esos» es el conjunto',
+    chooseObjectsRecipient: 'ChooseObjectsSelection · CR 115.10a, sin objetivo',
+    proliferate: 'ProliferateChoice · CR 701.34a, otra de cada clase',
+    timeTravelRemove: 'TimeTravelChoice · CR 701.56a, primera mitad: quitar',
+    timeTravelAdd: 'TimeTravelChoice · CR 701.56a, segunda mitad: poner',
+    category: 'CategoryChoice · CR 101.4, un permanente por tipo',
+    categoryForAll: 'CategoryChoice · CR 101.4, elige por los demás',
+    copyChosen: 'EachPlayerCopyChosenSelection · CR 707.2, el orden manda',
+    copyChosenNeighbor: 'EachPlayerCopyChosenSelection · CR 102.1, del vecino',
+    keepPower: 'KeepWithinTotalPowerChoice · CR 107.1c, tope de fuerza',
+    keepPowerForAll: 'KeepWithinTotalPowerChoice · CR 101.4, por todos',
+    keepExact: 'KeepExactPermanentsChoice · CR 701.21a, exactamente tres',
+    keepExactVow: 'KeepExactPermanentsChoice · CR 122.1, contador de voto',
+    removeCounters: 'RemoveCountersChoice · CR 107.1c, cualquier número',
+    removeCountersCapped: 'RemoveCountersChoice · CR 608.2d, hasta N en total',
+    copyRetarget: 'CopyRetarget · CR 707.10c, objetivos nuevos',
+    copyAnnounce: 'CopyRetarget · CR 707.12, la copia anuncia',
+    vote: 'VoteChoice · CR 701.38, voto con nombre',
+    voteObject: 'VoteChoice · CR 701.38b, voto sobre objetos',
+    explore: 'ExploreChoice · CR 701.44d, el orden lo eliges tú',
+    exploreShared: 'ExploreChoice · CR 101.4, cada jugador ordena los suyos',
+    pilePartition: 'SeparatePilesPartition · CR 700.3a, dos montones',
+    pileChoice: 'SeparatePilesChoice · CR 700.3, elegir lado',
+    miracle: 'MiracleReveal · CR 702.94a, revelar o no',
+    castOffer: 'CastOffer · CR 608.2g, milagro',
+    castOfferCascade: 'CastOffer · CR 702.85a, cascada',
+    castOfferWindow: 'CastOffer · CR 608.2g, ventana de lanzamiento',
+    meld: 'MeldPairChoice · CR 701.42, elegir la pareja',
+    meldAttack: 'MeldAttackTargetChoice · CR 508.4, el destino',
+    entryAttack: 'EntryAttackTargetChoice · CR 508.4, cualquier permanente',
+    replacement: 'ReplacementChoice · CR 616.1e, el orden importa',
+    replacementCompose: 'ReplacementChoice · CR 616.1f, se componen',
+    replacementOptional: 'ReplacementChoice · CR 616.1, «puedes»',
+    copyTarget: 'CopyTargetChoice · CR 707.2, entrar como copia',
+    copyTargetToken: 'CopyTargetChoice · CR 707.1, fuente de las fichas',
+    resolveAll: 'ResolveAllConsent · CR 117.3d, el asiento pregunta',
+    resolveAllStale: 'ResolveAllConsent · propuesta que ya no admite respuestas',
+    untapChoice: 'UntapChoice · CR 502.3, «puedes no enderezar»',
+    untapSubset: 'ChooseUntapSubset · CR 502.3, tope por tipo',
+    untapResume: 'UntapChoice · CR 502.1, el paso se reanuda desde su primera acción',
+    exert: 'ExertChoice · CR 508.1g + CR 701.43d, coste opcional al atacar',
+    enlist: 'EnlistChoice · CR 508.1g + CR 702.154a, girar para alistar',
+    payCost: 'PayCost · CR 118.3 + CR 601.2b, coste de sacrificar',
+    payCostHidden: 'PayCost · CR 400.2, candidatos redactados para el rival',
+    payCostAggregate: 'PayCost · CR 208.1, girar criaturas por fuerza total',
+    phyrexian: 'PhyrexianPayment · CR 107.4f, maná o 2 vidas por símbolo',
+    combatTax: 'CombatTaxPayment · CR 508.1h, impuesto de ataque fijado',
+    combatTaxBlock: 'CombatTaxPayment · CR 509.1d, impuesto de bloqueo fijado',
+    optionalCost: 'OptionalCostChoice · CR 702.33a, kicker de un coste',
+    optionalCostMulti: 'OptionalCostChoice · CR 702.33c, multikicker ya pagado dos veces',
+    optionalCostChoice: 'OptionalCostChoice · CR 601.2b, hay que pagar exactamente una',
+    optionalCostAlt: 'OptionalCostChoice · CR 118.9, coste alternativo ofrecido',
+    optionalCostGift: 'OptionalCostChoice · CR 702.174a, prometer un regalo',
+    optionalCostAway: 'OptionalCostChoice · el coste lo decide el otro asiento',
+    defiler: 'DefilerPayment · CR 601.2b, descuento sólo de color',
+    defilerAway: 'DefilerPayment · alcance omitido, lo decide el otro asiento',
+    zoneChoice: 'ChooseFromZoneChoice · CR 608.2d, exactamente una',
+    zoneChoiceTypes: 'ChooseFromZoneChoice · tipos distintos, hasta dos',
+    zoneChoiceAway: 'ChooseFromZoneChoice · conjunto redactado, lo decide el otro asiento',
+    modalFace: 'ModalFaceChoice · CR 712.11b, las dos caras que el motor ofrece',
+    modalFaceOne: 'ModalFaceChoice · una cara, coste añadido y cancelar',
+    modalFaceAway: 'ModalFaceChoice · CR 712.12, la cara la elige el otro asiento',
+    altCast: 'AlternativeCastChoice · CR 702.96a, las dos vías publicadas',
+    altCastEmerge: 'AlternativeCastChoice · CR 702.119a, el sacrificio lo nombra el motor',
+    altCastOne: 'AlternativeCastChoice · sólo la vía que legal.actions publicó',
+    altCastAway: 'AlternativeCastChoice · lo decide el otro asiento',
+    castVariant: 'CastingVariantChoice · CR 601.2b, el índice ausente no es botón',
+    castVariantAuth: 'CastingVariantChoice · permiso de cementerio, con su autoridad',
+    castVariantAway: 'CastingVariantChoice · lo decide el otro asiento',
+    typeSlot: 'ChoosePermanentTypeSlot · CR 110.4, el tipo no publicado no es botón',
+    typeSlotLand: 'ChoosePermanentTypeSlot · CR 305.1, jugar tierra no trae permiso',
+    typeSlotAway: 'ChoosePermanentTypeSlot · lo decide el otro asiento',
+    splice: 'SpliceOffer · CR 702.47a, empalmar o no empalmar',
+    spliceHidden: 'SpliceOffer · la carta oculta no es un botón',
+    spliceAway: 'SpliceOffer · lo decide el otro asiento',
+    mutate: 'MutateMergeChoice · CR 702.140c, el lado no publicado no es botón',
+    mutateOne: 'MutateMergeChoice · sólo el lado que legal.actions publicó',
+    mutateAway: 'MutateMergeChoice · lo decide el otro asiento',
+    cipher: 'CipherEncodeChoice · CR 702.99a, cifrar o no cifrar',
+    cipherHidden: 'CipherEncodeChoice · la criatura oculta no es un botón',
+    cipherAway: 'CipherEncodeChoice · lo decide el otro asiento',
+    costOrder: 'OrderCostReductions · CR 601.2f, el total no publicado no es botón',
+    costOrderOne: 'OrderCostReductions · sólo el total que legal.actions publicó',
+    costOrderAway: 'OrderCostReductions · lo decide el otro asiento',
+    resPay: 'ResolutionOptionalPaymentChoice · CR 118.12, el índice no se renumera',
+    resPayOne: 'ResolutionOptionalPaymentChoice · el declinar ausente no es botón',
+    resPayAway: 'ResolutionOptionalPaymentChoice · lo decide el otro asiento',
+    gift: 'ChooseGiftRecipient · CR 702.174a, el oponente no publicado no es botón',
+    giftOne: 'ChooseGiftRecipient · sólo el oponente que legal.actions publicó',
+    giftCost: 'ChooseGiftRecipient · CR 601.2h, el coste actúa sobre el elegido',
+    giftAway: 'ChooseGiftRecipient · lo decide el otro asiento',
+    topBottom: 'TopOrBottomChoice · CR 608.2d, arriba o abajo',
+    topBottomNth: 'TopOrBottomChoice · la segunda desde arriba, no la cima',
+    topBottomOne: 'TopOrBottomChoice · el fondo ausente no es botón',
+    topBottomAway: 'TopOrBottomChoice · lo decide el otro asiento',
+    clash: 'ClashChooseOpponent · CR 701.30b, el oponente no publicado no es botón',
+    clashOne: 'ClashChooseOpponent · sólo el oponente que legal.actions publicó',
+    clashAway: 'ClashChooseOpponent · lo decide el otro asiento',
+    clashPlace: 'ClashCardPlacement · CR 701.30c, arriba o abajo, se aplican juntas',
+    clashPlaceHidden: 'ClashCardPlacement · la carta oculta no se nombra',
+    clashPlaceAway: 'ClashCardPlacement · lo decide el otro asiento',
+    sideboard: 'BetweenGamesSideboard · CR 100.2b, el suelo y el tope son del motor',
+    sideboardNoSide: 'BetweenGamesSideboard · CR 100.4a, un formato sin banquillo',
+    sideboardAway: 'BetweenGamesSideboard · lo decide el otro asiento',
+    playDraw: 'BetweenGamesChoosePlayDraw · CR 103.1, jugar o robar',
+    playDrawDraw: 'BetweenGamesChoosePlayDraw · sólo robar publicado',
+    playDrawAway: 'BetweenGamesChoosePlayDraw · lo decide el otro asiento',
+    bottomRipple: 'RippleBottomOrder · CR 702.60a, el orden es la respuesta',
+    bottomReveal: 'RevealUntilBottomOrder · CR 701.20a, lo que no se quedó va al fondo',
+    bottomDig: 'DigBottomOrder · CR 701.20e, el resto de lo mirado',
+    bottomEmpty: 'DigBottomOrder · una pila vacía no inventa cartas',
+    bottomAway: 'RippleBottomOrder · lo ordena el otro asiento',
+    revealAny: 'RevealChoice · CR 107.1c, cualquier número',
+    unlessRepeat: 'UnlessPayment · CR 702.24a, ×N',
     damage: 'AssignCombatDamage · un bloqueador',
     idle: 'Priority · sin líneas'
   };
@@ -83,6 +447,8 @@
   const viewerField = [
     permanent(100, 0, 'Grizzly Bears', ['Creature'], { power: 2, toughness: 2, mana_cost: '{1}{G}', summoning_sick: false }),
     permanent(101, 0, 'Savannah Lions', ['Creature'], { power: 2, toughness: 1, mana_cost: '{W}' }),
+    // A third creature so a scene can ask «with which one?» and have two answers.
+    permanent(105, 0, 'Elvish Mystic', ['Creature'], { power: 1, toughness: 1, mana_cost: '{G}' }),
     ...Array.from({ length: 3 }, (_, i) => permanent(102 + i, 0, 'Forest', ['Land'], { tapped: i === 0 }))
   ];
   const rivalField = [
@@ -94,6 +460,669 @@
     ...Array.from({ length: 2 }, (_, i) => permanent(202 + i, 1, 'Island', ['Land']))
   ];
   const viewerGrave = [pileCard(110, 0, 'Lightning Bolt', 'Graveyard'), pileCard(111, 0, 'Shock', 'Graveyard')];
+  // The object that asks for the discard, so the panel can name it. It lives in
+  // `objects` only: listing it in a zone would change the pile counts the lab
+  // asserts elsewhere.
+  const discardSource = { ...pileCard(310, 0, 'Mind Rot', 'Graveyard'), oracle_text: 'El jugador objetivo descarta dos cartas.' };
+  // The spell waiting for its X. It also lives only in `objects`: the prompt
+  // names it, no zone has to hold it.
+  const xSpell = {
+    id: 320, card_id: 320, owner: 0, controller: 0, zone: 'Stack', name: 'Fireball',
+    card_types: { core_types: ['Sorcery'] }, mana_cost: '{X}{R}',
+    oracle_text: 'Fireball deals X damage divided as you choose among any number of targets.'
+  } as GameObject;
+  // The Tribute creature. Like the spell waiting for its X it lives only in
+  // `objects`: the prompt names it, no zone has to hold it, and the pile and
+  // battlefield counts the rest of the lab asserts stay put.
+  const tributeCreature = {
+    id: 330, card_id: 330, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Fanatic of Xenagos', card_types: { core_types: ['Creature'], subtypes: ['Minotaur'] },
+    mana_cost: '{1}{R}{G}', power: 3, toughness: 3,
+    oracle_text: 'Tribute 1 (As this creature enters, an opponent of your choice may put a +1/+1 counter on it.)'
+  } as GameObject;
+  // Crew, saddle and equip name a permanent the fixture does not need on a
+  // battlefield row: like the spell waiting for its X, they live only in
+  // `objects`, so no pile count moves.
+  //
+  // Each one is a card the engine itself quotes — `Smogbelcher Chariot` with
+  // Crew 3 and `Ornery Tumblewagg` with Saddle 2 in `tests/integration`, and
+  // `Bonesplitter` as an Equipment in `layers.rs` — and carries only what those
+  // literals state: the name, the type and the verbatim text. Mana cost and
+  // printed P/T are left out rather than guessed; the block never needs them,
+  // and its numbers come from the engine's `contributions`, not from the face.
+  const smogbelcherChariot = {
+    id: 340, card_id: 340, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Smogbelcher Chariot', card_types: { core_types: ['Artifact'], subtypes: ['Vehicle'] },
+    oracle_text: 'Menace, deathtouch, lifelink\nWhenever Smogbelcher Chariot attacks, target creature that crewed it this turn perpetually gains your choice of menace, deathtouch, or lifelink.\nCrew 3'
+  } as GameObject;
+  const bonesplitter = {
+    id: 341, card_id: 341, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Bonesplitter', card_types: { core_types: ['Artifact'], subtypes: ['Equipment'] }
+  } as GameObject;
+  const orneryTumblewagg = {
+    id: 342, card_id: 342, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Ornery Tumblewagg', card_types: { core_types: ['Creature'], subtypes: ['Mount'] },
+    oracle_text: 'At the beginning of combat on your turn, put a +1/+1 counter on target creature.\nWhenever this creature attacks while saddled, double the number of +1/+1 counters on target creature.\nSaddle 2 (Tap any number of other creatures you control with total power 2 or more: This Mount becomes saddled until end of turn. Saddle only as a sorcery.)'
+  } as GameObject;
+  // CR 702.184a: the Spacecraft, with the Station text the engine quotes verbatim
+  // in `tests/integration/stack_entry_node_reach.rs`. Its thresholds («1+», «8+»)
+  // are the card's, which is why the pick matters: the tapped creature's power is
+  // how many charge counters arrive.
+  const entropicBattlecruiser = {
+    id: 343, card_id: 343, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Entropic Battlecruiser',
+    card_types: { core_types: ['Artifact'], subtypes: ['Spacecraft'] },
+    oracle_text: 'Station (Tap another creature you control: Put charge counters equal to its power on this Spacecraft. Station only as a sorcery. It\'s an artifact creature at 8+.)\n1+ | Whenever an opponent discards a card, they lose 3 life.\n8+ | Flying, deathtouch\nWhenever this Spacecraft attacks, each opponent discards a card. Each opponent who can\'t loses 3 life.'
+  } as GameObject;
+  // CR 601.2c: two multi-target prompts, each with a card the engine quotes
+  // verbatim in its own tests. `Frost Breath` says "up to two", so the window is
+  // 0..2 and declining is legal; `Grusilda, Monster Masher` says "two", so the
+  // count is fixed. They live only in `objects`, like the spell waiting for its X.
+  const frostBreath = {
+    id: 350, card_id: 350, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Frost Breath', card_types: { core_types: ['Instant'], subtypes: ['Spell'] },
+    oracle_text: 'Tap up to two target creatures. Those creatures don\'t untap during their controller\'s next untap step.'
+  } as GameObject;
+  const grusilda = {
+    id: 351, card_id: 351, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Grusilda, Monster Masher',
+    card_types: { core_types: ['Creature'], subtypes: ['Zombie', 'Wizard'] },
+    oracle_text: '{3}{B}{R}, {T}: Put two target creature cards from graveyards onto the battlefield combined into one creature under your control. (Its power is equal to their total power, its toughness is equal to their total toughness, and it has their names, mana costs, types, text boxes, etc.)'
+  } as GameObject;
+  // The two creature cards her ability can name: graveyard-only in `objects`, so
+  // no pile count the rest of the lab asserts moves.
+  const graveElves = {
+    id: 352, card_id: 352, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Llanowar Elves', card_types: { core_types: ['Creature'], subtypes: ['Elf', 'Druid'] }
+  } as GameObject;
+  const graveBears = {
+    id: 353, card_id: 353, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Grizzly Bears', card_types: { core_types: ['Creature'], subtypes: ['Bear'] }
+  } as GameObject;
+  // CR 122.5: the counter source, with the text the engine quotes in
+  // `tests/integration/issue_680_shalai_upkeep_move.rs`.
+  const forgottenAncient = {
+    id: 344, card_id: 344, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Forgotten Ancient',
+    card_types: { core_types: ['Creature'], subtypes: ['Elemental'] },
+    // CR 701.34a: a permanent that already carries a counter is what proliferate
+    // can pick — the same three +1/+1 the move-counter scene moves.
+    counters: { P1P1: 3 },
+    oracle_text: 'Whenever a player casts a spell, you may put a +1/+1 counter on this creature.\nAt the beginning of your upkeep, you may move any number of +1/+1 counters from this creature onto other creatures.'
+  } as GameObject;
+  // CR 107.1c: the card the engine tests for the total-power keep window, with its
+  // verbatim text (`tests/integration/slaughter_the_strong_total_power_4380.rs`).
+  const slaughterTheStrong = {
+    id: 373, card_id: 373, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Slaughter the Strong',
+    card_types: { core_types: ['Sorcery'] },
+    oracle_text: 'Each player chooses any number of creatures they control with total power 4 or less, then sacrifices all other creatures they control.'
+  } as GameObject;
+  // CR 701.44d: "each Merfolk creature you control explores" — the clause the
+  // parser's own test uses (`explore_all`), with Merfolk taken from the 10E data in
+  // `data/mtgjson/10E.es.json` (real names, types and printed P/T). They live only
+  // in `objects`: the prompt names them, no battlefield row changes, and the pile
+  // counts the rest of the lab asserts stay put.
+  const merfolkLooter = {
+    id: 390, card_id: 390, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Merfolk Looter', card_types: { core_types: ['Creature'], subtypes: ['Merfolk', 'Rogue'] },
+    power: 1, toughness: 1
+  } as GameObject;
+  const rootwaterCommando = {
+    id: 391, card_id: 391, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Rootwater Commando', card_types: { core_types: ['Creature'], subtypes: ['Merfolk'] },
+    power: 2, toughness: 2
+  } as GameObject;
+  const rootwaterMatriarch = {
+    id: 392, card_id: 392, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Rootwater Matriarch', card_types: { core_types: ['Creature'], subtypes: ['Merfolk'] },
+    power: 2, toughness: 3
+  } as GameObject;
+  const rivalMerfolkLooter = {
+    id: 393, card_id: 393, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Merfolk Looter', card_types: { core_types: ['Creature'], subtypes: ['Merfolk', 'Rogue'] },
+    power: 1, toughness: 1
+  } as GameObject;
+  const rivalRootwaterCommando = {
+    id: 394, card_id: 394, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Rootwater Commando', card_types: { core_types: ['Creature'], subtypes: ['Merfolk'] },
+    power: 2, toughness: 2
+  } as GameObject;
+  // CR 702.94a: the first card drawn in a turn with miracle. `Terminus` is the
+  // printed wording the keyword asks for — the reveal offer names the card while it
+  // is still in hand, and the miracle cost ({W}) is not its mana cost ({4}{W}{W}).
+  // It lives only in `objects`, like the other prompt-only cards.
+  const terminus = {
+    id: 395, card_id: 395, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Terminus', card_types: { core_types: ['Sorcery'] },
+    mana_cost: { type: 'Cost', shards: ['White', 'White'], generic: 4 },
+    oracle_text: 'Put all creatures on the bottom of their owners\u2019 libraries.\nMiracle {W}'
+  } as GameObject;
+  // CR 701.42: a meld pair, with a duplicate half. The engine only asks when more
+  // than one permanent could be the other half, and two copies of the same card are
+  // exactly that case — which is why the answer names ids and not names. Printed
+  // names and the result are the real Eldritch Moon pair.
+  const bruna = {
+    id: 405, card_id: 405, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Bruna, the Fading Light',
+    card_types: { core_types: ['Creature'], subtypes: ['Angel', 'Horror'], supertypes: ['Legendary'] },
+    power: 5, toughness: 7,
+    oracle_text:
+      'When Bruna, the Fading Light enters, you may meld it with Gisela, the Broken Blade. Flying, vigilance.'
+  } as GameObject;
+  const giselaOne = {
+    id: 406, card_id: 406, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Gisela, the Broken Blade',
+    card_types: { core_types: ['Creature'], subtypes: ['Angel', 'Horror'], supertypes: ['Legendary'] },
+    power: 4, toughness: 3,
+    oracle_text: 'Flying, first strike, lifelink. At the beginning of your end step, transform Gisela.'
+  } as GameObject;
+  const giselaTwo = { ...giselaOne, id: 407, card_id: 407 } as GameObject;
+  // CR 702.49c + CR 508.4: a ninjutsu creature is put onto the battlefield already
+  // attacking, so its controller names the defender. It lives in `objects` only,
+  // like the other prompt-only cards, so the board counts the other scenes assert
+  // do not move.
+  const shinobi = {
+    id: 408, card_id: 408, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Ninja of the Deep Hours',
+    card_types: { core_types: ['Creature'], subtypes: ['Human', 'Ninja'] },
+    power: 2, toughness: 2,
+    mana_cost: { type: 'Cost', shards: ['Blue'], generic: 3 },
+    oracle_text:
+      'Ninjutsu {1}{U}. Whenever Ninja of the Deep Hours deals combat damage to a player, you may draw a card.'
+  } as GameObject;
+  // CR 310.5: a battle is a legal attack destination too — the third kind of
+  // defender the engine can publish besides a seat and a planeswalker.
+  // CR 616.1e: two replacements that write the same destination — the creature's
+  // zone — so the one applied last decides (CR 616.1f). Real cards, both printed.
+  const kalitas = {
+    id: 410, card_id: 410, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Kalitas, Traitor of Ghet',
+    card_types: { core_types: ['Creature'], subtypes: ['Vampire', 'Warrior'], supertypes: ['Legendary'] },
+    power: 3, toughness: 4,
+    oracle_text:
+      'Lifelink. If a nontoken creature an opponent controls would die, instead exile that card and create a 2/2 black Zombie creature token.'
+  } as GameObject;
+  const restInPeace = {
+    id: 411, card_id: 411, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Rest in Peace',
+    card_types: { core_types: ['Enchantment'] },
+    oracle_text:
+      'When Rest in Peace enters, exile all cards from all graveyards. If a card or token would be put into a graveyard from anywhere, exile it instead.'
+  } as GameObject;
+  // CR 616.1f: damage multipliers compose — neither decides the outcome alone.
+  const furnaceOfRath = {
+    id: 412, card_id: 412, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Furnace of Rath',
+    card_types: { core_types: ['Enchantment'] },
+    oracle_text: 'If a source would deal damage to any target, it deals double that damage instead.'
+  } as GameObject;
+  const gratuitousViolence = {
+    id: 413, card_id: 413, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Gratuitous Violence',
+    card_types: { core_types: ['Enchantment'] },
+    oracle_text:
+      'If a creature you control would deal damage to a permanent or player, it deals double that damage instead.'
+  } as GameObject;
+  // CR 616.1: one optional replacement («you may») shown as its two branches — the
+  // dredge offer on a draw, whose decline is a real answer.
+  // CR 707.2: the clone is entering, so the object it becomes is not on the
+  // battlefield yet — the choice is one of the permanents already there, and the
+  // printed mana-value ceiling is a sentence about a list Phase already filtered.
+  // CR 107.4f: the spell whose Phyrexian symbols are being paid. Two shards, one of
+  // each option shape, so the block can show a locked payment and a free one.
+  const dismember = {
+    id: 419, card_id: 419, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Dismember',
+    card_types: { core_types: ['Instant'] },
+    oracle_text:
+      '({B/P} can be paid with either {B} or 2 life.) Target creature gets -5/-5 until end of turn.'
+  } as GameObject;
+  // The spells these cast-cost windows name. They live only in `objects`, like
+  // the Phyrexian spell: the prompt names them, no pile count moves. The oracle
+  // lines are the engine's own test strings, not a paraphrase.
+  const bushwhacker = {
+    id: 420, card_id: 420, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Goblin Bushwhacker',
+    card_types: { core_types: ['Creature'], subtypes: ['Goblin', 'Warrior'] },
+    power: 1, toughness: 1, mana_cost: '{R}',
+    oracle_text:
+      'Kicker {R} (You may pay an additional {R} as you cast this spell.)\nWhen this creature enters, if it was kicked, creatures you control get +1/+0 and gain haste until end of turn.'
+  } as GameObject;
+  const chalice = {
+    id: 421, card_id: 421, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Everflowing Chalice',
+    card_types: { core_types: ['Artifact'] },
+    mana_cost: '{0}',
+    oracle_text:
+      'Multikicker {2} (You may pay an additional {2} any number of times as you cast this spell.)\nThis artifact enters with a charge counter on it for each time it was kicked.\n{T}: Add {C} for each charge counter on this artifact.'
+  } as GameObject;
+  // The pin quotes this clause and not the rest of the face. The costs the
+  // block shows come from the waiting-for, which is that clause.
+  const duskMangler = {
+    id: 422, card_id: 422, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Dusk Mangler',
+    card_types: { core_types: ['Creature'] },
+    oracle_text: 'As an additional cost to cast this spell, sacrifice a creature, discard a card, or pay 4 life.'
+  } as GameObject;
+  const coilingRebirth = {
+    id: 423, card_id: 423, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Coiling Rebirth',
+    card_types: { core_types: ['Sorcery'] },
+    oracle_text:
+      'Gift a card (You may promise an opponent a gift as you cast this spell. If you do, they draw a card before its other effects.)\nReturn target creature card from your graveyard to the battlefield. Then if the gift was promised and that creature isn\'t legendary, create a token that\'s a copy of that creature, except it\'s 1/1.'
+  } as GameObject;
+  // The spell the Defiler window names. A second Grizzly Bears, on the stack:
+  // the battlefield already has one, and the prompt looks the spell up by id.
+  const castingBears = {
+    id: 424, card_id: 424, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Grizzly Bears',
+    card_types: { core_types: ['Creature'], subtypes: ['Bear'] },
+    power: 2, toughness: 2, mana_cost: '{1}{G}'
+  } as GameObject;
+  const castingBearsAway = {
+    id: 425, card_id: 425, owner: 1, controller: 1, zone: 'Stack',
+    name: 'Grizzly Bears',
+    card_types: { core_types: ['Creature'], subtypes: ['Bear'] },
+    power: 2, toughness: 2, mana_cost: '{1}{G}'
+  } as GameObject;
+  // CR 118.9: the Rooftop Storm test's zombie, printed {6}, alternative {0}.
+  // CR 712.11b: Valki // Tibalt, the spell//spell the face prompt is for.
+  // Printed costs, not a paraphrase. The buttons come from legal.actions.
+  const valki = {
+    id: 428, card_id: 428, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Valki, God of Lies',
+    card_types: { core_types: ['Creature'], subtypes: ['God'] },
+    mana_cost: { type: 'Cost', shards: ['X', 'Black'], generic: 0 },
+    back_face: {
+      name: 'Tibalt, Cosmic Impostor',
+      card_types: { core_types: ['Planeswalker'], subtypes: ['Tibalt'] },
+      mana_cost: { type: 'Cost', shards: ['Black', 'Black'], generic: 5 }
+    }
+  } as GameObject;
+  // CR 712.12: a land//land. The verb is play, not cast.
+  const pathway = {
+    id: 429, card_id: 429, owner: 1, controller: 1, zone: 'Hand',
+    name: 'Barkchannel Pathway',
+    card_types: { core_types: ['Land'] },
+    back_face: {
+      name: 'Tidechannel Pathway',
+      card_types: { core_types: ['Land'] }
+    }
+  } as GameObject;
+  // CR 702.96a: Cyclonic Rift. Printed {1}{U}, overload {6}{U}. The buttons
+  // come from legal.actions, not from these two costs.
+  const cyclonic = {
+    id: 431, card_id: 431, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Cyclonic Rift',
+    card_types: { core_types: ['Instant'] },
+    mana_cost: { type: 'Cost', generic: 1, shards: ['Blue'] }
+  } as GameObject;
+  // CR 702.119a: Elder Deep-Fiend. The emerge sacrifice quality is the
+  // description on the prompt, not a filter read off this object.
+  const deepFiend = {
+    id: 432, card_id: 432, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Elder Deep-Fiend',
+    card_types: { core_types: ['Creature'], subtypes: ['Eldrazi', 'Octopus'] },
+    mana_cost: { type: 'Cost', generic: 8, shards: [] }
+  } as GameObject;
+  // Wear // Tear. Left face is the object's name; right face is the back.
+  const wear = {
+    id: 433, card_id: 433, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Wear',
+    card_types: { core_types: ['Instant'] },
+    mana_cost: { type: 'Cost', generic: 1, shards: ['Red'] },
+    back_face: { name: 'Tear', card_types: { core_types: ['Instant'] } }
+  } as GameObject;
+  const lurrus = {
+    id: 434, card_id: 434, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Lurrus of the Dream-Den',
+    card_types: { core_types: ['Creature'], subtypes: ['Cat', 'Nightmare'] }
+  } as GameObject;
+  const hawk = {
+    id: 435, card_id: 435, owner: 0, controller: 0, zone: 'Graveyard',
+    name: "Healer's Hawk",
+    card_types: { core_types: ['Creature'], subtypes: ['Bird'] },
+    mana_cost: { type: 'Cost', generic: 0, shards: ['White'] }
+  } as GameObject;
+  // CR 110.4: Dryad Arbor is a land and a creature. The slot buttons come
+  // from legal.actions, not from these two types.
+  const dryadArbor = {
+    id: 436, card_id: 436, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Dryad Arbor',
+    card_types: { core_types: ['Land', 'Creature'], subtypes: ['Forest', 'Dryad'] },
+    power: 1, toughness: 1
+  } as GameObject;
+  // CR 702.47a: Glacial Ray is the Arcane spell being cast. Peer Through Depths
+  // and Reach Through Mists are the splice cards the engine may list.
+  const glacialRay = {
+    id: 437, card_id: 437, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Glacial Ray',
+    card_types: { core_types: ['Instant'], subtypes: ['Arcane'] },
+    mana_cost: { type: 'Cost', generic: 1, shards: ['Red'] }
+  } as GameObject;
+  const peerThroughDepths = {
+    id: 438, card_id: 438, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Peer Through Depths',
+    card_types: { core_types: ['Instant'], subtypes: ['Arcane'] },
+    mana_cost: { type: 'Cost', generic: 1, shards: ['Blue'] }
+  } as GameObject;
+  const reachThroughMists = {
+    id: 439, card_id: 439, owner: 0, controller: 0, zone: 'Hand',
+    name: 'Reach Through Mists',
+    card_types: { core_types: ['Instant'], subtypes: ['Arcane'] },
+    mana_cost: { type: 'Cost', generic: 2, shards: ['Blue'] }
+  } as GameObject;
+  // CR 702.140c: Gemrazer is the mutating spell, held off the stack while its
+  // controller chooses a side. Llanowar Elves is the already-chosen target.
+  // The side buttons come from legal.actions, not from these two objects.
+  const gemrazer = {
+    id: 440, card_id: 440, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Gemrazer',
+    card_types: { core_types: ['Creature'], subtypes: ['Beast'] },
+    power: 4, toughness: 4
+  } as GameObject;
+  const llanowarElves = {
+    id: 441, card_id: 441, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Llanowar Elves',
+    card_types: { core_types: ['Creature'], subtypes: ['Elf', 'Druid'] },
+    power: 1, toughness: 1
+  } as GameObject;
+  // CR 702.99a: Hidden Strings is the resolving cipher spell. Invisible Stalker
+  // and Tormented Soul are the hosts the engine may list.
+  const hiddenStrings = {
+    id: 442, card_id: 442, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Hidden Strings',
+    card_types: { core_types: ['Instant'] }
+  } as GameObject;
+  const invisibleStalker = {
+    id: 443, card_id: 443, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Invisible Stalker',
+    card_types: { core_types: ['Creature'], subtypes: ['Human', 'Rogue'] },
+    power: 1, toughness: 1
+  } as GameObject;
+  const tormentedSoul = {
+    id: 444, card_id: 444, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Tormented Soul',
+    card_types: { core_types: ['Creature'], subtypes: ['Spirit'] },
+    power: 1, toughness: 1
+  } as GameObject;
+  // CR 601.2f: Altar's Reap is the spell whose reductions lock different totals.
+  // The buttons come from legal.actions, not from reordering these two.
+  const altarsReap = {
+    id: 445, card_id: 445, owner: 0, controller: 0, zone: 'Stack',
+    name: "Altar's Reap",
+    card_types: { core_types: ['Instant'] },
+    mana_cost: { type: 'Cost', generic: 1, shards: ['Black'] }
+  } as GameObject;
+  // CR 118.12: Fire Covenant is only the named source. The branches are the
+  // published costs, and index 2 is not renumbered to 1.
+  const fireCovenant = {
+    id: 446, card_id: 446, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Fire Covenant',
+    card_types: { core_types: ['Instant'] }
+  } as GameObject;
+  // CR 702.174a: Generous Gift is the spell whose recipient is chosen. The
+  // buttons come from legal.actions, not from reordering these seats.
+  const generousGift = {
+    id: 447, card_id: 447, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Generous Gift',
+    card_types: { core_types: ['Instant'] }
+  } as GameObject;
+  // CR 608.2d: Banishing Light is the permanent whose owner chooses the
+  // library position. The buttons are the published booleans.
+  const banishingLight = {
+    id: 448, card_id: 448, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Banishing Light',
+    card_types: { core_types: ['Enchantment'] }
+  } as GameObject;
+  // CR 701.30a: the two cards a clash reveals. They are named only when the
+  // wire publishes their id; a hidden card is 0 and the block does not name it.
+  // CR 702.60a: the two uncast cards a Ripple puts on the bottom. Their order is
+  // the answer, so they are named and never re-sorted by the block.
+  const rippleFirst = {
+    id: 531, card_id: 531, owner: 0, controller: 0, zone: 'Library',
+    name: 'Reach Through Mists',
+    card_types: { core_types: ['Instant'], subtypes: ['Arcane'] },
+    mana_cost: '{U}'
+  } as GameObject;
+  const rippleSecond = {
+    id: 532, card_id: 532, owner: 0, controller: 0, zone: 'Library',
+    name: 'Peer Through Depths',
+    card_types: { core_types: ['Instant'], subtypes: ['Arcane'] },
+    mana_cost: '{1}{U}'
+  } as GameObject;
+  const rippleSource = {
+    id: 533, card_id: 533, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Glacial Ray',
+    card_types: { core_types: ['Instant'], subtypes: ['Arcane'] },
+    mana_cost: '{1}{R}'
+  } as GameObject;
+  const clashRevealed = {
+    id: 512, card_id: 512, owner: 0, controller: 0, zone: 'Library',
+    name: 'Grizzly Bears',
+    card_types: { core_types: ['Creature'], subtypes: ['Bear'] },
+    power: 2, toughness: 2, mana_cost: '{1}{G}'
+  } as GameObject;
+  const clashRevealedOther = {
+    id: 513, card_id: 513, owner: 1, controller: 1, zone: 'Library',
+    name: 'Savannah Lions',
+    card_types: { core_types: ['Creature'], subtypes: ['Cat'] },
+    power: 2, toughness: 1, mana_cost: '{W}'
+  } as GameObject;
+  const zoneSource = {
+    id: 430, card_id: 430, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Test Spell',
+    card_types: { core_types: ['Sorcery'] }
+  } as GameObject;
+  const testZombie = {
+    id: 426, card_id: 426, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Test Zombie',
+    card_types: { core_types: ['Creature'], subtypes: ['Zombie'] },
+    power: 2, toughness: 2, mana_cost: '{6}'
+  } as GameObject;
+  // CR 502.3: the two untap questions. Vedalken Shackles is the «you may choose not
+  // to untap» class; Smoke is the MaxUntapPerType cap that forces a subset.
+  const shackles = {
+    id: 417, card_id: 417, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Vedalken Shackles',
+    card_types: { core_types: ['Artifact'] },
+    mana_cost: { type: 'Cost', shards: [], generic: 3 },
+    oracle_text:
+      'You may choose not to untap Vedalken Shackles during your untap step. {2}, {T}: Gain control of target creature with power less than or equal to the number of Islands you control for as long as Vedalken Shackles remains tapped.'
+  } as GameObject;
+  const smoke = {
+    id: 418, card_id: 418, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Smoke',
+    card_types: { core_types: ['Enchantment'] },
+    mana_cost: { type: 'Cost', shards: ['Red'], generic: 1 },
+    oracle_text: 'Players can\u2019t untap more than one creature during their untap steps.'
+  } as GameObject;
+  const mockingbird = {
+    id: 415, card_id: 415, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Mockingbird',
+    card_types: { core_types: ['Creature'], subtypes: ['Bird'] },
+    power: 1, toughness: 1,
+    mana_cost: { type: 'Cost', shards: ['White'], generic: 1 },
+    oracle_text:
+      'Flying. You may have Mockingbird enter as a copy of target creature you control with mana value 4 or less.'
+  } as GameObject;
+  // CR 707.1: Esix substitutes token creation, so the chosen permanent is the copy
+  // source and nothing on the battlefield is transformed.
+  const esix = {
+    id: 416, card_id: 416, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Esix, Fractal Bloom',
+    card_types: { core_types: ['Creature'], subtypes: ['Fractal'], supertypes: ['Legendary'] },
+    power: 4, toughness: 4,
+    mana_cost: { type: 'Cost', shards: ['Green', 'Blue'], generic: 4 },
+    oracle_text:
+      'If you would create one or more tokens, you may instead create that many tokens that are copies of a creature you control.'
+  } as GameObject;
+  const loam = {
+    id: 414, card_id: 414, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Life from the Loam',
+    card_types: { core_types: ['Sorcery'] },
+    mana_cost: { type: 'Cost', shards: ['Green'], generic: 1 },
+    oracle_text:
+      'Return up to three target land cards from your graveyard to your hand. Dredge 3 (If you would draw a card, you may mill three cards instead. If you do, return this card from your graveyard to your hand.)'
+  } as GameObject;
+  const invasion = {
+    id: 409, card_id: 409, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Invasion of Kamigawa',
+    card_types: { core_types: ['Battle'], subtypes: ['Siege'] }
+  } as GameObject;
+  // CR 608.2g: the free-cast window (Invoke Calamity) offers instants and sorceries
+  // from the controller's graveyard. Two real cheap ones, in `objects` only.
+  const graveShock = {
+    id: 396, card_id: 396, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Shock', card_types: { core_types: ['Instant'] },
+    mana_cost: { type: 'Cost', shards: ['Red'], generic: 0 },
+    oracle_text: 'Shock deals 2 damage to any target.'
+  } as GameObject;
+  const graveGrowth = {
+    id: 397, card_id: 397, owner: 0, controller: 0, zone: 'Graveyard',
+    name: 'Giant Growth', card_types: { core_types: ['Instant'] },
+    mana_cost: { type: 'Cost', shards: ['Green'], generic: 0 },
+    oracle_text: 'Target creature gets +3/+3 until end of turn.'
+  } as GameObject;
+  // CR 101.4 + CR 701.38: the two ballot shapes. `Emissary Green` is the attack
+  // trigger whose named vote the engine tests end to end (`emissary_green.rs`,
+  // verbatim text); the object-pool shape carries the very clause the engine's own
+  // vote test parses for Council's Judgment (the inner sentence, which is what the
+  // engine reads — the fixture never claims more text than that).
+  const emissaryGreen = {
+    id: 385, card_id: 385, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Emissary Green',
+    card_types: { core_types: ['Creature'] }, power: 3, toughness: 3,
+    oracle_text: 'Whenever Emissary Green attacks, starting with you, each player votes for profit or security. You create a number of Treasure tokens equal to twice the number of profit votes. Put a number of +1/+1 counters on each creature you control equal to the number of security votes.'
+  } as GameObject;
+  const councilsJudgment = {
+    id: 386, card_id: 386, owner: 1, controller: 1, zone: 'Stack',
+    name: "Council's Judgment", card_types: { core_types: ['Sorcery'] },
+    oracle_text: "Starting with you, each player votes for a nonland permanent you don't control. Exile each permanent with the most votes or tied for most votes."
+  } as GameObject;
+  // CR 707.10c + CR 707.12: one walk, two operations. `Twincast` is the engine's
+  // no-rider control for the copy-retarget clause, and `Mizzix's Mastery` is the
+  // real way a copied spell reaches the announcement walk (its copy of `Frost
+  // Breath` is announced slot by slot). The copies themselves are the objects on
+  // the stack: a copy keeps the printed name and text of what it copies.
+  const twincast = {
+    id: 382, card_id: 382, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Twincast', card_types: { core_types: ['Instant'] },
+    oracle_text: 'Copy target instant or sorcery spell. You may choose new targets for the copy.'
+  } as GameObject;
+  const shockCopy = {
+    id: 380, card_id: 380, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Shock', card_types: { core_types: ['Instant'] },
+    oracle_text: 'Shock deals 2 damage to any target.'
+  } as GameObject;
+  const mizzixsMastery = {
+    id: 384, card_id: 384, owner: 0, controller: 0, zone: 'Stack',
+    name: "Mizzix's Mastery", card_types: { core_types: ['Sorcery'] },
+    oracle_text: "Exile target card that's an instant or sorcery from your graveyard. For each card exiled this way, copy it, and you may cast the copy without paying its mana cost. Exile Mizzix's Mastery."
+  } as GameObject;
+  const frostBreathCopy = {
+    id: 383, card_id: 383, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Frost Breath', card_types: { core_types: ['Instant'] },
+    oracle_text: "Tap up to two target creatures. Those creatures don't untap during their controller's next untap step."
+  } as GameObject;
+  // CR 701.21a + CR 122.1: the two cards the engine tests for the exact keeper.
+  // Verbatim text from `tests/integration/promise_of_loyalty.rs`: `Razia's
+  // Purification` fixes the number at three, and `Promise of Loyalty` owes the kept
+  // creature a vow counter, which is placed before the sacrifice.
+  const raziasPurification = {
+    id: 374, card_id: 374, owner: 0, controller: 0, zone: 'Stack',
+    name: "Razia's Purification",
+    card_types: { core_types: ['Sorcery'] },
+    oracle_text: 'Each player chooses three permanents they control, then sacrifices the rest.'
+  } as GameObject;
+  const promiseOfLoyalty = {
+    id: 375, card_id: 375, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Promise of Loyalty',
+    card_types: { core_types: ['Sorcery'] },
+    oracle_text: "Each player puts a vow counter on a creature they control and sacrifices the rest. Each of those creatures can't attack you or planeswalkers you control for as long as it has a vow counter on it."
+  } as GameObject;
+  // CR 107.1c + CR 608.2d: the two shapes of "remove counters", with the verbatim
+  // text each one comes from in `tests/integration/rhys_evermore_remove_counters.rs`.
+  // `Rhys, the Evermore` removes *any number* (no cap); `Hex Parasite` removes
+  // *up to X*, so its cap is the announced X and the engine already bounded it by
+  // what the source carries. Both live only in `objects`, and the bearers carry the
+  // counters the engine's own tests give them: three +1/+1 and two charge for Rhys,
+  // two +1/+1 and one charge for Hex Parasite.
+  const rhysEvermore = {
+    id: 376, card_id: 376, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Rhys, the Evermore',
+    card_types: { core_types: ['Creature'], subtypes: ['Elf', 'Warrior'] },
+    oracle_text: '{W}, {T}: Remove any number of counters from target creature you control. Activate only as a sorcery.'
+  } as GameObject;
+  const hexParasite = {
+    id: 377, card_id: 377, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Hex Parasite',
+    card_types: { core_types: ['Creature'], subtypes: ['Insect'] },
+    oracle_text: '{X}{B/P}: Remove up to X counters from target permanent. For each counter removed this way, this creature gets +1/+0 until end of turn. ({B/P} can be paid with either {B} or 2 life.)'
+  } as GameObject;
+  const counterBearer = {
+    id: 378, card_id: 378, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Counter Bearer', card_types: { core_types: ['Creature'] },
+    power: 2, toughness: 2, counters: { P1P1: 3, charge: 2 }
+  } as GameObject;
+  const rivalCounterBearer = {
+    id: 379, card_id: 379, owner: 1, controller: 1, zone: 'Battlefield',
+    name: 'Counter Bearer', card_types: { core_types: ['Creature'] },
+    power: 2, toughness: 2, counters: { P1P1: 2, charge: 1 }
+  } as GameObject;
+  // CR 707.2: the phenomenon whose body is one `EachPlayerCopyChosen` — the
+  // verbatim text is the one in `oracle_effect/tests.rs`
+  // (`each_player_copy_chosen_human_time_lord_trigger`).
+  const metaCrisis = {
+    id: 372, card_id: 372, owner: 0, controller: 0, zone: 'Command',
+    name: 'Human—Time Lord Meta-Crisis',
+    card_types: { core_types: ['Phenomenon'] }
+  } as GameObject;
+  // CR 101.4: the two shapes of the category choice. `Cataclysm` keeps one of each
+  // type per player; `Tragic Arrogance` has the controller choose for everyone.
+  // Both live only in `objects` (they are the source of the effect, not a
+  // battlefield row), and carry only what the engine's own comments state.
+  const cataclysm = {
+    id: 370, card_id: 370, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Cataclysm', card_types: { core_types: ['Sorcery'] }
+  } as GameObject;
+  const tragicArrogance = {
+    id: 371, card_id: 371, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Tragic Arrogance', card_types: { core_types: ['Sorcery'] }
+  } as GameObject;
+  // CR 701.56a: the two halves of time travel need objects with time counters.
+  // `Ancestral Vision` and `Lotus Bloom` are the canonical suspend cards, and they
+  // live only in `objects` (their `zone` is Exile but they are not in `state.exile`),
+  // so no pile count the rest of the lab asserts moves.
+  const suspendedVision = {
+    id: 360, card_id: 360, owner: 0, controller: 0, zone: 'Exile',
+    name: 'Ancestral Vision',
+    card_types: { core_types: ['Sorcery'] },
+    counters: { time: 4 }
+  } as GameObject;
+  const suspendedLotus = {
+    id: 361, card_id: 361, owner: 0, controller: 0, zone: 'Exile',
+    name: 'Lotus Bloom',
+    card_types: { core_types: ['Artifact'] },
+    counters: { time: 3 }
+  } as GameObject;
+  // A modal card for the mode scene: Fireball is not modal, and the lab should
+  // not teach the wrong example.
+  const modeSpell = {
+    id: 321, card_id: 321, owner: 0, controller: 0, zone: 'Stack', name: 'Selesnya Charm',
+    card_types: { core_types: ['Instant'] }, mana_cost: '{G}{W}',
+    oracle_text: 'Elige dos: la criatura objetivo obtiene +2/+2; gana vigilancia; ganas 3 vidas.'
+  } as GameObject;
+  // Cards only the library knows: the search prompt names them, no zone lists
+  // them, so the pile counts the rest of the lab asserts stay put.
+  const searchPool = [
+    { id: 400, card_id: 400, owner: 0, controller: 0, zone: 'Library', name: 'Llanowar Elves', card_types: { core_types: ['Creature'], subtypes: ['Elf', 'Druid'] }, mana_cost: '{G}' },
+    { id: 401, card_id: 401, owner: 0, controller: 0, zone: 'Library', name: 'Grizzly Bears', card_types: { core_types: ['Creature'], subtypes: ['Bear'] }, mana_cost: '{1}{G}' },
+    { id: 402, card_id: 402, owner: 0, controller: 0, zone: 'Library', name: 'Shock', card_types: { core_types: ['Instant'] }, mana_cost: '{R}' },
+    { id: 403, card_id: 403, owner: 0, controller: 0, zone: 'Library', name: 'Island', card_types: { core_types: ['Land'], subtypes: ['Island'] } }
+  ] as GameObject[];
+  const xCost = (generic: number, red: number) => ({ type: 'Cost', generic, shards: Array.from({ length: red }, () => 'Red') });
   const viewerExile = [pileCard(112, 0, 'Giant Growth', 'Exile')];
   const rivalGrave = [pileCard(210, 1, 'Counterspell', 'Graveyard')];
   const rivalExile: GameObject[] = [];
@@ -112,7 +1141,7 @@
   })) as GameObject[];
 
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, cyclonic, deepFiend, wear, lurrus, hawk, dryadArbor, glacialRay, peerThroughDepths, reachThroughMists, gemrazer, llanowarElves, hiddenStrings, invisibleStalker, tormentedSoul, altarsReap, fireCovenant, generousGift, banishingLight, clashRevealed, clashRevealedOther, rippleFirst, rippleSecond, rippleSource, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -161,6 +1190,1538 @@
         }
       };
     }
+    if (scene === 'crew' || scene === 'saddle') {
+      // Shape taken from `CrewVehicle` / `SaddleMount`: the permanent being paid
+      // for, the threshold, and one contribution per eligible creature — in the
+      // engine's order, aligned index-for-index.
+      return scene === 'crew'
+        ? {
+            type: 'CrewVehicle',
+            data: {
+              player: 0,
+              vehicle_id: 340,
+              crew_power: 3,
+              eligible_creatures: [100, 101, 105],
+              contributions: [2, 2, 1]
+            }
+          }
+        : {
+            type: 'SaddleMount',
+            data: {
+              player: 0,
+              mount_id: 342,
+              saddle_power: 2,
+              eligible_creatures: [100, 101, 105],
+              contributions: [2, 2, 1]
+            }
+          };
+    }
+    if (scene === 'keepPower' || scene === 'keepPowerForAll') {
+      // `KeepWithinTotalPowerChoice`: the window is a sum of power, not a count.
+      // `Slaughter the Strong` is the card the engine tests for it. The eligible
+      // creatures carry their published power, so a pick that would overflow the cap
+      // is the one the block must disable: 2 + 2 + 1 = 5 over a cap of 4.
+      const forAll = scene === 'keepPowerForAll';
+      return {
+        type: 'KeepWithinTotalPowerChoice',
+        data: {
+          player: 0,
+          target_player: forAll ? 1 : 0,
+          eligible: forAll ? [200, 201] : [100, 101, 105],
+          cap: forAll ? 3 : 4,
+          chooser_scope: forAll ? 'ControllerForAll' : 'EachPlayerSelf',
+          source_id: 373,
+          source_controller: 0,
+          remaining_players: forAll ? [] : [1],
+          all_kept: [],
+          scoped_players: [0, 1]
+        }
+      };
+    }
+    if (scene === 'keepExact' || scene === 'keepExactVow') {
+      // `KeepExactPermanentsChoice`: a fixed number, already capped by the engine.
+      // `Razia's Purification` asks for three permanents out of five; `Promise of
+      // Loyalty` asks for one creature and owes it a vow counter (CR 122.1) before
+      // the rest is sacrificed.
+      const vow = scene === 'keepExactVow';
+      return {
+        type: 'KeepExactPermanentsChoice',
+        data: {
+          player: 0,
+          target_player: 0,
+          eligible: vow ? [100, 101, 105] : [100, 101, 105, 102, 340],
+          required_count: vow ? 1 : 3,
+          keeper_counter: vow ? ['vow', 1] : null,
+          chooser_scope: 'EachPlayerSelf',
+          source_id: vow ? 375 : 374,
+          source_controller: 0,
+          remaining_players: [1],
+          all_kept: [],
+          scoped_players: [0, 1]
+        }
+      };
+    }
+    if (scene === 'explore' || scene === 'exploreShared') {
+      // `ExploreChoice`: several permanents explore at once and their controller
+      // orders them (CR 701.44d). The shared shape shows the two lists differ —
+      // the rival's Merfolk are in the queue but not in this player's `choosable`,
+      // because each player orders their own (CR 101.4). `source_id` is the ability
+      // that caused it; this fixture has no object for it, and the block never
+      // names a source it was not given.
+      const shared = scene === 'exploreShared';
+      return {
+        type: 'ExploreChoice',
+        data: {
+          player: 0,
+          source_id: 0,
+          choosable: shared ? [390, 391] : [390, 391, 392],
+          remaining: shared ? [390, 391, 393, 394] : [390, 391, 392]
+        }
+      };
+    }
+    if (scene === 'pilePartition' || scene === 'pileChoice') {
+      // `SeparateIntoPiles` (CR 700.3) is three prompts in a row; the lab shows the
+      // two a two-player game can reach. The viewer splits their own creatures for
+      // a rival's effect (the stage-2 shape), and then picks a side for the rival's
+      // piles (the stage-3 shape). The stage-1 prompt — who partitions — only
+      // exists with three or more players, so it has no scene here rather than an
+      // invented one. `pile_source` is the battlefield shape (CR 700.3), which is
+      // what the shape's own docs call the Make an Example case.
+      if (scene === 'pileChoice') {
+        return {
+          type: 'SeparatePilesChoice',
+          data: {
+            player: 0,
+            pending: [],
+            current: { subject: 1, pile_a: [200], pile_b: [201] },
+            pile_source: { type: 'Battlefield' }
+          }
+        };
+      }
+      return {
+        type: 'SeparatePilesPartition',
+        data: {
+          player: 0,
+          eligible: [100, 101, 105],
+          remaining_subjects: [],
+          completed: [],
+          chooser: 1,
+          pile_source: { type: 'Battlefield' }
+        }
+      };
+    }
+    if (scene === 'miracle') {
+      // `MiracleReveal` (CR 702.94a) names the drawn card and the cost the offer
+      // latched; the reveal is the answer, and the cast comes later (CR 608.2g).
+      return {
+        type: 'MiracleReveal',
+        data: {
+          player: 0,
+          object_id: 395,
+          cost: { type: 'Cost', shards: ['White'], generic: 0 }
+        }
+      };
+    }
+    if (scene === 'untapChoice') {
+      // `UntapChoice` (CR 502.3): one permanent is being asked; `chosen_not_to_untap`
+      // carries what this same untap step already declined.
+      return {
+        type: 'UntapChoice',
+        data: {
+          player: 0,
+          candidates: [417],
+          chosen_not_to_untap: [418, 205],
+          progress: 'AfterTurnBasedActions'
+        }
+      };
+    }
+    if (scene === 'untapResume') {
+      // CR 502.1: a save from an earlier build offered the determination *before*
+      // phasing and the day/night check, so the answer restarts the step's actions.
+      return {
+        type: 'UntapChoice',
+        data: { player: 0, candidates: [417], progress: 'BeforeTurnBasedActions' }
+      };
+    }
+    if (scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate') {
+      // `PayCost` (CR 118.3 + CR 601.2b): one answer — `SelectCards` — and three
+      // meanings. Only `resume.type` is read; the embedded pending cast is the
+      // engine's, and the block never repeats it.
+      const resume = (type: string) => ({ type, spell: { object_id: 419 } });
+      if (scene === 'payCost') {
+        return {
+          type: 'PayCost',
+          data: {
+            player: 0,
+            kind: { type: 'Sacrifice' },
+            choices: [100, 101, 105],
+            count: 2,
+            min_count: 2,
+            resume: resume('Spell')
+          }
+        };
+      }
+      if (scene === 'payCostHidden') {
+        // CR 400.2: the opponent's hand-pitch cost reaches this viewer with the
+        // cardinality intact and `0` in place of every card.
+        return {
+          type: 'PayCost',
+          data: {
+            player: 1,
+            kind: { type: 'ExileFromZone', zone: 'Hand' },
+            choices: [0, 0],
+            count: 2,
+            min_count: 2,
+            resume: resume('Resolution')
+          }
+        };
+      }
+      // CR 208.1: «tap any number of creatures with total power 4 or greater»
+      // — the crew/saddle/teamwork shape, where the ceiling is the whole set.
+      return {
+        type: 'PayCost',
+        data: {
+          player: 0,
+          kind: {
+            type: 'TapCreatures',
+            mode: { Aggregate: { stat: 'TotalPower', comparator: 'GE', value: 4 } }
+          },
+          choices: [100, 101, 105],
+          count: 3,
+          min_count: 0,
+          resume: resume('ManaAbility')
+        }
+      };
+    }
+    if (scene === 'phyrexian') {
+      // `PhyrexianPayment` (CR 107.4f): one answer per shard, in this order, and the
+      // options are the engine's per-shard verdict.
+      return {
+        type: 'PhyrexianPayment',
+        data: {
+          player: 0,
+          spell_object: 419,
+          shards: [
+            { shard_index: 0, color: 'Black', options: 'ManaOrLife' },
+            { shard_index: 1, color: 'Black', options: 'ManaOnly' },
+            { shard_index: 2, color: 'Blue', options: 'LifeOnly' }
+          ]
+        }
+      };
+    }
+    if (scene === 'combatTax' || scene === 'combatTaxBlock') {
+      // `CombatTaxPayment` (CR 508.1d + CR 508.1h + CR 509.1c + CR 509.1d): the
+      // declaration is already validated and priced, and the price is the
+      // engine's — the total and the per-creature breakdown it computed for this
+      // proposal. `context` is internally tagged (`#[serde(tag = "type")]`), so
+      // the wire form is `{ type }`, not a bare string. `pending` is the paused
+      // declaration, snapshotted as incarnation references (CR 508.1k + CR 400.7).
+      //
+      // The attack scene uses Norn's Annex's shard, `PhyrexianWhite` (`{W/P}`,
+      // mana value 1 each): a hybrid/Phyrexian cost must render, not vanish.
+      // The block scene is the generic `{2}` shape and belongs to the other
+      // seat, so the block stays visible but offers no button.
+      const generic = (amount: number) => ({ type: 'Cost', shards: [] as string[], generic: amount });
+      const phyrexian = (count: number) => ({
+        type: 'Cost',
+        shards: Array.from({ length: count }, () => 'PhyrexianWhite'),
+        generic: 0
+      });
+      if (scene === 'combatTax') {
+        return {
+          type: 'CombatTaxPayment',
+          data: {
+            player: 0,
+            context: { type: 'Attacking' },
+            total_cost: phyrexian(2),
+            per_creature: [
+              [100, phyrexian(1)],
+              [101, phyrexian(1)]
+            ],
+            pending: {
+              type: 'Attack',
+              data: {
+                attacks: [
+                  [{ object_id: 100, incarnation: 1 }, { type: 'Player', data: 1 }],
+                  [{ object_id: 101, incarnation: 1 }, { type: 'Planeswalker', data: 205 }]
+                ],
+                bands: [[{ object_id: 100, incarnation: 1 }, { object_id: 101, incarnation: 1 }]]
+              }
+            }
+          }
+        };
+      }
+      return {
+        type: 'CombatTaxPayment',
+        data: {
+          player: 1,
+          context: { type: 'Blocking' },
+          total_cost: generic(2),
+          per_creature: [[200, generic(2)]],
+          pending: {
+            type: 'Block',
+            data: {
+              assignments: [[{ object_id: 200, incarnation: 1 }, { object_id: 100, incarnation: 1 }]]
+            }
+          }
+        }
+      };
+    }
+    if (scene.startsWith('optionalCost') || scene.startsWith('defiler')) {
+      // `OptionalCostChoice` and `DefilerPayment` (CR 601.2b). Both answer with
+      // `DecideOptionalCost { index }`, and the index does not mean the same
+      // thing. AdditionalCost is `{ type, data }`. A kicker prompt publishes
+      // one live cost; a Choice publishes every alternative and no decline.
+      // Defiler's reach is omitted when it is the spill default.
+      const mana = (generic: number, shards: string[] = []) => ({ type: 'Cost', shards, generic });
+      const manaCost = (generic: number, shards: string[] = []) => ({ type: 'Mana', cost: mana(generic, shards) });
+      const pending = (id: number, election = 'Undecided') => ({
+        object_id: id,
+        alternative_cost_election: election
+      });
+      if (scene === 'optionalCost' || scene === 'optionalCostAway') {
+        return {
+          type: 'OptionalCostChoice',
+          data: {
+            player: scene === 'optionalCostAway' ? 1 : 0,
+            cost: { type: 'Kicker', data: { costs: [manaCost(0, ['Red'])] } },
+            times_kicked: 0,
+            origin: 'Kicker',
+            pending_cast: pending(420)
+          }
+        };
+      }
+      if (scene === 'optionalCostMulti') {
+        return {
+          type: 'OptionalCostChoice',
+          data: {
+            player: 0,
+            cost: { type: 'Kicker', data: { costs: [manaCost(2)], repeatable: true } },
+            times_kicked: 2,
+            origin: 'Kicker',
+            pending_cast: pending(421)
+          }
+        };
+      }
+      if (scene === 'optionalCostChoice') {
+        return {
+          type: 'OptionalCostChoice',
+          data: {
+            player: 0,
+            cost: {
+              type: 'Choice',
+              data: [
+                { type: 'Sacrifice', target: { type: 'Typed', type_filters: ['Creature'], controller: 'You' }, count: 1 },
+                { type: 'Discard', count: { type: 'Fixed', value: 1 } },
+                { type: 'PayLife', amount: { type: 'Fixed', value: 4 } }
+              ]
+            },
+            times_kicked: 0,
+            origin: 'Other',
+            pending_cast: pending(422)
+          }
+        };
+      }
+      if (scene === 'optionalCostAlt') {
+        // The Rooftop Storm test: alternative {0}, printed fallback {6}.
+        return {
+          type: 'OptionalCostChoice',
+          data: {
+            player: 0,
+            cost: { type: 'Choice', data: [manaCost(0), manaCost(6)] },
+            times_kicked: 0,
+            origin: 'Other',
+            pending_cast: pending(426, 'Offered')
+          }
+        };
+      }
+      if (scene === 'optionalCostGift') {
+        return {
+          type: 'OptionalCostChoice',
+          data: {
+            player: 0,
+            cost: { type: 'Optional', data: { cost: manaCost(0) } },
+            times_kicked: 0,
+            origin: 'Gift',
+            gift_kind: { type: 'Card' },
+            pending_cast: pending(423)
+          }
+        };
+      }
+      if (scene === 'defiler') {
+        return {
+          type: 'DefilerPayment',
+          data: {
+            player: 0,
+            life_cost: 2,
+            mana_reduction: mana(0, ['Green']),
+            reach: 'ColoredManaOnly',
+            pending_cast: pending(424)
+          }
+        };
+      }
+      return {
+        type: 'DefilerPayment',
+        data: {
+          player: 1,
+          life_cost: 2,
+          mana_reduction: mana(1, ['Green']),
+          pending_cast: pending(425)
+        }
+      };
+    }
+    if (scene.startsWith('zoneChoice')) {
+      if (scene === 'zoneChoiceAway') {
+        return {
+          type: 'ChooseFromZoneChoice',
+          data: { player: 1, cards: [0, 0, 0], count: 1, source_id: 430 }
+        };
+      }
+      if (scene === 'zoneChoiceTypes') {
+        return {
+          type: 'ChooseFromZoneChoice',
+          data: {
+            player: 0,
+            cards: [341, 353, 396],
+            count: 2,
+            up_to: true,
+            constraint: { type: 'DistinctCardTypes', categories: ['Artifact', 'Creature'] },
+            reciprocal_role: 'Produce',
+            source_id: 430
+          }
+        };
+      }
+      return {
+        type: 'ChooseFromZoneChoice',
+        data: { player: 0, cards: [396, 397, 353], count: 1, source_id: 430 }
+      };
+    }
+    if (scene.startsWith('modalFace')) {
+      const extra = { type: 'Cost', shards: [], generic: 2 };
+      if (scene === 'modalFaceAway') {
+        return {
+          type: 'ModalFaceChoice',
+          data: { player: 1, object_id: 429, card_id: 429 }
+        };
+      }
+      if (scene === 'modalFaceOne') {
+        return {
+          type: 'ModalFaceChoice',
+          data: {
+            player: 0,
+            object_id: 428,
+            card_id: 428,
+            payment_mode: 'Manual',
+            resolution_additional_cost: extra
+          }
+        };
+      }
+      return {
+        type: 'ModalFaceChoice',
+        data: { player: 0, object_id: 428, card_id: 428 }
+      };
+    }
+    if (scene.startsWith('typeSlot')) {
+      return {
+        type: 'ChoosePermanentTypeSlot',
+        data: {
+          player: scene === 'typeSlotAway' ? 1 : 0,
+          object_id: 436,
+          card_id: 436,
+          source: 434,
+          payment_mode: 'Auto',
+          available_slots: scene === 'typeSlotLand' ? ['Land'] : ['Land', 'Creature'],
+          ...(scene === 'typeSlotLand'
+            ? {}
+            : { permission: { source: 434, type_slot: 'Creature' } })
+        }
+      };
+    }
+    if (scene.startsWith('mutate')) {
+      return {
+        type: 'MutateMergeChoice',
+        data: {
+          player: scene === 'mutateAway' ? 1 : 0,
+          merging_id: 440,
+          target_id: 441
+        }
+      };
+    }
+    if (scene.startsWith('costOrder')) {
+      return {
+        type: 'OrderCostReductions',
+        data: {
+          player: scene === 'costOrderAway' ? 1 : 0,
+          pending_cast: { object_id: 445 },
+          reductions: [
+            {
+              display_name: 'Thunderscape Familiar',
+              amount: { type: 'Cost', generic: 0, shards: ['Red'] },
+              multiplier: 1
+            },
+            {
+              display_name: 'Morophon, the Boundless',
+              amount: { type: 'Cost', generic: 0, shards: ['Red'] },
+              multiplier: 1,
+              reach: 'ColoredManaOnly'
+            }
+          ],
+          hybrid_symbols: ['WhiteBlue'],
+          outcomes: [
+            {
+              order: [1, 0],
+              hybrid_announcement: ['White'],
+              locked_cost: { type: 'Cost', generic: 0, shards: ['Red'] }
+            },
+            {
+              order: [0, 1],
+              locked_cost: { type: 'Cost', generic: 1, shards: ['Red', 'Blue'] }
+            }
+          ]
+        }
+      };
+    }
+    if (scene.startsWith('gift')) {
+      const effectCost = {
+        type: 'EffectCost',
+        cost: { type: 'EffectCost', data: { effect: { type: 'GainLife', amount: { type: 'Fixed', value: 3 } } } }
+      };
+      return {
+        type: 'ChooseGiftRecipient',
+        data: {
+          player: scene === 'giftAway' ? 1 : 0,
+          candidates: scene === 'giftOne' ? [1] : [2, 1],
+          ...(scene === 'giftCost'
+            ? { purpose: effectCost }
+            : { gift_kind: { type: 'Card' } }),
+          pending_cast: { object_id: 447 }
+        }
+      };
+    }
+    if (scene.startsWith('topBottom')) {
+      return {
+        type: 'TopOrBottomChoice',
+        data: {
+          player: scene === 'topBottomAway' ? 1 : 0,
+          object_id: 448,
+          ...(scene === 'topBottomNth' ? { top_position: { type: 'NthFromTop', n: 2 } } : {})
+        }
+      };
+    }
+    if (scene.startsWith('bottom')) {
+      const cards = scene === 'bottomEmpty' ? [] : [531, 532];
+      return {
+        type: scene === 'bottomRipple' || scene === 'bottomAway'
+          ? 'RippleBottomOrder'
+          : scene === 'bottomReveal'
+            ? 'RevealUntilBottomOrder'
+            : 'DigBottomOrder',
+        data: {
+          player: scene === 'bottomAway' ? 1 : 0,
+          source_id: 533,
+          cards,
+          ...(scene === 'bottomRipple' || scene === 'bottomAway' ? { count: 4 } : {})
+        }
+      };
+    }
+    if (scene.startsWith('sideboard')) {
+      return {
+        type: 'BetweenGamesSideboard',
+        data: {
+          player: scene === 'sideboardAway' ? 1 : 0,
+          game_number: 2,
+          score: { p0_wins: 1, p1_wins: 0, draws: 0 },
+          min_main_deck_size: 60,
+          max_sideboard_size: scene === 'sideboardNoSide' ? 0 : 15
+        }
+      };
+    }
+    if (scene.startsWith('playDraw')) {
+      return {
+        type: 'BetweenGamesChoosePlayDraw',
+        data: {
+          player: scene === 'playDrawAway' ? 1 : 0,
+          game_number: 2,
+          score: { p0_wins: 1, p1_wins: 0, draws: 0 }
+        }
+      };
+    }
+    if (scene.startsWith('clashPlace')) {
+      return {
+        type: 'ClashCardPlacement',
+        data: {
+          player: scene === 'clashPlaceAway' ? 1 : 0,
+          card: scene === 'clashPlaceHidden' ? 0 : 512,
+          remaining: scene === 'clashPlace' || scene === 'clashPlaceHidden' ? [[1, 513]] : [],
+          ...(scene === 'clashPlaceHidden' ? { bottom_cards: [513] } : {})
+        }
+      };
+    }
+    if (scene.startsWith('clash')) {
+      return {
+        type: 'ClashChooseOpponent',
+        data: {
+          player: scene === 'clashAway' ? 1 : 0,
+          candidates: scene === 'clashOne' ? [2] : [2, 1]
+        }
+      };
+    }
+    if (scene.startsWith('resPay')) {
+      return {
+        type: 'ResolutionOptionalPaymentChoice',
+        data: {
+          player: scene === 'resPayAway' ? 1 : 0,
+          source_id: 446,
+          costs: [
+            { index: 0, cost: { type: 'PayLife', amount: { type: 'Fixed', value: 2 } } },
+            {
+              index: 2,
+              cost: {
+                type: 'Sacrifice',
+                count: { type: 'Fixed', value: 1 },
+                target: { type: 'Typed', type_filters: ['Creature'], controller: 'You' }
+              }
+            }
+          ]
+        }
+      };
+    }
+    if (scene.startsWith('cipher')) {
+      return {
+        type: 'CipherEncodeChoice',
+        data: {
+          player: scene === 'cipherAway' ? 1 : 0,
+          card_id: 442,
+          creatures: scene === 'cipherHidden' ? [443, 0] : [443, 444]
+        }
+      };
+    }
+    if (scene.startsWith('splice')) {
+      return {
+        type: 'SpliceOffer',
+        data: {
+          player: scene === 'spliceAway' ? 1 : 0,
+          pending_cast: { object_id: 437 },
+          eligible: scene === 'spliceHidden' ? [438, 0] : [438, 439]
+        }
+      };
+    }
+    if (scene.startsWith('altCast')) {
+      const printed = { type: 'Cost', generic: 1, shards: ['Blue'] };
+      const overload = { type: 'Cost', generic: 6, shards: ['Blue'] };
+      if (scene === 'altCastAway') {
+        return {
+          type: 'AlternativeCastChoice',
+          data: {
+            player: 1,
+            object_id: 431,
+            card_id: 431,
+            keyword: { type: 'Overload' },
+            normal_cost: printed,
+            alternative_cost: overload
+          }
+        };
+      }
+      if (scene === 'altCastEmerge') {
+        return {
+          type: 'AlternativeCastChoice',
+          data: {
+            player: 0,
+            object_id: 432,
+            card_id: 432,
+            keyword: { type: 'Emerge' },
+            normal_cost: { type: 'Cost', generic: 8, shards: [] },
+            alternative_cost: { type: 'Cost', generic: 5, shards: ['Blue', 'Blue'] },
+            alternative_additional_cost: { type: 'Sacrifice', count: 1 },
+            alternative_additional_cost_description: { type: 'EmergeSacrifice', quality: { type: 'Creature' } }
+          }
+        };
+      }
+      if (scene === 'altCastOne') {
+        return {
+          type: 'AlternativeCastChoice',
+          data: {
+            player: 0,
+            object_id: 431,
+            card_id: 431,
+            keyword: { type: 'Overload' },
+            payment_mode: 'Manual',
+            normal_cost: printed,
+            alternative_cost: overload
+          }
+        };
+      }
+      return {
+        type: 'AlternativeCastChoice',
+        data: {
+          player: 0,
+          object_id: 431,
+          card_id: 431,
+          keyword: { type: 'Overload' },
+          normal_cost: printed,
+          alternative_cost: overload
+        }
+      };
+    }
+    if (scene.startsWith('castVariant')) {
+      const wearCost = { type: 'Cost', generic: 1, shards: ['Red'] };
+      const tearCost = { type: 'Cost', generic: 0, shards: ['White'] };
+      const fuseCost = { type: 'Cost', generic: 1, shards: ['Red', 'White'] };
+      if (scene === 'castVariantAuth') {
+        return {
+          type: 'CastingVariantChoice',
+          data: {
+            player: 0,
+            object_id: 435,
+            card_id: 435,
+            options: [
+              {
+                variant: { GraveyardPermission: { source: 434, frequency: 'OncePerTurn' } },
+                face: 'Current',
+                mana_cost: { type: 'Cost', generic: 0, shards: ['White'] },
+                authority: {
+                  announcement: {
+                    permission: { source: 434, grant: { type: 'Static', index: 0 } },
+                    grant_digest: 'aa'
+                  },
+                  frequency: 'OncePerTurn',
+                  extra_cost: {
+                    cost: { type: 'PayLife', amount: { type: 'Fixed', value: 2 } },
+                    mode: 'Additional'
+                  }
+                }
+              },
+              {
+                variant: 'Flashback',
+                face: 'Current',
+                mana_cost: { type: 'Cost', generic: 1, shards: ['White'] }
+              }
+            ]
+          }
+        };
+      }
+      return {
+        type: 'CastingVariantChoice',
+        data: {
+          player: scene === 'castVariantAway' ? 1 : 0,
+          object_id: 433,
+          card_id: 433,
+          options: [
+            { variant: 'Normal', face: 'Left', mana_cost: wearCost },
+            { variant: 'Normal', face: 'Right', mana_cost: tearCost },
+            { variant: 'Fuse', face: 'Current', mana_cost: fuseCost }
+          ]
+        }
+      };
+    }
+    if (scene === 'exert') {
+      // `ExertChoice` (CR 508.1g + CR 701.43d): the answer is a boolean; the
+      // `permission` below binds one source incarnation and one occurrence, and the
+      // block never repeats it.
+      const permission = (id: number) => ({
+        source: { object_id: id, incarnation: 3 },
+        occurrence: { type: 'Printed', data: { base_set: 1, printed_index: 0 } }
+      });
+      return {
+        type: 'ExertChoice',
+        data: { player: 0, attacker: 100, permission: permission(100), remaining: [{ attacker: 101, permission: permission(101) }] }
+      };
+    }
+    if (scene === 'enlist') {
+      // `EnlistChoice` (CR 508.1g + CR 702.154a): `eligible` is the engine's tap set
+      // — Savannah Lions (2/1) and Elvish Mystic (1/1) under a 2/2 attacker.
+      return { type: 'EnlistChoice', data: { player: 0, attacker: 100, eligible: [101, 105], remaining: [100] } };
+    }
+    if (scene === 'untapSubset') {
+      // `ChooseUntapSubset` (CR 502.3): a MaxUntapPerType cap leaves more eligible
+      // tapped lands than the cap allows, so the player picks which one untaps.
+      return {
+        type: 'ChooseUntapSubset',
+        data: { player: 0, group: [102, 103, 104], max: 1, progress: 'AfterTurnBasedActions' }
+      };
+    }
+    if (scene === 'resolveAll' || scene === 'resolveAllStale') {
+      // `ResolveAllConsent` (CR 117.3d + CR 117.4): only the epoch and the seat being
+      // asked cross the viewer projection — the run itself is server-private. The
+      // answers are the engine's own envelopes in `legal.actions`, which is what
+      // lets the stale scene show a proposal with none on offer.
+      return { type: 'ResolveAllConsent', data: { epoch: 3, representative: 0 } };
+    }
+    if (scene === 'copyTarget') {
+      // CR 707.2 + CR 707.9: the entering object becomes a copy and the printed
+      // ceiling (four) is part of the card, not a filter the table applies.
+      return {
+        type: 'CopyTargetChoice',
+        data: {
+          player: 0,
+          source_id: 415,
+          valid_targets: [100, 101, 105],
+          max_mana_value: 4,
+          purpose: { type: 'BecomeCopy' }
+        }
+      };
+    }
+    if (scene === 'copyTargetToken') {
+      // CR 707.1: Esix makes the chosen permanent the copy source of the tokens;
+      // there is no mana-value ceiling here, so the block must not print one.
+      return {
+        type: 'CopyTargetChoice',
+        data: {
+          player: 0,
+          source_id: 416,
+          valid_targets: [100, 101],
+          purpose: { type: 'CopyTokenSource' }
+        }
+      };
+    }
+    if (scene === 'replacement') {
+      // CR 616.1e: two distinct applicable replacements for the same event — a
+      // creature dying. Both write the card's destination, so the last applied one
+      // decides (CR 616.1f), and the engine says so with `last_applied_decides`.
+      return {
+        type: 'ReplacementChoice',
+        data: {
+          player: 0,
+          candidate_count: 2,
+          candidates: [
+            { source_id: 410, source_name: 'Kalitas, Traitor of Ghet', description: 'Exiliar la criatura en vez de ponerla en el cementerio' },
+            { source_id: 411, source_name: 'Rest in Peace', description: 'Exiliar la carta en vez de ponerla en el cementerio' }
+          ],
+          kind: { type: 'Order' },
+          last_applied_decides: true
+        }
+      };
+    }
+    if (scene === 'replacementCompose') {
+      // CR 616.1f: damage multipliers apply one after the other and both count, so
+      // there is no single winner and the block must not name one.
+      return {
+        type: 'ReplacementChoice',
+        data: {
+          player: 0,
+          candidate_count: 2,
+          candidates: [
+            { source_id: 412, source_name: 'Furnace of Rath', description: 'El daño que se fuera a hacer a cualquier objetivo se duplica' },
+            { source_id: 413, source_name: 'Gratuitous Violence', description: 'El daño que una criatura que controlas fuera a hacer se duplica' }
+          ],
+          kind: { type: 'Order' },
+          last_applied_decides: false
+        }
+      };
+    }
+    if (scene === 'replacementOptional') {
+      // CR 616.1: a single «you may» replacement as two branches of one source —
+      // index 0 accepts, index 1 declines. It is not an ordering.
+      return {
+        type: 'ReplacementChoice',
+        data: {
+          player: 0,
+          candidate_count: 2,
+          candidates: [
+            { source_id: 414, source_name: 'Life from the Loam', description: 'Moler 3 cartas y devolver Life from the Loam a la mano' },
+            { source_id: 414, source_name: 'Life from the Loam', description: 'Robar la carta con normalidad' }
+          ],
+          kind: { type: 'OptionalBranch' },
+          last_applied_decides: false
+        }
+      };
+    }
+    if (scene === 'entryAttack') {
+      // `EntryAttackTargetChoice` (CR 508.4): the generic window — no frozen meld
+      // context, just the permanent that is entering and the whole legal topology.
+      // Three destinations cover the three kinds `AttackTarget` has.
+      return {
+        type: 'EntryAttackTargetChoice',
+        data: {
+          player: 0,
+          object_id: 408,
+          valid_targets: [
+            { type: 'Player', data: 1 },
+            { type: 'Planeswalker', data: 205 },
+            { type: 'Battle', data: 409 }
+          ]
+        }
+      };
+    }
+    if (scene === 'meldAttack') {
+      // `MeldAttackTargetChoice` (CR 508.4): the frozen context of the pair plus the
+      // complete legal topology. Two destinations — the seat and a planeswalker —
+      // which is the case where the engine asks at all.
+      return {
+        type: 'MeldAttackTargetChoice',
+        data: {
+          player: 0,
+          context: {
+            source_id: 405,
+            partner_id: 406,
+            controller: 0,
+            expected_source: 'Bruna, the Fading Light',
+            expected_partner: 'Gisela, the Broken Blade',
+            result: 'Brisela, Voice of Nightmares',
+            entry: { type: 'TappedAndAttacking', data: { type: 'AnyDefender' } }
+          },
+          valid_targets: [{ type: 'Player', data: 1 }, { type: 'Planeswalker', data: 205 }]
+        }
+      };
+    }
+    if (scene === 'meld') {
+      // `MeldPairChoice` (CR 701.42) freezes the referents of each candidate pair:
+      // same half fixed, one entry per possible partner, plus the printed names the
+      // instruction expects and the card the pair becomes.
+      const pair = (partner: number) => ({
+        source_id: 405,
+        partner_id: partner,
+        controller: 0,
+        expected_source: 'Bruna, the Fading Light',
+        expected_partner: 'Gisela, the Broken Blade',
+        result: 'Brisela, Voice of Nightmares',
+        entry: 'Normal'
+      });
+      return {
+        type: 'MeldPairChoice',
+        data: { player: 0, choices: [pair(406), pair(407)] }
+      };
+    }
+    if (scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow') {
+      // `CastOffer` (CR 608.2g) is one variant with nine shapes. The lab shows the
+      // three that ask different things: the miracle cast that follows the reveal,
+      // a cascade hit gated by the source's mana value, and a free-cast window with
+      // candidates and a budget. Only the fields this view reads are published.
+      if (scene === 'castOfferCascade') {
+        return {
+          type: 'CastOffer',
+          data: {
+            player: 0,
+            kind: {
+              type: 'Cascade',
+              hit_card: 300,
+              exiled_misses: [401, 403],
+              source_mv: 4,
+              source_id: 384
+            }
+          }
+        };
+      }
+      if (scene === 'castOfferWindow') {
+        return {
+          type: 'CastOffer',
+          data: {
+            player: 0,
+            kind: {
+              type: 'FreeCastWindow',
+              candidates: [396, 397],
+              remaining_casts: 2,
+              remaining_mv_budget: 4,
+              zones: ['Graveyard'],
+              member_pool: []
+            }
+          }
+        };
+      }
+      return {
+        type: 'CastOffer',
+        data: {
+          player: 0,
+          kind: { type: 'Miracle', object_id: 395, cost: { type: 'Cost', shards: ['White'], generic: 0 } }
+        }
+      };
+    }
+    if (scene === 'vote' || scene === 'voteObject') {
+      // `VoteChoice`: the engine runs the vote as a session in APNAP order.
+      //   - `vote`: Emissary Green's named vote, first ballot, nobody has voted.
+      //   - `voteObject`: Council's Judgment cast by the rival, so its controller
+      //     votes first and the viewer answers second: one ballot is already
+      //     tallied, and the candidates are the permanents the caster doesn't
+      //     control (CR 701.38b, index-based because names repeat).
+      if (scene === 'voteObject') {
+        return {
+          type: 'VoteChoice',
+          data: {
+            player: 0,
+            remaining_votes: 1,
+            options: ['bears', 'lions'],
+            option_labels: ['Grizzly Bears', 'Savannah Lions'],
+            remaining_voters: [],
+            tallies: [1, 0],
+            ballots: [[1, 0]],
+            candidate_objects: [100, 101],
+            controller: 1,
+            source_id: 386,
+            actor: 'SubjectActs',
+            tally_mode: 'TopVotes',
+            visibility: 'Open',
+            chain_root_targets: []
+          }
+        };
+      }
+      return {
+        type: 'VoteChoice',
+        data: {
+          player: 0,
+          remaining_votes: 1,
+          options: ['profit', 'security'],
+          option_labels: ['Profit', 'Security'],
+          remaining_voters: [[1, 1]],
+          tallies: [0, 0],
+          ballots: [],
+          candidate_objects: [],
+          controller: 0,
+          source_id: 385,
+          actor: 'SubjectActs',
+          tally_mode: 'PerVote',
+          visibility: 'Open',
+          chain_root_targets: []
+        }
+      };
+    }
+    if (scene === 'removeCounters' || scene === 'removeCountersCapped') {
+      // `RemoveCountersChoice`: the pool is the counters actually on the source, and
+      // `max_total` is the only thing the text may cap. `pending_effect` is omitted
+      // on purpose: it is the engine's own bookkeeping — this fixture never runs it,
+      // and the block does not read it, so writing one here would be an invention.
+      const capped = scene === 'removeCountersCapped';
+      return {
+        type: 'RemoveCountersChoice',
+        data: {
+          player: 0,
+          source_id: capped ? 379 : 378,
+          counter_type: null,
+          available: capped ? [['P1P1', 2], ['charge', 1]] : [['P1P1', 3], ['charge', 2]],
+          max_total: capped ? 2 : null
+        }
+      };
+    }
+    if (scene === 'copyRetarget' || scene === 'copyAnnounce') {
+      // `CopyRetarget`: the engine walks the slots one answer at a time, so the
+      // fixture shows a walk mid-step. The retarget shape keeps its announced
+      // target and offers new ones (with `can_keep_rest`); the announcement shape
+      // is the copy `Mizzix's Mastery` casts, already past its first (optional)
+      // slot, which may be declined (CR 115.6) and has nothing to keep (CR 707.12).
+      if (scene === 'copyAnnounce') {
+        return {
+          type: 'CopyRetarget',
+          data: {
+            player: 0,
+            copy_id: 383,
+            target_slots: [
+              {
+                current: null,
+                legal_alternatives: [{ Object: 200 }, { Object: 201 }],
+                can_keep: false,
+                can_decline: true
+              },
+              {
+                current: null,
+                legal_alternatives: [{ Object: 100 }, { Object: 101 }],
+                can_keep: false,
+                can_decline: true
+              }
+            ],
+            current_slot: 1,
+            picks: [{ Object: 200 }],
+            can_keep_rest: false,
+            mode: 'Announce'
+          }
+        };
+      }
+      return {
+        type: 'CopyRetarget',
+        data: {
+          player: 0,
+          copy_id: 380,
+          target_slots: [
+            {
+              current: { Object: 200 },
+              legal_alternatives: [{ Object: 100 }, { Object: 101 }, { Player: 1 }],
+              can_keep: true,
+              can_decline: false
+            }
+          ],
+          current_slot: 0,
+          picks: [],
+          can_keep_rest: true,
+          mode: 'Retarget'
+        }
+      };
+    }
+    if (scene === 'copyChosen' || scene === 'copyChosenNeighbor') {
+      // `EachPlayerCopyChosenSelection`: min 1, max 2, and the order decides what
+      // is copied and what only scales the copy. The neighbour shape changes whose
+      // battlefield the pool comes from (CR 102.1) and carries what the earlier
+      // player already chose, because nothing is applied until the set is complete.
+      const neighbor = scene === 'copyChosenNeighbor';
+      return {
+        type: 'EachPlayerCopyChosenSelection',
+        data: {
+          player: 0,
+          eligible: neighbor ? [{ Object: 200 }, { Object: 201 }] : [{ Object: 100 }, { Object: 101 }, { Object: 105 }],
+          min: 1,
+          max: 2,
+          copy_modifications: [],
+          scale: { counter_type: 'P1P1', scale_property: 'Power' },
+          choose_scope: neighbor ? { type: 'Neighbor', direction: 'Left' } : { type: 'Chooser' },
+          source_id: 372,
+          source_controller: 1,
+          remaining_players: neighbor ? [] : [1],
+          all_choices: neighbor ? [{ player: 1, chosen: [101] }] : [],
+          scoped_players: neighbor ? [1, 0] : [0, 1]
+        }
+      };
+    }
+    if (scene === 'category' || scene === 'categoryForAll') {
+      // `CategoryChoice`: one candidate list per category, aligned with
+      // `categories`. `Cataclysm` is the \"each player for their own\" shape and
+      // `Tragic Arrogance` the \"controller chooses for all\" one; the engine names
+      // both in `effects/choose_and_sacrifice_rest.rs`. The artifact is
+      // `Bonesplitter` and the lands are the fixture's Forests, so every candidate
+      // is an object the lab already has — and one category (Enchantment) has none,
+      // which is exactly when the engine expects a `null` slot.
+      const forAll = scene === 'categoryForAll';
+      return {
+        type: 'CategoryChoice',
+        data: {
+          player: 0,
+          target_player: forAll ? 1 : 0,
+          categories: forAll
+            ? ['Artifact', 'Creature', 'Enchantment', 'Planeswalker']
+            : ['Artifact', 'Creature', 'Enchantment', 'Land'],
+          chooser_scope: forAll ? 'ControllerForAll' : 'EachPlayerSelf',
+          source_controller: 0,
+          eligible_per_category: forAll
+            ? [[341], [200, 201], [], [205]]
+            : [[341], [100, 101, 105], [], [102, 103, 104]],
+          source_id: forAll ? 371 : 370,
+          remaining_players: forAll ? [] : [1],
+          all_kept: [],
+          scoped_players: [0, 1]
+        }
+      };
+    }
+    if (scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd') {
+      // `ProliferateChoice`: everything that already carries a counter — permanents
+      // and, for poison or energy, the seats. `Steady Progress` ("Proliferate.") is
+      // the card whose own text the engine quotes. `TimeTravelChoice` is the same
+      // gesture in two halves; `Ancestral Vision` and `Lotus Bloom` are suspended
+      // cards with time counters, which is the common case the engine names.
+      if (scene === 'proliferate') {
+        return {
+          type: 'ProliferateChoice',
+          data: {
+            player: 0,
+            eligible: [{ Object: 205 }, { Object: 344 }, { Player: 0 }, { Player: 1 }]
+          }
+        };
+      }
+      const adding = scene === 'timeTravelAdd';
+      return {
+        type: 'TimeTravelChoice',
+        data: {
+          player: 0,
+          // After the remove half the just-chosen object is gone from the list:
+          // each object gets at most one of add/remove (CR 701.56a).
+          eligible: adding ? [{ Object: 361 }] : [{ Object: 360 }, { Object: 361 }],
+          phase: { type: adding ? 'Add' : 'Remove' }
+        }
+      };
+    }
+    if (scene === 'chooseObjects' || scene === 'chooseObjectsRecipient') {
+      // `ChooseObjectsSelection`: the eligible set and the window the engine
+      // enforces. `Magnetic Mountain` ("choose any number of tapped blue creatures
+      // … pay {4} for each creature chosen this way") is the "any number" shape —
+      // `max` absent — and `Comet, Stellar Pup` names a described damage recipient
+      // ("a creature or player"), which is the one case where a seat is eligible
+      // and the pick is still not a target (CR 115.10a).
+      const recipient = scene === 'chooseObjectsRecipient';
+      return {
+        type: 'ChooseObjectsSelection',
+        data: recipient
+          ? {
+              player: 0,
+              eligible: [{ Object: 200 }, { Object: 100 }, { Player: 1 }, { Player: 0 }],
+              min: 1,
+              max: 1,
+              trigger_event: { type: 'SpellCast', data: { player_id: 1, object_id: 1002 } }
+            }
+          : {
+              // `max` is deliberately absent: "any number" clamps to what is eligible.
+              player: 0,
+              eligible: [{ Object: 100 }, { Object: 101 }, { Object: 105 }],
+              min: 0,
+              trigger_event: { type: 'StepBegins', data: { player_id: 0, phase: 'Upkeep' } }
+            }
+      };
+    }
+    if (scene === 'retarget' || scene === 'retargetSingle') {
+      // `RetargetChoice`: the declared targets and, per position, what that
+      // position admits. `Frost Breath` ("tap up to two target creatures") is the
+      // two-target spell — both declared targets are creatures, and the pools say
+      // which creatures each position may name. `Lightning Bolt` ("deals 3 damage
+      // to any target") is the one-target case, so its alternatives include the
+      // seats. Both texts are the engine's, and every offered target is an object
+      // this fixture already has.
+      const single = scene === 'retargetSingle';
+      return {
+        type: 'RetargetChoice',
+        data: {
+          player: 0,
+          stack_entry_index: 0,
+          scope: single ? { type: 'Single' } : { type: 'All' },
+          current_targets: single ? [{ Object: 200 }] : [{ Object: 200 }, { Object: 201 }],
+          slots: single
+            ? [{ path: [], slot: 0 }]
+            : [{ path: [], slot: 0 }, { path: [], slot: 1 }],
+          slot_pools: single
+            ? [[{ Object: 200 }, { Object: 101 }, { Object: 105 }, { Player: 0 }, { Player: 1 }]]
+            : [[{ Object: 200 }, { Object: 101 }, { Object: 105 }], [{ Object: 201 }, { Object: 100 }, { Object: 105 }]],
+          keep_is_distinct: single ? [false] : [false, false],
+          legal_new_targets: single
+            ? [{ Object: 200 }, { Object: 101 }, { Object: 105 }, { Player: 0 }, { Player: 1 }]
+            : [{ Object: 200 }, { Object: 201 }, { Object: 101 }, { Object: 100 }, { Object: 105 }]
+        }
+      };
+    }
+    if (scene === 'moveCounters') {
+      // `MoveCountersDistribution`: what the source holds, by type, and where it
+      // may go. `Forgotten Ancient` is the card whose own text the engine quotes
+      // for this shape ("move any number of +1/+1 counters from this creature
+      // onto other creatures").
+      return {
+        type: 'MoveCountersDistribution',
+        data: {
+          player: 0,
+          source_id: 344,
+          available: [['P1P1', 3]],
+          destinations: [100, 105, 200],
+          pending_effect: { ability: {} }
+        }
+      };
+    }
+    if (scene === 'distribute' || scene === 'distributeAnnounced') {
+      // `DistributeAmong`: the amount, the recipients and when the division is
+      // chosen. At resolution (CR 608.2d) candidates may be left out; announced
+      // (CR 601.2d) every target must receive at least one.
+      const announced = scene === 'distributeAnnounced';
+      return {
+        type: 'DistributeAmong',
+        data: {
+          player: 0,
+          total: announced ? 4 : 5,
+          targets: announced ? [{ Object: 100 }, { Object: 101 }] : [{ Object: 100 }, { Object: 101 }, { Object: 200 }],
+          unit: { type: 'Damage' },
+          ...(announced ? {} : { scope: { type: 'ResolutionCandidates', data: { pending_effect: { ability: {} } } } })
+        }
+      };
+    }
+    if (scene === 'multiTarget' || scene === 'multiTargetExact') {
+      // `MultiTargetSelection`: the legal targets and the window the engine
+      // enforces. `pending_ability.source_id` is attribution only, and it is what
+      // lets the block name the spell.
+      const upToTwo = scene === 'multiTarget';
+      return {
+        type: 'MultiTargetSelection',
+        data: {
+          player: 0,
+          legal_targets: upToTwo ? [100, 101, 105] : [352, 353],
+          min_targets: upToTwo ? 0 : 2,
+          max_targets: 2,
+          pending_ability: { ability: {}, source_id: upToTwo ? 350 : 351 }
+        }
+      };
+    }
+    if (scene === 'station') {
+      // `StationTarget`: the Spacecraft and the untapped creatures the engine
+      // will accept — one pick, no contributions list, because the number is the
+      // chosen creature's power and arrives with the resolution.
+      return { type: 'StationTarget', data: { player: 0, spacecraft_id: 343, eligible_creatures: [100, 101, 105] } };
+    }
+    if (scene === 'equip') {
+      // `EquipTarget`: the equipment and the permanents it may attach to.
+      return { type: 'EquipTarget', data: { player: 0, equipment_id: 341, valid_targets: [101, 105] } };
+    }
+    if (scene === 'scry' || scene === 'surveil') {
+      // Shape taken from `ScryChoice` / `SurveilChoice`: the seat and the cards it
+      // looked at, in library order. The cards are library-only in this fixture,
+      // so no pile count moves.
+      return {
+        type: scene === 'scry' ? 'ScryChoice' : 'SurveilChoice',
+        data: { player: 0, cards: scene === 'scry' ? [400, 401, 402] : [401, 403] }
+      };
+    }
+    if (scene === 'startingPlayer') {
+      // Shape taken from `WaitingFor::ChooseStartingPlayer`: the roll winner and
+      // the seats the engine will accept, in seat order.
+      return { type: 'ChooseStartingPlayer', data: { player: 0, candidates: [0, 1] } };
+    }
+    if (scene === 'ward' || scene === 'wardPower') {
+      // Shape taken from `WaitingFor::WardSacrificeChoice`. Without a threshold
+      // Phase lists one candidate per permanent; with one it lists the single
+      // set it found, and the legal list below mirrors that.
+      return {
+        type: 'WardSacrificeChoice',
+        data: {
+          player: 0,
+          permanents: scene === 'ward' ? [101, 105] : [100, 101, 105],
+          remaining: 1,
+          min_total_power: scene === 'wardPower' ? 3 : null,
+          pending_effect: { ability: {} }
+        }
+      };
+    }
+    if (scene === 'tribute') {
+      // Shape taken from `WaitingFor::TributeChoice`: the deciding seat, the
+      // entering creature and how many +1/+1 counters the tribute is worth.
+      return { type: 'TributeChoice', data: { player: 0, source_id: 330, count: 1 } };
+    }
+    if (scene === 'branches') {
+      // Shape taken from `WaitingFor::UnlessPaymentChooseCost`: the punisher class
+      // the engine documents with Tergrid's Lantern ("loses N life unless they
+      // sacrifice a nonland permanent or discard a card"). `SacrificeCost` is
+      // flattened onto the tag, so `count` and `target` sit next to `type`.
+      return {
+        type: 'UnlessPaymentChooseCost',
+        data: {
+          player: 0,
+          costs: [
+            {
+              type: 'Sacrifice',
+              target: { type: 'Typed', type_filters: ['Permanent'] },
+              count: 1
+            },
+            { type: 'Discard', count: { type: 'Fixed', value: 1 }, filter: null }
+          ],
+          pending_ability: { ability: {} },
+          effect_description: 'pierde 3 vidas',
+          remaining_choices: [],
+          chosen: []
+        }
+      };
+    }
+    if (scene === 'host') {
+      // Shape taken from `WaitingFor::ChooseTokenHost` in the pinned engine: the
+      // stamped entrants as `TargetRef`, already filtered by the engine.
+      return {
+        type: 'ChooseTokenHost',
+        data: {
+          player: 0,
+          source_id: 100,
+          // `TargetRef` has no tag wrapper: the key itself is the discriminant.
+          legal_targets: [{ Object: 101 }, { Object: 105 }],
+          pending_ability: { ability: {} }
+        }
+      };
+    }
+    if (scene === 'pair') {
+      // Shape taken from `WaitingFor::PairChoice` in the pinned engine (CR
+      // 702.95a): the entering creature and the unpaired creatures it may join.
+      return {
+        type: 'PairChoice',
+        data: { player: 0, source_id: 100, choices: [101, 105] }
+      };
+    }
+    if (scene === 'unless') {
+      // Shape taken from `WaitingFor::UnlessPayment` in the pinned engine: an
+      // `AbilityCost` (here `Mana {3}`, the Mana Leak pattern) and the effect the
+      // engine will run if the payer declines.
+      return {
+        type: 'UnlessPayment',
+        data: {
+          player: 0,
+          cost: { type: 'Mana', cost: { generic: 3, shards: [] } },
+          pending_effect: { ability: { kind: 'Spell' } },
+          effect_description: 'contrarrestar el hechizo',
+          remaining: []
+        }
+      };
+    }
+    if (scene === 'revealAny') {
+      // CR 107.1c from the pinned 0.126.0 contract: `cardinality: AnyNumber` admits
+      // any subset of the offered cards, including none — the field is additive and
+      // the historical single pick stays the default.
+      return {
+        type: 'RevealChoice',
+        data: {
+          player: 0,
+          cards: [1000, 1001, 1002],
+          optional: true,
+          decline_runs_continuation: true,
+          cardinality: 'AnyNumber'
+        }
+      };
+    }
+    if (scene === 'unlessRepeat') {
+      // CR 702.24a from the pinned 0.126.0 contract: a compact cumulative upkeep
+      // pays one printed instruction `repeat` times — the age-counter count.
+      return {
+        type: 'UnlessPayment',
+        data: {
+          player: 0,
+          cost: { type: 'Mana', cost: { generic: 1, shards: [] } },
+          pending_effect: { ability: { kind: 'Permanent' } },
+          effect_description: 'sacrificar este permanente',
+          repeat: 3,
+          remaining: []
+        }
+      };
+    }
+    if (scene === 'reveal') {
+      // Shape taken from `WaitingFor::RevealChoice` in the pinned engine: the
+      // reveal-land pattern, where declining is a real answer (CR 701.20a).
+      return {
+        type: 'RevealChoice',
+        // The reveal-land pattern reads a card from the hand, so the fixture uses
+        // the hand's own objects rather than the library pool.
+        data: { player: 0, cards: [1000, 1001, 1002], optional: true, decline_runs_continuation: true }
+      };
+    }
+    if (scene === 'opponent') {
+      // Shape taken from `WaitingFor::OpponentMayChoice` in the pinned engine:
+      // the seat being asked, the source it does not control and who is left.
+      return {
+        type: 'OpponentMayChoice',
+        data: {
+          player: 0,
+          source_id: 205,
+          decision_subject_id: 205,
+          description: 'Puedes sacrificar una tierra.',
+          remaining: [1]
+        }
+      };
+    }
+    if (scene === 'pay') {
+      // Shape taken from `WaitingFor::PayAmountChoice` in the pinned engine:
+      // `resource: Life` (CR 119.4), a window the engine owns and the source.
+      return {
+        type: 'PayAmountChoice',
+        data: {
+          player: 0,
+          resource: { type: 'Life' },
+          min: 1,
+          max: 4,
+          accumulated: 0,
+          source_id: 100
+        }
+      };
+    }
+    if (scene === 'optional') {
+      // Shape taken from `WaitingFor::OptionalEffectChoice` in the pinned
+      // engine: the instruction's own wording, its source and the memory key.
+      return {
+        type: 'OptionalEffectChoice',
+        data: {
+          player: 0,
+          source_id: 100,
+          decision_subject_id: 100,
+          description: 'Puedes robar una carta.',
+          may_trigger_key: { player: 0, source_id: 100, origin: { type: 'Printed', trigger_index: 0 } },
+          same_card_may_trigger_choice_available: true
+        }
+      };
+    }
+    if (scene === 'dig') {
+      // Shape taken from `WaitingFor::DigChoice` in the pinned engine: the cards
+      // looked at, the ones that pass the filter and where each pile goes.
+      return {
+        type: 'DigChoice',
+        data: {
+          player: 0,
+          library_owner: 0,
+          cards: searchPool.slice(0, 3).map((card) => card.id),
+          keep_count: 1,
+          up_to: false,
+          selectable_cards: searchPool.slice(0, 2).map((card) => card.id),
+          kept_destination: 'Hand',
+          rest_destination: 'Graveyard'
+        }
+      };
+    }
+    if (scene === 'search') {
+      // Shape taken from `WaitingFor::SearchChoice` in the pinned engine: the
+      // legal choices and the window the searcher may answer within.
+      return {
+        type: 'SearchChoice',
+        data: {
+          player: 0,
+          library_owner: 0,
+          cards: searchPool.map((card) => card.id),
+          count: 1,
+          reveal: true,
+          up_to: false,
+          allows_partial_find: false,
+          constraint: { type: 'None' }
+        }
+      };
+    }
+    if (scene === 'modeChoice') {
+      // Shape taken from `WaitingFor::ModeChoice` in the pinned engine: the
+      // modal window, the mode texts and the modes Phase already rules out.
+      return {
+        type: 'ModeChoice',
+        data: {
+          player: 0,
+          modal: {
+            min_choices: 2,
+            max_choices: 2,
+            mode_count: 3,
+            mode_descriptions: [
+              'La criatura objetivo obtiene +2/+2 hasta el final del turno.',
+              'La criatura objetivo gana la habilidad de vigilancia hasta el final del turno.',
+              'Ganas 3 vidas.'
+            ],
+            allow_repeat_modes: false
+          },
+          pending_cast: { object_id: 321, cost: { type: 'Cost', generic: 0, shards: ['Green', 'White'] } },
+          unavailable_modes: [2]
+        }
+      };
+    }
+    if (scene === 'triggerOrder') {
+      // Shape taken from `WaitingFor::OrderTriggers` in the pinned engine:
+      // summaries the engine derived, and the indices it accepts a permutation of.
+      return {
+        type: 'OrderTriggers',
+        data: {
+          player: 0,
+          triggers: [
+            { source_id: 1000, source_name: 'Soul Warden', description: 'Ganas 1 vida.' },
+            { source_id: 1001, source_name: "Ajani's Pridemate", description: 'Pon un contador +1/+1 sobre esta criatura.' },
+            { source_id: 2000, source_name: 'Dina, Soul Steeper', description: 'Cada oponente pierde 1 vida.' }
+          ]
+        }
+      };
+    }
+    if (scene === 'chooseX') {
+      // Shape taken from `WaitingFor::ChooseXValue` in the pinned engine: the
+      // window the caster may announce, the spell, and the cost of each value.
+      return {
+        type: 'ChooseXValue',
+        data: {
+          player: 0,
+          min: 0,
+          max: 5,
+          pending_cast: { object_id: 320, cost: xCost(1, 1) },
+          x_cost_previews: [[0, xCost(1, 1)], [3, xCost(4, 1)], [5, xCost(6, 1)]]
+        }
+      };
+    }
+    if (scene === 'cleanup') {
+      // Shape taken from `WaitingFor::DiscardToHandSize`: only the player, how
+      // many cards are over the maximum and which ones Phase will accept.
+      return { type: 'DiscardToHandSize', data: { player: 0, count: 2, cards: hand.map((card) => card.id) } };
+    }
+    if (scene === 'discard' || scene === 'discardUpTo') {
+      // Shape taken from `WaitingFor::DiscardChoice` in the pinned engine: a
+      // discard effect names the cards it accepts and (optionally) allows fewer.
+      return {
+        type: 'DiscardChoice',
+        data: {
+          player: 0,
+          count: 2,
+          cards: hand.map((card) => card.id),
+          source_id: 310,
+          up_to: scene === 'discardUpTo'
+        }
+      };
+    }
     if (scene === 'combat') return { type: 'DeclareBlockers', data: { player: 1 } };
     if (scene === 'damage') {
       // Shape taken from `WaitingFor::AssignCombatDamage` in the pinned engine:
@@ -183,7 +2744,7 @@
   }
 
   function snapshot(): EngineSnapshot {
-    return {
+    const built = {
       ok: true,
       viewer: 0,
       seed: 42,
@@ -193,14 +2754,54 @@
         turn_number: 4,
         active_player: 0,
         priority_player: 0,
-        phase: scene === 'combat' ? 'DeclareBlockers'
+        phase: scene === 'cleanup' ? 'Cleanup'
+          : scene === 'chooseX' ? 'PreCombatMain'
+          : scene === 'triggerOrder' ? 'PreCombatMain'
+          : scene === 'modeChoice' ? 'PreCombatMain'
+          : scene === 'search' ? 'PreCombatMain'
+          : scene === 'dig' ? 'PreCombatMain'
+          : scene === 'optional' ? 'PreCombatMain'
+          : scene === 'pay' ? 'PreCombatMain'
+          : scene === 'opponent' ? 'PreCombatMain'
+          : scene === 'reveal' ? 'PreCombatMain'
+          : scene === 'unless' ? 'PreCombatMain'
+          : scene === 'pair' ? 'PreCombatMain'
+          : scene === 'host' ? 'PreCombatMain'
+          : scene === 'branches' ? 'PreCombatMain'
+          : scene === 'tribute' ? 'PreCombatMain'
+          : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
+          : scene === 'startingPlayer' ? 'Beginning'
+          : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' || scene === 'explore' || scene === 'exploreShared' || scene === 'pilePartition' || scene === 'pileChoice' ? 'PreCombatMain'
+          : scene === 'miracle' ? 'Draw'
+          : scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow' ? 'PreCombatMain'
+          : scene === 'meld' ? 'PreCombatMain'
+          : scene === 'meldAttack' || scene === 'entryAttack' ? 'DeclareAttackers'
+          : scene === 'revealAny' || scene === 'unlessRepeat' || scene === 'replacementOptional' ? 'Draw'
+          : scene === 'replacement' || scene === 'replacementCompose' || scene === 'copyTarget' || scene === 'copyTargetToken' ? 'PreCombatMain'
+          : scene === 'resolveAll' || scene === 'resolveAllStale' ? 'PreCombatMain'
+          : scene === 'untapChoice' || scene === 'untapSubset' || scene === 'untapResume' ? 'Untap'
+          : scene === 'exert' || scene === 'enlist' ? 'DeclareAttackers'
+          : scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate' || scene === 'phyrexian'
+            || scene.startsWith('optionalCost') || scene.startsWith('defiler')
+            || scene.startsWith('zoneChoice') || scene.startsWith('modalFace')
+            || scene.startsWith('altCast') || scene.startsWith('castVariant')
+            ? 'PreCombatMain'
+          : scene === 'combatTax' ? 'DeclareAttackers'
+          : scene === 'combatTaxBlock' ? 'DeclareBlockers'
+          : scene === 'discard' || scene === 'discardUpTo' ? 'PreCombatMain'
+          : scene === 'combat' ? 'DeclareBlockers'
           : scene === 'damage' ? 'CombatDamage'
           : scene === 'attackers' ? 'DeclareAttackers'
           : 'PreCombatMain',
         waiting_for: waiting(),
         players: seats,
         battlefield: [...viewerField, ...rivalField].map((object) => object.id),
-        stack: scene === 'targets' ? [{ id: 7, source_id: 300, controller: 0 }] : [],
+        stack: scene === 'targets'
+          ? [{ id: 7, source_id: 300, controller: 0 }]
+          : scene === 'retarget' || scene === 'retargetSingle'
+            ? [{ id: 7, source_id: scene === 'retarget' ? 350 : 300, controller: 0 }]
+            : [],
         exile: [],
         objects: objects as Record<string, GameObject>,
         combat: scene === 'combat' || scene === 'damage'
@@ -232,7 +2833,137 @@
         blocker_assignment_pairs: scene === 'combat' ? [[201, 100]] : []
       },
       legal: {
-        actions: scene === 'targets'
+        actions: scene === 'altCast' || scene === 'altCastEmerge' || scene === 'altCastAway'
+          ? [
+              { type: 'ChooseAlternativeCast', data: { choice: { type: 'Normal' } } },
+              { type: 'ChooseAlternativeCast', data: { choice: { type: 'Alternative' } } }
+            ]
+          : scene === 'altCastOne'
+            ? [{ type: 'ChooseAlternativeCast', data: { choice: { type: 'Normal' } } }]
+            : scene === 'typeSlot' || scene === 'typeSlotAway'
+              ? [
+                  { type: 'ChoosePermanentTypeSlot', data: { slot: 'Land' } },
+                  { type: 'ChoosePermanentTypeSlot', data: { slot: 'Creature' } }
+                ]
+              : scene === 'typeSlotLand'
+                ? [{ type: 'ChoosePermanentTypeSlot', data: { slot: 'Land' } }]
+                : scene === 'splice' || scene === 'spliceAway'
+                  ? [
+                      { type: 'RespondToSpliceOffer', data: { card: 438 } },
+                      { type: 'RespondToSpliceOffer', data: { card: 439 } },
+                      { type: 'RespondToSpliceOffer', data: { card: null } }
+                    ]
+                  : scene === 'mutate' || scene === 'mutateAway'
+                    ? [
+                        { type: 'ChooseMutateMergeSide', data: { side: 'Top' } },
+                        { type: 'ChooseMutateMergeSide', data: { side: 'Bottom' } }
+                      ]
+                    : scene === 'mutateOne'
+                      ? [{ type: 'ChooseMutateMergeSide', data: { side: 'Top' } }]
+                      : scene === 'cipher' || scene === 'cipherAway'
+                        ? [
+                            { type: 'CipherEncode', data: { creature: 443 } },
+                            { type: 'CipherEncode', data: { creature: 444 } },
+                            { type: 'CipherEncode', data: { creature: null } }
+                          ]
+                        : scene === 'costOrder' || scene === 'costOrderAway'
+                          ? [
+                              { type: 'OrderCostReductions', data: { order: [1, 0], hybrid_announcement: ['White'] } },
+                              { type: 'OrderCostReductions', data: { order: [0, 1] } }
+                            ]
+                          : scene === 'costOrderOne'
+                            ? [{ type: 'OrderCostReductions', data: { order: [1, 0], hybrid_announcement: ['White'] } }]
+                            : scene === 'resPay' || scene === 'resPayAway'
+                              ? [
+                                  { type: 'ChooseResolutionOptionalPaymentBranch', data: { choice: { type: 'Pay', data: { index: 0 } } } },
+                                  { type: 'ChooseResolutionOptionalPaymentBranch', data: { choice: { type: 'Pay', data: { index: 2 } } } },
+                                  { type: 'ChooseResolutionOptionalPaymentBranch', data: { choice: { type: 'Decline' } } }
+                                ]
+                              : scene === 'resPayOne'
+                                ? [{ type: 'ChooseResolutionOptionalPaymentBranch', data: { choice: { type: 'Pay', data: { index: 0 } } } }]
+                                : scene === 'gift' || scene === 'giftCost' || scene === 'giftAway'
+                                  ? [
+                                      { type: 'ChooseGiftRecipient', data: { opponent: 2 } },
+                                      { type: 'ChooseGiftRecipient', data: { opponent: 1 } },
+                                      { type: 'CancelCast' }
+                                    ]
+                                  : scene === 'giftOne'
+                                    ? [{ type: 'ChooseGiftRecipient', data: { opponent: 1 } }]
+                                    : scene === 'bottomRipple' || scene === 'bottomAway'
+                                      ? [{ type: 'SelectCards', data: { cards: [532, 531] } }]
+                                      : scene === 'bottomReveal' || scene === 'bottomDig'
+                                        ? [{ type: 'SelectCards', data: { cards: [531, 532] } }]
+                                        : scene === 'bottomEmpty'
+                                          ? [{ type: 'SelectCards', data: { cards: [] } }]
+                                          : scene === 'sideboard' || scene === 'sideboardNoSide' || scene === 'sideboardAway'
+                                      ? [
+                                          {
+                                            type: 'SubmitSideboard',
+                                            data: {
+                                              main: [{ name: 'Forest', count: 24 }, { name: 'Grizzly Bears', count: 4 }],
+                                              sideboard: [{ name: 'Naturalize', count: 3 }]
+                                            }
+                                          }
+                                        ]
+                                      : scene === 'playDraw' || scene === 'playDrawAway'
+                                        ? [
+                                            { type: 'ChoosePlayDraw', data: { play_first: true } },
+                                            { type: 'ChoosePlayDraw', data: { play_first: false } }
+                                          ]
+                                        : scene === 'playDrawDraw'
+                                          ? [{ type: 'ChoosePlayDraw', data: { play_first: false } }]
+                                          : scene === 'clash' || scene === 'clashAway'
+                                      ? [
+                                          { type: 'ChooseClashOpponent', data: { opponent: 2 } },
+                                          { type: 'ChooseClashOpponent', data: { opponent: 1 } }
+                                        ]
+                                      : scene === 'clashOne'
+                                        ? [{ type: 'ChooseClashOpponent', data: { opponent: 2 } }]
+                                        : scene === 'clashPlace' || scene === 'clashPlaceAway'
+                                          ? [
+                                              { type: 'ChooseTopOrBottom', data: { top: true } },
+                                              { type: 'ChooseTopOrBottom', data: { top: false } }
+                                            ]
+                                          : scene === 'clashPlaceHidden'
+                                            ? [{ type: 'ChooseTopOrBottom', data: { top: false } }]
+                                            : scene === 'topBottom' || scene === 'topBottomNth' || scene === 'topBottomAway'
+                                      ? [
+                                          { type: 'ChooseTopOrBottom', data: { top: true } },
+                                          { type: 'ChooseTopOrBottom', data: { top: false } }
+                                        ]
+                                      : scene === 'topBottomOne'
+                                        ? [{ type: 'ChooseTopOrBottom', data: { top: true } }]
+                                        : scene === 'cipherHidden'
+                          ? [
+                              { type: 'CipherEncode', data: { creature: 443 } },
+                              { type: 'CipherEncode', data: { creature: 0 } }
+                            ]
+                          : scene === 'spliceHidden'
+                    ? [
+                        { type: 'RespondToSpliceOffer', data: { card: 438 } },
+                        { type: 'RespondToSpliceOffer', data: { card: 0 } }
+                      ]
+                    : scene === 'castVariant' || scene === 'castVariantAway'
+              ? [
+                  { type: 'ChooseCastingVariant', data: { index: 0 } },
+                  { type: 'ChooseCastingVariant', data: { index: 2 } }
+                ]
+              : scene === 'castVariantAuth'
+                ? [
+                    { type: 'ChooseCastingVariant', data: { index: 0 } },
+                    { type: 'ChooseCastingVariant', data: { index: 1 } }
+                  ]
+                : scene === 'modalFace'
+          ? [
+              { type: 'ChooseModalFace', data: { back_face: false } },
+              { type: 'ChooseModalFace', data: { back_face: true } }
+            ]
+          : scene === 'modalFaceOne'
+            ? [
+                { type: 'ChooseModalFace', data: { back_face: true } },
+                { type: 'CancelCast' }
+              ]
+            : scene === 'targets'
           ? [
               { type: 'ChooseTarget', data: { target: { Player: 1 } } },
               { type: 'ChooseTarget', data: { target: { Object: 200 } } },
@@ -243,7 +2974,19 @@
                 { type: 'AssignCombatDamage', data: { mode: 'Normal', assignments: [[200, 2]], trample_damage: 1, controller_damage: 0 } },
                 { type: 'AssignCombatDamage', data: { mode: 'AsThoughUnblocked', assignments: [], trample_damage: 0, controller_damage: 0 } }
               ]
-            : [{ type: 'PassPriority' }],
+            : scene === 'ward'
+              ? [
+                  { type: 'SelectCards', data: { cards: [101] } },
+                  { type: 'SelectCards', data: { cards: [105] } }
+                ]
+              : scene === 'wardPower'
+                ? [{ type: 'SelectCards', data: { cards: [100, 105] } }]
+                : scene === 'resolveAll'
+                  ? [
+                      { type: 'RespondResolveAllConsent', data: { epoch: 3, decision: { type: 'Grant' } } },
+                      { type: 'RespondResolveAllConsent', data: { epoch: 3, decision: { type: 'Decline' } } }
+                    ]
+                  : [{ type: 'PassPriority' }],
         spell_costs: {},
         // Actions the menu must show. In the real table these arrive from
         // `legal.by_object`; the fixture copies the shape, not the rules.
@@ -254,6 +2997,18 @@
       },
       metrics: {}
     } as unknown as EngineSnapshot;
+    // The over-cap group has to *be* tapped: those permanents are what the cap keeps
+    // from untapping. Copies, so no other scene sees a tapped Forest.
+    if (scene === 'untapSubset') {
+      const objects = built.state.objects as Record<string, GameObject>;
+      for (const id of ['102', '103', '104']) {
+        built.state.objects = {
+          ...(built.state.objects as Record<string, GameObject>),
+          [id]: { ...objects[id], tapped: true }
+        };
+      }
+    }
+    return built;
   }
 
   // Install the fixture snapshot. The component tree reads it exactly like a
@@ -295,8 +3050,22 @@
   }}
 />
 
-<div id="mesa-ux" class="app ux" data-board-style="arena" data-chrome="arena" style="--card-w: min(148px, calc((100vw - 6rem) / 2)); --arena-base-card-w: 124px">
-  <ArenaSurface color="green" />
+<!--
+  The same two switches as `Board.svelte`: the board style and — only while the
+  arena chrome is on — `data-chrome="arena"`, which `arena.css` uses to keep the
+  chrome dark over the art on purpose. Without this the laboratory could not
+  show the classic chrome, and the classic chrome is the one that follows the
+  global theme, so a light/dark review had nothing to review.
+-->
+<div
+  id="mesa-ux"
+  class="app ux"
+  data-board-style={session.boardStyle}
+  data-chrome={session.boardStyle === 'arena' ? 'arena' : undefined}
+  style="--card-w: min(148px, calc((100vw - 6rem) / 2)); --arena-base-card-w: 124px">
+  {#if session.boardStyle === 'arena'}
+    <ArenaSurface color="green" />
+  {/if}
 
   <header class="topbar">
     <div class="brand">
@@ -343,6 +3112,79 @@
     <div class="middle">
       <div class="center">
         {#if scene === 'damage'}<DamageAssignment />{/if}
+        {#if scene === 'cleanup' || scene === 'discard' || scene === 'discardUpTo'}<DiscardPrompt />{/if}
+        {#if scene === 'chooseX'}<ChooseXPrompt />{/if}
+        {#if scene === 'triggerOrder'}<TriggerOrderPrompt />{/if}
+        {#if scene === 'modeChoice'}<ModeChoicePrompt />{/if}
+        {#if scene === 'search'}<SearchPrompt />{/if}
+        {#if scene === 'dig'}<DigPrompt />{/if}
+        {#if scene === 'optional'}<OptionalEffectPrompt />{/if}
+        {#if scene === 'pay'}<PayAmountPrompt />{/if}
+        {#if scene === 'opponent'}<OptionalEffectPrompt />{/if}
+        {#if scene === 'reveal'}<RevealPrompt />{/if}
+        {#if scene === 'unless'}<UnlessPrompt />{/if}
+        {#if scene === 'pair'}<PairPrompt />{/if}
+        {#if scene === 'host'}<TokenHostPrompt />{/if}
+        {#if scene === 'branches'}<UnlessBranchPrompt />{/if}
+        {#if scene === 'tribute'}<TributePrompt />{/if}
+        {#if scene === 'ward' || scene === 'wardPower'}<WardSacrificePrompt />{/if}
+        {#if scene === 'startingPlayer'}<StartingPlayerPrompt />{/if}
+        {#if scene === 'scry' || scene === 'surveil'}<ScryPrompt />{/if}
+        {#if scene === 'crew' || scene === 'saddle'}<TapPowerPrompt />{/if}
+        {#if scene === 'equip'}<EquipPrompt />{/if}
+        {#if scene === 'station'}<StationPrompt />{/if}
+        {#if scene === 'multiTarget' || scene === 'multiTargetExact'}<MultiTargetPrompt />{/if}
+        {#if scene === 'distribute' || scene === 'distributeAnnounced'}<DistributePrompt />{/if}
+        {#if scene === 'moveCounters'}<MoveCountersPrompt />{/if}
+        {#if scene === 'retarget' || scene === 'retargetSingle'}<RetargetPrompt />{/if}
+        {#if scene === 'chooseObjects' || scene === 'chooseObjectsRecipient'}<ChooseObjectsPrompt />{/if}
+        {#if scene === 'proliferate'}<ProliferatePrompt />{/if}
+        {#if scene === 'timeTravelRemove' || scene === 'timeTravelAdd'}<TimeTravelPrompt />{/if}
+        {#if scene === 'category' || scene === 'categoryForAll'}<CategoryPrompt />{/if}
+        {#if scene === 'copyChosen' || scene === 'copyChosenNeighbor'}<CopyChosenPrompt />{/if}
+        {#if scene === 'keepPower' || scene === 'keepPowerForAll'}<KeepPowerPrompt />{/if}
+        {#if scene === 'keepExact' || scene === 'keepExactVow'}<KeepExactPrompt />{/if}
+        {#if scene === 'removeCounters' || scene === 'removeCountersCapped'}<RemoveCountersPrompt />{/if}
+        {#if scene === 'copyRetarget' || scene === 'copyAnnounce'}<CopyRetargetPrompt />{/if}
+        {#if scene === 'vote' || scene === 'voteObject'}<VotePrompt />{/if}
+        {#if scene === 'explore' || scene === 'exploreShared'}<ExploreChoicePrompt />{/if}
+        {#if scene === 'pilePartition' || scene === 'pileChoice'}<SeparatePilesPrompt />{/if}
+        {#if scene === 'miracle'}<MiracleRevealPrompt />{/if}
+        {#if scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow'}<CastOfferPrompt />{/if}
+        {#if scene === 'meld'}<MeldPairPrompt />{/if}
+        {#if scene === 'meldAttack'}<MeldAttackPrompt />{/if}
+        {#if scene === 'entryAttack'}<EntryAttackPrompt />{/if}
+        {#if scene === 'replacement' || scene === 'replacementCompose' || scene === 'replacementOptional'}<ReplacementPrompt />{/if}
+        {#if scene === 'copyTarget' || scene === 'copyTargetToken'}<CopyTargetPrompt />{/if}
+        {#if scene === 'resolveAll' || scene === 'resolveAllStale'}<ResolveAllConsentPrompt />{/if}
+        {#if scene === 'untapChoice' || scene === 'untapResume'}<UntapChoicePrompt />{/if}
+        {#if scene === 'untapSubset'}<UntapSubsetPrompt />{/if}
+        {#if scene === 'exert'}<ExertChoicePrompt />{/if}
+        {#if scene === 'enlist'}<EnlistChoicePrompt />{/if}
+        {#if scene === 'payCost' || scene === 'payCostHidden' || scene === 'payCostAggregate'}<PayCostPrompt />{/if}
+        {#if scene === 'phyrexian'}<PhyrexianPaymentPrompt />{/if}
+        {#if scene === 'combatTax' || scene === 'combatTaxBlock'}<CombatTaxPrompt />{/if}
+        {#if scene.startsWith('optionalCost')}<OptionalCostPrompt />{/if}
+        {#if scene.startsWith('defiler')}<DefilerPaymentPrompt />{/if}
+        {#if scene.startsWith('zoneChoice')}<ChooseFromZonePrompt />{/if}
+        {#if scene.startsWith('modalFace')}<ModalFacePrompt />{/if}
+        {#if scene.startsWith('altCast')}<AlternativeCastPrompt />{/if}
+        {#if scene.startsWith('castVariant')}<CastingVariantPrompt />{/if}
+        {#if scene.startsWith('typeSlot')}<TypeSlotPrompt />{/if}
+        {#if scene.startsWith('splice')}<SplicePrompt />{/if}
+        {#if scene.startsWith('mutate')}<MutateMergePrompt />{/if}
+        {#if scene.startsWith('cipher')}<CipherPrompt />{/if}
+        {#if scene.startsWith('costOrder')}<CostOrderPrompt />{/if}
+        {#if scene.startsWith('resPay')}<ResolutionPaymentPrompt />{/if}
+        {#if scene.startsWith('gift')}<GiftRecipientPrompt />{/if}
+        {#if scene.startsWith('topBottom')}<TopOrBottomPrompt />{/if}
+        {#if scene.startsWith('clashPlace')}<ClashPlacementPrompt />{/if}
+        {#if scene.startsWith('clash')}<ClashOpponentPrompt />{/if}
+        {#if scene.startsWith('sideboard')}<SideboardPrompt />{/if}
+        {#if scene.startsWith('playDraw')}<PlayDrawPrompt />{/if}
+        {#if scene.startsWith('bottom')}<BottomOrderPrompt />{/if}
+        {#if scene === 'revealAny'}<RevealPrompt />{/if}
+        {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}
         <StackPanel />
         <HistoryPanel compact />
       </div>
@@ -364,7 +3206,10 @@
   {#if session.attackPicker !== null}
     <AttackTargetPicker objectId={session.attackPicker.id} anchor={session.attackPicker.anchor} onclose={() => session.closeAttackPicker()} />
   {/if}
-  <Hand objects={hand} metas={{}} title="Tu mano · Jugador 1" onselect={(id) => { session.inspect = id; }} />
+  <!-- Same click contract as the real hand (`Board.svelte` leaves `Hand` its own
+       default): a card the engine is asking for is an answer to that prompt, not
+       something to inspect. Without this the discard scenes could not be used. -->
+  <Hand objects={hand} metas={{}} title="Tu mano · Jugador 1" onselect={(id) => session.selectObject(id)} />
 
 
   <footer class="metrics">
@@ -410,9 +3255,15 @@
   h1 { margin: 0; font-size: 1.15rem; }
   .brand p { margin: 0; font-size: .74rem; color: var(--ink-muted); max-width: 46ch; }
   .brand a { color: var(--focus); }
-  .controls { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
-  .controls label { display: flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--ink-muted); }
-  .controls select { background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: .25rem .4rem; }
+  /* A long scene label is an option, not a layout decision: a native select
+     sizes itself to its widest option, so an option added later could widen the
+     chrome past the window (measured: 30 px of overflow at 320 px the first time
+     a label grew). `min-width: 0` lets the flex chain shrink and the select
+     ellipsise instead. */
+  .brand { min-width: 0; }
+  .controls { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; min-width: 0; max-width: 100%; }
+  .controls label { display: flex; align-items: center; gap: .4rem; min-width: 0; font-size: .78rem; color: var(--ink-muted); }
+  .controls select { max-width: 100%; min-width: 0; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: .25rem .4rem; }
   .lede { margin: 0; font-size: .82rem; color: var(--ink-muted); max-width: 90ch; }
   /* The fixture is taller than one screen once the hand is added; without this
      the flex column shrinks the table and the seats overlap the hand (measured:

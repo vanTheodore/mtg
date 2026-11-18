@@ -371,7 +371,6 @@ mod morbid_curiosity_cost_paid_mana_value_draw;
 mod mornsong_aria_scoped_player_search;
 mod morophon_chosen_type_1653;
 mod mount_doom_destroy_rest;
-mod mox_diamond_discard_cost_2853;
 mod msh_wave5a_group1_classifier;
 mod mulligan_serum_powder_scope;
 mod multi_layer_continuous_effect;

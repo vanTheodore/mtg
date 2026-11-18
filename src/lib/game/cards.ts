@@ -46,7 +46,78 @@ export function isHidden(obj: Pick<GameObject, 'face_down' | 'display_visible_to
   return obj.face_down === true || obj.display_visible_to_viewer === false;
 }
 
-const COLOR_SYMBOLS: Record<string, string> = { White: 'W', Blue: 'U', Black: 'B', Red: 'R', Green: 'G', Colorless: 'C' };
+/**
+ * Printed symbol for each `ManaCostShard`, matching `ManaCostShard::symbol()`
+ * in `crates/phase-ast`. The engine serializes the variant name
+ * (`PhyrexianWhite`), not the braces (`{W/P}`). Presentation only: this never
+ * decides what a symbol costs or what can pay it. An unknown name is kept, not
+ * dropped — a shard the table cannot name is still a shard the engine charged.
+ */
+const SHARD_SYMBOLS: Record<string, string> = {
+  White: 'W', Blue: 'U', Black: 'B', Red: 'R', Green: 'G', Colorless: 'C',
+  Snow: 'S', X: 'X', TwoOrMoreColorSource: 'Z',
+  WhiteBlue: 'W/U', WhiteBlack: 'W/B', BlueBlack: 'U/B', BlueRed: 'U/R',
+  BlackRed: 'B/R', BlackGreen: 'B/G', RedWhite: 'R/W', RedGreen: 'R/G',
+  GreenWhite: 'G/W', GreenBlue: 'G/U',
+  TwoWhite: '2/W', TwoBlue: '2/U', TwoBlack: '2/B', TwoRed: '2/R', TwoGreen: '2/G',
+  PhyrexianWhite: 'W/P', PhyrexianBlue: 'U/P', PhyrexianBlack: 'B/P',
+  PhyrexianRed: 'R/P', PhyrexianGreen: 'G/P',
+  PhyrexianWhiteBlue: 'W/U/P', PhyrexianWhiteBlack: 'W/B/P', PhyrexianBlueBlack: 'U/B/P',
+  PhyrexianBlueRed: 'U/R/P', PhyrexianBlackRed: 'B/R/P', PhyrexianBlackGreen: 'B/G/P',
+  PhyrexianRedWhite: 'R/W/P', PhyrexianRedGreen: 'R/G/P', PhyrexianGreenWhite: 'G/W/P',
+  PhyrexianGreenBlue: 'G/U/P',
+  ColorlessWhite: 'C/W', ColorlessBlue: 'C/U', ColorlessBlack: 'C/B',
+  ColorlessRed: 'C/R', ColorlessGreen: 'C/G'
+};
+
+export type ManaPipKind =
+  | 'white' | 'blue' | 'black' | 'red' | 'green' | 'colorless' | 'generic'
+  | 'hybrid' | 'phyrexian' | 'snow' | 'variable';
+
+export interface ManaPip {
+  /** The symbol printed on the card: `W`, `W/P`, `2/W`, a generic number, …. */
+  symbol: string;
+  kind: ManaPipKind;
+}
+
+const MONO_KINDS: Record<string, ManaPipKind> = {
+  White: 'white', Blue: 'blue', Black: 'black', Red: 'red', Green: 'green', Colorless: 'colorless'
+};
+const SYMBOL_KINDS: Record<string, ManaPipKind> = {
+  W: 'white', U: 'blue', B: 'black', R: 'red', G: 'green', C: 'colorless', S: 'snow', X: 'variable', Z: 'variable'
+};
+
+function shardName(shard: unknown): string {
+  if (typeof shard === 'string') return shard;
+  if (shard && typeof shard === 'object' && typeof (shard as { type?: unknown }).type === 'string') {
+    return (shard as { type: string }).type;
+  }
+  return '';
+}
+
+function shardSymbol(name: string): string {
+  if (!name) return '';
+  return SHARD_SYMBOLS[name] ?? name.replace(/^\{|\}$/g, '');
+}
+
+function shardKind(name: string, symbol: string): ManaPipKind {
+  if (MONO_KINDS[name]) return MONO_KINDS[name];
+  if (name === 'Snow') return 'snow';
+  if (name === 'X' || name === 'TwoOrMoreColorSource') return 'variable';
+  if (name.startsWith('Phyrexian') || symbol.includes('/P')) return 'phyrexian';
+  if (name.startsWith('Two') || name.startsWith('Colorless') || symbol.includes('/')) return 'hybrid';
+  return SYMBOL_KINDS[symbol] ?? 'generic';
+}
+
+function shardText(shard: unknown): string {
+  const symbol = shardSymbol(shardName(shard));
+  return symbol ? `{${symbol}}` : '';
+}
+
+const HALF_SPOKEN: Record<string, string> = {
+  W: 'blanco', U: 'azul', B: 'negro', R: 'rojo', G: 'verde', C: 'incoloro',
+  '2': 'dos genéricos', P: '2 vidas', S: 'nieve', X: 'X', Z: 'maná de dos o más colores'
+};
 
 /** Formats the engine's mana-cost DTO; it never evaluates affordability. */
 export function manaText(cost: unknown): string {
@@ -57,50 +128,60 @@ export function manaText(cost: unknown): string {
   if (typeof c.type === 'string' && c.type !== 'Cost') return '';
   if (Array.isArray(c.mana)) return c.mana.map(manaText).join('');
   const generic = typeof c.generic === 'number' && c.generic > 0 ? `{${c.generic}}` : '';
-  const shards = Array.isArray(c.shards) ? c.shards.map((shard) => {
-    if (typeof shard === 'string') return `{${COLOR_SYMBOLS[shard] ?? shard}}`;
-    if (shard && typeof shard === 'object') {
-      const s = shard as Record<string, unknown>;
-      if (typeof s.type === 'string') return `{${COLOR_SYMBOLS[s.type] ?? s.type}}`;
-    }
-    return '';
-  }).join('') : '';
+  const shards = Array.isArray(c.shards) ? c.shards.map(shardText).join('') : '';
   return generic + shards;
 }
-
-export interface ManaPip {
-  /** The symbol printed on the card: W, U, B, R, G, C or a generic number. */
-  symbol: string;
-  kind: 'white' | 'blue' | 'black' | 'red' | 'green' | 'colorless' | 'generic';
-}
-
-const PIP_KINDS: Record<string, ManaPip['kind']> = {
-  White: 'white', Blue: 'blue', Black: 'black', Red: 'red', Green: 'green', Colorless: 'colorless'
-};
 
 /**
  * The same cost as {@link manaText}, but as separate pips so the interface
  * can *show* the cost instead of only naming it. Presentation only: it reads
- * the engine's DTO and never decides what a card costs or what is payable.
+ * the engine's DTO (and a printed `{W/P}` string, when that is what arrived)
+ * and never decides what a card costs or what is payable.
+ *
+ * A shard this table does not know is still emitted. Dropping it is how
+ * `{W/P}` used to vanish: `mana_value()` counts it as 1, and an empty pip
+ * is a second opinion about a cost the engine already froze.
  */
 export function manaPips(cost: unknown): ManaPip[] {
-  if (!cost || typeof cost !== 'object') return [];
+  if (!cost) return [];
+  if (typeof cost === 'string') return pipsFromPrinted(cost);
+  if (typeof cost !== 'object') return [];
   const c = cost as Record<string, unknown>;
   if (typeof c.type === 'string' && c.type !== 'Cost') return [];
   const pips: ManaPip[] = [];
   const generic = typeof c.generic === 'number' && c.generic > 0 ? c.generic : 0;
   if (generic > 0) pips.push({ symbol: String(generic), kind: 'generic' });
   for (const shard of Array.isArray(c.shards) ? c.shards : []) {
-    const name = typeof shard === 'string'
-      ? shard
-      : shard && typeof shard === 'object' && 'type' in shard
-        ? String((shard as { type: unknown }).type)
-        : '';
-    const kind = PIP_KINDS[name];
-    if (!kind) continue;
-    pips.push({ symbol: COLOR_SYMBOLS[name] ?? name, kind });
+    const name = shardName(shard);
+    const symbol = shardSymbol(name);
+    if (!symbol) continue;
+    pips.push({ symbol, kind: shardKind(name, symbol) });
   }
   return pips;
+}
+
+function pipsFromPrinted(text: string): ManaPip[] {
+  const pips: ManaPip[] = [];
+  for (const match of text.matchAll(/\{([^}]+)\}/g)) {
+    const symbol = match[1] ?? '';
+    if (!symbol || symbol === '0') continue;
+    if (/^\d+$/.test(symbol)) {
+      pips.push({ symbol, kind: 'generic' });
+      continue;
+    }
+    pips.push({ symbol, kind: shardKind(symbol, symbol) });
+  }
+  return pips;
+}
+
+/** Spanish words for a screen reader. The pips stay the printed symbols. */
+export function manaSpoken(pips: ManaPip[]): string {
+  if (!pips.length) return 'sin coste de maná';
+  return pips.map((pip) => {
+    if (pip.kind === 'generic') return pip.symbol;
+    if (!pip.symbol.includes('/')) return HALF_SPOKEN[pip.symbol] ?? pip.symbol;
+    return pip.symbol.split('/').map((half) => HALF_SPOKEN[half] ?? half).join(' o ');
+  }).join(', ');
 }
 
 /**
@@ -135,6 +216,11 @@ const SUBTYPES_ES: Record<string, string> = {
   Soldier: 'Soldado', Sphinx: 'Esfinge', Spirit: 'Espíritu', Swamp: 'Pantano', Vampire: 'Vampiro',
   Warrior: 'Guerrero', Wizard: 'Mago', Zombie: 'Zombi'
 };
+
+/** One core type in es-419; an unmapped type keeps the engine's own word. */
+export function coreTypeLabel(type: string): string {
+  return CORE_TYPES_ES[type]?.es ?? type;
+}
 
 /** "Criatura legendaria — Humano Mago", "Tierra básica — Llanura", "Ficha de criatura — Soldado". */
 function spanishTypeLine(supertypes: string[], coreTypes: string[]): string | undefined {

@@ -20,12 +20,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
+      BUN_VERSION: '1.4.4'
       CARGO_TARGET_DIR: target-phase-regressions
       CARGO_BUILD_JOBS: '1'
       CARGO_INCREMENTAL: '0'
       RUSTFLAGS: '-Zcrate-attr=feature(if_let_guard) -Zcrate-attr=feature(let_chains) -Zthreads=1 -Zshare-generics -Zmir-opt-level=0'
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-03-02
@@ -70,7 +74,8 @@ jobs:
           RUST
       - name: Assert the specific upstream regression tests are registered
         run: |
-          cargo test --locked -p phase-engine --test mesa_phase_regressions -- --list > /tmp/mesa-phase-tests.txt
+          set -o pipefail
+          cargo test --locked -p phase-engine --test mesa_phase_regressions -- --list 2>&1 | tee /tmp/phase-tests.log > /tmp/mesa-phase-tests.txt
           for name in \
             nested_ripple_bottom_order_cards_are_visible_to_controller \
             ripple_cast_with_target_pause_keeps_bottom_pile_revealed \
@@ -109,3 +114,8 @@ jobs:
         run: cargo test --locked -p phase-engine --test mesa_phase_regressions board_wipe_co_departure_scaling -- --test-threads=1
       - name: Nightmare Shepherd copy exceptions (original upstream test)
         run: cargo test --locked -p phase-engine --test mesa_phase_regressions issue_8065_nightmare_shepherd -- --test-threads=1
+      # The job log lives behind a blob download that is unreachable on some
+      # networks; annotations are plain JSON on api.github.com.
+      - name: Annotate Rust errors
+        if: failure()
+        run: bun scripts/rust-annotations.ts /tmp/phase-tests.log

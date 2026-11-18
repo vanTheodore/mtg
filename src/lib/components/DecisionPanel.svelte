@@ -2,6 +2,76 @@
   import { session } from '#lib/game/session.svelte.ts';
   import { actionPriority, actionsForObject, decisionGuide, describeAction, isKeepHand } from '#lib/game/actions.ts';
   import DamageAssignment from './DamageAssignment.svelte';
+  import DiscardPrompt from './DiscardPrompt.svelte';
+  import ChooseXPrompt from './ChooseXPrompt.svelte';
+  import TriggerOrderPrompt from './TriggerOrderPrompt.svelte';
+  import ModeChoicePrompt from './ModeChoicePrompt.svelte';
+  import SearchPrompt from './SearchPrompt.svelte';
+  import DigPrompt from './DigPrompt.svelte';
+  import OptionalEffectPrompt from './OptionalEffectPrompt.svelte';
+  import PayAmountPrompt from './PayAmountPrompt.svelte';
+  import RevealPrompt from './RevealPrompt.svelte';
+  import UnlessPrompt from './UnlessPrompt.svelte';
+  import PairPrompt from './PairPrompt.svelte';
+  import TokenHostPrompt from './TokenHostPrompt.svelte';
+  import UnlessBranchPrompt from './UnlessBranchPrompt.svelte';
+  import TributePrompt from './TributePrompt.svelte';
+  import WardSacrificePrompt from './WardSacrificePrompt.svelte';
+  import StartingPlayerPrompt from './StartingPlayerPrompt.svelte';
+  import ScryPrompt from './ScryPrompt.svelte';
+  import TapPowerPrompt from './TapPowerPrompt.svelte';
+  import EquipPrompt from './EquipPrompt.svelte';
+  import StationPrompt from './StationPrompt.svelte';
+  import MultiTargetPrompt from './MultiTargetPrompt.svelte';
+  import DistributePrompt from './DistributePrompt.svelte';
+  import MoveCountersPrompt from './MoveCountersPrompt.svelte';
+  import RetargetPrompt from './RetargetPrompt.svelte';
+  import ChooseObjectsPrompt from './ChooseObjectsPrompt.svelte';
+  import ProliferatePrompt from './ProliferatePrompt.svelte';
+  import TimeTravelPrompt from './TimeTravelPrompt.svelte';
+  import CategoryPrompt from './CategoryPrompt.svelte';
+  import CopyChosenPrompt from './CopyChosenPrompt.svelte';
+  import KeepPowerPrompt from './KeepPowerPrompt.svelte';
+  import KeepExactPrompt from './KeepExactPrompt.svelte';
+  import RemoveCountersPrompt from './RemoveCountersPrompt.svelte';
+  import CopyRetargetPrompt from './CopyRetargetPrompt.svelte';
+  import VotePrompt from './VotePrompt.svelte';
+  import ExploreChoicePrompt from './ExploreChoicePrompt.svelte';
+  import SeparatePilesPrompt from './SeparatePilesPrompt.svelte';
+  import MiracleRevealPrompt from './MiracleRevealPrompt.svelte';
+  import CastOfferPrompt from './CastOfferPrompt.svelte';
+  import MeldPairPrompt from './MeldPairPrompt.svelte';
+  import MeldAttackPrompt from './MeldAttackPrompt.svelte';
+  import EntryAttackPrompt from './EntryAttackPrompt.svelte';
+  import ReplacementPrompt from './ReplacementPrompt.svelte';
+  import CopyTargetPrompt from './CopyTargetPrompt.svelte';
+  import ResolveAllConsentPrompt from './ResolveAllConsentPrompt.svelte';
+  import UntapChoicePrompt from './UntapChoicePrompt.svelte';
+  import UntapSubsetPrompt from './UntapSubsetPrompt.svelte';
+  import ExertChoicePrompt from './ExertChoicePrompt.svelte';
+  import EnlistChoicePrompt from './EnlistChoicePrompt.svelte';
+  import PayCostPrompt from './PayCostPrompt.svelte';
+  import PhyrexianPaymentPrompt from './PhyrexianPaymentPrompt.svelte';
+  import CombatTaxPrompt from './CombatTaxPrompt.svelte';
+  import OptionalCostPrompt from './OptionalCostPrompt.svelte';
+  import DefilerPaymentPrompt from './DefilerPaymentPrompt.svelte';
+  import ChooseFromZonePrompt from './ChooseFromZonePrompt.svelte';
+  import ModalFacePrompt from './ModalFacePrompt.svelte';
+  import AlternativeCastPrompt from './AlternativeCastPrompt.svelte';
+  import CastingVariantPrompt from './CastingVariantPrompt.svelte';
+  import TypeSlotPrompt from './TypeSlotPrompt.svelte';
+  import SplicePrompt from './SplicePrompt.svelte';
+  import MutateMergePrompt from './MutateMergePrompt.svelte';
+  import CipherPrompt from './CipherPrompt.svelte';
+  import CostOrderPrompt from './CostOrderPrompt.svelte';
+  import ResolutionPaymentPrompt from './ResolutionPaymentPrompt.svelte';
+  import GiftRecipientPrompt from './GiftRecipientPrompt.svelte';
+  import TopOrBottomPrompt from './TopOrBottomPrompt.svelte';
+  import ClashOpponentPrompt from './ClashOpponentPrompt.svelte';
+  import ClashPlacementPrompt from './ClashPlacementPrompt.svelte';
+  import SideboardPrompt from './SideboardPrompt.svelte';
+  import PlayDrawPrompt from './PlayDrawPrompt.svelte';
+  import BottomOrderPrompt from './BottomOrderPrompt.svelte';
   import { manaText } from '#lib/game/cards.ts';
   import { actionObjectId, attackLabel, attackTargets, blockTargets, isManaAction, isManaPrompt, isTargetPrompt, manaActions, manualCast, targetLabel } from '#lib/game/interaction.ts';
   import type { GameAction } from '#lib/engine/types.ts';
@@ -55,8 +125,8 @@
   const sources = $derived(manaActionsFor());
   const pass = $derived(actions.find((a) => a.type === 'PassPriority'));
   const cancel = $derived(actions.find((a) => a.type === 'CancelCast'));
-  const handled = new Set(['PassPriority', 'CancelCast', 'ChooseTarget', 'DeclareAttackers', 'DeclareBlockers', 'CastSpell', 'PlayLand', 'TapLandForMana', 'ActivateManaSource', 'MulliganDecision', 'SelectCards']);
-  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'GameOver', 'UnlessPayment']);
+  const handled = new Set(['PassPriority', 'CancelCast', 'ChooseTarget', 'DeclareAttackers', 'DeclareBlockers', 'CastSpell', 'PlayLand', 'TapLandForMana', 'ActivateManaSource', 'MulliganDecision', 'SelectCards', 'DecideOptionalCost', 'ChooseModalFace', 'ChooseAlternativeCast', 'ChooseCastingVariant', 'ChoosePermanentTypeSlot', 'RespondToSpliceOffer', 'ChooseMutateMergeSide', 'CipherEncode', 'OrderCostReductions', 'ChooseResolutionOptionalPaymentBranch', 'ChooseGiftRecipient', 'ChooseTopOrBottom', 'ChooseClashOpponent', 'SubmitSideboard', 'ChoosePlayDraw', 'SelectCards']);
+  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'ChooseXValue', 'OrderTriggers', 'ModeChoice', 'AbilityModeChoice', 'SearchChoice', 'DigChoice', 'OptionalEffectChoice', 'OpponentMayChoice', 'PayAmountChoice', 'RevealChoice', 'PairChoice', 'ChooseTokenHost', 'GameOver', 'UnlessPayment', 'UnlessPaymentChooseCost', 'TributeChoice', 'WardSacrificeChoice', 'ChooseStartingPlayer', 'ScryChoice', 'SurveilChoice', 'CrewVehicle', 'SaddleMount', 'EquipTarget', 'StationTarget', 'MultiTargetSelection', 'DistributeAmong', 'MoveCountersDistribution', 'RetargetChoice', 'ChooseObjectsSelection', 'ProliferateChoice', 'TimeTravelChoice', 'CategoryChoice', 'EachPlayerCopyChosenSelection', 'KeepWithinTotalPowerChoice', 'KeepExactPermanentsChoice', 'RemoveCountersChoice', 'CopyRetarget', 'VoteChoice', 'ExploreChoice', 'SeparatePilesChooseOpponent', 'SeparatePilesPartition', 'SeparatePilesChoice', 'MiracleReveal', 'CastOffer', 'MeldPairChoice', 'MeldAttackTargetChoice', 'EntryAttackTargetChoice', 'ReplacementChoice', 'CopyTargetChoice', 'ResolveAllConsent', 'UntapChoice', 'ChooseUntapSubset', 'ExertChoice', 'EnlistChoice', 'PayCost', 'PhyrexianPayment', 'CombatTaxPayment', 'OptionalCostChoice', 'DefilerPayment', 'ChooseFromZoneChoice', 'ModalFaceChoice', 'AlternativeCastChoice', 'CastingVariantChoice', 'ChoosePermanentTypeSlot', 'SpliceOffer', 'MutateMergeChoice', 'CipherEncodeChoice', 'OrderCostReductions', 'ResolutionOptionalPaymentChoice', 'ChooseGiftRecipient', 'TopOrBottomChoice', 'ClashChooseOpponent', 'ClashCardPlacement', 'BetweenGamesSideboard', 'BetweenGamesChoosePlayDraw', 'RippleBottomOrder', 'RevealUntilBottomOrder', 'DigBottomOrder']);
   const manaExtras = new Set(['UntapLandForMana', 'BackToManaPayment', 'PayManaAbilityMana', 'ChooseManaColor']);
   const globalActions = $derived(actions.filter((a) => !handled.has(a.type) && actionObjectId(a) === undefined && !isManaAction(a) && !(manaPrompt && manaExtras.has(a.type))));
   const attackDraft = $derived(Object.entries(session.attacks));
@@ -65,6 +135,117 @@
   const selectedBlockTargets = $derived(selected ? blockTargets(s, selected.id) : []);
   const canDeclare = $derived(actions.some((a) => a.type === kind));
   const discard = $derived(session.discardPrompt);
+  // CR 107.3a: only the spell's controller announces X.
+  const chooseX = $derived(session.chooseXPrompt);
+  // CR 603.3b: only the controller of the triggered abilities orders them.
+  const triggerOrder = $derived(session.triggerOrderPrompt);
+  // CR 700.2: the modal's controller chooses its modes.
+  const modes = $derived(session.modeChoicePrompt);
+  // CR 701.23: a search lists the cards Phase will accept.
+  const search = $derived(session.searchPrompt);
+  // CR 701.20e: a "look at the top N" shows the cards and where each pile goes.
+  const dig = $derived(session.digPrompt);
+  // CR 608.2d: "you may …" asks the controller.
+  const optional = $derived(session.optionalEffectPrompt);
+  // CR 107.1c: an amount inside an engine-owned window.
+  const pay = $derived(session.payAmountPrompt);
+  // CR 701.20a: which card is shown, if any.
+  const reveal = $derived(session.revealPrompt);
+  // CR 118.12: pay or let the effect happen. Ahead of the mana block, which
+  // still owns the tapping needed to pay.
+  const unless = $derived(session.unlessPrompt);
+  // CR 702.95a: soulbond partner, optional.
+  const pair = $derived(session.pairPrompt);
+  // Alchemy batch entry: the host the token enters with.
+  const host = $derived(session.tokenHostPrompt);
+  // CR 118.12a: "unless they X or Y" — which cost, not whether to pay.
+  const branches = $derived(session.unlessBranchPrompt);
+  // CR 702.104a: an opponent pays the tribute or denies it.
+  const tribute = $derived(session.tributePrompt);
+  // CR 702.21b: which permanents pay the ward cost.
+  const wardSacrifice = $derived(session.wardSacrificePrompt);
+  // CR 103.1: the roll winner names who starts.
+  const startingPlayer = $derived(session.startingPlayerPrompt);
+  // CR 701.22a / CR 701.25a: look at the top and keep any of it on top.
+  const scry = $derived(session.scryPrompt);
+  // CR 702.122a / CR 702.171a: tap creatures for crew or saddle.
+  const tapPower = $derived(session.tapPowerPrompt);
+  // CR 702.6a: which permanent the equipment attaches to.
+  const equip = $derived(session.equipPrompt);
+  // CR 702.184a: which single creature pays the station cost.
+  const station = $derived(session.stationPrompt);
+  // CR 601.2c: the set of targets a multi-target spell or ability asks for.
+  const multiTarget = $derived(session.multiTargetPrompt);
+  // CR 601.2d / CR 608.2d: the division of an amount among recipients.
+  const distribute = $derived(session.distributePrompt);
+  // CR 122.5: which counters leave the source, and where they land.
+  const moveCounters = $derived(session.moveCountersPrompt);
+  // CR 115.7: repointing a spell that is already on the stack.
+  const retarget = $derived(session.retargetPrompt);
+  // CR 608.2c + CR 115.10a: the set the effect will call «esos», or a damage recipient.
+  const chooseObjects = $derived(session.chooseObjectsPrompt);
+  // CR 701.34a: which objects that already carry a counter get another one.
+  const proliferate = $derived(session.proliferatePrompt);
+  // CR 701.56a: the remove half, then the add half, over the same list.
+  const timeTravel = $derived(session.timeTravelPrompt);
+  // CR 101.4: one permanent kept per type category, the rest sacrificed.
+  const category = $derived(session.categoryPrompt);
+  // CR 707.2: an ordered pick — the first is copied, the second scales the copy.
+  const copyChosen = $derived(session.copyChosenPrompt);
+  // CR 107.1c: a keep window measured in combined power, not in count.
+  const keepPower = $derived(session.keepPowerPrompt);
+  // CR 609.3: the exact number the engine resolved and capped.
+  const keepExact = $derived(session.keepExactPrompt);
+  // CR 107.1c + CR 608.2d: counters leaving the source, with the engine's budget.
+  const removeCounters = $derived(session.removeCountersPrompt);
+  // CR 707.10c: the copy target walk, one slot at a time.
+  const copyRetarget = $derived(session.copyRetargetPrompt);
+  // CR 701.38: the vote session; the engine decides which seat answers.
+  const vote = $derived(session.votePrompt);
+  // CR 701.44d: the explore order, one explorer per step.
+  const explore = $derived(session.explorePrompt);
+  // CR 700.3: the two-pile flow, in whichever of its three stages it is.
+  const piles = $derived(session.separatePilesPrompt);
+  // CR 702.94a: the first card drawn this turn carries miracle; reveal it or not.
+  const miracle = $derived(session.miraclePrompt);
+  // CR 608.2g: the umbrella cast offer, in whichever of its nine shapes it is.
+  const castOffer = $derived(session.castOfferPrompt);
+  // CR 701.42: which copy is the other half of the meld.
+  const meld = $derived(session.meldPrompt);
+  // CR 508.4: the melded creature enters attacking; a destination is chosen.
+  const meldAttack = $derived(session.meldAttackPrompt);
+  // CR 508.4: the generic window — any permanent that enters already attacking.
+  const entryAttack = $derived(session.entryAttackPrompt);
+  // CR 616.1: which replacement applies — order, optional branch or destination.
+  const replacement = $derived(session.replacementPrompt);
+  // CR 707.2: which permanent a copy effect copies — three purposes, one variant.
+  const copyTarget = $derived(session.copyTargetPrompt);
+  // CR 117.3d: the table's «resolve all» consent, one representative at a time.
+  const resolveAll = $derived(session.resolveAllPrompt);
+  // CR 502.3: «may choose not to untap» and the MaxUntapPerType cap.
+  const untap = $derived(session.untapPrompt);
+  const untapSubset = $derived(session.untapSubsetPrompt);
+  // CR 508.1g: the two optional attack costs, decided before the declaration closes.
+  const exert = $derived(session.exertPrompt);
+  const enlist = $derived(session.enlistPrompt);
+  // CR 118.3 + CR 107.4f: paying a cost by choosing objects, or a Phyrexian shard by shard.
+  const payCost = $derived(session.payCostPrompt);
+  const phyrexian = $derived(session.phyrexianPrompt);
+  const combatTax = $derived(session.combatTaxPrompt);
+  const optionalCost = $derived(session.optionalCostPrompt);
+  const defiler = $derived(session.defilerPrompt);
+  const zoneChoice = $derived(session.zoneChoicePrompt);
+  const modalFace = $derived(session.modalFacePrompt);
+  const alternativeCast = $derived(session.alternativeCastPrompt);
+  const castingVariant = $derived(session.castingVariantPrompt);
+  const typeSlot = $derived(session.typeSlotPrompt);
+  const splice = $derived(session.splicePrompt);
+  const mutateMerge = $derived(session.mutateMergePrompt);
+  const cipher = $derived(session.cipherPrompt);
+  const costOrder = $derived(session.costOrderPrompt);
+  const resolutionPayment = $derived(session.resolutionPaymentPrompt);
+  const giftRecipient = $derived(session.giftRecipientPrompt);
+  const topOrBottom = $derived(session.topOrBottomPrompt);
   const PHASES: Record<string, string> = { Untap: 'Enderezar', Upkeep: 'Mantenimiento', Draw: 'Robar', PreCombatMain: 'Fase principal', BeginCombat: 'Inicio de combate', DeclareAttackers: 'Ataque', DeclareBlockers: 'Bloqueo', CombatDamage: 'Daño de combate', EndCombat: 'Fin de combate', PostCombatMain: 'Fase principal posterior', End: 'Final', Cleanup: 'Limpieza' };
   function manaActionsFor(id?: number) { return manaActions(s, id); }
   function play(action: GameAction) { void session.dispatch(action); }
@@ -91,13 +272,141 @@
   </div>
   {#if s}
 
-    {#if discard && discard.player === s.viewer}
-      <div class="prompt" aria-label="Descartar hasta siete cartas">
-        <strong>Descartar {discard.count} carta{discard.count === 1 ? '' : 's'}</strong>
-        <p>Al terminar el turno solo puedes conservar siete cartas. Selecciona las cartas de tu mano que descartas.</p>
-        <ul class="draft">{#each session.choosing as id (id)}<li>{objects[String(id)]?.name ?? `Carta ${id}`}</li>{#if !session.choosing.length}<li>Sin cartas elegidas.</li>{/if}{/each}</ul>
-        <button type="button" class="primary" disabled={session.busy || session.choosing.length !== discard.count} onclick={() => session.confirmDiscard()}>Confirmar descarte ({session.choosing.length}/{discard.count})</button>
-      </div>
+    {#if tapPower && tapPower.player === s.viewer}
+      <TapPowerPrompt />
+    {:else if equip && equip.player === s.viewer}
+      <EquipPrompt />
+    {:else if station && station.player === s.viewer}
+      <StationPrompt />
+    {:else if multiTarget && multiTarget.player === s.viewer}
+      <MultiTargetPrompt />
+    {:else if distribute && distribute.player === s.viewer}
+      <DistributePrompt />
+    {:else if moveCounters && moveCounters.player === s.viewer}
+      <MoveCountersPrompt />
+    {:else if retarget && retarget.player === s.viewer}
+      <RetargetPrompt />
+    {:else if chooseObjects && chooseObjects.player === s.viewer}
+      <ChooseObjectsPrompt />
+    {:else if proliferate && proliferate.player === s.viewer}
+      <ProliferatePrompt />
+    {:else if timeTravel && timeTravel.player === s.viewer}
+      <TimeTravelPrompt />
+    {:else if category && category.player === s.viewer}
+      <CategoryPrompt />
+    {:else if copyChosen && copyChosen.player === s.viewer}
+      <CopyChosenPrompt />
+    {:else if keepPower && keepPower.player === s.viewer}
+      <KeepPowerPrompt />
+    {:else if keepExact && keepExact.player === s.viewer}
+      <KeepExactPrompt />
+    {:else if removeCounters && removeCounters.player === s.viewer}
+      <RemoveCountersPrompt />
+    {:else if copyRetarget && copyRetarget.player === s.viewer}
+      <CopyRetargetPrompt />
+    {:else if vote && vote.voter === s.viewer}
+      <VotePrompt />
+    {:else if explore && explore.player === s.viewer}
+      <ExploreChoicePrompt />
+    {:else if piles && piles.player === s.viewer}
+      <SeparatePilesPrompt />
+    {:else if miracle && miracle.player === s.viewer}
+      <MiracleRevealPrompt />
+    {:else if castOffer && castOffer.player === s.viewer}
+      <CastOfferPrompt />
+    {:else if meld && meld.player === s.viewer}
+      <MeldPairPrompt />
+    {:else if meldAttack && meldAttack.player === s.viewer}
+      <MeldAttackPrompt />
+    {:else if entryAttack && entryAttack.player === s.viewer}
+      <EntryAttackPrompt />
+    {:else if replacement && replacement.player === s.viewer}
+      <ReplacementPrompt />
+    {:else if copyTarget && copyTarget.player === s.viewer}
+      <CopyTargetPrompt />
+    {:else if resolveAll && resolveAll.representative === s.viewer}
+      <ResolveAllConsentPrompt />
+    {:else if untap && untap.player === s.viewer}
+      <UntapChoicePrompt />
+    {:else if untapSubset && untapSubset.player === s.viewer}
+      <UntapSubsetPrompt />
+    {:else if exert && exert.player === s.viewer}
+      <ExertChoicePrompt />
+    {:else if enlist && enlist.player === s.viewer}
+      <EnlistChoicePrompt />
+    {:else if payCost}
+      <PayCostPrompt />
+    {:else if phyrexian && phyrexian.player === s.viewer}
+      <PhyrexianPaymentPrompt />
+    {:else if combatTax}
+      <CombatTaxPrompt />
+    {:else if optionalCost}
+      <OptionalCostPrompt />
+    {:else if defiler}
+      <DefilerPaymentPrompt />
+    {:else if zoneChoice}
+      <ChooseFromZonePrompt />
+    {:else if modalFace}
+      <ModalFacePrompt />
+    {:else if alternativeCast}
+      <AlternativeCastPrompt />
+    {:else if castingVariant}
+      <CastingVariantPrompt />
+    {:else if typeSlot}
+      <TypeSlotPrompt />
+    {:else if splice}
+      <SplicePrompt />
+    {:else if mutateMerge}
+      <MutateMergePrompt />
+    {:else if cipher}
+      <CipherPrompt />
+    {:else if costOrder}
+      <CostOrderPrompt />
+    {:else if resolutionPayment}
+      <ResolutionPaymentPrompt />
+    {:else if giftRecipient}
+      <GiftRecipientPrompt />
+    {:else if topOrBottom}
+      <TopOrBottomPrompt />
+      <ClashOpponentPrompt />
+      <ClashPlacementPrompt />
+      <SideboardPrompt />
+      <PlayDrawPrompt />
+      <BottomOrderPrompt />
+    {:else if scry && scry.player === s.viewer}
+      <ScryPrompt />
+    {:else if startingPlayer && startingPlayer.player === s.viewer}
+      <StartingPlayerPrompt />
+    {:else if wardSacrifice && wardSacrifice.player === s.viewer}
+      <WardSacrificePrompt />
+    {:else if tribute && tribute.player === s.viewer}
+      <TributePrompt />
+    {:else if branches && branches.player === s.viewer}
+      <UnlessBranchPrompt />
+    {:else if host && host.player === s.viewer}
+      <TokenHostPrompt />
+    {:else if pair && pair.player === s.viewer}
+      <PairPrompt />
+    {:else if unless && unless.player === s.viewer}
+      <UnlessPrompt />
+    {:else if reveal && reveal.player === s.viewer}
+      <RevealPrompt />
+    {:else if pay && pay.player === s.viewer}
+      <PayAmountPrompt />
+    {:else if optional && optional.player === s.viewer}
+      <OptionalEffectPrompt />
+    {:else if dig && dig.player === s.viewer}
+      <DigPrompt />
+    {:else if search && search.player === s.viewer}
+      <SearchPrompt />
+    {:else if modes && modes.player === s.viewer}
+      <ModeChoicePrompt />
+    {:else if triggerOrder && triggerOrder.player === s.viewer}
+      <TriggerOrderPrompt />
+    {:else if chooseX && chooseX.player === s.viewer}
+      <ChooseXPrompt />
+    {:else if discard && discard.player === s.viewer}
+      <DiscardPrompt />
     {:else if targetPrompt}
       <div class="prompt" aria-label="Objetivos del hechizo">
         <strong>{pending?.name ?? 'Elige un objetivo'}</strong>
@@ -192,7 +501,7 @@
 
     <div class="actions confirmations">
       {#if discard && discard.player === s.viewer}
-      {#if session.choosing.length !== discard.count}<span class="muted">Elige exactamente {discard.count} carta(s).</span>{/if}
+      {#if !session.discardReady}<span class="muted">{discard.upTo ? `Puedes descartar hasta ${discard.count} carta(s).` : `Elige exactamente ${discard.count} carta(s).`}</span>{/if}
     {:else if kind === 'DeclareAttackers'}
         <button type="button" class="primary" disabled={session.busy || !canDeclare} onclick={() => session.confirmAttackers()}>{attackDraft.length ? `Confirmar ataque (${attackDraft.length})` : 'No atacar'}</button>
       {:else if kind === 'DeclareBlockers'}

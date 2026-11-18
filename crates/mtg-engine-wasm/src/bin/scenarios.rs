@@ -2,6 +2,7 @@
 //! harness, these decks/policies force mana, casting, combat, targets, triggers,
 //! replacement effects and game-over, and compare direct Phase vs wrapper ABI.
 use engine::database::CardDatabase;
+use engine::database::combo_table::ComboTable;
 use engine::game::deck_loading::{resolve_deck_list, DeckList};
 use engine::game::engine::{apply_with_rejection, start_game_with_starting_player};
 use engine::game::visibility::filter_state_for_viewer;
@@ -113,7 +114,7 @@ fn run_scenario(catalog_text: &str, catalog: &serde_json::Value, sc: &Scenario, 
     let mut direct = GameState::new(FormatConfig::limited(), 2, seed);
     let decks_json = serde_json::json!({"player": {"main_deck": sc.p0}, "opponent": {"main_deck": sc.p1}});
     let decks: DeckList = serde_json::from_value(decks_json.clone()).unwrap();
-    let payload = resolve_deck_list(&direct_db, &decks);
+    let payload = resolve_deck_list(&direct_db, &ComboTable::default(), &decks);
     load_and_hydrate_decks(&mut direct, &payload, Some(&direct_db));
     start_game_with_starting_player(&mut direct, PlayerId(0));
 
