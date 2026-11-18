@@ -3208,3 +3208,61 @@ presupuesto de 1410 s); las dieciséis capturas nuevas son los pares de
 `arriba-o-abajo`, `la-segunda`, `solo-arriba` y `posicion-ajena`. La prueba de
 temas reescribe jpg de escenas ajenas; las dos que tocó esta vez se revirtieron
 antes del commit.
+
+## El choque pregunta dos veces, y la segunda no estrena vocabulario (sexagésima cuarta pasada, 18 nov 2026)
+
+`ClashChooseOpponent` y `ClashCardPlacement` son las dos ventanas del choque
+(CR 701.30). Phase tiene la primera en React (`ClashOpponentModal`); la segunda
+la resuelve el mismo modal de arriba o abajo, sin cromo propio. Mesa no copia el
+cromo. Copia qué botón existe y qué sobre se envía.
+
+**`ClashChooseOpponent` (CR 701.30b).** «Choca con un oponente» elige con quién.
+El motor sólo pausa con **dos o más** oponentes: con uno no hay decisión y el
+choque sigue solo, así que un candidato único es un conjunto publicado, no una
+síntesis. La acción es `ChooseClashOpponent { opponent }`, copiada de
+`legal.actions`. Un botón existe sólo si ese oponente ya es legal. El orden de
+los candidatos es el del motor: el cliente de arriba lo reordena por
+`seat_order`, y Mesa no, porque el cable ya entrega el orden y esta mesa no lo
+retoca. **Esta ventana no publica `CancelCast`**: el motor no ofrece cancelar el
+choque, y la mesa no lo inventa. El otro asiento ve los candidatos y no recibe
+botón.
+
+**`ClashCardPlacement` (CR 701.30c).** Tras el choque, cada participante pone su
+carta revelada arriba o abajo, en orden APNAP, y las colocaciones se aplican
+**juntas** cuando elige el último. La ventana no estrena vocabulario: la
+respuesta es el mismo `ChooseTopOrBottom { top }` de la ventana de posición en
+la biblioteca, y el brazo `ClashCardPlacement` del motor la acepta. Por eso los
+botones se leen con el mismo parser de ofertas y no hay un segundo vocabulario
+de booleanos. `card` es la carta revelada que se está colocando; un `0` es una
+carta oculta y la mesa no la nombra. `remaining` es la cola que el motor ya
+publicó (pares jugador/carta en APNAP): se lee, no se reconstruye. `bottom_cards`
+es el recuento interno del motor y **no** es una elección: no se pinta. El otro
+asiento ve la carta revelada y no recibe botón.
+
+Laboratorio: `/ux?scene=clash` (el Jugador 1 elige entre el Jugador 3 y el
+Jugador 2), `clashOne` (sólo el Jugador 3), `clashAway` (lo decide el Jugador
+2), `clashPlace` (Grizzly Bears, arriba o abajo, con el Jugador 2 en la cola),
+`clashPlaceHidden` (carta `0`, y sólo el fondo publicado) y `clashPlaceAway`.
+Capturas `ux-oponente-choque-1440.jpg`, `ux-un-oponente-choque-1440.jpg`,
+`ux-choque-ajeno-1440.jpg`, `ux-colocar-choque-1440.jpg`,
+`ux-colocar-oculta-1440.jpg` y `ux-colocacion-ajena-1440.jpg`.
+
+`PhysicalContest` queda fuera de esta ventana, igual que `ClashCardPlacement`
+quedó fuera de la 63: no la responde un `GameAction`, la conduce el anfitrión
+con su propio reloj.
+
+`main` de Phase va 23 commits por delante del pin. No se importan: estas dos
+ventanas se leen del pin `28b2f9e4`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **706** (7
+nuevas en `clash.test.ts`: los candidatos son el orden del cable, el candidato en
+blanco no es botón, la ventana sin lista no ofrece nada, la carta y la cola son
+las publicadas, la carta oculta no se nombra y la respuesta de la colocación es
+el booleano de la biblioteca); el recuento vigilado pasa a **88** entradas en
+`REPRESENTED` (86 → 88). El motor no se tocó: `bun run engine:verify` sigue en
+verde con **497** ficheros y SHA-256
+`f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
+En Chromium, seis pruebas nuevas en `ux-lab` (141 → 147) y seis escenas más en
+la prueba de temas.

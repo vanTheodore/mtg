@@ -152,6 +152,12 @@ const SCENES = [
   { scene: 'topBottomNth', slug: 'la-segunda', block: '[data-top-bottom]' },
   { scene: 'topBottomOne', slug: 'solo-arriba', block: '[data-top-bottom]' },
   { scene: 'topBottomAway', slug: 'posicion-ajena', block: '[data-top-bottom]' },
+  { scene: 'clash', slug: 'choque', block: '[data-clash]' },
+  { scene: 'clashOne', slug: 'un-oponente-choque', block: '[data-clash]' },
+  { scene: 'clashAway', slug: 'choque-ajeno', block: '[data-clash]' },
+  { scene: 'clashPlace', slug: 'colocar-choque', block: '[data-clash-placement]' },
+  { scene: 'clashPlaceHidden', slug: 'colocar-oculta', block: '[data-clash-placement]' },
+  { scene: 'clashPlaceAway', slug: 'colocacion-ajena', block: '[data-clash-placement]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

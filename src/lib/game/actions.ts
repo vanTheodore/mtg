@@ -27,7 +27,8 @@ const LABELS: Record<string, string> = {
   OrderCostReductions: 'Elegir orden de reducción',
   ChooseResolutionOptionalPaymentBranch: 'Elegir pago opcional',
   ChooseGiftRecipient: 'Elegir destinatario',
-  ChooseTopOrBottom: 'Elegir posición en la biblioteca'
+  ChooseTopOrBottom: 'Elegir posición en la biblioteca',
+  ChooseClashOpponent: 'Elegir oponente del choque'
 };
 
 function actionObjectId(action: GameAction): number | undefined {
@@ -114,6 +115,10 @@ export function describeAction(action: GameAction, objects: Record<string, GameO
   if (action.type === 'ChooseGiftRecipient') {
     const opponent = data.opponent;
     return typeof opponent === 'number' ? `Elegir al Jugador ${opponent + 1}` : base;
+  }
+  if (action.type === 'ChooseClashOpponent') {
+    const opponent = data.opponent;
+    return typeof opponent === 'number' ? `Chocar con el Jugador ${opponent + 1}` : base;
   }
   if (action.type === 'ChooseTopOrBottom') {
     if (data.top === true) return 'Arriba de la biblioteca';
@@ -225,6 +230,8 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'ResolutionOptionalPaymentChoice': return 'Puedes pagar una rama de las que publicó el motor, o no pagar si el cable lo ofrece.';
     case 'ChooseGiftRecipient': return 'Eliges un oponente de los que publicó el motor: el destinatario del regalo, o a quién afecta el coste.';
     case 'TopOrBottomChoice': return 'Eliges arriba o abajo de la biblioteca. Arriba es la posición que ya fijó el efecto; abajo es el fondo.';
+    case 'ClashChooseOpponent': return 'Eliges con qué oponente chocar. Los candidatos son los que publicó el motor; no se reordenan.';
+    case 'ClashCardPlacement': return 'Colocas la carta revelada del choque arriba o abajo. Las colocaciones se aplican juntas al final.';
     case 'DeclareAttackers': return 'Elige qué criaturas atacan y a quién.';
     case 'DeclareBlockers': return 'Asigna cada bloqueadora a una atacante.';
     case 'GameOver': return 'La partida terminó.';

@@ -107,6 +107,12 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `castVariantAuth` | `CastingVariantChoice` (permiso) | [claro](permiso-cementerio-claro.jpg) | [oscuro](permiso-cementerio-oscuro.jpg) |
 | `castVariantAway` | `CastingVariantChoice` (ajena) | [claro](variante-ajena-claro.jpg) | [oscuro](variante-ajena-oscuro.jpg) |
 | `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
+| `clash` | `ClashChooseOpponent` | [claro](choque-claro.jpg) | [oscuro](choque-oscuro.jpg) |
+| `clashOne` | `ClashChooseOpponent` (un candidato) | [claro](un-oponente-choque-claro.jpg) | [oscuro](un-oponente-choque-oscuro.jpg) |
+| `clashAway` | `ClashChooseOpponent` (ajeno) | [claro](choque-ajeno-claro.jpg) | [oscuro](choque-ajeno-oscuro.jpg) |
+| `clashPlace` | `ClashCardPlacement` | [claro](colocar-choque-claro.jpg) | [oscuro](colocar-choque-oscuro.jpg) |
+| `clashPlaceHidden` | `ClashCardPlacement` (carta oculta) | [claro](colocar-oculta-claro.jpg) | [oscuro](colocar-oculta-oscuro.jpg) |
+| `clashPlaceAway` | `ClashCardPlacement` (ajena) | [claro](colocacion-ajena-claro.jpg) | [oscuro](colocacion-ajena-oscuro.jpg) |
 
 Para regenerarlas, con un Chromium disponible para Playwright:
 

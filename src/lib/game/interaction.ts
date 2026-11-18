@@ -3520,6 +3520,83 @@ export function topOrBottomOffers(actions: GameAction[]): TopOrBottomOffers {
   return { top, bottom };
 }
 
+export type ClashPrompt = {
+  player: PlayerId;
+  /** CR 701.30b: the opponents the wire published, in the engine's order. */
+  candidates: PlayerId[];
+};
+/**
+ * CR 701.30b: `WaitingFor::ClashChooseOpponent`. "Clash with an opponent" makes
+ * the clashing player choose which opponent to clash with, and the engine only
+ * pauses when two or more opponents exist (CR 701.30b) — with one there is no
+ * decision, so a single-candidate prompt is still a published set, not a
+ * synthesis. The answer is `ChooseClashOpponent { opponent }`, copied from
+ * `legal.actions`. Candidate order is the engine's; this table does not re-sort
+ * it (the upstream client sorts by seat order, which the wire gives Mesa in
+ * `candidates` already).
+ */
+export function clashPrompt(snapshot: EngineSnapshot | null): ClashPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ClashChooseOpponent') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    candidates: Array.isArray(data.candidates)
+      ? data.candidates.filter((id): id is PlayerId => typeof id === 'number' && Number.isInteger(id) && id >= 0)
+      : []
+  };
+}
+export type ClashOffers = { byOpponent: Map<number, GameAction> };
+/** An opponent that is not a published integer is not a button. The first action wins. */
+export function clashOffers(actions: GameAction[]): ClashOffers {
+  const byOpponent = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChooseClashOpponent') continue;
+    const opponent = action.data?.opponent;
+    if (typeof opponent !== 'number' || !Number.isInteger(opponent) || opponent < 0) continue;
+    if (!byOpponent.has(opponent)) byOpponent.set(opponent, action);
+  }
+  return { byOpponent };
+}
+
+export type ClashPlacementPrompt = {
+  player: PlayerId;
+  /** CR 701.30c: the revealed card this player is placing. A `0` is hidden. */
+  cardId: ObjectId | null;
+  /** The players still to choose, in APNAP order, as the wire published them. */
+  remaining: PlayerId[];
+};
+/**
+ * CR 701.30c: `WaitingFor::ClashCardPlacement`. After a clash each participant
+ * puts their revealed card on top or bottom, in APNAP order, and the choices
+ * commit together. The answer is the same `ChooseTopOrBottom { top }` the
+ * library-position window uses — the engine's own `ClashCardPlacement` arm
+ * takes it — so the buttons are read with the same offer parser. `bottom_cards`
+ * is the engine's running tally and is not a choice: it is not drawn.
+ */
+export function clashPlacementPrompt(snapshot: EngineSnapshot | null): ClashPlacementPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ClashCardPlacement') return null;
+  const data = waiting.data ?? {};
+  const remainingRaw = Array.isArray(data.remaining) ? data.remaining : [];
+  const remaining = remainingRaw
+    .map((entry) => {
+      const pair = entry as unknown;
+      if (Array.isArray(pair)) return pair[0];
+      if (pair && typeof pair === 'object') {
+        return (pair as { 0?: unknown })[0] ?? (pair as { player?: unknown }).player;
+      }
+      return undefined;
+    })
+    .filter((id): id is PlayerId => typeof id === 'number' && Number.isInteger(id) && id >= 0);
+  const card = data.card;
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    cardId: typeof card === 'number' && card > 0 ? (card as ObjectId) : null,
+    remaining
+  };
+}
+
 /**
  * CR 508.1g + CR 701.43d: as attackers are declared, the active player may pay
  * the optional «exert this creature as it attacks» cost, one creature at a time.

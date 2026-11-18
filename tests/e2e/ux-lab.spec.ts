@@ -2291,6 +2291,88 @@ test('la posición ajena se nombra y no ofrece botones', async ({ page }) => {
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('el oponente del choque es un jugador publicado, y el orden no se reordena', async ({ page }) => {
+  await page.goto('/ux?scene=clash');
+  const block = page.locator('[data-clash]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-clash-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir oponente del choque');
+  const options = block.locator('[data-clash-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-clash-option', '2');
+  await expect(options.nth(0)).toContainText('Jugador 3');
+  await expect(options.nth(1)).toHaveAttribute('data-clash-option', '1');
+  // CR 701.30b: the engine publishes no cancel for this window, so none is drawn.
+  await expect(block.locator('button')).toHaveCount(2);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un oponente del choque no publicado no es botón', async ({ page }) => {
+  await page.goto('/ux?scene=clashOne');
+  const block = page.locator('[data-clash]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-clash-option]')).toHaveCount(1);
+  await expect(block.locator('[data-clash-option="2"]')).toContainText('Jugador 3');
+  await expect(block.locator('[data-clash-option="1"]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el choque ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=clashAway');
+  const block = page.locator('[data-clash]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-clash-faces]')).toContainText('Jugador 3');
+  await expect(block.locator('[data-clash-faces]')).toContainText('Jugador 2');
+  await expect(block.locator('[data-clash-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la carta del choque se coloca con los mismos booleanos de la biblioteca', async ({ page }) => {
+  await page.goto('/ux?scene=clashPlace');
+  const block = page.locator('[data-clash-placement]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-clash-placement-remaining', '1');
+  await expect(block.locator('strong')).toHaveText('Colocar la carta del choque');
+  await expect(block.locator('[data-clash-placement-card]')).toHaveText('Grizzly Bears');
+  await expect(block.locator('[data-clash-placement-top]')).toContainText('Arriba de la biblioteca');
+  await expect(block.locator('[data-clash-placement-bottom]')).toContainText('Abajo de la biblioteca');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una carta oculta del choque no se nombra y el booleano ausente no es botón', async ({ page }) => {
+  await page.goto('/ux?scene=clashPlaceHidden');
+  const block = page.locator('[data-clash-placement]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-clash-placement-card]')).toHaveCount(0);
+  // CR 701.30c: only the bottom was published; the top is not reconstructed.
+  await expect(block.locator('[data-clash-placement-bottom]')).toHaveCount(1);
+  await expect(block.locator('[data-clash-placement-top]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la colocación ajena del choque se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=clashPlaceAway');
+  const block = page.locator('[data-clash-placement]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-clash-placement-card]')).toHaveText('Grizzly Bears');
+  await expect(block.locator('[data-clash-placement-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');
