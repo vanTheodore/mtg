@@ -3147,7 +3147,7 @@ vigilado pasa a **84** entradas en `REPRESENTED` (82 → 84). El motor no se toc
 En Chromium, seis pruebas nuevas (127 → 133 en `ux-lab`) y seis escenas más
 en la prueba de temas (107 → 113 escenas, 226 jpg, presupuesto de 1320 s).
 
-## El destinatario y la posición en la biblioteca no se reconstruyen (sexagésima tercera pasada, 7 nov 2026)
+## El destinatario y la posición en la biblioteca no se reconstruyen (sexagésima tercera pasada, 18 nov 2026)
 
 `ChooseGiftRecipient` y `TopOrBottomChoice` son las dos ventanas que siguen al
 pago al resolver en lo que el cable ya sabe responder. Phase ya las tiene
@@ -3199,3 +3199,12 @@ pasa a **86** entradas en `REPRESENTED` (84 → 86). El motor no se tocó:
 `f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
 En Chromium, ocho pruebas nuevas (133 → 141 en `ux-lab`) y ocho escenas más
 en la prueba de temas (113 → 121 escenas, 242 jpg, presupuesto de 1410 s).
+
+Los pares de tema de esas ocho escenas no se habían escrito cuando se publicó la
+ventana: esta pasada los ejecuta. `ux-themes` recorre las **121** escenas en los
+dos temas y deja **242** jpg en `docs/screenshots/temas/` (14,4 min con el
+presupuesto de 1410 s); las dieciséis capturas nuevas son los pares de
+`destinatario`, `un-destinatario`, `coste-oponente`, `regalo-ajeno`,
+`arriba-o-abajo`, `la-segunda`, `solo-arriba` y `posicion-ajena`. La prueba de
+temas reescribe jpg de escenas ajenas; las dos que tocó esta vez se revirtieron
+antes del commit.
