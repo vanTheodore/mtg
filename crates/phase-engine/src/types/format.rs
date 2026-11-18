@@ -6909,7 +6909,7 @@ mod tests {
     fn client_builtin_game_format_union_matches_the_engine() {
         use strum::IntoEnumIterator;
 
-        const TYPES_TS: &str = include_str!("../../../../client/src/adapter/types.ts");
+        const TYPES_TS: &str = include_str!("../../client-mirror/types.ts");
 
         // The union's own span: from its declaration header to the first
         // subsequent line whose code half ends in `;`.
@@ -6963,7 +6963,7 @@ mod tests {
     /// every entry writes `format:` continues to pass.
     #[test]
     fn client_format_registry_matches_the_engine_registry() {
-        const REGISTRY_TS: &str = include_str!("../../../../client/src/data/formatRegistry.ts");
+        const REGISTRY_TS: &str = include_str!("../../client-mirror/formatRegistry.ts");
 
         let raw = client_format_names(REGISTRY_TS, "format: ");
 
@@ -7050,7 +7050,7 @@ mod tests {
     /// legality lens from them.
     #[test]
     fn client_format_registry_legality_keys_match_the_engine() {
-        const REGISTRY_TS: &str = include_str!("../../../../client/src/data/formatRegistry.ts");
+        const REGISTRY_TS: &str = include_str!("../../client-mirror/formatRegistry.ts");
 
         let found: Vec<Option<String>> = REGISTRY_TS
             .lines()
