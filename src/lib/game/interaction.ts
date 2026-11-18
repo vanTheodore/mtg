@@ -5159,3 +5159,232 @@ export function objectSelectLabel(s: EngineSnapshot | null, id: ObjectId): strin
   if (s.state.waiting_for.type === 'DeclareBlockers' && s.state.combat?.attackers.some((a) => a.object_id === id)) return 'Elegir atacante para bloquear';
   return undefined;
 }
+
+// ── Pasada 67: `ChooseRingBearer`, `ChooseLegend`, `BattleProtectorChoice` ──
+//
+// Las tres son la misma pregunta con otro sujeto: «elige uno de estos», con la
+// lista cerrada que el motor publica. Por eso comparten un solo panel
+// (`ExactCandidatePrompt.svelte`) y un solo parser de ofertas: la forma de la
+// respuesta es idéntica (`ExactCandidates` en `human_response_model`), aunque
+// el objeto que se elige sea una criatura, un permanente legendario o un
+// jugador. Ninguna de las tres añade, quita ni reordena candidatos.
+
+/** El sujeto de una elección de candidato exacto. Decide el título del panel. */
+export type ExactCandidateKind = 'ring-bearer' | 'legend' | 'battle-protector';
+
+export type ExactCandidatePrompt = {
+  kind: ExactCandidateKind;
+  player: PlayerId;
+  /**
+   * Lo que el motor publicó, en su orden. Para `ring-bearer` y `legend` son
+   * objetos; para `battle-protector`, jugadores. El panel no los reordena ni
+   * los filtra: un candidato publicado sin acción publicada es una fila sin
+   * botón, no un candidato descartado.
+   */
+  candidates: (ObjectId | PlayerId)[];
+  /** CR 701.54a / CR 704.5j / CR 310.11: el objeto o la batalla en disputa. */
+  sourceId: ObjectId | null;
+  /** CR 310.11: la batalla cuyo protector se elige. Sólo `battle-protector`. */
+  battleId: ObjectId | null;
+  /** CR 704.5j: el nombre legendario que colisiona. Sólo `legend`. */
+  legendName: string | null;
+};
+
+function ints(raw: unknown): number[] {
+  return Array.isArray(raw)
+    ? raw.filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id >= 0)
+    : [];
+}
+
+/**
+ * CR 701.54a: el Anillo te tienta y eliges qué criatura lo porta.
+ * CR 704.5j: la regla de leyendas deja elegir cuál de los legendarios homónimos
+ * se queda; `legend_name` es el nombre que colisiona y se pinta tal cual, sin
+ * deducirlo de los candidatos.
+ * CR 310.11: al morir un planeswalker que protegía una batalla, su controlador
+ * elige qué jugador pasa a protegerla.
+ *
+ * Una sola función para las tres: la forma de la respuesta es la misma y el
+ * motor la clasifica igual (`HumanResponseModel::ExactCandidates`).
+ */
+export function exactCandidatePrompt(snapshot: EngineSnapshot | null): ExactCandidatePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting) return null;
+  const data = waiting.data ?? {};
+  const player = typeof data.player === 'number' ? data.player : snapshot!.viewer;
+  if (waiting.type === 'ChooseRingBearer') {
+    return {
+      kind: 'ring-bearer',
+      player,
+      candidates: ints(data.candidates),
+      sourceId: null,
+      battleId: null,
+      legendName: null
+    };
+  }
+  if (waiting.type === 'ChooseLegend') {
+    return {
+      kind: 'legend',
+      player,
+      candidates: ints(data.candidates),
+      sourceId: null,
+      battleId: null,
+      legendName: typeof data.legend_name === 'string' ? data.legend_name : null
+    };
+  }
+  if (waiting.type === 'BattleProtectorChoice') {
+    return {
+      kind: 'battle-protector',
+      player,
+      // CR 310.11: los candidatos son asientos, no objetos.
+      candidates: ints(data.candidates),
+      sourceId: null,
+      battleId: typeof data.battle_id === 'number' ? data.battle_id : null,
+      legendName: null
+    };
+  }
+  return null;
+}
+
+export type ExactCandidateOffers = {
+  /** `ChooseRingBearer { target }` por objeto, en el orden del cable. */
+  byObject: Map<number, GameAction>;
+  /** `ChooseLegend { keep }` por objeto, en el orden del cable. */
+  byLegend: Map<number, GameAction>;
+  /** `ChooseBattleProtector { protector }` por asiento, en el orden del cable. */
+  byProtector: Map<number, GameAction>;
+};
+
+/**
+ * Las tres respuestas del cable, indexadas por el valor que eligen. Un id que
+ * no es entero, o que el motor no publicó como acción, no produce botón: la
+ * lista de botones es la intersección de candidatos y acciones, no una
+ * reconstrucción de ninguna de las dos. Cuando el cable repite una acción gana
+ * la primera, igual que en `clashOffers`.
+ */
+export function exactCandidateOffers(actions: GameAction[]): ExactCandidateOffers {
+  const byObject = new Map<number, GameAction>();
+  const byLegend = new Map<number, GameAction>();
+  const byProtector = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type === 'ChooseRingBearer') {
+      const target = action.data?.target;
+      if (typeof target === 'number' && Number.isInteger(target) && target >= 0 && !byObject.has(target)) {
+        byObject.set(target, action);
+      }
+      continue;
+    }
+    if (action.type === 'ChooseLegend') {
+      const keep = action.data?.keep;
+      if (typeof keep === 'number' && Number.isInteger(keep) && keep >= 0 && !byLegend.has(keep)) {
+        byLegend.set(keep, action);
+      }
+      continue;
+    }
+    if (action.type === 'ChooseBattleProtector') {
+      const protector = action.data?.protector;
+      if (typeof protector === 'number' && Number.isInteger(protector) && protector >= 0 && !byProtector.has(protector)) {
+        byProtector.set(protector, action);
+      }
+    }
+  }
+  return { byObject, byLegend, byProtector };
+}
+
+/** La acción publicada para un candidato de este prompt, o nada. */
+export function exactCandidateAction(
+  offers: ExactCandidateOffers,
+  prompt: Pick<ExactCandidatePrompt, 'kind'>,
+  candidate: number
+): GameAction | undefined {
+  if (prompt.kind === 'ring-bearer') return offers.byObject.get(candidate);
+  if (prompt.kind === 'legend') return offers.byLegend.get(candidate);
+  return offers.byProtector.get(candidate);
+}
+
+/**
+ * `ChooseDungeon` y `ChooseDungeonRoom` — CR 701.49a y CR 309.5a.
+ *
+ * Van aparte de las tres de arriba porque su lista no son ids: el motor manda
+ * `DungeonPreview` / `RoomPreview` con el nombre y el texto impresos, y la
+ * respuesta lleva un índice o un id de dungeon, no un objeto del campo. Pintar
+ * el nombre desde la tabla de dungeons del cliente sería inventar: el nombre
+ * que se lee es el que vino en el cable.
+ */
+export type DungeonPrompt = {
+  player: PlayerId;
+  /** `null` para `ChooseDungeon`: todavía no hay dungeon elegida. */
+  dungeonName: string | null;
+  /** CR 701.49a: dungeons a los que se puede venturar. */
+  dungeons: { id: unknown; name: string; roomName: string; roomText: string }[];
+  /** CR 309.5a: habitaciones a las que se puede avanzar. */
+  rooms: { index: number; name: string; text: string }[];
+};
+
+export function dungeonPrompt(snapshot: EngineSnapshot | null): DungeonPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting) return null;
+  const data = waiting.data ?? {};
+  const player = typeof data.player === 'number' ? data.player : snapshot!.viewer;
+  const name = (value: unknown) => (typeof value === 'string' ? value : '');
+  if (waiting.type === 'ChooseDungeon') {
+    const raw = Array.isArray(data.options) ? data.options : [];
+    const dungeons = raw.map((option) => {
+      const entry = (option?.entry_room ?? {}) as Record<string, unknown>;
+      return {
+        id: option?.dungeon,
+        name: name(option?.name),
+        // CR 309.4a: la habitación de entrada, que es donde cae el marcador.
+        roomName: name(entry.name),
+        roomText: name(entry.text)
+      };
+    }).filter((option) => option.name !== '');
+    return { player, dungeonName: null, dungeons, rooms: [] };
+  }
+  if (waiting.type === 'ChooseDungeonRoom') {
+    const raw = Array.isArray(data.options) ? data.options : [];
+    const rooms = raw.map((option) => ({
+      index: typeof option?.index === 'number' ? option.index : -1,
+      name: name(option?.name),
+      text: name(option?.text)
+    })).filter((room) => room.index >= 0 && room.name !== '');
+    return {
+      player,
+      dungeonName: typeof data.dungeon_name === 'string' ? data.dungeon_name : null,
+      dungeons: [],
+      rooms
+    };
+  }
+  return null;
+}
+
+export type DungeonOffers = {
+  /** `ChooseDungeon { dungeon }` por el id publicado, comparado como JSON. */
+  byDungeon: Map<string, GameAction>;
+  /** `ChooseDungeonRoom { room_index }`. */
+  byRoom: Map<number, GameAction>;
+};
+
+/**
+ * El índice de una dungeon es un `DungeonId` serializado, y este lado no tiene
+ * por qué conocer su forma interna: se indexa por su JSON canónico, que es
+ * exactamente el valor que el motor publicó en `DungeonPreview.dungeon`.
+ */
+export function dungeonOffers(actions: GameAction[]): DungeonOffers {
+  const byDungeon = new Map<string, GameAction>();
+  const byRoom = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type === 'ChooseDungeon') {
+      const key = JSON.stringify(action.data?.dungeon ?? null);
+      if (!byDungeon.has(key)) byDungeon.set(key, action);
+      continue;
+    }
+    if (action.type === 'ChooseDungeonRoom') {
+      const index = action.data?.room_index;
+      if (typeof index === 'number' && Number.isInteger(index) && !byRoom.has(index)) {
+        byRoom.set(index, action);
+      }
+    }
+  }
+  return { byDungeon, byRoom };
+}

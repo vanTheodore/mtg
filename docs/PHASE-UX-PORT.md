@@ -3360,12 +3360,14 @@ publicada, y si no, la publicada.
 ### El pin sigue en `28b2f9e4`, y upstream ya está en v0.128.0
 
 `main` de Phase pasó de 23 a **38** commits por delante del pin, con release
-**v0.128.0**. El enum sigue en **148** variantes, pero **no es el mismo enum**:
-`SpellCopyOrderChoice` desapareció y en su lugar está `MemberOrderChoice` (misma
-forma más `purpose`, con valor por defecto). Ninguna de las 90 ventanas que Mesa
-ya representaba cambia de forma: lo comprobé comparando los bloques del enum
-publicado contra los del pin, y la única diferencia está en nombres que Mesa no
-había portado. El pin no se mueve en esta pasada.
+**v0.128.0**. El enum sigue en **148** variantes. Ninguna de las 90 ventanas que
+Mesa ya representaba cambia de forma, y la única que cambia entre las 148 es una
+que Mesa no había portado: `LoopShortcut` pierde `road: OfferRoad`, la etiqueta
+del productor que acuñó la oferta. El pin no se mueve en esta pasada; se movió en
+la siguiente, junto con la corrección de la frase que había aquí antes (decía que
+`SpellCopyOrderChoice` había desaparecido a favor de `MemberOrderChoice`, y es al
+revés: `SpellCopyOrderChoice` sigue en el enum con su forma de siempre y
+`MemberOrderChoice` no existe).
 
 ### Verificación de esta pasada
 
@@ -3375,3 +3377,78 @@ carta no publicada no entra en la pila, la acción es la permutación exacta, la
 `N` sólo la lleva el estruendo y una pila vacía no inventa cartas); el recuento
 vigilado pasa a **93** entradas en `REPRESENTED` (90 → 93). El motor no se tocó:
 `bun run engine:verify` sigue en verde con el mismo SHA.
+
+## Tres preguntas con la misma forma, y dos listas que no son ids (sexagésima séptima pasada, 18 nov 2026)
+
+Las cinco variantes de esta pasada están entre las **30** que el propio motor
+clasifica como `HumanResponseModel::ExactCandidates` en
+`game/interaction.rs`: el motor publica una lista cerrada y la respuesta elige uno
+de sus elementos. Eso no es una intuición sobre los nombres —es el `match` que
+decide cómo se materializa una respuesta humana—, y por eso tres de ellas
+comparten un solo panel.
+
+### `ChooseRingBearer`, `ChooseLegend` y `BattleProtectorChoice`
+
+Las tres preguntan lo mismo con otro sujeto y publican lo mismo: `candidates`.
+
+- `ChooseRingBearer` (CR 701.54a): el Anillo te tienta y eliges qué criatura lo
+  porta. La respuesta es `ChooseRingBearer { target }`.
+- `ChooseLegend` (CR 704.5j): dos legendarios homónimos bajo el mismo control y
+  eliges cuál se queda. `legend_name` es el nombre que colisiona y se pinta tal
+  cual; no se deduce de los candidatos ni se busca en ninguna tabla. La respuesta
+  es `ChooseLegend { keep }`.
+- `BattleProtectorChoice` (CR 310.11): al quedar una batalla sin protector, su
+  controlador elige qué jugador la protege. Aquí los candidatos son **asientos**,
+  no objetos, y la batalla en disputa se nombra si el cable publica su objeto.
+
+`ExactCandidatePrompt.svelte` pinta los candidatos en el orden del cable, sin
+filtrar, sin ordenar y sin completar. Un candidato sin acción publicada queda como
+fila sin botón (`data-exact-candidate-inert`), no como candidato descartado: lo
+que se lee es lo que el cable dijo. El botón que sí existe se busca en la
+intersección de candidatos y `legal.actions` (`exactCandidateOffers`), y despacha
+**el objeto publicado**, comprobado por identidad en las pruebas.
+
+Los dos legendarios del mismo lado se distinguen con el mismo criterio que ya usa
+el retarget: nombre, y si se repite, controlador, y si aún se repite, `#id`.
+
+### `ChooseDungeon` y `ChooseDungeonRoom`
+
+Van en otro bloque (`DungeonPrompt.svelte`) porque su lista **no son ids**: el
+motor manda `DungeonPreview` y `RoomPreview` con el nombre y el texto impresos, y
+la respuesta lleva un `DungeonId` o un `room_index`, no un objeto del campo. La
+regla de la capa de presentación prohíbe que el cliente tenga sus propias tablas
+de dungeons, así que el nombre que se lee es exactamente el que vino en la
+preview: CR 701.49a para elegir dungeon (con la habitación de entrada, CR 309.4a)
+y CR 309.5a para elegir a qué habitación avanza el marcador, con el nombre de la
+dungeon (`dungeon_name`) como contexto.
+
+### Una trampa de Svelte 5, anotada
+
+`DungeonId` viaja como objeto, así que `String(id)` es `[object Object]` para todas
+las dungeons y un `{#each ... (String(option.id))}` lanza `each_key_duplicate`: la
+ruta responde 500 y no se pinta nada. La clave tiene que ser la forma canónica del
+id (`JSON.stringify`), que es además la que usa `dungeonOffers` para indexar la
+acción. Sólo se veía con dos dungeons: con una, la clave repetida no se repite.
+
+### Escenas y verificación
+
+Escenas `ringBearer`, `ringBearerOne`, `ringBearerAway`, `legend`, `legendAway`,
+`protoProtector`, `protoOne`, `protoAway`, `dungeon`, `dungeonOne`, `dungeonAway`,
+`dungeonRoom`, `dungeonRoomOne` y `dungeonRoomAway`. Capturas
+`ux-portador-anillo-1440.jpg`, `ux-un-portador-anillo-1440.jpg`,
+`ux-portador-ajeno-1440.jpg`, `ux-regla-leyendas-1440.jpg`,
+`ux-leyendas-ajenas-1440.jpg`, `ux-protector-batalla-1440.jpg`,
+`ux-un-protector-batalla-1440.jpg`, `ux-protector-ajeno-1440.jpg`,
+`ux-elegir-dungeon-1440.jpg`, `ux-una-dungeon-1440.jpg`,
+`ux-dungeon-ajena-1440.jpg`, `ux-habitacion-dungeon-1440.jpg`,
+`ux-una-habitacion-1440.jpg` y `ux-habitacion-ajena-1440.jpg`, más sus pares de
+tema (152 escenas, 304 jpg).
+
+`bun run check` 0 errores; `bun test src/lib` **732** (12 nuevas en
+`exact-candidate.test.ts`); `ux-lab` **168** (11 nuevas); `ux-themes` **3/3** con
+152 escenas. `REPRESENTED` pasa de **93** a **98** (quedan **50** de las 148).
+
+**El contraste muerde.** `.type` con `opacity: .85` sobre el relleno de acento
+falla AA en tema claro; el texto secundario de un botón se separa por tamaño y
+peso, no por opacidad. Y la norma de es-419 veta «pulsa» incluso en un comentario
+de código: la prueba de locale recorre los `.svelte` línea a línea.

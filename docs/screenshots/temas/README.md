@@ -107,6 +107,20 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `castVariantAuth` | `CastingVariantChoice` (permiso) | [claro](permiso-cementerio-claro.jpg) | [oscuro](permiso-cementerio-oscuro.jpg) |
 | `castVariantAway` | `CastingVariantChoice` (ajena) | [claro](variante-ajena-claro.jpg) | [oscuro](variante-ajena-oscuro.jpg) |
 | `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
+| `ringBearer` | `ChooseRingBearer` | [claro](portador-anillo-claro.jpg) | [oscuro](portador-anillo-oscuro.jpg) |
+| `ringBearerOne` | `ChooseRingBearer` (un candidato) | [claro](un-portador-anillo-claro.jpg) | [oscuro](un-portador-anillo-oscuro.jpg) |
+| `ringBearerAway` | `ChooseRingBearer` (ajena) | [claro](portador-ajeno-claro.jpg) | [oscuro](portador-ajeno-oscuro.jpg) |
+| `legend` | `ChooseLegend` | [claro](regla-leyendas-claro.jpg) | [oscuro](regla-leyendas-oscuro.jpg) |
+| `legendAway` | `ChooseLegend` (ajena) | [claro](leyendas-ajenas-claro.jpg) | [oscuro](leyendas-ajenas-oscuro.jpg) |
+| `protoProtector` | `BattleProtectorChoice` | [claro](protector-batalla-claro.jpg) | [oscuro](protector-batalla-oscuro.jpg) |
+| `protoOne` | `BattleProtectorChoice` (un candidato) | [claro](un-protector-batalla-claro.jpg) | [oscuro](un-protector-batalla-oscuro.jpg) |
+| `protoAway` | `BattleProtectorChoice` (ajena) | [claro](protector-ajeno-claro.jpg) | [oscuro](protector-ajeno-oscuro.jpg) |
+| `dungeon` | `ChooseDungeon` | [claro](elegir-dungeon-claro.jpg) | [oscuro](elegir-dungeon-oscuro.jpg) |
+| `dungeonOne` | `ChooseDungeon` (una) | [claro](una-dungeon-claro.jpg) | [oscuro](una-dungeon-oscuro.jpg) |
+| `dungeonAway` | `ChooseDungeon` (ajena) | [claro](dungeon-ajena-claro.jpg) | [oscuro](dungeon-ajena-oscuro.jpg) |
+| `dungeonRoom` | `ChooseDungeonRoom` | [claro](habitacion-dungeon-claro.jpg) | [oscuro](habitacion-dungeon-oscuro.jpg) |
+| `dungeonRoomOne` | `ChooseDungeonRoom` (una) | [claro](una-habitacion-claro.jpg) | [oscuro](una-habitacion-oscuro.jpg) |
+| `dungeonRoomAway` | `ChooseDungeonRoom` (ajena) | [claro](habitacion-ajena-claro.jpg) | [oscuro](habitacion-ajena-oscuro.jpg) |
 | `clash` | `ClashChooseOpponent` | [claro](choque-claro.jpg) | [oscuro](choque-oscuro.jpg) |
 | `clashOne` | `ClashChooseOpponent` (un candidato) | [claro](un-oponente-choque-claro.jpg) | [oscuro](un-oponente-choque-oscuro.jpg) |
 | `clashAway` | `ClashChooseOpponent` (ajeno) | [claro](choque-ajeno-claro.jpg) | [oscuro](choque-ajeno-oscuro.jpg) |

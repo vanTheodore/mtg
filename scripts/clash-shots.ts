@@ -35,7 +35,21 @@ const SHOTS = [
   { scene: 'bottomReveal', file: 'ux-fondo-revelado-1440.jpg', block: '[data-bottom-order]' },
   { scene: 'bottomDig', file: 'ux-fondo-mirado-1440.jpg', block: '[data-bottom-order]' },
   { scene: 'bottomEmpty', file: 'ux-fondo-vacio-1440.jpg', block: '[data-bottom-order]' },
-  { scene: 'bottomAway', file: 'ux-fondo-ajeno-1440.jpg', block: '[data-bottom-order]' }
+  { scene: 'bottomAway', file: 'ux-fondo-ajeno-1440.jpg', block: '[data-bottom-order]' },
+  { scene: 'ringBearer', file: 'ux-portador-anillo-1440.jpg', block: '[data-exact-candidate]' },
+  { scene: 'ringBearerOne', file: 'ux-un-portador-anillo-1440.jpg', block: '[data-exact-candidate]' },
+  { scene: 'ringBearerAway', file: 'ux-portador-ajeno-1440.jpg', block: '[data-exact-candidate]' },
+  { scene: 'legend', file: 'ux-regla-leyendas-1440.jpg', block: '[data-exact-candidate]' },
+  { scene: 'legendAway', file: 'ux-leyendas-ajenas-1440.jpg', block: '[data-exact-candidate]' },
+  { scene: 'protoProtector', file: 'ux-protector-batalla-1440.jpg', block: '[data-exact-candidate]' },
+  { scene: 'protoOne', file: 'ux-un-protector-batalla-1440.jpg', block: '[data-exact-candidate]' },
+  { scene: 'protoAway', file: 'ux-protector-ajeno-1440.jpg', block: '[data-exact-candidate]' },
+  { scene: 'dungeon', file: 'ux-elegir-dungeon-1440.jpg', block: '[data-dungeon]' },
+  { scene: 'dungeonOne', file: 'ux-una-dungeon-1440.jpg', block: '[data-dungeon]' },
+  { scene: 'dungeonAway', file: 'ux-dungeon-ajena-1440.jpg', block: '[data-dungeon]' },
+  { scene: 'dungeonRoom', file: 'ux-habitacion-dungeon-1440.jpg', block: '[data-dungeon]' },
+  { scene: 'dungeonRoomOne', file: 'ux-una-habitacion-1440.jpg', block: '[data-dungeon]' },
+  { scene: 'dungeonRoomAway', file: 'ux-habitacion-ajena-1440.jpg', block: '[data-dungeon]' }
 ];
 
 mkdirSync(outDir, { recursive: true });

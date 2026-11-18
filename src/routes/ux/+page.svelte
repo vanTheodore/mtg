@@ -90,6 +90,8 @@
   import GiftRecipientPrompt from '#lib/components/GiftRecipientPrompt.svelte';
   import TopOrBottomPrompt from '#lib/components/TopOrBottomPrompt.svelte';
   import ClashOpponentPrompt from '#lib/components/ClashOpponentPrompt.svelte';
+  import ExactCandidatePrompt from '#lib/components/ExactCandidatePrompt.svelte';
+  import DungeonPrompt from '#lib/components/DungeonPrompt.svelte';
   import ClashPlacementPrompt from '#lib/components/ClashPlacementPrompt.svelte';
   import SideboardPrompt from '#lib/components/SideboardPrompt.svelte';
   import PlayDrawPrompt from '#lib/components/PlayDrawPrompt.svelte';
@@ -97,7 +99,7 @@
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway' | 'ringBearer' | 'ringBearerOne' | 'ringBearerAway' | 'legend' | 'legendAway' | 'protoProtector' | 'protoOne' | 'protoAway' | 'dungeon' | 'dungeonOne' | 'dungeonAway' | 'dungeonRoom' | 'dungeonRoomOne' | 'dungeonRoomAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -243,6 +245,20 @@
     { value: 'playDraw', label: 'Jugar o robar' },
     { value: 'playDrawDraw', label: 'Robar primero' },
     { value: 'playDrawAway', label: 'Elección ajena' },
+    { value: 'ringBearer', label: 'Portador del Anillo' },
+    { value: 'ringBearerOne', label: 'Un portador del Anillo' },
+    { value: 'ringBearerAway', label: 'Portador ajeno' },
+    { value: 'legend', label: 'Regla de leyendas' },
+    { value: 'legendAway', label: 'Leyendas ajenas' },
+    { value: 'protoProtector', label: 'Protector de batalla' },
+    { value: 'protoOne', label: 'Un protector de batalla' },
+    { value: 'protoAway', label: 'Protector ajeno' },
+    { value: 'dungeon', label: 'Elegir dungeon' },
+    { value: 'dungeonOne', label: 'Una dungeon' },
+    { value: 'dungeonAway', label: 'Dungeon ajena' },
+    { value: 'dungeonRoom', label: 'Habitación de dungeon' },
+    { value: 'dungeonRoomOne', label: 'Una habitación' },
+    { value: 'dungeonRoomAway', label: 'Habitación ajena' },
     { value: 'bottomRipple', label: 'Fondo del estruendo' },
     { value: 'bottomReveal', label: 'Fondo de lo revelado' },
     { value: 'bottomDig', label: 'Fondo de lo mirado' },
@@ -397,6 +413,20 @@
     playDraw: 'BetweenGamesChoosePlayDraw · CR 103.1, jugar o robar',
     playDrawDraw: 'BetweenGamesChoosePlayDraw · sólo robar publicado',
     playDrawAway: 'BetweenGamesChoosePlayDraw · lo decide el otro asiento',
+    ringBearer: 'ChooseRingBearer · CR 701.54a, dos portadores publicados',
+    ringBearerOne: 'ChooseRingBearer · CR 701.54a, sólo el candidato que legal.actions publicó',
+    ringBearerAway: 'ChooseRingBearer · CR 701.54a, el asiento que no decide',
+    legend: 'ChooseLegend · CR 704.5j, el nombre legendario viene del cable',
+    legendAway: 'ChooseLegend · CR 704.5j, la regla de leyendas la resuelve su controlador',
+    protoProtector: 'BattleProtectorChoice · CR 310.11, los candidatos son asientos',
+    protoOne: 'BattleProtectorChoice · CR 310.11, sólo el asiento que legal.actions publicó',
+    protoAway: 'BattleProtectorChoice · CR 310.11, el asiento que no decide',
+    dungeon: 'ChooseDungeon · CR 701.49a, nombres impresos por el motor',
+    dungeonOne: 'ChooseDungeon · CR 701.49a, sólo la dungeon publicada',
+    dungeonAway: 'ChooseDungeon · CR 701.49a, el asiento que no decide',
+    dungeonRoom: 'ChooseDungeonRoom · CR 309.5a, la bifurcación del pasillo',
+    dungeonRoomOne: 'ChooseDungeonRoom · CR 309.5a, una sola salida publicada',
+    dungeonRoomAway: 'ChooseDungeonRoom · CR 309.5a, el asiento que no decide',
     bottomRipple: 'RippleBottomOrder · CR 702.60a, el orden es la respuesta',
     bottomReveal: 'RevealUntilBottomOrder · CR 701.20a, lo que no se quedó va al fondo',
     bottomDig: 'DigBottomOrder · CR 701.20e, el resto de lo mirado',
@@ -1708,6 +1738,69 @@
         }
       };
     }
+    if (scene.startsWith('ringBearer')) {
+      return {
+        type: 'ChooseRingBearer',
+        data: {
+          player: scene === 'ringBearerAway' ? 1 : 0,
+          // CR 701.54a: dos criaturas que pueden portar el Anillo.
+          candidates: scene === 'ringBearerOne' ? [333] : [333, 334]
+        }
+      };
+    }
+    if (scene.startsWith('legend')) {
+      return {
+        type: 'ChooseLegend',
+        data: {
+          player: scene === 'legendAway' ? 1 : 0,
+          // CR 704.5j: dos Gisela bajo el mismo control.
+          legend_name: 'Gisela, the Broken Blade',
+          candidates: [406, 407]
+        }
+      };
+    }
+    if (scene.startsWith('proto')) {
+      return {
+        type: 'BattleProtectorChoice',
+        data: {
+          player: scene === 'protoAway' ? 1 : 0,
+          battle_id: 409,
+          // CR 310.11: los candidatos son asientos.
+          candidates: scene === 'protoOne' ? [0] : [0, 1]
+        }
+      };
+    }
+    if (scene.startsWith('dungeonRoom')) {
+      return {
+        type: 'ChooseDungeonRoom',
+        data: {
+          player: scene === 'dungeonRoomAway' ? 1 : 0,
+          dungeon: { type: 'LostMineOfPhandelver' },
+          dungeon_name: 'Lost Mine of Phandelver',
+          // CR 309.5a: dos salidas del mismo pasillo, con el texto impreso.
+          options: scene === 'dungeonRoomOne'
+            ? [{ index: 1, name: 'Cave Entrance', text: 'The entrance to the cave is dark.' }]
+            : [
+                { index: 1, name: 'Cave Entrance', text: 'The entrance to the cave is dark.' },
+                { index: 2, name: 'Mine Tunnels', text: 'The tunnels twist and turn.' }
+              ]
+        }
+      };
+    }
+    if (scene.startsWith('dungeon')) {
+      return {
+        type: 'ChooseDungeon',
+        data: {
+          player: scene === 'dungeonAway' ? 1 : 0,
+          options: scene === 'dungeonOne'
+            ? [{ dungeon: { type: 'LostMineOfPhandelver' }, name: 'Lost Mine of Phandelver', entry_room: { index: 1, name: 'Cave Entrance', text: 'The entrance to the cave is dark.' } }]
+            : [
+                { dungeon: { type: 'LostMineOfPhandelver' }, name: 'Lost Mine of Phandelver', entry_room: { index: 1, name: 'Cave Entrance', text: 'The entrance to the cave is dark.' } },
+                { dungeon: { type: 'DungeonOfTheMadMage' }, name: 'Dungeon of the Mad Mage', entry_room: { index: 1, name: 'Yawning Portal', text: 'The stairs descend into darkness.' } }
+              ]
+        }
+      };
+    }
     if (scene.startsWith('bottom')) {
       const cards = scene === 'bottomEmpty' ? [] : [531, 532];
       return {
@@ -2889,7 +2982,20 @@
                                     ]
                                   : scene === 'giftOne'
                                     ? [{ type: 'ChooseGiftRecipient', data: { opponent: 1 } }]
-                                    : scene === 'bottomRipple' || scene === 'bottomAway'
+                                    : scene.startsWith('ringBearer')
+                                      ? (scene === 'ringBearerOne' ? [333] : [333, 334]).map((target) => ({ type: 'ChooseRingBearer', data: { target } }))
+                                      : scene.startsWith('legend')
+                                        ? [406, 407].map((keep) => ({ type: 'ChooseLegend', data: { keep } }))
+                                        : scene.startsWith('proto')
+                                          ? (scene === 'protoOne' ? [0] : [0, 1]).map((protector) => ({ type: 'ChooseBattleProtector', data: { protector } }))
+                                          : scene === 'dungeonRoom' || scene === 'dungeonRoomAway' || scene === 'dungeonRoomOne'
+                                            ? (scene === 'dungeonRoomOne' ? [1] : [1, 2]).map((room_index) => ({ type: 'ChooseDungeonRoom', data: { room_index } }))
+                                            : scene === 'dungeon' || scene === 'dungeonAway' || scene === 'dungeonOne'
+                                              ? (scene === 'dungeonOne'
+                                                  ? [{ dungeon: { type: 'LostMineOfPhandelver' } }]
+                                                  : [{ dungeon: { type: 'LostMineOfPhandelver' } }, { dungeon: { type: 'DungeonOfTheMadMage' } }]
+                                                ).map((data) => ({ type: 'ChooseDungeon', data }))
+                                              : scene === 'bottomRipple' || scene === 'bottomAway'
                                       ? [{ type: 'SelectCards', data: { cards: [532, 531] } }]
                                       : scene === 'bottomReveal' || scene === 'bottomDig'
                                         ? [{ type: 'SelectCards', data: { cards: [531, 532] } }]
@@ -3182,6 +3288,8 @@
         {#if scene.startsWith('clash')}<ClashOpponentPrompt />{/if}
         {#if scene.startsWith('sideboard')}<SideboardPrompt />{/if}
         {#if scene.startsWith('playDraw')}<PlayDrawPrompt />{/if}
+        {#if scene.startsWith('ringBearer') || scene.startsWith('legend') || scene.startsWith('proto')}<ExactCandidatePrompt />{/if}
+        {#if scene.startsWith('dungeon')}<DungeonPrompt />{/if}
         {#if scene.startsWith('bottom')}<BottomOrderPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}

@@ -3417,3 +3417,154 @@ test('la vista de asignación de daño nombra los repartos que propone Phase', a
   const serious = board.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''));
   expect(serious).toEqual([]);
 });
+
+// ── Pasada 67: ChooseRingBearer, ChooseLegend, BattleProtectorChoice ─────────
+
+test('el portador del Anillo se elige entre los candidatos publicados, en su orden', async ({ page }) => {
+  await page.goto('/ux?scene=ringBearer');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-exact-candidate-kind', 'ring-bearer');
+  await expect(block).toHaveAttribute('data-exact-candidate-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir portador del Anillo');
+  await expect(block.locator('[data-exact-candidate-rule]')).toContainText('CR 701.54a');
+
+  const options = block.locator('[data-exact-candidate-option]');
+  await expect(options).toHaveCount(2);
+  // The wire's order, not the label's: the ids are what the engine published.
+  await expect(options.nth(0)).toHaveAttribute('data-exact-candidate-option', '333');
+  await expect(options.nth(1)).toHaveAttribute('data-exact-candidate-option', '334');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un candidato que legal.actions no publicó no es un botón', async ({ page }) => {
+  await page.goto('/ux?scene=ringBearerOne');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block).toHaveAttribute('data-exact-candidate-count', '1');
+  await expect(block.locator('[data-exact-candidate-option]')).toHaveCount(1);
+  await expect(block.locator('[data-exact-candidate-option="334"]')).toHaveCount(0);
+});
+
+test('el portador ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=ringBearerAway');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-exact-candidate-faces] li')).toHaveCount(2);
+  await expect(block.locator('[data-exact-candidate-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la regla de leyendas nombra el legendario con el nombre que vino del cable', async ({ page }) => {
+  await page.goto('/ux?scene=legend');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block).toHaveAttribute('data-exact-candidate-kind', 'legend');
+  await expect(block.locator('strong')).toHaveText('Elegir qué Gisela, the Broken Blade se queda');
+  await expect(block.locator('[data-exact-candidate-rule]')).toContainText('CR 704.5j');
+  const options = block.locator('[data-exact-candidate-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toContainText('Gisela, the Broken Blade');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la leyenda ajena la resuelve su controlador y no se pulsa desde aquí', async ({ page }) => {
+  await page.goto('/ux?scene=legendAway');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block.locator('[data-exact-candidate-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+});
+
+test('el protector de la batalla es un asiento publicado, y la batalla se nombra', async ({ page }) => {
+  await page.goto('/ux?scene=protoProtector');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block).toHaveAttribute('data-exact-candidate-kind', 'battle-protector');
+  await expect(block).toHaveAttribute('data-exact-candidate-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir protector de la batalla');
+  await expect(block.locator('[data-exact-candidate-battle]')).toContainText('Invasion of Kamigawa');
+  const options = block.locator('[data-exact-candidate-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toContainText('Jugador 1');
+  await expect(options.nth(1)).toContainText('Jugador 2');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un protector no publicado no es un botón, y el ajeno no se pulsa', async ({ page }) => {
+  await page.goto('/ux?scene=protoOne');
+  const one = page.locator('[data-exact-candidate]');
+  await expect(one.locator('[data-exact-candidate-option]')).toHaveCount(1);
+  await expect(one.locator('[data-exact-candidate-option="1"]')).toHaveCount(0);
+
+  await page.goto('/ux?scene=protoAway');
+  const away = page.locator('[data-exact-candidate]');
+  await expect(away.locator('button')).toHaveCount(0);
+  await expect(away.locator('[data-exact-candidate-other]')).toContainText('Jugador 2');
+});
+
+// ── Pasada 67: ChooseDungeon y ChooseDungeonRoom ─────────────────────────────
+
+test('la dungeon se elige con el nombre que el motor imprimió, sin tabla propia', async ({ page }) => {
+  await page.goto('/ux?scene=dungeon');
+  const block = page.locator('[data-dungeon]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-dungeon-kind', 'dungeon');
+  await expect(block).toHaveAttribute('data-dungeon-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir dungeon');
+  await expect(block.locator('[data-dungeon-rule]')).toContainText('CR 701.49a');
+  const options = block.locator('[data-dungeon-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toContainText('Lost Mine of Phandelver');
+  await expect(options.nth(1)).toContainText('Dungeon of the Mad Mage');
+  // CR 309.4a: the entry room comes from the preview, not from a client table.
+  await expect(options.nth(0)).toContainText('Cave Entrance');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una dungeon no publicada no es un botón, y la ajena no se pulsa', async ({ page }) => {
+  await page.goto('/ux?scene=dungeonOne');
+  const one = page.locator('[data-dungeon]');
+  await expect(one.locator('[data-dungeon-option]')).toHaveCount(1);
+  await expect(one.locator('[data-dungeon-option="Dungeon of the Mad Mage"]')).toHaveCount(0);
+
+  await page.goto('/ux?scene=dungeonAway');
+  const away = page.locator('[data-dungeon]');
+  await expect(away.locator('button')).toHaveCount(0);
+  await expect(away.locator('[data-dungeon-other]')).toContainText('Jugador 2');
+});
+
+test('la habitación de la dungeon se elige por el índice que publicó el motor', async ({ page }) => {
+  await page.goto('/ux?scene=dungeonRoom');
+  const block = page.locator('[data-dungeon]');
+  await expect(block).toHaveAttribute('data-dungeon-kind', 'room');
+  await expect(block).toHaveAttribute('data-dungeon-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir habitación');
+  await expect(block.locator('[data-dungeon-name]')).toContainText('Lost Mine of Phandelver');
+  const options = block.locator('[data-dungeon-room]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-dungeon-room', '1');
+  await expect(options.nth(0)).toContainText('Cave Entrance');
+  await expect(options.nth(1)).toHaveAttribute('data-dungeon-room', '2');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una habitación no publicada no es un botón, y la ajena no se pulsa', async ({ page }) => {
+  await page.goto('/ux?scene=dungeonRoomOne');
+  const one = page.locator('[data-dungeon]');
+  await expect(one.locator('[data-dungeon-room]')).toHaveCount(1);
+  await expect(one.locator('[data-dungeon-room="2"]')).toHaveCount(0);
+
+  await page.goto('/ux?scene=dungeonRoomAway');
+  const away = page.locator('[data-dungeon]');
+  await expect(away.locator('button')).toHaveCount(0);
+});
