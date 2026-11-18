@@ -3176,6 +3176,200 @@ export function cipherOffers(actions: GameAction[]): CipherOffers {
   return { byCreature, decline };
 }
 
+function integerList(raw: unknown): number[] | null {
+  if (!Array.isArray(raw)) return null;
+  const values: number[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'number' || !Number.isInteger(item) || item < 0) return null;
+    values.push(item);
+  }
+  return values;
+}
+
+function shardNames(raw: unknown): string[] | null {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) return null;
+  const names: string[] = [];
+  for (const shard of raw) {
+    const name = typeof shard === 'string'
+      ? shard
+      : shard && typeof shard === 'object' && typeof (shard as { type?: unknown }).type === 'string'
+        ? (shard as { type: string }).type
+        : '';
+    if (!name) return null;
+    names.push(name);
+  }
+  return names;
+}
+
+function electionKey(order: number[], hybrid: string[]): string {
+  return `${order.join('.')}|${hybrid.join('.')}`;
+}
+
+/**
+ * CR 601.2b + CR 601.2f: `WaitingFor::OrderCostReductions`. Two legal elections
+ * lock different totals, so the caster chooses one. The engine already picked
+ * one representative per distinct locked cost. The answer is that representative's
+ * `OrderCostReductions { order, hybrid_announcement }`, copied from `legal.actions`.
+ * A button exists only when that exact election is already legal. Reordering the
+ * list, or announcing a hybrid the outcome did not carry, would submit a total
+ * this table had not been shown. `CancelCast` appears only when it is legal.
+ * The locked cost is printed, never recomputed.
+ */
+export type CostReductionView = {
+  index: number;
+  name: string;
+  amount: unknown;
+  multiplier: number | null;
+  /** Empty when the wire omitted it. That omission is the spills-to-generic default, not a rider this table invents. */
+  reach: string;
+  minimumMana: number | null;
+};
+export type CostOrderOutcome = {
+  index: number;
+  order: number[];
+  /** Empty means the outcome announces nothing. */
+  hybrid: string[];
+  lockedCost: unknown;
+  key: string;
+};
+export type CostOrderPrompt = {
+  player: PlayerId;
+  spellId: ObjectId | null;
+  reductions: CostReductionView[];
+  hybridSymbols: string[];
+  outcomes: CostOrderOutcome[];
+};
+export function costOrderPrompt(snapshot: EngineSnapshot | null): CostOrderPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'OrderCostReductions') return null;
+  const data = waiting.data ?? {};
+  const pending = (data.pending_cast ?? {}) as { object_id?: unknown };
+  const reductions = Array.isArray(data.reductions)
+    ? data.reductions.flatMap((entry, index) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const raw = entry as { display_name?: unknown; amount?: unknown; multiplier?: unknown; reach?: unknown; minimum_mana?: unknown };
+        const reach = typeof raw.reach === 'string'
+          ? raw.reach
+          : raw.reach && typeof raw.reach === 'object' && typeof (raw.reach as { type?: unknown }).type === 'string'
+            ? (raw.reach as { type: string }).type
+            : '';
+        return [{
+          index,
+          name: typeof raw.display_name === 'string' ? raw.display_name : '',
+          amount: raw.amount ?? null,
+          multiplier: typeof raw.multiplier === 'number' && Number.isInteger(raw.multiplier) && raw.multiplier >= 1 ? raw.multiplier : null,
+          reach,
+          minimumMana: typeof raw.minimum_mana === 'number' && raw.minimum_mana > 0 ? raw.minimum_mana : null
+        }];
+      })
+    : [];
+  const outcomes = Array.isArray(data.outcomes)
+    ? data.outcomes.flatMap((entry, index) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const raw = entry as { order?: unknown; hybrid_announcement?: unknown; locked_cost?: unknown };
+        const order = integerList(raw.order);
+        const hybrid = shardNames(raw.hybrid_announcement);
+        if (!order || !hybrid) return [];
+        return [{ index, order, hybrid, lockedCost: raw.locked_cost ?? null, key: electionKey(order, hybrid) }];
+      })
+    : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    spellId: typeof pending.object_id === 'number' ? (pending.object_id as ObjectId) : null,
+    reductions,
+    hybridSymbols: shardNames(data.hybrid_symbols) ?? [],
+    outcomes
+  };
+}
+export type CostOrderOffers = {
+  byKey: Map<string, GameAction>;
+  cancel: GameAction | null;
+};
+/** An election that is not a published order plus a readable announcement is not a button. The first action wins. */
+export function costOrderOffers(actions: GameAction[]): CostOrderOffers {
+  const byKey = new Map<string, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'OrderCostReductions') continue;
+    const order = integerList(action.data?.order);
+    const hybrid = shardNames(action.data?.hybrid_announcement);
+    if (!order || !hybrid) continue;
+    const key = electionKey(order, hybrid);
+    if (!byKey.has(key)) byKey.set(key, action);
+  }
+  return {
+    byKey,
+    cancel: actions.find((action) => action.type === 'CancelCast') ?? null
+  };
+}
+
+function resolutionChoice(raw: unknown): { kind: 'decline' } | { kind: 'pay'; index: number } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const choice = raw as { type?: unknown; data?: { index?: unknown } };
+  if (choice.type === 'Decline') return { kind: 'decline' };
+  if (choice.type !== 'Pay') return null;
+  const index = choice.data?.index;
+  if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) return null;
+  return { kind: 'pay', index };
+}
+
+/**
+ * CR 118.12: `WaitingFor::ResolutionOptionalPaymentChoice`. While an effect
+ * resolves, the payer may decline or pay one server-authored branch of a
+ * `PayCost(OneOf)`. `index` is that branch's position in the original cost,
+ * not its position in this list: omitted siblings are not renumbered. The
+ * answer is `ChooseResolutionOptionalPaymentBranch`. A button exists only when
+ * that choice is already legal. Decline is the tagged `Decline`, not a missing
+ * field this table fills in.
+ */
+export type ResolutionPaymentOption = {
+  index: number;
+  cost: unknown;
+};
+export type ResolutionPaymentPrompt = {
+  player: PlayerId;
+  sourceId: ObjectId | null;
+  options: ResolutionPaymentOption[];
+};
+export function resolutionPaymentPrompt(snapshot: EngineSnapshot | null): ResolutionPaymentPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ResolutionOptionalPaymentChoice') return null;
+  const data = waiting.data ?? {};
+  const options = Array.isArray(data.costs)
+    ? data.costs.flatMap((entry) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const raw = entry as { index?: unknown; cost?: unknown };
+        if (typeof raw.index !== 'number' || !Number.isInteger(raw.index) || raw.index < 0) return [];
+        return [{ index: raw.index, cost: raw.cost ?? null }];
+      })
+    : [];
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+    options
+  };
+}
+export type ResolutionPaymentOffers = {
+  byIndex: Map<number, GameAction>;
+  decline: GameAction | null;
+};
+/** A choice that is not tagged `Decline` or `Pay` is not a button. The first action wins. */
+export function resolutionPaymentOffers(actions: GameAction[]): ResolutionPaymentOffers {
+  const byIndex = new Map<number, GameAction>();
+  let decline: GameAction | null = null;
+  for (const action of actions) {
+    if (action.type !== 'ChooseResolutionOptionalPaymentBranch') continue;
+    const choice = resolutionChoice(action.data?.choice);
+    if (!choice) continue;
+    if (choice.kind === 'decline') {
+      if (!decline) decline = action;
+      continue;
+    }
+    if (!byIndex.has(choice.index)) byIndex.set(choice.index, action);
+  }
+  return { byIndex, decline };
+}
+
 /**
  * CR 508.1g + CR 701.43d: as attackers are declared, the active player may pay
  * the optional «exert this creature as it attacks» cost, one creature at a time.

@@ -2091,6 +2091,94 @@ test('el cifrado ajeno se nombra y no ofrece botones', async ({ page }) => {
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
 });
 
+test('un total de reducción es botón sólo si el motor publicó esa elección', async ({ page }) => {
+  await page.goto('/ux?scene=costOrder');
+  const block = page.locator('[data-cost-order]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-cost-order-count', '2');
+  await expect(block.locator('strong')).toHaveText("Elegir coste fijado · Altar's Reap");
+  await expect(block.locator('[data-cost-order-reductions]')).toContainText('Thunderscape Familiar');
+  await expect(block.locator('[data-cost-order-reductions]')).toContainText('sólo maná de color');
+  await expect(block.locator('[data-cost-order-outcome="0"]')).toContainText('Fijar {R}');
+  await expect(block.locator('[data-cost-order-note="0"]')).toContainText('Primero Morophon, the Boundless, luego Thunderscape Familiar');
+  await expect(block.locator('[data-cost-order-hybrid="0"]')).toContainText('Anuncia {W}');
+  await expect(block.locator('[data-cost-order-outcome="1"]')).toContainText('Fijar {1}{R}{U}');
+  await expect(block.locator('[data-cost-order-hybrid="1"]')).toContainText('No anuncia el híbrido');
+  await expect(block.locator('[data-cost-order-cancel]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un total que el motor no publicó no es un botón', async ({ page }) => {
+  await page.goto('/ux?scene=costOrderOne');
+  const block = page.locator('[data-cost-order]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-cost-order-count', '2');
+  await expect(block.locator('[data-cost-order-outcome="0"]')).toHaveCount(1);
+  await expect(block.locator('[data-cost-order-outcome="1"]')).toHaveCount(0);
+  await expect(block.locator('[data-cost-order-note="1"]')).toHaveCount(0);
+  await expect(block.locator('[data-cost-order-cancel]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la orden ajena se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=costOrderAway');
+  const block = page.locator('[data-cost-order]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-cost-order-faces]')).toContainText('{R}');
+  await expect(block.locator('[data-cost-order-faces]')).toContainText('{1}{R}{U}');
+  await expect(block.locator('[data-cost-order-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el pago al resolver conserva el índice del motor y el no pagar publicado', async ({ page }) => {
+  await page.goto('/ux?scene=resPay');
+  const block = page.locator('[data-res-pay]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-res-pay-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir un pago opcional · Fire Covenant');
+  await expect(block.locator('[data-res-pay-option="0"]')).toContainText('Pagar 2 vidas');
+  await expect(block.locator('[data-res-pay-option="2"]')).toContainText('Pagar Sacrificar 1 criatura que controlas');
+  await expect(block.locator('[data-res-pay-option="1"]')).toHaveCount(0);
+  await expect(block.locator('[data-res-pay-decline]')).toContainText('No pagar');
+  await expect(block.locator('[data-res-pay-decline-note]')).toContainText('sin esa rama');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un índice no publicado no es botón y el declinar ausente tampoco', async ({ page }) => {
+  await page.goto('/ux?scene=resPayOne');
+  const block = page.locator('[data-res-pay]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-res-pay-option="0"]')).toHaveCount(1);
+  await expect(block.locator('[data-res-pay-option="2"]')).toHaveCount(0);
+  await expect(block.locator('[data-res-pay-decline]')).toHaveCount(0);
+  await expect(block.locator('[data-res-pay-decline-note]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el pago ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=resPayAway');
+  const block = page.locator('[data-res-pay]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-res-pay-faces]')).toContainText('Pagar 2 vidas');
+  await expect(block.locator('[data-res-pay-faces]')).toContainText('Pagar Sacrificar 1 criatura que controlas');
+  await expect(block.locator('[data-res-pay-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('una copia elige entre los permanentes que publica Phase, con su techo de maná', async ({ page }) => {
   await page.goto('/ux?scene=copyTarget');
   const block = page.locator('[data-copy-target]');

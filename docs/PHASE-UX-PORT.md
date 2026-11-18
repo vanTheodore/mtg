@@ -3095,3 +3095,54 @@ vigilado pasa a **82** entradas en `REPRESENTED` (80 → 82). El motor no se toc
 `f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
 En Chromium, seis pruebas nuevas (121 → 127 en `ux-lab`) y seis escenas más
 en la prueba de temas (101 → 107 escenas, 214 jpg, presupuesto de 1200 s).
+
+## El total fijado y el pago al resolver no se reconstruyen (sexagésima segunda pasada, 7 nov 2026)
+
+`OrderCostReductions` y `ResolutionOptionalPaymentChoice` son las dos ventanas
+que siguen al cifrado en lo que el cable ya sabe responder. Phase ya las tiene
+(`CostReductionOrderModal`, `ResolutionOptionalPaymentModal`). Mesa no copia el
+cromo. Copia qué botón existe y qué sobre se envía.
+
+**`OrderCostReductions` (CR 601.2b + CR 601.2f).** Varias reducciones fijan
+totales distintos, así que el lanzador elige. El motor ya eligió un
+representante por cada total distinto. La acción es ese
+`OrderCostReductions { order, hybrid_announcement }`, copiado de
+`legal.actions`. Un botón existe sólo si esa elección exacta ya es legal.
+Reordenar la lista, o anunciar un híbrido que el resultado no traía, enviaría
+un total que esta mesa no ha visto. El coste fijado se imprime, no se
+recalcula. `CancelCast` aparece sólo si está publicado. El alcance omitido es
+el que derrama a genérico: no es un jinete que esta mesa invente.
+
+**`ResolutionOptionalPaymentChoice` (CR 118.12).** Mientras un efecto se
+resuelve, el pagador puede declinar o pagar una rama de un `PayCost(OneOf)`.
+El `index` es el lugar de esa rama en el coste original: un hermano omitido no
+se renumera. La acción es `ChooseResolutionOptionalPaymentBranch`. Un botón
+existe sólo si esa elección ya es legal. Declinar es la etiqueta `Decline`, no
+un campo ausente que esta mesa rellene. Un coste que esta mesa no sabe nombrar
+sigue siendo botón, rotulado por ese índice. El otro asiento ve las ramas y no
+recibe botón.
+
+Laboratorio: `/ux?scene=costOrder` (Altar's Reap, `{R}` anunciando `{W}`, o
+`{1}{R}{U}` sin anuncio), `costOrderOne` (sólo el primer total),
+`costOrderAway`, `resPay` (Fire Covenant, 2 vidas en el índice 0, sacrificar
+una criatura en el índice 2, más «No pagar»), `resPayOne` (sólo el índice 0) y
+`resPayAway`. Capturas `ux-orden-reduccion-1440.jpg`,
+`ux-un-total-1440.jpg`, `ux-orden-ajena-1440.jpg`,
+`ux-pago-opcional-1440.jpg`, `ux-un-pago-1440.jpg` y
+`ux-pago-ajeno-1440.jpg`, más sus pares de tema.
+
+`main` de Phase va 23 commits por delante del pin. No se importan: estas dos
+ventanas se leen del pin `28b2f9e4`.
+
+### Verificación de esta pasada
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **689** (10 nuevas:
+5 en `cost-order.test.ts` —el orden del motor y el alcance omitido, el orden
+ilegible que se descarta, la elección exacta y el cancelar que sólo existe si
+se publicó— y 5 en `resolution-payment.test.ts` —el índice con hueco, el índice
+en blanco, el `Decline` etiquetado y el declinar que falta—); el recuento
+vigilado pasa a **84** entradas en `REPRESENTED` (82 → 84). El motor no se tocó:
+`bun run engine:verify` sigue en verde con **497** ficheros y SHA-256
+`f8daa35ecbcdcf35d911f1bb74709c4a85b179d96b2e5ad1abc2bd814edbb58b`.
+En Chromium, seis pruebas nuevas (127 → 133 en `ux-lab`) y seis escenas más
+en la prueba de temas (107 → 113 escenas, 226 jpg, presupuesto de 1320 s).

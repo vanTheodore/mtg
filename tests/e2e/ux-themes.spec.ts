@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 // (dos capturas y dos auditorías por escena), así que su presupuesto es el del
 // recorrido entero y crece con el catálogo; el límite del proyecto es para un test
 // corto. Cuando la lista crezca otra vez, este número es el que hay que mirar.
-test.describe.configure({ timeout: 1_200_000 });
+test.describe.configure({ timeout: 1_320_000 });
 
 const shotsDir = fileURLToPath(new URL('../../docs/screenshots/temas/', import.meta.url));
 
@@ -138,6 +138,12 @@ const SCENES = [
   { scene: 'cipher', slug: 'cifrar', block: '[data-cipher]' },
   { scene: 'cipherHidden', slug: 'cifrar-oculto', block: '[data-cipher]' },
   { scene: 'cipherAway', slug: 'cifrado-ajeno', block: '[data-cipher]' },
+  { scene: 'costOrder', slug: 'orden-reduccion', block: '[data-cost-order]' },
+  { scene: 'costOrderOne', slug: 'un-total', block: '[data-cost-order]' },
+  { scene: 'costOrderAway', slug: 'orden-ajena', block: '[data-cost-order]' },
+  { scene: 'resPay', slug: 'pago-opcional', block: '[data-res-pay]' },
+  { scene: 'resPayOne', slug: 'un-pago', block: '[data-res-pay]' },
+  { scene: 'resPayAway', slug: 'pago-ajeno', block: '[data-res-pay]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;
