@@ -6919,7 +6919,6 @@ pub(super) fn handle_resolution_choice(
                     "Selected cards must be distinct".to_string(),
                 ));
             }
-
             let current_hand: std::collections::HashSet<ObjectId> = state
                 .players
                 .iter()
@@ -7282,6 +7281,9 @@ pub(super) fn handle_resolution_choice(
                 enters_modified_if,
                 duration,
                 performed_by,
+                // The prompt-owned scope is retired by replacing
+                // `waiting_for`; the answer path does not read it.
+                privacy_zones: _,
             },
             GameAction::SelectCards { cards: chosen },
         ) => {
@@ -8498,6 +8500,9 @@ pub(super) fn handle_resolution_choice(
                             blighted,
                             crate::types::counter::CounterType::Minus1Minus1,
                             count_param,
+                            // CR 614.16: blight's counters are placed by a
+                            // resolving effect.
+                            crate::types::proposed_event::CounterCause::ResolvingEffect,
                             events,
                         )
                     {
@@ -15861,6 +15866,7 @@ mod tests {
             is_cost_payment: false,
             enters_modified_if: None,
             duration: None,
+            privacy_zones: None,
         };
         state.waiting_for = waiting.clone();
 
@@ -15975,6 +15981,7 @@ mod tests {
                     is_cost_payment: false,
                     enters_modified_if: None,
                     duration: None,
+                    privacy_zones: None,
                 };
                 state.waiting_for = waiting.clone();
                 let life_before = state.players[0].life;
