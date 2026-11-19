@@ -3810,9 +3810,13 @@ De las ocho diferencias, sólo una es un defecto y no una decisión de producto:
 **el rail de fases recorta ocho de los doce pasos a 1280 y 1440** (punto 3). Las
 otras siete son dos maneras defendibles de repartir la misma mesa, y quedan
 anotadas aquí para que la próxima pasada decida con las capturas delante en vez
-de volver a descubrirlas. La barra de fases no se toca en este bloque porque su
-arreglo cambia la chrome del tablero entero; el guion de captura ya está listo
-para fotografiar el antes y el después cuando se haga.
+de volver a descubrirlas.
+
+**Resuelto en la pasada siguiente** (véase «Primera pasada del paso React →
+Svelte» más abajo): el punto 3 quedó arreglado con el guion de captura que este
+bloque dejó listo —doce pasos visibles de doce a 1440 y a 1280—, y con él se
+aplicaron los puntos 1, 2, 4 y 6. Siguen abiertos el 5 (la mano del teléfono es
+un cajón, no el abanico completo) y, por decisión de producto, el 7 y el 8.
 
 ### Lo que la comparación **no** puede decir
 
@@ -3878,11 +3882,13 @@ visible entero (`y: 528`) y 12 de 12 pasos en una fila de 290 px.
   (`position: absolute` contra la fila de chips) y la tarjeta de 416 px caía
   sobre las dos criaturas propias, tapando su P/T. Se quedó en el flujo, pero en
   una fila de 40 px en vez de 97.
-- **La columna del cementerio como tira de cartas.** Medía 198 px de los 630
-  del tablero con una sola carta, que es justo el alto que este reparto da a los
-  campos. En Arena el cementerio sigue a un clic en la pila del asiento
-  (`ZonePile` → `ZoneViewer`) y el contador sigue en la fila del asiento; en
-  Clásico no cambia nada.
+- **La tira de cementerio.** Medía 198 px de los 630 del tablero con una sola
+  carta, que es justo el alto que este reparto da a los campos. En Arena el
+  cementerio sigue a un clic en la pila del asiento (`ZonePile` →
+  `ZoneViewer`) y el contador sigue en la fila del asiento. El cambio alcanza a
+  todo Arena, también al teléfono (donde esa tira quedaba fuera de la primera
+  pantalla y sólo alargaba el desplazamiento: 1729 → 1507 px de contenido a
+  390×844); el estilo Clásico la conserva tal cual.
 
 ### Un defecto que sí se arregló de paso
 
