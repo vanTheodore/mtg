@@ -3568,3 +3568,109 @@ test('una habitación no publicada no es un botón, y la ajena no se pulsa', asy
   const away = page.locator('[data-dungeon]');
   await expect(away.locator('button')).toHaveCount(0);
 });
+
+// ── Pasada 68: BeholdChoice, PopulateChoice, SpecializeColor, ChooseRoomDoor ──
+
+test('behold elige exactamente uno del conjunto mixto, en el orden del cable', async ({ page }) => {
+  await page.goto('/ux?scene=behold');
+  const block = page.locator('[data-pick-one]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pick-one-kind', 'behold');
+  await expect(block).toHaveAttribute('data-pick-one-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir qué mostrar');
+  await expect(block.locator('[data-pick-one-rule]')).toContainText('CR 701.4a');
+  const options = block.locator('[data-pick-one-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-pick-one-option', '100');
+  // The second candidate is in hand, not on the battlefield: the set is mixed.
+  await expect(options.nth(1)).toHaveAttribute('data-pick-one-option', '1001');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('behold no ofrece ni cero ni varios, y lo no publicado no es botón', async ({ page }) => {
+  await page.goto('/ux?scene=beholdOne');
+  const block = page.locator('[data-pick-one]');
+  await expect(block.locator('[data-pick-one-option]')).toHaveCount(1);
+  await expect(block.locator('[data-pick-one-option="1001"]')).toHaveCount(0);
+});
+
+test('el behold ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=beholdAway');
+  const block = page.locator('[data-pick-one]');
+  await expect(block).toBeVisible();
+  // CR 400.2: the seat that does not decide sees the published set, without buttons.
+  await expect(block.locator('[data-pick-one-faces] li')).toHaveCount(2);
+  await expect(block.locator('[data-pick-one-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+});
+
+test('poblar despacha un objetivo, y la ventana es la suya', async ({ page }) => {
+  await page.goto('/ux?scene=populate');
+  const block = page.locator('[data-pick-one]');
+  await expect(block).toHaveAttribute('data-pick-one-kind', 'populate');
+  await expect(block.locator('strong')).toHaveText('Elegir qué ficha poblar');
+  await expect(block.locator('[data-pick-one-rule]')).toContainText('CR 701.47a');
+  const options = block.locator('[data-pick-one-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-pick-one-option', '100');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('especializar nombra los colores que el motor publicó', async ({ page }) => {
+  await page.goto('/ux?scene=specialize');
+  const block = page.locator('[data-specialize]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-specialize-count', '2');
+  await expect(block.locator('[data-specialize-rule]')).toContainText('CR 253.2');
+  const options = block.locator('[data-specialize-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-specialize-option', 'White');
+  await expect(options.nth(0)).toHaveText('Blanco');
+  await expect(options.nth(1)).toHaveText('Negro');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la puerta de la Room se elige entre los pares publicados, no en producto cartesiano', async ({ page }) => {
+  await page.goto('/ux?scene=roomDoor');
+  const block = page.locator('[data-room-door]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-room-door-count', '2');
+  await expect(block.locator('[data-room-door-rule]')).toContainText('CR 709.5f');
+  const options = block.locator('[data-room-door-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-room-door-option', 'Unlock-Left');
+  await expect(options.nth(0)).toHaveText('Desbloquear la puerta izquierda');
+  await expect(options.nth(1)).toHaveAttribute('data-room-door-option', 'Lock-Right');
+  // The cross product would offer four; the wire published two.
+  await expect(block.locator('[data-room-door-option="Lock-Left"]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un solo par de puerta publicado deja un solo botón', async ({ page }) => {
+  await page.goto('/ux?scene=roomDoorOne');
+  const block = page.locator('[data-room-door]');
+  await expect(block.locator('[data-room-door-option]')).toHaveCount(1);
+  await expect(block.locator('[data-room-door-option="Lock-Right"]')).toHaveCount(0);
+});
+
+test('la especialización y la puerta ajenas no ofrecen botones', async ({ page }) => {
+  await page.goto('/ux?scene=specializeAway');
+  const spec = page.locator('[data-specialize]');
+  await expect(spec).toBeVisible();
+  await expect(spec.locator('button')).toHaveCount(0);
+  await expect(spec.locator('[data-specialize-other]')).toContainText('Jugador 2');
+
+  await page.goto('/ux?scene=roomDoorAway');
+  const door = page.locator('[data-room-door]');
+  await expect(door).toBeVisible();
+  await expect(door.locator('button')).toHaveCount(0);
+  await expect(door.locator('[data-room-door-other]')).toContainText('Jugador 2');
+});

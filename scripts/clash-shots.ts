@@ -49,7 +49,19 @@ const SHOTS = [
   { scene: 'dungeonAway', file: 'ux-dungeon-ajena-1440.jpg', block: '[data-dungeon]' },
   { scene: 'dungeonRoom', file: 'ux-habitacion-dungeon-1440.jpg', block: '[data-dungeon]' },
   { scene: 'dungeonRoomOne', file: 'ux-una-habitacion-1440.jpg', block: '[data-dungeon]' },
-  { scene: 'dungeonRoomAway', file: 'ux-habitacion-ajena-1440.jpg', block: '[data-dungeon]' }
+  { scene: 'dungeonRoomAway', file: 'ux-habitacion-ajena-1440.jpg', block: '[data-dungeon]' },
+  { scene: 'behold', file: 'ux-behold-1440.jpg', block: '[data-pick-one]' },
+  { scene: 'beholdOne', file: 'ux-un-behold-1440.jpg', block: '[data-pick-one]' },
+  { scene: 'beholdAway', file: 'ux-behold-ajeno-1440.jpg', block: '[data-pick-one]' },
+  { scene: 'populate', file: 'ux-poblar-1440.jpg', block: '[data-pick-one]' },
+  { scene: 'populateOne', file: 'ux-un-poblar-1440.jpg', block: '[data-pick-one]' },
+  { scene: 'populateAway', file: 'ux-poblar-ajeno-1440.jpg', block: '[data-pick-one]' },
+  { scene: 'specialize', file: 'ux-especializar-1440.jpg', block: '[data-specialize]' },
+  { scene: 'specializeOne', file: 'ux-un-color-especializar-1440.jpg', block: '[data-specialize]' },
+  { scene: 'specializeAway', file: 'ux-especializar-ajeno-1440.jpg', block: '[data-specialize]' },
+  { scene: 'roomDoor', file: 'ux-puerta-room-1440.jpg', block: '[data-room-door]' },
+  { scene: 'roomDoorOne', file: 'ux-una-puerta-1440.jpg', block: '[data-room-door]' },
+  { scene: 'roomDoorAway', file: 'ux-puerta-ajena-1440.jpg', block: '[data-room-door]' }
 ];
 
 mkdirSync(outDir, { recursive: true });

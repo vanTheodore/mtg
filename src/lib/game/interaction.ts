@@ -5388,3 +5388,266 @@ export function dungeonOffers(actions: GameAction[]): DungeonOffers {
   }
   return { byDungeon, byRoom };
 }
+
+// ── Pasada 68: `BeholdChoice`, `PopulateChoice`, `SpecializeColor`, `ChooseRoomDoor` ──
+//
+// Las cuatro son `ExactCandidates` en `human_response_model`, pero no comparten
+// forma de respuesta y por eso no comparten panel:
+//
+//   BeholdChoice      → `SelectCards { cards: [uno] }`
+//   PopulateChoice    → `ChooseTarget { Object(id) }`
+//   SpecializeColor   → `ChooseSpecializeColor { color }`
+//   ChooseRoomDoor    → `ChooseRoomDoor { object_id, op, door }`
+//
+// Lo que sí comparten es la regla: la lista es la que publicó el motor y la
+// respuesta es uno de sus elementos, sin añadir, quitar ni reordenar.
+
+/** CR 701.4a: «behold a [quality]» — un objeto del conjunto mixto que el motor publicó. */
+export type BeholdPrompt = {
+  player: PlayerId;
+  /** CR 701.4a: campo que controlas ∪ mano, en el orden del cable. */
+  choices: ObjectId[];
+};
+
+/**
+ * CR 701.4a + CR 608.2d: behold elige **exactamente uno** del conjunto mixto y
+ * la respuesta es `SelectCards` con esa única carta. El motor rechaza cualquier
+ * otro tamaño, así que el panel no ofrece «cero» ni «varios».
+ */
+export function beholdPrompt(snapshot: EngineSnapshot | null): BeholdPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'BeholdChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    choices: ints(data.choices)
+  };
+}
+
+export type BeholdOffers = { byCard: Map<number, GameAction> };
+
+/** La acción publicada es `SelectCards` con una sola carta; otra forma no es botón. */
+export function beholdOffers(actions: GameAction[]): BeholdOffers {
+  const byCard = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'SelectCards') continue;
+    const cards = action.data?.cards;
+    if (!Array.isArray(cards) || cards.length !== 1) continue;
+    const id = cards[0];
+    if (typeof id !== 'number' || !Number.isInteger(id) || id < 0) continue;
+    if (!byCard.has(id)) byCard.set(id, action);
+  }
+  return { byCard };
+}
+
+/** CR 701.47a: poblar crea una copia de una ficha que ya controlas. */
+export type PopulatePrompt = {
+  player: PlayerId;
+  sourceId: ObjectId | null;
+  /** CR 701.47a: las fichas que se pueden copiar, en el orden del cable. */
+  tokens: ObjectId[];
+};
+
+export function populatePrompt(snapshot: EngineSnapshot | null): PopulatePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'PopulateChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? data.source_id : null,
+    tokens: ints(data.valid_tokens)
+  };
+}
+
+export type PopulateOffers = { byToken: Map<number, GameAction> };
+
+/**
+ * La respuesta es `ChooseTarget` con un `Object(id)`; el motor comprueba que el
+ * id esté en `valid_tokens` y no ofrece nada más. Una acción con otro destino no
+ * es un botón de esta ventana.
+ */
+export function populateOffers(actions: GameAction[]): PopulateOffers {
+  const byToken = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChooseTarget') continue;
+    const target = action.data?.target;
+    if (!target || typeof target !== 'object') continue;
+    const id = (target as { Object?: unknown }).Object;
+    if (typeof id !== 'number' || !Number.isInteger(id) || id < 0) continue;
+    if (!byToken.has(id)) byToken.set(id, action);
+  }
+  return { byToken };
+}
+
+/**
+ * CR 253.2 + CR 702.168a: especializar. Al resolverse, la carta gana un color
+ * adicional y el jugador elige cuál de las opciones que el motor publicó.
+ *
+ * El nombre del color sale de una tabla de cinco entradas cerrada por el propio
+ * enum del motor (`ManaColor`: White, Blue, Black, Red, Green), no de los datos
+ * de la carta: no hay nada que inventar y nada que adivinar. Un valor que no sea
+ * uno de esos cinco se dice sin nombre.
+ */
+export type SpecializePrompt = {
+  player: PlayerId;
+  objectId: ObjectId | null;
+  /** Los colores publicados, en el orden del cable. */
+  options: string[];
+};
+
+const COLOR_NAMES: Record<string, string> = {
+  White: 'Blanco',
+  Blue: 'Azul',
+  Black: 'Negro',
+  Red: 'Rojo',
+  Green: 'Verde'
+};
+
+/** El nombre del color, o `null` si el cable publicó algo que no es un color. */
+export function colorName(value: unknown): string | null {
+  return typeof value === 'string' && value in COLOR_NAMES ? COLOR_NAMES[value]! : null;
+}
+
+export function specializePrompt(snapshot: EngineSnapshot | null): SpecializePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'SpecializeColor') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: typeof data.object_id === 'number' ? data.object_id : null,
+    options: Array.isArray(data.options) ? data.options.filter((option): option is string => typeof option === 'string') : []
+  };
+}
+
+export type SpecializeOffers = { byColor: Map<string, GameAction> };
+
+export function specializeOffers(actions: GameAction[]): SpecializeOffers {
+  const byColor = new Map<string, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChooseSpecializeColor') continue;
+    const color = action.data?.color;
+    if (typeof color !== 'string') continue;
+    if (!byColor.has(color)) byColor.set(color, action);
+  }
+  return { byColor };
+}
+
+/**
+ * CR 709.5f-g: la puerta de una Room. El motor publica pares `(op, door)` y
+ * exige que la respuesta sea **uno de esos pares**, así que la lista de botones
+ * es la de pares publicados, no el producto cartesiano de operaciones y puertas.
+ *
+ * `op` es `Unlock`, `Lock` o `LockOrUnlock`; `door` es `Left` o `Right`. Los
+ * nombres son los del propio enum del motor, traducidos; un valor distinto se
+ * dice sin nombre en vez de inventarle uno.
+ */
+export type RoomDoorPrompt = {
+  player: PlayerId;
+  objectId: ObjectId | null;
+  options: { op: string; door: string }[];
+};
+
+const OP_NAMES: Record<string, string> = {
+  Unlock: 'Desbloquear',
+  Lock: 'Bloquear',
+  LockOrUnlock: 'Bloquear o desbloquear'
+};
+
+const DOOR_NAMES: Record<string, string> = {
+  Left: 'puerta izquierda',
+  Right: 'puerta derecha'
+};
+
+export function opName(value: unknown): string | null {
+  return typeof value === 'string' && value in OP_NAMES ? OP_NAMES[value]! : null;
+}
+
+export function doorName(value: unknown): string | null {
+  return typeof value === 'string' && value in DOOR_NAMES ? DOOR_NAMES[value]! : null;
+}
+
+export function roomDoorPrompt(snapshot: EngineSnapshot | null): RoomDoorPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ChooseRoomDoor') return null;
+  const data = waiting.data ?? {};
+  const raw = Array.isArray(data.options) ? data.options : [];
+  const options: { op: string; door: string }[] = [];
+  const seen = new Set<string>();
+  for (const option of raw) {
+    // The wire sends `[op, door]`; `op` is `{type: "Unlock"}` because `DoorLockOp`
+    // is internally tagged, `door` is the plain `Left` / `Right` string.
+    if (!Array.isArray(option) || option.length < 2) continue;
+    const opRaw = option[0];
+    const op = typeof opRaw === 'string' ? opRaw : (opRaw as { type?: unknown } | null)?.type;
+    const door = option[1];
+    if (typeof op !== 'string' || typeof door !== 'string') continue;
+    const key = `${op}\u0000${door}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    options.push({ op, door });
+  }
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: typeof data.object_id === 'number' ? data.object_id : null,
+    options
+  };
+}
+
+export type RoomDoorOffers = { byPair: Map<string, GameAction> };
+
+/** La misma clave `op\0door` que usa el prompt, para que un par sin acción no sea botón. */
+export function roomDoorOffers(actions: GameAction[]): RoomDoorOffers {
+  const byPair = new Map<string, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChooseRoomDoor') continue;
+    const opRaw = action.data?.op;
+    const op = typeof opRaw === 'string' ? opRaw : (opRaw as { type?: unknown } | null)?.type;
+    const door = action.data?.door;
+    if (typeof op !== 'string' || typeof door !== 'string') continue;
+    const key = `${op}\u0000${door}`;
+    if (!byPair.has(key)) byPair.set(key, action);
+  }
+  return { byPair };
+}
+
+export function roomDoorKey(op: string, door: string): string {
+  return `${op}\u0000${door}`;
+}
+
+/**
+ * La forma que consume `PickOnePrompt.svelte`: una lista de objetos y **la
+ * acción ya resuelta por candidato**, para que el panel no tenga que saber si
+ * detrás hay un `SelectCards` o un `ChooseTarget`.
+ *
+ * Son dos ventanas distintas con dos respuestas distintas, y el motor las
+ * clasifica por separado; unirlas aquí es sólo dibujo, no protocolo: cada id se
+ * empareja con la acción que su propia ventana publica, y las acciones de la
+ * otra ventana jamás aparecen como botón.
+ */
+export type PickOnePrompt = {
+  kind: 'behold' | 'populate';
+  player: PlayerId;
+  options: ObjectId[];
+  actions: Map<number, GameAction>;
+};
+
+export function pickOnePrompt(snapshot: EngineSnapshot | null): PickOnePrompt | null {
+  if (!snapshot) return null;
+  const actions = snapshot.legal.actions ?? [];
+  const behold = beholdPrompt(snapshot);
+  if (behold) {
+    return { kind: 'behold', player: behold.player, options: behold.choices, actions: beholdOffers(actions).byCard };
+  }
+  const populate = populatePrompt(snapshot);
+  if (populate) {
+    return { kind: 'populate', player: populate.player, options: populate.tokens, actions: populateOffers(actions).byToken };
+  }
+  return null;
+}
+
+/** Sólo se despacha una acción que la ventana actual publicó para un candidato suyo. */
+export function pickOneAction(snapshot: EngineSnapshot | null, action: GameAction): boolean {
+  const prompt = pickOnePrompt(snapshot);
+  if (!prompt) return false;
+  return [...prompt.actions.values()].includes(action);
+}

@@ -183,6 +183,18 @@ const SCENES = [
   { scene: 'dungeonRoom', slug: 'habitacion-dungeon', block: '[data-dungeon]' },
   { scene: 'dungeonRoomOne', slug: 'una-habitacion', block: '[data-dungeon]' },
   { scene: 'dungeonRoomAway', slug: 'habitacion-ajena', block: '[data-dungeon]' },
+  { scene: 'behold', slug: 'behold', block: '[data-pick-one]' },
+  { scene: 'beholdOne', slug: 'un-behold', block: '[data-pick-one]' },
+  { scene: 'beholdAway', slug: 'behold-ajeno', block: '[data-pick-one]' },
+  { scene: 'populate', slug: 'poblar', block: '[data-pick-one]' },
+  { scene: 'populateOne', slug: 'un-poblar', block: '[data-pick-one]' },
+  { scene: 'populateAway', slug: 'poblar-ajeno', block: '[data-pick-one]' },
+  { scene: 'specialize', slug: 'especializar', block: '[data-specialize]' },
+  { scene: 'specializeOne', slug: 'un-color-especializar', block: '[data-specialize]' },
+  { scene: 'specializeAway', slug: 'especializar-ajeno', block: '[data-specialize]' },
+  { scene: 'roomDoor', slug: 'puerta-room', block: '[data-room-door]' },
+  { scene: 'roomDoorOne', slug: 'una-puerta', block: '[data-room-door]' },
+  { scene: 'roomDoorAway', slug: 'puerta-ajena', block: '[data-room-door]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

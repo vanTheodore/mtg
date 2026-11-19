@@ -3452,3 +3452,59 @@ tema (152 escenas, 304 jpg).
 falla AA en tema claro; el texto secundario de un botón se separa por tamaño y
 peso, no por opacidad. Y la norma de es-419 veta «pulsa» incluso en un comentario
 de código: la prueba de locale recorre los `.svelte` línea a línea.
+
+## Cuatro ventanas que son ExactCandidates y no se parecen (sexagésima octava pasada, 18 nov 2026)
+
+El grupo de `ExactCandidates` sigue siendo el más rentable, pero no es homogéneo.
+Estas cuatro ofrecen una lista cerrada y eligen uno de sus elementos, y aun así
+**ninguna responde igual a las otras tres**:
+
+| Ventana | Respuesta del cable |
+| --- | --- |
+| `BeholdChoice` (CR 701.4a) | `SelectCards { cards: [una] }` |
+| `PopulateChoice` (CR 701.47a) | `ChooseTarget { Object(id) }` |
+| `SpecializeColor` (CR 253.2) | `ChooseSpecializeColor { color }` |
+| `ChooseRoomDoor` (CR 709.5f-g) | `ChooseRoomDoor { object_id, op, door }` |
+
+Dos de ellas comparten dibujo (`PickOnePrompt.svelte`) porque las dos eligen un
+objeto del campo, pero **no comparten parser de oferta ni despacho**: behold sólo
+acepta un `SelectCards` de una carta y populate sólo un `ChooseTarget` con
+`Object(id)`. Una prueba fija justo eso —la misma id en las dos ventanas, con la
+acción de la otra, no enciende ningún botón— porque es la tentación obvia al
+unificarlas.
+
+Las otras dos van por su cuenta, y cada una tiene su trampa:
+
+- **`SpecializeColor`** elige un color. El nombre sale de una tabla de cinco
+  entradas que es el propio enum del motor (`ManaColor`: White, Blue, Black, Red,
+  Green). Un valor fuera de esas cinco se dice **sin nombre**, no se traduce a la
+  brava: el panel muestra el valor del cable.
+- **`ChooseRoomDoor`** publica **pares** `(op, door)` y el motor exige que la
+  respuesta sea uno de esos pares. Por eso la lista de botones es la de pares
+  publicados y no el producto cartesiano de operaciones × mitades, que ofrecería
+  combinaciones que el motor rechaza. Una prueba lo fija: con `(Unlock, Left)` y
+  `(Lock, Right)` publicados, `(Lock, Left)` no es botón.
+
+`op` llega etiquetado por tipo (`DoorLockOp` es internamente etiquetado:
+`{ type: "Unlock" }`) y `door` como cadena simple (`Left` / `Right`); el parser
+acepta las dos formas de `op` para no atarse a la etiqueta de serde.
+
+### Una regla que casi se rompe
+
+El primer `PickOnePrompt` dibujaba el bloque sólo para el asiento que decide. La
+regla del proyecto es la contraria: **el asiento que no decide ve lo publicado y
+no recibe botón** (CR 400.2). Se vio al escribir la prueba del asiento ajeno, que
+esperaba el bloque y encontró el vacío. Corregido: la lista se lee y los botones
+no existen.
+
+### Escenas y verificación
+
+Escenas `behold`, `beholdOne`, `beholdAway`, `populate`, `populateOne`,
+`populateAway`, `specialize`, `specializeOne`, `specializeAway`, `roomDoor`,
+`roomDoorOne` y `roomDoorAway`; capturas `ux-behold-1440.jpg` … con sus pares de
+tema (162 escenas, 324 jpg de escena).
+
+`bun run check` 0 errores; `bun test src/lib` **747** (15 nuevas en
+`pick-one.test.ts`); `ux-lab` **176** (8 nuevas); `ux-themes` **3/3** con 162
+escenas. `REPRESENTED` pasa de **98** a **102**; quedan **46** de las 148.
+El motor no se toca: `engine:verify` sigue en verde con el pin `576e2bf5`.

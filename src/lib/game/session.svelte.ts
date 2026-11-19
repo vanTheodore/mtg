@@ -15,7 +15,7 @@ import {
   wardSacrificePrompt as readWardSacrifice, wardSacrificeAction,
   startingPlayerPrompt as readStartingPlayer, chooseStartingPlayer,
   scryPrompt as readScry, scryAction,
-  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, payCostPrompt as readPayCost, payCostAction, comparatorHolds, phyrexianPaymentPrompt as readPhyrexian, phyrexianChoicesAction, combatTaxPrompt as readCombatTax, payCombatTaxAction, optionalCostPrompt as readOptionalCost, decideOptionalCostAction, defilerPaymentPrompt as readDefiler, zoneChoicePrompt as readZoneChoice, zoneChoiceReady as isZoneChoiceReady, modalFacePrompt as readModalFace, modalFaceOffers, alternativeCastPrompt as readAlternativeCast, alternativeCastOffers, castingVariantPrompt as readCastingVariant, castingVariantOffers, typeSlotPrompt as readTypeSlot, typeSlotOffers, splicePrompt as readSplice, spliceOffers, mutateMergePrompt as readMutateMerge, mutateMergeOffers, cipherPrompt as readCipher, cipherOffers, costOrderPrompt as readCostOrder, costOrderOffers, resolutionPaymentPrompt as readResolutionPayment, resolutionPaymentOffers, giftRecipientPrompt as readGiftRecipient, giftRecipientOffers, topOrBottomPrompt as readTopOrBottom, topOrBottomOffers, clashPrompt as readClash, clashOffers, exactCandidatePrompt as readExactCandidate, exactCandidateOffers, dungeonPrompt as readDungeon, dungeonOffers, clashPlacementPrompt as readClashPlacement, sideboardPrompt as readSideboard, sideboardOffers, playDrawPrompt as readPlayDraw, playDrawOffers, bottomOrderPrompt as readBottomOrder, bottomOrderPile, bottomOrderAction, isBottomOrderPermutation, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
+  tapPowerPrompt as readTapPower, tapPowerAction, tapPowerTotal, equipPrompt as readEquip, equipAction, stationPrompt as readStation, stationAction, multiTargetPrompt as readMultiTarget, multiTargetAction, distributePrompt as readDistribute, distributeAction, moveCountersPrompt as readMoveCounters, moveCountersAction, removeCountersPrompt as readRemoveCounters, removeCountersAction, votePrompt as readVote, voteAction, voteCandidateAction, explorePrompt as readExplore, exploreAction, separatePilesPrompt as readSeparatePiles, choosePileOpponentAction, submitPilePartitionAction, choosePileAction, type PileSide, miraclePrompt as readMiracle, castAsMiracleAction, declineMiracleAction, castOfferPrompt as readCastOffer, adventureFaceAction, castAsMadnessAction, castParadigmCopyAction, passParadigmOfferAction, castOfferChoiceAction, castFreeCandidateAction, finishFreeCastWindowAction, type CastOfferShape, meldPrompt as readMeld, chooseMeldPairAction, meldAttackPrompt as readMeldAttack, entryAttackPrompt as readEntryAttack, chooseEntryAttackTargetAction, replacementPrompt as readReplacement, chooseReplacementAction, copyTargetPrompt as readCopyTargetChoice, resolveAllPrompt as readResolveAll, untapPrompt as readUntap, chooseUntapAction, untapSubsetPrompt as readUntapSubset, untapSubsetAction, exertPrompt as readExert, chooseExertAction, enlistPrompt as readEnlist, chooseEnlistAction, payCostPrompt as readPayCost, payCostAction, comparatorHolds, phyrexianPaymentPrompt as readPhyrexian, phyrexianChoicesAction, combatTaxPrompt as readCombatTax, payCombatTaxAction, optionalCostPrompt as readOptionalCost, decideOptionalCostAction, defilerPaymentPrompt as readDefiler, zoneChoicePrompt as readZoneChoice, zoneChoiceReady as isZoneChoiceReady, modalFacePrompt as readModalFace, modalFaceOffers, alternativeCastPrompt as readAlternativeCast, alternativeCastOffers, castingVariantPrompt as readCastingVariant, castingVariantOffers, typeSlotPrompt as readTypeSlot, typeSlotOffers, splicePrompt as readSplice, spliceOffers, mutateMergePrompt as readMutateMerge, mutateMergeOffers, cipherPrompt as readCipher, cipherOffers, costOrderPrompt as readCostOrder, costOrderOffers, resolutionPaymentPrompt as readResolutionPayment, resolutionPaymentOffers, giftRecipientPrompt as readGiftRecipient, giftRecipientOffers, topOrBottomPrompt as readTopOrBottom, topOrBottomOffers, clashPrompt as readClash, clashOffers, exactCandidatePrompt as readExactCandidate, exactCandidateOffers, dungeonPrompt as readDungeon, dungeonOffers, pickOnePrompt as readPickOne, pickOneAction, specializePrompt as readSpecialize, specializeOffers, roomDoorPrompt as readRoomDoor, roomDoorOffers, clashPlacementPrompt as readClashPlacement, sideboardPrompt as readSideboard, sideboardOffers, playDrawPrompt as readPlayDraw, playDrawOffers, bottomOrderPrompt as readBottomOrder, bottomOrderPile, bottomOrderAction, isBottomOrderPermutation, grantResolveAllAction, declineResolveAllAction, revokeResolveAllAction, copyRetargetPrompt as readCopyRetarget, chooseCopyTargetAction, keepCopyTargetsAction, chooseCopyAnnouncerAction, type CounterRemovalSelection, retargetPrompt as readRetarget, retargetAction, chooseObjectsPrompt as readChooseObjects, chooseObjectsAction, proliferatePrompt as readProliferate, timeTravelPrompt as readTimeTravel, categoryPrompt as readCategory, categoryAction, copyChosenPrompt as readCopyChosen, copyChosenAction, keepPowerPrompt as readKeepPower, keepPowerAction, keepExactPrompt as readKeepExact, keepExactAction, selectTargetsAction, evenSplit, targetKey as splitKey, revealAction, revealCardsAction, revealPrompt as readRevealPrompt,
   unlessPrompt as readUnless,
   searchPrompt as readSearchPrompt, searchReady as isSearchReady, secondActivation,
   selectCardsAction, targetAction, togglePick, triggerOrderPrompt as readTriggerOrder,
@@ -1169,6 +1169,40 @@ class GameSession {
   answerDungeon(action: GameAction) {
     const offers = dungeonOffers(this.snapshot?.legal.actions ?? []);
     const published = [...offers.byDungeon.values(), ...offers.byRoom.values()];
+    if (!published.includes(action)) return;
+    void this.dispatch(action);
+  }
+
+  /**
+   * CR 701.4a + CR 701.47a: behold y populate ofrecen una lista de objetos y
+   * eligen uno, pero responden distinto (`SelectCards` frente a `ChooseTarget`).
+   * El panel recibe la acción ya emparejada con su candidato y aquí sólo se
+   * comprueba que sea una de las publicadas para ESTA ventana.
+   */
+  get pickOnePrompt() {
+    return readPickOne(this.snapshot);
+  }
+  answerPickOne(action: GameAction) {
+    if (!pickOneAction(this.snapshot, action)) return;
+    void this.dispatch(action);
+  }
+
+  /** CR 253.2: el color adicional, de las opciones publicadas. */
+  get specializePrompt() {
+    return readSpecialize(this.snapshot);
+  }
+  answerSpecialize(action: GameAction) {
+    const published = [...specializeOffers(this.snapshot?.legal.actions ?? []).byColor.values()];
+    if (!published.includes(action)) return;
+    void this.dispatch(action);
+  }
+
+  /** CR 709.5f-g: sólo un par (op, door) que el motor publicó. */
+  get roomDoorPrompt() {
+    return readRoomDoor(this.snapshot);
+  }
+  answerRoomDoor(action: GameAction) {
+    const published = [...roomDoorOffers(this.snapshot?.legal.actions ?? []).byPair.values()];
     if (!published.includes(action)) return;
     void this.dispatch(action);
   }
