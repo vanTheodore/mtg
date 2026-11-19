@@ -3598,3 +3598,87 @@ sí publica las combinaciones completas (`ai_support/candidates.rs`), pero
 que `mana_value` es método de `GameObject`, no campo. Reimplementar esa aritmética
 en TypeScript es justo lo que la casa prohíbe; se decidirá si el panel enseña las
 combinaciones tal cual o si espera a que el cable publique la suma.
+
+## Cuatro `Select` que contestan lo mismo y no preguntan lo mismo (septuagésima pasada, 18 nov 2026)
+
+El grupo `Select` del motor no es «elige uno»: es «elige un subconjunto de lo
+que yo publiqué». Estas cuatro lo contestan **igual** —`SelectCards { cards }`
+sobre el conjunto del cable— y aun así la pregunta que hacen es distinta, porque
+la **ventana** de tamaños la fija cada una:
+
+| Ventana | Ventana de tamaños | De dónde sale |
+| --- | --- | --- |
+| `EffectZoneChoice` (CR 701.21a / CR 608.2d) | `count` exactas, o `min_count..=count` si `up_to` | `ai_support/mod.rs`, `selection_mismatch` |
+| `HeroEventChoice` (sin CR: producto casual) | `count` exactas, o `min..=count` si `up_to` | `engine_resolution_choices.rs:7136` |
+| `DrawnThisTurnTopdeckChoice` (CR 614.1) | `min_count..=count` **siempre** | `effects/drawn_this_turn_choice.rs` |
+| `SearchPartitionChoice` (CR 608.2d) | exactamente `primary_count` | `engine_resolution_choices.rs:6000` |
+
+Comparten dibujo (`SelectFromListPrompt.svelte`) y **no comparten aritmética**:
+ninguna rama del panel resta, cuenta ni acota por su cuenta. `min`, `max` y
+`window` se leen del cable; lo único que hace TypeScript es comparar la
+selección con esa ventana (`selectFromListReady`) y acotar el máximo al tamaño
+del conjunto publicado para no ofrecer de más.
+
+### Los tres números que se copian y no se calculan
+
+- **`DrawnThisTurnTopdeckChoice` no calcula la vida.** Cada carta que no va
+  arriba cuesta `life_payment` vidas, y el mínimo (cuántas **tienen** que ir
+  arriba) es `minimum_topdeck_count` en el motor: depende de la vida del
+  jugador, de `count` y de `life_payment`. El bloque pinta la ventana y el coste
+  por carta; no hace la resta. La escena `topdeck` publica `min_count: 1` con
+  `life_payment: 2`, y `topdeckOne` publica `min_count: 3` con `life_payment: 0`
+  —la misma ventana cerrada sin haber calculado nada—.
+- **`SearchPartitionChoice` no reparte.** `primary_count` y las dos zonas
+  (`primary_destination`, `rest_destination`) vienen del cable; el panel nombra
+  las zonas con una tabla de siete entradas que es el `Zone` del motor, y una
+  zona desconocida se dice con su propio nombre (`Somewhere`) en vez de
+  traducirse a la brava. La escena `partitionOne` tiene **una** carta encontrada:
+  el motor sigue pidiendo exactamente una, así que el botón no se habilita solo
+  porque no haya nada que repartir.
+- **`EffectZoneChoice` tiene dos familias y sólo una entra aquí.** Cuando publica
+  `mass_library_order` es un orden de biblioteca propiedad del dueño
+  (`change_zone.rs::mass_library_order_effect_zone_choice`), y ese ya tiene su
+  bloque desde la pasada 66 (`BottomOrderPrompt`). El parser devuelve `null` en
+  ese caso para no pintar la misma ventana dos veces con dos contratos.
+
+### El mínimo que no es cero
+
+`min_count`/`min` valen `0` en la mayoría de los «hasta N», y por eso la lista
+vacía es una respuesta legal **ahí**. Pero no en todas: Turtle Team-Up tiene
+mínimos de contribución (el «Krang's Stratagem» que ya usa el motor en su propio
+comentario), y `drawn-topdeck` sube el mínimo cuando no hay vida que pagar. El
+botón de cero existe sólo cuando el mínimo publicado es cero, y su etiqueta lo
+dice («No elegir ninguna»); con `min: 1` el mismo botón nace deshabilitado.
+
+### Escenas y verificación
+
+Escenas `sacrifice`, `sacrificeOne`, `sacrificeUpTo`, `sacrificeAway`,
+`heroEvent`, `heroEventOpen`, `heroEventAway`, `topdeck`, `topdeckOne`,
+`topdeckAway`, `partition`, `partitionOne` y `partitionAway`; capturas
+`ux-sacrificar-1440.jpg`, `ux-un-sacrificio-1440.jpg`,
+`ux-sacrificar-hasta-dos-1440.jpg`, `ux-sacrificio-ajeno-1440.jpg`,
+`ux-evento-heroe-1440.jpg`, `ux-evento-abierto-1440.jpg`,
+`ux-evento-ajeno-1440.jpg`, `ux-robado-este-turno-1440.jpg`,
+`ux-robado-obligatorio-1440.jpg`, `ux-robado-ajeno-1440.jpg`,
+`ux-reparto-busqueda-1440.jpg`, `ux-reparto-unico-1440.jpg` y
+`ux-reparto-ajeno-1440.jpg`, más sus pares de tema (199 escenas, 398 jpg).
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **772** (13
+nuevas en `select-from-list.test.ts`); `ux-lab` **193** (10 nuevas); `ux-themes`
+**3/3** con 199 escenas; `scripts/clash-shots.ts` pasa a 65 capturas.
+`REPRESENTED` pasa de **105** a **109**; quedan **39** de las 148.
+
+### Lo que queda de `Select`, y por qué no entra aquí
+
+`ArrangePlanarDeckTopChoice` es un subconjunto *y* un orden a la vez
+(`keep_on_top` arriba en el orden enviado, el resto al fondo en cualquiera), y
+merece su propio bloque de dos pasos, no una rejilla de marcas.
+`CollectEvidenceChoice` sigue fuera por la razón de la pasada 69: la suma contra
+`minimum_mana_value` no se puede enseñar sin el valor de maná por carta, y el
+cable no lo manda. `DigRestSplitChoice` y `OpeningHandBottomCards` publican
+cosas distintas: el primero es una **permutación** completa del montón —el mismo
+contrato que `RippleBottomOrder`, con la restricción añadida de que el conjunto
+de arriba no se mueve cuando `scope` es `OrderOnly`—, y el segundo no publica
+cartas: publica `(jugador, cuántas)` y las cartas salen de la mano de ese
+jugador. Ninguno de los dos es una selección de subconjunto y meterlos aquí
+habría sido reutilizar un dibujo con otro contrato.

@@ -70,7 +70,20 @@ const SHOTS = [
   { scene: 'harmonizeAway', file: 'ux-armonizar-ajena-1440.jpg', block: '[data-pick-exactly-one]' },
   { scene: 'bounce', file: 'ux-devolver-a-la-mano-1440.jpg', block: '[data-pick-exactly-one]' },
   { scene: 'bounceOne', file: 'ux-un-permanente-devolver-1440.jpg', block: '[data-pick-exactly-one]' },
-  { scene: 'bounceAway', file: 'ux-devolver-ajena-1440.jpg', block: '[data-pick-exactly-one]' }
+  { scene: 'bounceAway', file: 'ux-devolver-ajena-1440.jpg', block: '[data-pick-exactly-one]' },
+  { scene: 'sacrifice', file: 'ux-sacrificar-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'sacrificeOne', file: 'ux-un-sacrificio-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'sacrificeUpTo', file: 'ux-sacrificar-hasta-dos-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'sacrificeAway', file: 'ux-sacrificio-ajeno-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'heroEvent', file: 'ux-evento-heroe-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'heroEventOpen', file: 'ux-evento-abierto-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'heroEventAway', file: 'ux-evento-ajeno-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'topdeck', file: 'ux-robado-este-turno-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'topdeckOne', file: 'ux-robado-obligatorio-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'topdeckAway', file: 'ux-robado-ajeno-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'partition', file: 'ux-reparto-busqueda-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'partitionOne', file: 'ux-reparto-unico-1440.jpg', block: '[data-select-from-list]' },
+  { scene: 'partitionAway', file: 'ux-reparto-ajeno-1440.jpg', block: '[data-select-from-list]' }
 ];
 
 mkdirSync(outDir, { recursive: true });

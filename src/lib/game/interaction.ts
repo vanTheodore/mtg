@@ -5831,3 +5831,177 @@ export function pickExactlyOneAction(snapshot: EngineSnapshot | null, action: Ga
   if (prompt.decline !== null && action === prompt.decline) return true;
   return [...prompt.actions.values()].includes(action);
 }
+
+// ── Pasada 70: cuatro `Select` que responden `SelectCards` sobre una lista ──
+//
+// El motor clasifica las cuatro como `HumanResponseModel::Select` y las cuatro
+// contestan lo mismo —`SelectCards { cards }` sobre el conjunto que él mismo
+// publica—, pero la ventana que publican no es la misma:
+//
+//   EffectZoneChoice        → `count` exactas, o `min_count..=count` si `up_to`
+//   HeroEventChoice         → `count` exactas, o `min..=count` si `up_to`
+//   DrawnThisTurnTopdeckChoice → `min_count..=count` SIEMPRE (no hay exacta)
+//   SearchPartitionChoice   → exactamente `primary_count`, y ninguna otra
+//
+// El panel no calcula ninguna de esas cotas: las pinta. Y no filtra la lista:
+// las cartas son las que el cable publicó, en su orden.
+
+export type SelectFromListKind = 'effect-zone' | 'hero-event' | 'drawn-topdeck' | 'search-partition';
+
+export type SelectFromListPrompt = {
+  kind: SelectFromListKind;
+  player: PlayerId;
+  /** El conjunto publicado, tal cual llega y en su orden. */
+  cards: ObjectId[];
+  /** Cota inferior del cable. `0` es una respuesta legal, no «sin mínimo». */
+  min: number;
+  /** Cota superior, ya acotada al tamaño del conjunto para no ofrecer de más. */
+  max: number;
+  /**
+   * `true` sólo cuando el motor publica una **ventana**; con `false` la única
+   * respuesta legal es `min === max` y el botón no se habilita antes ni después.
+   */
+  window: boolean;
+  /** El objeto que pide la decisión, si el cable lo publica. */
+  sourceId: ObjectId | null;
+  /** CR 701.68a-style extra: sólo `drawn-topdeck`, la vida por carta que se queda. */
+  lifePayment: number | null;
+  /** Sólo `search-partition`: las zonas del reparto, tal como las nombró el motor. */
+  primaryDestination: string | null;
+  restDestination: string | null;
+  /** Sólo `effect-zone`: la zona de origen publicada. */
+  zone: string | null;
+  /** Sólo `hero-event`: el tipo de evento, para la cabecera. */
+  event: string | null;
+};
+
+const SELECT_FROM_LIST_ZONES: Record<string, string> = {
+  Library: 'la biblioteca',
+  Hand: 'la mano',
+  Battlefield: 'el campo de batalla',
+  Graveyard: 'el cementerio',
+  Exile: 'el exilio',
+  Stack: 'la pila',
+  Command: 'la zona de mando'
+};
+
+function clampCount(value: unknown, fallback: number, size: number): number {
+  const count = typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fallback;
+  return Math.min(count, size);
+}
+
+/**
+ * La ventana `[min, max]` de cada una de las cuatro, leída del cable. Ni una
+ * rama resta en TypeScript: `drawn-topdeck` no calcula cuántas cartas puede
+ * pagar, el motor ya publicó `min_count`; `search-partition` no deduce el
+ * reparto, el motor publicó `primary_count`.
+ */
+export function selectFromListPrompt(snapshot: EngineSnapshot | null): SelectFromListPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting) return null;
+  const data = waiting.data ?? {};
+  const player = typeof data.player === 'number' ? data.player : snapshot!.viewer;
+  const cards = ints(data.cards);
+  const zone = (value: unknown) => (typeof value === 'string' ? SELECT_FROM_LIST_ZONES[value] ?? value : null);
+
+  if (waiting.type === 'EffectZoneChoice') {
+    // Un orden de biblioteca propiedad del dueño tiene su propio bloque
+    // (`BottomOrderPrompt`): aquí sólo entran las selecciones de subconjunto.
+    if (data.mass_library_order !== undefined && data.mass_library_order !== null) return null;
+    const upTo = data.up_to === true;
+    const max = clampCount(data.count, cards.length, cards.length);
+    const min = upTo ? clampCount(data.min_count, 0, max) : max;
+    return {
+      kind: 'effect-zone',
+      player,
+      cards,
+      min,
+      max,
+      window: upTo,
+      sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+      lifePayment: null,
+      primaryDestination: null,
+      restDestination: null,
+      zone: zone(data.zone),
+      event: null
+    };
+  }
+  if (waiting.type === 'HeroEventChoice') {
+    const upTo = data.up_to === true;
+    const max = clampCount(data.count, cards.length, cards.length);
+    const min = upTo ? clampCount(data.min, 0, max) : max;
+    return {
+      kind: 'hero-event',
+      player,
+      cards,
+      min,
+      max,
+      window: upTo,
+      sourceId: typeof data.event_id === 'number' ? (data.event_id as ObjectId) : null,
+      lifePayment: null,
+      primaryDestination: null,
+      restDestination: null,
+      zone: null,
+      event: typeof (data.event as { type?: unknown } | null)?.type === 'string' ? ((data.event as { type: string }).type) : null
+    };
+  }
+  if (waiting.type === 'DrawnThisTurnTopdeckChoice') {
+    const max = clampCount(data.count, cards.length, cards.length);
+    const min = clampCount(data.min_count, 0, max);
+    return {
+      kind: 'drawn-topdeck',
+      player,
+      cards,
+      min,
+      max,
+      // Aunque `min < max`, el cable nunca llama a esto «up to»: la ventana es
+      // la que deja la vida que puedas pagar, y la dice el motor.
+      window: min < max,
+      sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+      lifePayment:
+        typeof data.life_payment === 'number' && Number.isInteger(data.life_payment) && data.life_payment >= 0
+          ? data.life_payment
+          : null,
+      primaryDestination: null,
+      restDestination: null,
+      zone: null,
+      event: null
+    };
+  }
+  if (waiting.type === 'SearchPartitionChoice') {
+    // CR 608.2d: exactamente `primary_count` para el destino primario. El motor
+    // rechaza cualquier otro tamaño, así que aquí no hay ventana.
+    const count = clampCount(data.primary_count, cards.length, cards.length);
+    return {
+      kind: 'search-partition',
+      player,
+      cards,
+      min: count,
+      max: count,
+      window: false,
+      sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+      lifePayment: null,
+      primaryDestination: zone(data.primary_destination),
+      restDestination: zone(data.rest_destination),
+      zone: null,
+      event: null
+    };
+  }
+  return null;
+}
+
+/** Si el motor aceptaría esta respuesta tal como está. */
+export function selectFromListReady(prompt: SelectFromListPrompt, selected: ObjectId[]): boolean {
+  if (new Set(selected).size !== selected.length) return false;
+  if (!selected.every((id) => prompt.cards.includes(id))) return false;
+  return selected.length >= prompt.min && selected.length <= prompt.max;
+}
+
+/**
+ * El botón, sólo cuando la selección cae dentro de la ventana publicada. La
+ * lista vacía no se inventa como «ninguna»: sólo pasa el filtro cuando el
+ * propio motor publicó un mínimo de cero.
+ */
+export function selectFromListAction(prompt: SelectFromListPrompt, selected: ObjectId[]): GameAction | null {
+  return selectFromListReady(prompt, selected) ? selectCardsAction(selected) : null;
+}

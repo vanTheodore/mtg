@@ -96,6 +96,7 @@
   import SpecializePrompt from '#lib/components/SpecializePrompt.svelte';
   import RoomDoorPrompt from '#lib/components/RoomDoorPrompt.svelte';
   import PickExactlyOnePrompt from '#lib/components/PickExactlyOnePrompt.svelte';
+  import SelectFromListPrompt from '#lib/components/SelectFromListPrompt.svelte';
   import ClashPlacementPrompt from '#lib/components/ClashPlacementPrompt.svelte';
   import SideboardPrompt from '#lib/components/SideboardPrompt.svelte';
   import PlayDrawPrompt from '#lib/components/PlayDrawPrompt.svelte';
@@ -103,7 +104,7 @@
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway' | 'ringBearer' | 'ringBearerOne' | 'ringBearerAway' | 'legend' | 'legendAway' | 'protoProtector' | 'protoOne' | 'protoAway' | 'dungeon' | 'dungeonOne' | 'dungeonAway' | 'dungeonRoom' | 'dungeonRoomOne' | 'dungeonRoomAway' | 'behold' | 'beholdOne' | 'beholdAway' | 'populate' | 'populateOne' | 'populateAway' | 'specialize' | 'specializeOne' | 'specializeAway' | 'roomDoor' | 'roomDoorOne' | 'roomDoorAway' | 'blight' | 'blightOne' | 'blightAway' | 'harmonize' | 'harmonizeDecline' | 'harmonizeAway' | 'bounce' | 'bounceOne' | 'bounceAway';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway' | 'ringBearer' | 'ringBearerOne' | 'ringBearerAway' | 'legend' | 'legendAway' | 'protoProtector' | 'protoOne' | 'protoAway' | 'dungeon' | 'dungeonOne' | 'dungeonAway' | 'dungeonRoom' | 'dungeonRoomOne' | 'dungeonRoomAway' | 'behold' | 'beholdOne' | 'beholdAway' | 'populate' | 'populateOne' | 'populateAway' | 'specialize' | 'specializeOne' | 'specializeAway' | 'roomDoor' | 'roomDoorOne' | 'roomDoorAway' | 'blight' | 'blightOne' | 'blightAway' | 'harmonize' | 'harmonizeDecline' | 'harmonizeAway' | 'bounce' | 'bounceOne' | 'bounceAway' | 'sacrifice' | 'sacrificeOne' | 'sacrificeUpTo' | 'sacrificeAway' | 'heroEvent' | 'heroEventOpen' | 'heroEventAway' | 'topdeck' | 'topdeckOne' | 'topdeckAway' | 'partition' | 'partitionOne' | 'partitionAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -258,6 +259,19 @@
     { value: 'bounce', label: 'Devolver a la mano' },
     { value: 'bounceOne', label: 'Un permanente que devolver' },
     { value: 'bounceAway', label: 'Devolver ajeno' },
+    { value: 'sacrifice', label: 'Sacrificar (una)' },
+    { value: 'sacrificeOne', label: 'Sacrificar, un solo candidato' },
+    { value: 'sacrificeUpTo', label: 'Sacrificar hasta dos' },
+    { value: 'sacrificeAway', label: 'Sacrificio ajeno' },
+    { value: 'heroEvent', label: 'Evento de héroe' },
+    { value: 'heroEventOpen', label: 'Evento con ventana' },
+    { value: 'heroEventAway', label: 'Evento ajeno' },
+    { value: 'topdeck', label: 'Robado este turno' },
+    { value: 'topdeckOne', label: 'Uno solo, y obligatorio' },
+    { value: 'topdeckAway', label: 'Robado ajeno' },
+    { value: 'partition', label: 'Reparto de búsqueda' },
+    { value: 'partitionOne', label: 'Reparto sin reparto' },
+    { value: 'partitionAway', label: 'Reparto ajeno' },
     { value: 'behold', label: 'Mostrar (behold)' },
     { value: 'beholdOne', label: 'Un objeto que mostrar' },
     { value: 'beholdAway', label: 'Behold ajeno' },
@@ -461,6 +475,19 @@
     bounce: 'UnlessBounceChoice · CR 118.12, uno de los permanentes publicados',
     bounceOne: 'UnlessBounceChoice · CR 118.12, un solo permanente',
     bounceAway: 'UnlessBounceChoice · CR 118.12, el asiento que no decide',
+    sacrifice: 'EffectZoneChoice · CR 701.21a, una carta de las que el motor publicó',
+    sacrificeOne: 'EffectZoneChoice · CR 701.21a, un solo candidato',
+    sacrificeUpTo: 'EffectZoneChoice · CR 608.2d, ventana 0..2 publicada',
+    sacrificeAway: 'EffectZoneChoice · CR 701.21a, el asiento que no decide',
+    heroEvent: 'HeroEventChoice · evento de equipo, dos exactas',
+    heroEventOpen: 'HeroEventChoice · ventana con mínimo de contribución',
+    heroEventAway: 'HeroEventChoice · el asiento que no decide',
+    topdeck: 'DrawnThisTurnTopdeckChoice · ventana 1..3 por la vida disponible',
+    topdeckOne: 'DrawnThisTurnTopdeckChoice · todas obligatorias',
+    topdeckAway: 'DrawnThisTurnTopdeckChoice · el asiento que no decide',
+    partition: 'SearchPartitionChoice · CR 608.2d, una al campo y el resto a la mano',
+    partitionOne: 'SearchPartitionChoice · CR 608.2d, con una sola carta encontrada',
+    partitionAway: 'SearchPartitionChoice · el asiento que no decide',
     behold: 'BeholdChoice · CR 701.4a, campo y mano en un solo conjunto',
     beholdOne: 'BeholdChoice · CR 701.4a, exactamente uno',
     beholdAway: 'BeholdChoice · CR 701.4a, el asiento que no decide',
@@ -1216,8 +1243,37 @@
     id, card_id: id, owner: 1, controller: 1, zone: 'Hand', name: 'Carta oculta', display_visible_to_viewer: false
   })) as GameObject[];
 
+  // CR 608.2d: cuatro ventanas `Select` que publican un conjunto y una ventana.
+  // El sacrificio tiene un permanente distinto en cada zona para que la lista
+  // mixta del cable se pueda leer tal cual; las cartas de la mano son las que
+  // el laboratorio ya usa en el descarte y en el beholder.
+  const sacrificeSource = {
+    id: 470, card_id: 470, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Grave Pact', card_types: { core_types: ['Enchantment'] },
+    oracle_text: 'Whenever a creature you control dies, each other player sacrifices a creature.'
+  } as GameObject;
+  const heroEventSource = {
+    id: 471, card_id: 471, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Chrome Overload', card_types: { core_types: ['Scheme'] },
+    oracle_text: 'Each hero sacrifices a tapped creature they control.'
+  } as GameObject;
+  const tintedBears = {
+    id: 475, card_id: 475, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Runeclaw Bear', card_types: { core_types: ['Creature'] }, power: 2, toughness: 2,
+    oracle_text: 'A bear. Nothing more.'
+  } as GameObject;
+  const topdeckSource = {
+    id: 472, card_id: 472, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Robaran Mercenaries', card_types: { core_types: ['Creature'] },
+    oracle_text: 'Choose any number of cards you drew this turn. Put those cards on top of your library. For each card you did not put on top of your library, you lose 2 life.'
+  } as GameObject;
+  const cultivate = {
+    id: 473, card_id: 473, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Cultivate', card_types: { core_types: ['Sorcery'] },
+    oracle_text: 'Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.'
+  } as GameObject;
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, cyclonic, deepFiend, wear, lurrus, hawk, dryadArbor, glacialRay, peerThroughDepths, reachThroughMists, gemrazer, llanowarElves, hiddenStrings, invisibleStalker, tormentedSoul, altarsReap, fireCovenant, generousGift, banishingLight, clashRevealed, clashRevealedOther, rippleFirst, rippleSecond, rippleSource, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, cyclonic, deepFiend, wear, lurrus, hawk, dryadArbor, glacialRay, peerThroughDepths, reachThroughMists, gemrazer, llanowarElves, hiddenStrings, invisibleStalker, tormentedSoul, altarsReap, fireCovenant, generousGift, banishingLight, clashRevealed, clashRevealedOther, rippleFirst, rippleSecond, rippleSource, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, sacrificeSource, heroEventSource, tintedBears, topdeckSource, cultivate, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -1860,6 +1916,68 @@
           player: scene === 'bounceAway' ? 1 : 0,
           permanents: scene === 'bounceOne' ? [100] : [100, 101],
           remaining: scene === 'bounce' ? 2 : 1
+        }
+      };
+    }
+    if (scene.startsWith('sacrifice')) {
+      return {
+        type: 'EffectZoneChoice',
+        data: {
+          player: scene === 'sacrificeAway' ? 1 : 0,
+          cards: scene === 'sacrificeOne' ? [100] : [100, 105],
+          count: scene === 'sacrificeUpTo' ? 2 : 1,
+          min_count: scene === 'sacrificeUpTo' ? 0 : 1,
+          up_to: scene === 'sacrificeUpTo',
+          source_id: 470,
+          effect_kind: 'Sacrifice',
+          zone: 'Battlefield',
+          destination: null,
+          count_param: 0,
+          is_cost_payment: false
+        }
+      };
+    }
+    if (scene.startsWith('heroEvent')) {
+      return {
+        type: 'HeroEventChoice',
+        data: {
+          player: scene === 'heroEventAway' ? 1 : 0,
+          event: scene === 'heroEventOpen' ? { type: 'KrangStratagem', data: { remaining: 2 } } : { type: 'ChromeOverload' },
+          event_id: 471,
+          cards: [100, 105],
+          count: 2,
+          up_to: scene === 'heroEventOpen',
+          min: scene === 'heroEventOpen' ? 1 : 0,
+          remaining_heroes: [1],
+          answers: [],
+          copies_pending: 0
+        }
+      };
+    }
+    if (scene.startsWith('topdeck')) {
+      return {
+        type: 'DrawnThisTurnTopdeckChoice',
+        data: {
+          player: scene === 'topdeckAway' ? 1 : 0,
+          cards: [1000, 1001, 1002],
+          count: 3,
+          min_count: scene === 'topdeckOne' ? 3 : 1,
+          life_payment: 2,
+          source_id: 472
+        }
+      };
+    }
+    if (scene.startsWith('partition')) {
+      return {
+        type: 'SearchPartitionChoice',
+        data: {
+          player: scene === 'partitionAway' ? 1 : 0,
+          cards: scene === 'partitionOne' ? [105] : [105, 475],
+          primary_destination: 'Battlefield',
+          primary_count: 1,
+          primary_enter_tapped: false,
+          rest_destination: 'Hand',
+          source_id: 473
         }
       };
     }
@@ -3103,7 +3221,18 @@
                                     ]
                                   : scene === 'giftOne'
                                     ? [{ type: 'ChooseGiftRecipient', data: { opponent: 1 } }]
-                                    : scene.startsWith('blight')
+                                    : scene.startsWith('sacrifice')
+                                      ? (scene === 'sacrificeUpTo'
+                                          ? [[], [100], [105], [100, 105]]
+                                          : (scene === 'sacrificeOne' ? [100] : [100, 105]).map((id) => [id])
+                                        ).map((cards) => ({ type: 'SelectCards', data: { cards } }))
+                                      : scene.startsWith('heroEvent')
+                                        ? (scene === 'heroEventOpen' ? [[100], [100, 105]] : [[100, 105]]).map((cards) => ({ type: 'SelectCards', data: { cards } }))
+                                        : scene.startsWith('topdeck')
+                                          ? [1, 2, 3].map((n) => ({ type: 'SelectCards', data: { cards: [1000, 1001, 1002].slice(0, scene === 'topdeckOne' ? 3 : n) } }))
+                                          : scene.startsWith('partition')
+                                            ? (scene === 'partitionOne' ? [105] : [105, 475]).map((id) => ({ type: 'SelectCards', data: { cards: [id] } }))
+                                            : scene.startsWith('blight')
                                       ? (scene === 'blightOne' ? [105] : [100, 105]).map((id) => ({ type: 'SelectCards', data: { cards: [id] } }))
                                       : scene.startsWith('harmonize')
                                         ? [
@@ -3435,6 +3564,7 @@
         {#if scene.startsWith('specialize')}<SpecializePrompt />{/if}
         {#if scene.startsWith('roomDoor')}<RoomDoorPrompt />{/if}
         {#if scene.startsWith('blight') || scene.startsWith('harmonize') || scene.startsWith('bounce')}<PickExactlyOnePrompt />{/if}
+        {#if scene.startsWith('sacrifice') || scene.startsWith('heroEvent') || scene.startsWith('topdeck') || scene.startsWith('partition')}<SelectFromListPrompt />{/if}
         {#if scene.startsWith('dungeon')}<DungeonPrompt />{/if}
         {#if scene.startsWith('bottom')}<BottomOrderPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}

@@ -3768,3 +3768,147 @@ test('las tres ventanas ajenas se nombran y no ofrecen botones', async ({ page }
     await expect(block.locator('[data-pick-exactly-one-other]')).toContainText('Jugador 2');
   }
 });
+
+// ── Pasada 70: EffectZoneChoice, HeroEventChoice, DrawnThisTurnTopdeckChoice, SearchPartitionChoice ──
+
+test('el sacrificio lista lo que el motor publicó y exige exactamente una', async ({ page }) => {
+  await page.goto('/ux?scene=sacrifice');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-select-from-list-kind', 'effect-zone');
+  await expect(block).toHaveAttribute('data-select-from-list-count', '2');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '1');
+  await expect(block).toHaveAttribute('data-select-from-list-max', '1');
+  await expect(block).toHaveAttribute('data-select-from-list-window', 'false');
+  await expect(block.locator('strong')).toHaveText('Elegir en el campo de batalla');
+  await expect(block.locator('[data-select-from-list-rule]')).toContainText('CR 608.2d');
+  const options = block.locator('[data-select-from-list-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-select-from-list-option', '100');
+  await expect(options.nth(1)).toHaveAttribute('data-select-from-list-option', '105');
+
+  // The confirm button is dead until the engine's own count is met.
+  const confirm = block.locator('[data-select-from-list-confirm]');
+  await expect(confirm).toBeDisabled();
+  await options.nth(1).click();
+  await expect(options.nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(confirm).toBeEnabled();
+  // A second pick would be over the published maximum, so the click does nothing.
+  await options.nth(0).click();
+  await expect(options.nth(0)).toHaveAttribute('aria-pressed', 'false');
+  await expect(confirm).toContainText('Confirmar (1/1)');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un solo candidato de sacrificio sigue siendo una pregunta, no una elección hecha', async ({ page }) => {
+  await page.goto('/ux?scene=sacrificeOne');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block.locator('[data-select-from-list-option]')).toHaveCount(1);
+  await expect(block.locator('[data-select-from-list-option="105"]')).toHaveCount(0);
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeDisabled();
+});
+
+test('«hasta dos» abre la ventana que publicó el motor, con su mínimo', async ({ page }) => {
+  await page.goto('/ux?scene=sacrificeUpTo');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-window', 'true');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '0');
+  await expect(block).toHaveAttribute('data-select-from-list-max', '2');
+  // Zero cards is a real answer here, and the button says so.
+  const confirm = block.locator('[data-select-from-list-confirm]');
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('No elegir ninguna');
+  await block.locator('[data-select-from-list-option="100"]').click();
+  await expect(block.locator('[data-select-from-list-counts]')).toContainText('mínimo 0');
+});
+
+test('el evento de héroe pinta cuántas pide y de qué evento', async ({ page }) => {
+  await page.goto('/ux?scene=heroEvent');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-kind', 'hero-event');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '2');
+  await expect(block).toHaveAttribute('data-select-from-list-max', '2');
+  await expect(block.locator('[data-select-from-list-event]')).toHaveText('ChromeOverload');
+  const options = block.locator('[data-select-from-list-option]');
+  await options.nth(0).click();
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeDisabled();
+  await options.nth(1).click();
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el evento con mínimo de contribución no acepta cero', async ({ page }) => {
+  await page.goto('/ux?scene=heroEventOpen');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-window', 'true');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '1');
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeDisabled();
+});
+
+test('lo robado este turno enseña la ventana y el coste en vida del cable', async ({ page }) => {
+  await page.goto('/ux?scene=topdeck');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-kind', 'drawn-topdeck');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '1');
+  await expect(block).toHaveAttribute('data-select-from-list-max', '3');
+  await expect(block.locator('[data-select-from-list-rule]')).toContainText('2 vida');
+  const options = block.locator('[data-select-from-list-option]');
+  await expect(options).toHaveCount(3);
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeDisabled();
+  await options.nth(0).click();
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('sin vida que pagar, lo robado obliga a mandar todas arriba', async ({ page }) => {
+  await page.goto('/ux?scene=topdeckOne');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-window', 'false');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '3');
+  await expect(block).toHaveAttribute('data-select-from-list-max', '3');
+});
+
+test('el reparto de búsqueda es exactamente primary_count y nombra las dos zonas', async ({ page }) => {
+  await page.goto('/ux?scene=partition');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-kind', 'search-partition');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '1');
+  await expect(block).toHaveAttribute('data-select-from-list-window', 'false');
+  await expect(block.locator('[data-select-from-list-rule]')).toContainText('el campo de batalla');
+  await expect(block.locator('[data-select-from-list-rule]')).toContainText('la mano');
+  const options = block.locator('[data-select-from-list-option]');
+  await expect(options).toHaveCount(2);
+  await options.nth(1).click();
+  // A second pick cannot be queued: the engine only accepts exactly one.
+  await options.nth(0).click();
+  await expect(block.locator('[data-select-from-list-confirm]')).toContainText('Confirmar (1/1)');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un reparto con una sola carta encontrada obliga a nombrarla', async ({ page }) => {
+  await page.goto('/ux?scene=partitionOne');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block.locator('[data-select-from-list-option]')).toHaveCount(1);
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeDisabled();
+  await expect(block.locator('[data-select-from-list-option="475"]')).toHaveCount(0);
+});
+
+test('las cuatro ventanas ajenas se leen y no ofrecen botones', async ({ page }) => {
+  // The away block lists exactly the published set, whatever its size.
+  for (const [scene, cards] of [['sacrificeAway', 2], ['heroEventAway', 2], ['topdeckAway', 3], ['partitionAway', 2]] as const) {
+    await page.goto(`/ux?scene=${scene}`);
+    const block = page.locator('[data-select-from-list]');
+    await expect(block).toBeVisible();
+    await expect(block.locator('button')).toHaveCount(0);
+    await expect(block.locator('[data-select-from-list-faces] li')).toHaveCount(cards);
+    await expect(block.locator('[data-select-from-list-other]')).toContainText('Jugador 2');
+  }
+});
