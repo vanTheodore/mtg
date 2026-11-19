@@ -3836,3 +3836,68 @@ LD_LIBRARY_PATH=~/.cache/mesa-chromium/al2023/lib:~/.cache/mesa-chromium \
     --phase http://127.0.0.1:5280 --out docs/screenshots
 bun scripts/seed-phase-board.ts --client /ruta/al/cliente/phase --remove
 ```
+
+## Primera pasada del paso React → Svelte (7 nov 2026)
+
+La comparación de arriba dice qué reparte cada tablero. Este bloque aplica al
+tablero **Arena** de Mesa la parte de ese reparto que no es cuestión de gusto, y
+mide el resultado con el mismo procedimiento: un Chromium, la misma instantánea
+`EngineSnapshot`, las mismas tres medidas.
+
+Evidencia: `docs/screenshots/tablero-{antes,despues}-{1440,1280,390}.jpg` y
+`docs/evidence/tablero-{antes,despues}-{1440,1280,390}.json`. Las cifras de esta
+sección salen de esos JSON, no de mirar las imágenes.
+
+Se reproduce con `bun scripts/board-shots.ts --tag antes|despues`, que instala la
+misma fixture y escribe foto + medidas en el mismo pase.
+
+### Qué cambió, con la diferencia de arriba al lado
+
+| Diferencia | Antes (medido) | Después (medido) |
+| --- | --- | --- |
+| **1. Reparto del ancho** | mesa 1395 px; rail de decisión de 392 px con el registro plegado dentro | mesa 1052 px + **columna de registro de 320 px** (`x: 1090`, ancho 320, alto 569); el rail vive en esa columna |
+| **2. Alto por campo** | 204 px por campo, 204 px de hueco entre los dos, y el contenedor del tablero desplazaba 225 px por dentro | 238 px por campo, los dos pegados al centro de su mitad, y `.layout` **sin desplazamiento interno** (`clientHeight` 628 = `scrollHeight` 628) |
+| **3. Barra de fases** | rail de 362 px, 868 px de chips, **4 de 12** pasos visibles con 8 sin señal | fila de 290 px, `scrollWidth` 290, **12 de 12** visibles; dos líneas con los cuatro rótulos largos abreviados |
+| **4. Consejo de flujo** | 544×97 en una fila propia entre el campo y la mano | 667×40 en la fila de chips de estado, **sin fila propia**: comparte fila con `Tu prioridad · Principal 1 · MANO 7 · CONTROL`, que es donde Phase pone `Your priority` / `HAND 7` / `CONTROL` |
+| **6. Barra de asiento** | franja única de 760 px centrada en la mesa | contador de 671 px (asiento rival) y 620 px (propio) pegados al ancho de su columna: la vida a la izquierda, las pilas a la derecha |
+
+A 1280 el mismo reparto da 892 px de campo, 320 px de registro, el registro
+visible entero (`y: 528`) y 12 de 12 pasos en una fila de 290 px.
+
+### Lo que **no** se copió, y por qué
+
+- **El contador de vida suelto de Phase** (84×68 centrado sobre el campo, con
+  las pilas repartidas por las esquinas). Se probó y se descartó: en Mesa el
+  asiento lleva además el botón de objetivo (`Elegir Jugador N como objetivo`),
+  los contadores de veneno/energía, el aviso de cambio de vida y `data-life`, que
+  tres pruebas E2E leen. Partirlo en widgets dejaría esos datos sin sitio o
+  obligaría a duplicarlos. Lo que sí se copió es lo que se ve: dejó de ser una
+  franja de 760 px centrada y pasó a ser una fila al pie de su campo.
+- **El consejo flotando sobre el campo.** Phase lo ancla abajo a la derecha y no
+  tapa nada porque su campo acaba en `y: 606`. Aquí se probó igual
+  (`position: absolute` contra la fila de chips) y la tarjeta de 416 px caía
+  sobre las dos criaturas propias, tapando su P/T. Se quedó en el flujo, pero en
+  una fila de 40 px en vez de 97.
+- **La columna del cementerio como tira de cartas.** Medía 198 px de los 630
+  del tablero con una sola carta, que es justo el alto que este reparto da a los
+  campos. En Arena el cementerio sigue a un clic en la pila del asiento
+  (`ZonePile` → `ZoneViewer`) y el contador sigue en la fila del asiento; en
+  Clásico no cambia nada.
+
+### Un defecto que sí se arregló de paso
+
+La mano de escritorio estaba **pegada a la izquierda**: la regla que centra el
+abanico sólo cubría `.layout .hand-zone` y `.board .hand-zone`, y desde M10 la
+mano es hija directa de `.app`. Medido a 1440: primera carta en `x: 19` y última
+en `x: 1152` de una franja de 1395 px. Añadido el selector que faltaba, el
+abanico queda centrado (`x: 425…1015`).
+
+### Lo que sigue sin ser el de Phase
+
+- La **mano del teléfono** sigue siendo un cajón, no el abanico completo de
+  Phase a 390 px (diferencia 5). Es el cambio más grande que queda y toca la
+  navegación del tablero, no sólo su reparto.
+- El **marcador sin arte** de la diferencia 7 y el registro en español de la 8
+  no se tocan: son decisiones de producto ya documentadas.
+- `arena-ui.spec.ts` sigue midiendo `position: sticky` en el rail: la columna
+  nueva es `sticky` dentro de su propia celda, así que el contrato no cambia.

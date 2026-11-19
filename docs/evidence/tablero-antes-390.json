@@ -1,0 +1,203 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "documentHeight": 844,
+  "horizontalOverflow": 0,
+  "boxes": {
+    "topbar": {
+      "x": 10,
+      "y": 5,
+      "w": 371,
+      "h": 67
+    },
+    "layout": {
+      "x": 10,
+      "y": 77,
+      "w": 371,
+      "h": 693
+    },
+    "opponentField": {
+      "x": 17,
+      "y": 187,
+      "w": 356,
+      "h": 332
+    },
+    "playerField": {
+      "x": 17,
+      "y": 658,
+      "w": 356,
+      "h": 332
+    },
+    "middle": {
+      "x": 17,
+      "y": 522,
+      "w": 356,
+      "h": 133
+    },
+    "decision": {
+      "x": 10,
+      "y": 529,
+      "w": 371,
+      "h": 241
+    },
+    "log": {
+      "x": 17,
+      "y": 609,
+      "w": 356,
+      "h": 36
+    },
+    "stopBar": {
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+    },
+    "opponentSeat": {
+      "x": 17,
+      "y": 84,
+      "w": 356,
+      "h": 100
+    },
+    "playerSeat": {
+      "x": 17,
+      "y": 993,
+      "w": 356,
+      "h": 92
+    },
+    "hand": {
+      "x": 0,
+      "y": 841,
+      "w": 390,
+      "h": 3
+    },
+    "handTrigger": {
+      "x": 10,
+      "y": 775,
+      "w": 371,
+      "h": 44
+    },
+    "statusDock": {
+      "x": 17,
+      "y": 1207,
+      "w": 356,
+      "h": 53
+    },
+    "coach": {
+      "x": 17,
+      "y": 1089,
+      "w": 356,
+      "h": 115
+    },
+    "metrics": {
+      "x": 10,
+      "y": 823,
+      "w": 371,
+      "h": 16
+    },
+    "rivalHand": null
+  },
+  "phaseRail": {
+    "clientWidth": 0,
+    "scrollWidth": 0,
+    "visible": [
+      "Enderezar",
+      "Mantener",
+      "Robar",
+      "Principal",
+      "Combate",
+      "Atacar",
+      "Bloquear",
+      "Daño",
+      "Fin combate",
+      "Principal 2",
+      "Final",
+      "Limpieza"
+    ],
+    "total": 12
+  },
+  "lands": [
+    {
+      "x": 30,
+      "y": 842,
+      "w": 100,
+      "h": 139
+    },
+    {
+      "x": 136,
+      "y": 842,
+      "w": 100,
+      "h": 139
+    },
+    {
+      "x": 241,
+      "y": 842,
+      "w": 100,
+      "h": 139
+    }
+  ],
+  "creatures": [
+    {
+      "x": 30,
+      "y": 692,
+      "w": 100,
+      "h": 139
+    },
+    {
+      "x": 136,
+      "y": 692,
+      "w": 100,
+      "h": 139
+    }
+  ],
+  "handCards": [
+    {
+      "x": 3,
+      "y": 852,
+      "w": 147,
+      "h": 205
+    },
+    {
+      "x": 161,
+      "y": 852,
+      "w": 147,
+      "h": 205
+    },
+    {
+      "x": 318,
+      "y": 852,
+      "w": 147,
+      "h": 205
+    },
+    {
+      "x": 475,
+      "y": 852,
+      "w": 147,
+      "h": 205
+    },
+    {
+      "x": 633,
+      "y": 852,
+      "w": 147,
+      "h": 205
+    },
+    {
+      "x": 790,
+      "y": 852,
+      "w": 147,
+      "h": 205
+    },
+    {
+      "x": 948,
+      "y": 852,
+      "w": 147,
+      "h": 205
+    }
+  ],
+  "logText": "Resoluciones 0 Sin resoluciones todavía.",
+  "layoutScroll": {
+    "clientHeight": 691,
+    "scrollHeight": 1729
+  }
+}
