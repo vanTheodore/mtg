@@ -95,6 +95,7 @@
   import PickOnePrompt from '#lib/components/PickOnePrompt.svelte';
   import SpecializePrompt from '#lib/components/SpecializePrompt.svelte';
   import RoomDoorPrompt from '#lib/components/RoomDoorPrompt.svelte';
+  import PickExactlyOnePrompt from '#lib/components/PickExactlyOnePrompt.svelte';
   import ClashPlacementPrompt from '#lib/components/ClashPlacementPrompt.svelte';
   import SideboardPrompt from '#lib/components/SideboardPrompt.svelte';
   import PlayDrawPrompt from '#lib/components/PlayDrawPrompt.svelte';
@@ -102,7 +103,7 @@
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway' | 'ringBearer' | 'ringBearerOne' | 'ringBearerAway' | 'legend' | 'legendAway' | 'protoProtector' | 'protoOne' | 'protoAway' | 'dungeon' | 'dungeonOne' | 'dungeonAway' | 'dungeonRoom' | 'dungeonRoomOne' | 'dungeonRoomAway' | 'behold' | 'beholdOne' | 'beholdAway' | 'populate' | 'populateOne' | 'populateAway' | 'specialize' | 'specializeOne' | 'specializeAway' | 'roomDoor' | 'roomDoorOne' | 'roomDoorAway';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway' | 'ringBearer' | 'ringBearerOne' | 'ringBearerAway' | 'legend' | 'legendAway' | 'protoProtector' | 'protoOne' | 'protoAway' | 'dungeon' | 'dungeonOne' | 'dungeonAway' | 'dungeonRoom' | 'dungeonRoomOne' | 'dungeonRoomAway' | 'behold' | 'beholdOne' | 'beholdAway' | 'populate' | 'populateOne' | 'populateAway' | 'specialize' | 'specializeOne' | 'specializeAway' | 'roomDoor' | 'roomDoorOne' | 'roomDoorAway' | 'blight' | 'blightOne' | 'blightAway' | 'harmonize' | 'harmonizeDecline' | 'harmonizeAway' | 'bounce' | 'bounceOne' | 'bounceAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -248,6 +249,15 @@
     { value: 'playDraw', label: 'Jugar o robar' },
     { value: 'playDrawDraw', label: 'Robar primero' },
     { value: 'playDrawAway', label: 'Elección ajena' },
+    { value: 'blight', label: 'Malea (blight)' },
+    { value: 'blightOne', label: 'Una criatura que malea' },
+    { value: 'blightAway', label: 'Blight ajeno' },
+    { value: 'harmonize', label: 'Armonizar (girar)' },
+    { value: 'harmonizeDecline', label: 'Armonizar sin no-reducir' },
+    { value: 'harmonizeAway', label: 'Armonizar ajeno' },
+    { value: 'bounce', label: 'Devolver a la mano' },
+    { value: 'bounceOne', label: 'Un permanente que devolver' },
+    { value: 'bounceAway', label: 'Devolver ajeno' },
     { value: 'behold', label: 'Mostrar (behold)' },
     { value: 'beholdOne', label: 'Un objeto que mostrar' },
     { value: 'beholdAway', label: 'Behold ajeno' },
@@ -442,6 +452,15 @@
     dungeonRoom: 'ChooseDungeonRoom · CR 309.5a, la bifurcación del pasillo',
     dungeonRoomOne: 'ChooseDungeonRoom · CR 309.5a, una sola salida publicada',
     dungeonRoomAway: 'ChooseDungeonRoom · CR 309.5a, el asiento que no decide',
+    blight: 'BlightChoice · CR 701.68a, los contadores caen en UNA criatura',
+    blightOne: 'BlightChoice · CR 701.68a, una sola criatura elegible',
+    blightAway: 'BlightChoice · CR 701.68a, el asiento que no decide',
+    harmonize: 'HarmonizeTapChoice · CR 702.180b, girar para reducir',
+    harmonizeDecline: 'HarmonizeTapChoice · CR 702.180b, sin la vía de no reducir',
+    harmonizeAway: 'HarmonizeTapChoice · CR 702.180b, el asiento que no decide',
+    bounce: 'UnlessBounceChoice · CR 118.12, uno de los permanentes publicados',
+    bounceOne: 'UnlessBounceChoice · CR 118.12, un solo permanente',
+    bounceAway: 'UnlessBounceChoice · CR 118.12, el asiento que no decide',
     behold: 'BeholdChoice · CR 701.4a, campo y mano en un solo conjunto',
     beholdOne: 'BeholdChoice · CR 701.4a, exactamente uno',
     beholdAway: 'BeholdChoice · CR 701.4a, el asiento que no decide',
@@ -1814,6 +1833,36 @@
         }
       };
     }
+    if (scene.startsWith('blight')) {
+      return {
+        type: 'BlightChoice',
+        data: {
+          player: scene === 'blightAway' ? 1 : 0,
+          // CR 701.68a: dos contadores en UNA criatura, no dos criaturas.
+          counters: 2,
+          creatures: scene === 'blightOne' ? [105] : [100, 105]
+        }
+      };
+    }
+    if (scene.startsWith('harmonize')) {
+      return {
+        type: 'HarmonizeTapChoice',
+        data: {
+          player: scene === 'harmonizeAway' ? 1 : 0,
+          eligible_creatures: [100, 105]
+        }
+      };
+    }
+    if (scene.startsWith('bounce')) {
+      return {
+        type: 'UnlessBounceChoice',
+        data: {
+          player: scene === 'bounceAway' ? 1 : 0,
+          permanents: scene === 'bounceOne' ? [100] : [100, 101],
+          remaining: scene === 'bounce' ? 2 : 1
+        }
+      };
+    }
     if (scene.startsWith('behold')) {
       return {
         type: 'BeholdChoice',
@@ -3054,7 +3103,17 @@
                                     ]
                                   : scene === 'giftOne'
                                     ? [{ type: 'ChooseGiftRecipient', data: { opponent: 1 } }]
-                                    : scene.startsWith('behold')
+                                    : scene.startsWith('blight')
+                                      ? (scene === 'blightOne' ? [105] : [100, 105]).map((id) => ({ type: 'SelectCards', data: { cards: [id] } }))
+                                      : scene.startsWith('harmonize')
+                                        ? [
+                                            { type: 'HarmonizeTap', data: { creature_id: 100 } },
+                                            { type: 'HarmonizeTap', data: { creature_id: 105 } },
+                                            ...(scene === 'harmonizeDecline' ? [] : [{ type: 'HarmonizeTap', data: { creature_id: null } }])
+                                          ]
+                                        : scene.startsWith('bounce')
+                                          ? (scene === 'bounceOne' ? [100] : [100, 101]).map((id) => ({ type: 'SelectCards', data: { cards: [id] } }))
+                                          : scene.startsWith('behold')
                                       ? (scene === 'beholdOne' ? [100] : [100, 1001]).map((id) => ({ type: 'SelectCards', data: { cards: [id] } }))
                                       : scene.startsWith('populate')
                                         ? (scene === 'populateOne' ? [100] : [100, 101]).map((id) => ({ type: 'ChooseTarget', data: { target: { Object: id } } }))
@@ -3375,6 +3434,7 @@
         {#if scene.startsWith('behold') || scene.startsWith('populate')}<PickOnePrompt />{/if}
         {#if scene.startsWith('specialize')}<SpecializePrompt />{/if}
         {#if scene.startsWith('roomDoor')}<RoomDoorPrompt />{/if}
+        {#if scene.startsWith('blight') || scene.startsWith('harmonize') || scene.startsWith('bounce')}<PickExactlyOnePrompt />{/if}
         {#if scene.startsWith('dungeon')}<DungeonPrompt />{/if}
         {#if scene.startsWith('bottom')}<BottomOrderPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}

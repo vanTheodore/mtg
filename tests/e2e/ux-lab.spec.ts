@@ -3674,3 +3674,97 @@ test('la especialización y la puerta ajenas no ofrecen botones', async ({ page 
   await expect(door.locator('button')).toHaveCount(0);
   await expect(door.locator('[data-room-door-other]')).toContainText('Jugador 2');
 });
+
+// ── Pasada 69: BlightChoice, HarmonizeTapChoice, UnlessBounceChoice ──
+
+test('blight pone sus contadores en una sola criatura, y las cuenta el motor', async ({ page }) => {
+  await page.goto('/ux?scene=blight');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pick-exactly-one-kind', 'blight');
+  await expect(block).toHaveAttribute('data-pick-exactly-one-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir qué criatura malea');
+  // CR 701.68a: two counters live on ONE creature, so the count is not the list's length.
+  await expect(block.locator('[data-pick-exactly-one-rule]')).toContainText('CR 701.68a');
+  await expect(block.locator('[data-pick-exactly-one-rule]')).toContainText('2 contador');
+  const options = block.locator('[data-pick-exactly-one-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-pick-exactly-one-option', '100');
+  await expect(options.nth(1)).toHaveAttribute('data-pick-exactly-one-option', '105');
+  // No «ninguno»: the wire published no empty answer for blight.
+  await expect(block.locator('[data-pick-exactly-one-decline]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('blight con una sola criatura elegible dibuja un solo botón', async ({ page }) => {
+  await page.goto('/ux?scene=blightOne');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block).toHaveAttribute('data-pick-exactly-one-count', '1');
+  await expect(block.locator('[data-pick-exactly-one-option]')).toHaveCount(1);
+  await expect(block.locator('[data-pick-exactly-one-option="100"]')).toHaveCount(0);
+});
+
+test('armonizar gira una criatura y despacha HarmonizeTap, no SelectCards', async ({ page }) => {
+  await page.goto('/ux?scene=harmonize');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pick-exactly-one-kind', 'harmonize');
+  await expect(block.locator('strong')).toHaveText('Elegir qué criatura girar');
+  await expect(block.locator('[data-pick-exactly-one-rule]')).toContainText('CR 702.180b');
+  const options = block.locator('[data-pick-exactly-one-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-pick-exactly-one-option', '100');
+  await expect(options.nth(1)).toHaveAttribute('data-pick-exactly-one-option', '105');
+  // The wire published `creature_id: null`, so declining exists — and only then.
+  await expect(block.locator('[data-pick-exactly-one-decline]')).toHaveText('No reducir el coste');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('sin la acción nula en el cable, armonizar no ofrece «no reducir»', async ({ page }) => {
+  await page.goto('/ux?scene=harmonizeDecline');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block.locator('[data-pick-exactly-one-option]')).toHaveCount(2);
+  // The UI must not synthesize the way out the engine did not publish.
+  await expect(block.locator('[data-pick-exactly-one-decline]')).toHaveCount(0);
+});
+
+test('«a menos que» devuelve uno de los permanentes publicados, con el recuento del cable', async ({ page }) => {
+  await page.goto('/ux?scene=bounce');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pick-exactly-one-kind', 'unless-bounce');
+  await expect(block).toHaveAttribute('data-pick-exactly-one-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir qué permanente devolver a la mano');
+  await expect(block.locator('[data-pick-exactly-one-rule]')).toContainText('CR 118.12');
+  await expect(block.locator('[data-pick-exactly-one-remaining]')).toContainText('Quedan 2 jugadores');
+  const options = block.locator('[data-pick-exactly-one-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-pick-exactly-one-option', '100');
+  await expect(options.nth(1)).toHaveAttribute('data-pick-exactly-one-option', '101');
+  await expect(block.locator('[data-pick-exactly-one-decline]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un solo permanente publicado deja un botón y ningún recuento que anunciar', async ({ page }) => {
+  await page.goto('/ux?scene=bounceOne');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block.locator('[data-pick-exactly-one-option]')).toHaveCount(1);
+  await expect(block.locator('[data-pick-exactly-one-option="101"]')).toHaveCount(0);
+  await expect(block.locator('[data-pick-exactly-one-remaining]')).toHaveCount(0);
+});
+
+test('las tres ventanas ajenas se nombran y no ofrecen botones', async ({ page }) => {
+  for (const scene of ['blightAway', 'harmonizeAway', 'bounceAway']) {
+    await page.goto(`/ux?scene=${scene}`);
+    const block = page.locator('[data-pick-exactly-one]');
+    await expect(block).toBeVisible();
+    await expect(block.locator('button')).toHaveCount(0);
+    await expect(block.locator('[data-pick-exactly-one-other]')).toContainText('Jugador 2');
+  }
+});

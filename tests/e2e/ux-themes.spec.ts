@@ -195,6 +195,15 @@ const SCENES = [
   { scene: 'roomDoor', slug: 'puerta-room', block: '[data-room-door]' },
   { scene: 'roomDoorOne', slug: 'una-puerta', block: '[data-room-door]' },
   { scene: 'roomDoorAway', slug: 'puerta-ajena', block: '[data-room-door]' },
+  { scene: 'blight', slug: 'malea', block: '[data-pick-exactly-one]' },
+  { scene: 'blightOne', slug: 'una-criatura-malea', block: '[data-pick-exactly-one]' },
+  { scene: 'blightAway', slug: 'malea-ajena', block: '[data-pick-exactly-one]' },
+  { scene: 'harmonize', slug: 'armonizar', block: '[data-pick-exactly-one]' },
+  { scene: 'harmonizeDecline', slug: 'armonizar-obligado', block: '[data-pick-exactly-one]' },
+  { scene: 'harmonizeAway', slug: 'armonizar-ajena', block: '[data-pick-exactly-one]' },
+  { scene: 'bounce', slug: 'devolver-a-la-mano', block: '[data-pick-exactly-one]' },
+  { scene: 'bounceOne', slug: 'un-permanente-devolver', block: '[data-pick-exactly-one]' },
+  { scene: 'bounceAway', slug: 'devolver-ajena', block: '[data-pick-exactly-one]' },
   { scene: 'revealAny', slug: 'revelar-cualquier-numero', block: '[data-reveal-prompt]' },
   { scene: 'unlessRepeat', slug: 'mantenimiento-acumulativo', block: '[data-unless-prompt]' }
 ] as const;

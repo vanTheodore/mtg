@@ -5651,3 +5651,183 @@ export function pickOneAction(snapshot: EngineSnapshot | null, action: GameActio
   if (!prompt) return false;
   return [...prompt.actions.values()].includes(action);
 }
+
+// ── Pasada 69: `BlightChoice`, `HarmonizeTapChoice`, `UnlessBounceChoice` ──
+//
+// Tres formas de «elige exactamente uno», con tres respuestas distintas:
+//
+//   BlightChoice      → `SelectCards { cards: [esa] }`            (CR 701.68a)
+//   HarmonizeTapChoice→ `HarmonizeTap { creature_id }`            (CR 702.180b)
+//   UnlessBounceChoice→ `SelectCards { cards: [ese] }`            (CR 118.12)
+//
+// Las tres publican una lista cerrada y el motor exige exactamente un elemento
+// (o `HarmonizeTap { creature_id: null }` para no reducir, que también publica
+// él). Ninguna de las tres admite una lista de dos, así que el panel no ofrece
+// «cero» ni «varios» salvo donde el motor lo publicó.
+
+/** CR 701.68a: blight N pone N contadores -1/-1 en UNA criatura, no en N. */
+export type BlightPrompt = {
+  player: PlayerId;
+  /** Cuántos contadores -1/-1 lleva la criatura elegida. Se pinta; no se resta. */
+  counters: number;
+  /** Criaturas elegibles, en el orden del cable. */
+  creatures: ObjectId[];
+};
+
+export function blightPrompt(snapshot: EngineSnapshot | null): BlightPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'BlightChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    counters: typeof data.counters === 'number' ? data.counters : 0,
+    creatures: ints(data.creatures)
+  };
+}
+
+/** CR 702.180b: armonizar reduce el coste girando una criatura; el motor publica también «ninguna». */
+export type HarmonizePrompt = {
+  player: PlayerId;
+  creatures: ObjectId[];
+};
+
+export function harmonizePrompt(snapshot: EngineSnapshot | null): HarmonizePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'HarmonizeTapChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    creatures: ints(data.eligible_creatures)
+  };
+}
+
+/** CR 118.12: «a menos que» devuelve UN permanente a la mano, de los publicados. */
+export type UnlessBouncePrompt = {
+  player: PlayerId;
+  permanents: ObjectId[];
+  /** Cuántos jugadores quedan por decidir; el motor lo manda y se pinta. */
+  remaining: number;
+};
+
+export function unlessBouncePrompt(snapshot: EngineSnapshot | null): UnlessBouncePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'UnlessBounceChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    permanents: ints(data.permanents),
+    remaining: typeof data.remaining === 'number' ? data.remaining : 1
+  };
+}
+
+export type PickExactlyOneOffers = {
+  /** `SelectCards` con exactamente una carta, por esa carta. */
+  byCard: Map<number, GameAction>;
+  /** `HarmonizeTap` con una criatura, por esa criatura. */
+  byTap: Map<number, GameAction>;
+  /** `HarmonizeTap { creature_id: null }`: la vía de no reducir. */
+  declineTap: GameAction | null;
+};
+
+/**
+ * Las acciones publicadas para las tres ventanas. `SelectCards` sólo cuenta con
+ * **una** carta: dos cartas es la respuesta de otra ventana y no un botón de
+ * ésta. «Ninguna» no se inventa: sólo existe si el cable publicó
+ * `HarmonizeTap { creature_id: null }`.
+ */
+export function pickExactlyOneOffers(actions: GameAction[]): PickExactlyOneOffers {
+  const byCard = new Map<number, GameAction>();
+  const byTap = new Map<number, GameAction>();
+  let declineTap: GameAction | null = null;
+  for (const action of actions) {
+    if (action.type === 'SelectCards') {
+      const cards = action.data?.cards;
+      if (!Array.isArray(cards) || cards.length !== 1) continue;
+      const id = cards[0];
+      if (typeof id !== 'number' || !Number.isInteger(id) || id < 0) continue;
+      if (!byCard.has(id)) byCard.set(id, action);
+      continue;
+    }
+    if (action.type === 'HarmonizeTap') {
+      const creature = action.data?.creature_id;
+      if (creature === null) {
+        if (!declineTap) declineTap = action;
+        continue;
+      }
+      if (typeof creature !== 'number' || !Number.isInteger(creature) || creature < 0) continue;
+      if (!byTap.has(creature)) byTap.set(creature, action);
+    }
+  }
+  return { byCard, byTap, declineTap };
+}
+
+/** La forma que consume `PickExactlyOnePrompt.svelte`. */
+export type PickExactlyOnePrompt = {
+  kind: 'blight' | 'harmonize' | 'unless-bounce';
+  player: PlayerId;
+  candidates: ObjectId[];
+  /** CR 701.68a: sólo blight, cuántos contadores lleva la elegida. */
+  counters: number | null;
+  /** CR 118.12: sólo unless-bounce, cuántos quedan por decidir. */
+  remaining: number | null;
+  actions: Map<number, GameAction>;
+  /** La vía de «no reducir», sólo si el motor la publicó. */
+  decline: GameAction | null;
+  /** El nombre del objeto que pide la decisión, si el cable lo publica. */
+  sourceId: ObjectId | null;
+};
+
+export function pickExactlyOnePrompt(snapshot: EngineSnapshot | null): PickExactlyOnePrompt | null {
+  if (!snapshot) return null;
+  const actions = snapshot.legal.actions ?? [];
+  const offers = pickExactlyOneOffers(actions);
+  const blight = blightPrompt(snapshot);
+  if (blight) {
+    return {
+      kind: 'blight',
+      player: blight.player,
+      candidates: blight.creatures,
+      counters: blight.counters,
+      remaining: null,
+      actions: offers.byCard,
+      decline: null,
+      sourceId: null
+    };
+  }
+  const harmonize = harmonizePrompt(snapshot);
+  if (harmonize) {
+    return {
+      kind: 'harmonize',
+      player: harmonize.player,
+      candidates: harmonize.creatures,
+      counters: null,
+      remaining: null,
+      actions: offers.byTap,
+      // Only the wire's own null answer; the UI never adds one.
+      decline: offers.declineTap,
+      sourceId: null
+    };
+  }
+  const bounce = unlessBouncePrompt(snapshot);
+  if (bounce) {
+    return {
+      kind: 'unless-bounce',
+      player: bounce.player,
+      candidates: bounce.permanents,
+      counters: null,
+      remaining: bounce.remaining,
+      actions: offers.byCard,
+      decline: null,
+      sourceId: null
+    };
+  }
+  return null;
+}
+
+/** Sólo se despacha una acción que esta ventana publicó. */
+export function pickExactlyOneAction(snapshot: EngineSnapshot | null, action: GameAction): boolean {
+  const prompt = pickExactlyOnePrompt(snapshot);
+  if (!prompt) return false;
+  if (prompt.decline !== null && action === prompt.decline) return true;
+  return [...prompt.actions.values()].includes(action);
+}

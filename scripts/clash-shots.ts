@@ -61,7 +61,16 @@ const SHOTS = [
   { scene: 'specializeAway', file: 'ux-especializar-ajeno-1440.jpg', block: '[data-specialize]' },
   { scene: 'roomDoor', file: 'ux-puerta-room-1440.jpg', block: '[data-room-door]' },
   { scene: 'roomDoorOne', file: 'ux-una-puerta-1440.jpg', block: '[data-room-door]' },
-  { scene: 'roomDoorAway', file: 'ux-puerta-ajena-1440.jpg', block: '[data-room-door]' }
+  { scene: 'roomDoorAway', file: 'ux-puerta-ajena-1440.jpg', block: '[data-room-door]' },
+  { scene: 'blight', file: 'ux-malea-1440.jpg', block: '[data-pick-exactly-one]' },
+  { scene: 'blightOne', file: 'ux-una-criatura-malea-1440.jpg', block: '[data-pick-exactly-one]' },
+  { scene: 'blightAway', file: 'ux-malea-ajena-1440.jpg', block: '[data-pick-exactly-one]' },
+  { scene: 'harmonize', file: 'ux-armonizar-1440.jpg', block: '[data-pick-exactly-one]' },
+  { scene: 'harmonizeDecline', file: 'ux-armonizar-obligado-1440.jpg', block: '[data-pick-exactly-one]' },
+  { scene: 'harmonizeAway', file: 'ux-armonizar-ajena-1440.jpg', block: '[data-pick-exactly-one]' },
+  { scene: 'bounce', file: 'ux-devolver-a-la-mano-1440.jpg', block: '[data-pick-exactly-one]' },
+  { scene: 'bounceOne', file: 'ux-un-permanente-devolver-1440.jpg', block: '[data-pick-exactly-one]' },
+  { scene: 'bounceAway', file: 'ux-devolver-ajena-1440.jpg', block: '[data-pick-exactly-one]' }
 ];
 
 mkdirSync(outDir, { recursive: true });

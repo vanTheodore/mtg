@@ -3508,3 +3508,93 @@ tema (162 escenas, 324 jpg de escena).
 `pick-one.test.ts`); `ux-lab` **176** (8 nuevas); `ux-themes` **3/3** con 162
 escenas. `REPRESENTED` pasa de **98** a **102**; quedan **46** de las 148.
 El motor no se toca: `engine:verify` sigue en verde con el pin `576e2bf5`.
+
+## Tres ventanas, un dibujo y dos acciones (sexagésima novena pasada, 18 nov 2026)
+
+El motor clasifica las tres igual —`HumanResponseModel::Select`, la familia de
+«elige un subconjunto de lo publicado»—, pero **no contestan igual**:
+
+| Ventana | Respuesta del cable | Quién la valida |
+| --- | --- | --- |
+| `BlightChoice` (CR 701.68a) | `SelectCards { cards: [una] }` | `ai_support/mod.rs` — `selection_mismatch(..., Some(1))` |
+| `HarmonizeTapChoice` (CR 702.180b) | `HarmonizeTap { creature_id }` | `game/engine.rs`, brazo `HarmonizeTap` |
+| `UnlessBounceChoice` (CR 118.12) | `SelectCards { cards: [uno] }` | `engine_payment_choices.rs::handle_unless_bounce_choice`, exige `chosen.len() == 1` |
+
+Las tres se dibujan con el mismo panel (`PickExactlyOnePrompt.svelte`) porque
+piden lo mismo —exactamente uno de una lista cerrada—, pero **cada botón despacha
+la acción que el parser emparejó para su ventana**, y eso no es cosmético:
+`SelectCards` de una carta enciende blight y «a menos que», nunca armonizar, y un
+`HarmonizeTap` no enciende las otras dos. Hay una prueba que fija justo esa
+tentación: la misma criatura, con la acción de la ventana hermana, no produce
+ningún botón.
+
+### El número que no se cuenta
+
+`BlightChoice` publica `counters` **y** `creatures` por separado, y no son lo
+mismo: dos contadores caen sobre **una** criatura (CR 701.68a), así que el panel
+lee `counters` del cable y lo escribe en la regla, en lugar de deducirlo del
+tamaño de la lista. La escena `blight` tiene `counters: 2` y dos criaturas
+elegibles precisamente para que una implementación que cuente candidatos falle.
+
+`UnlessBounceChoice` trae `remaining`, cuántos jugadores quedan por decidir. Se
+pinta sólo si es mayor que uno: anunciar «quedan 1» sobraba. Cuando el dato no
+viene, el parser asume uno y **no** inventa un recuento.
+
+### La opción que sí se puede inventar, y no se inventa
+
+`HarmonizeTapChoice` tiene una salida que no es un candidato: no reducir el
+coste, que el cable manda como `HarmonizeTap { creature_id: null }`. Ese `null`
+llega como acción publicada, así que el botón «No reducir el coste» sólo existe
+si el motor lo publicó. La escena `harmonizeDecline` es la misma ventana **sin**
+la acción nula: dos criaturas, dos botones y ninguna vía de escape. Es la regla
+de siempre —no inventar una opción— aplicada al único sitio de esta pasada donde
+inventarla habría sido razonable.
+
+### El asiento que no decide
+
+Las tres escenas `*Away` montan el bloque con `player: 1`: se lee la lista y no
+hay ni un botón (CR 400.2). Es la misma regla que ya se rompió una vez en la
+pasada 68 y que ahora tiene prueba propia en las tres ventanas.
+
+### Escenas y verificación
+
+Escenas `blight`, `blightOne`, `blightAway`, `harmonize`, `harmonizeDecline`,
+`harmonizeAway`, `bounce`, `bounceOne` y `bounceAway`; capturas
+`ux-malea-1440.jpg`, `ux-una-criatura-malea-1440.jpg`, `ux-malea-ajena-1440.jpg`,
+`ux-armonizar-1440.jpg`, `ux-armonizar-obligado-1440.jpg`,
+`ux-armonizar-ajena-1440.jpg`, `ux-devolver-a-la-mano-1440.jpg`,
+`ux-un-permanente-devolver-1440.jpg` y `ux-devolver-ajena-1440.jpg`, más sus
+pares de tema (173 escenas, 346 jpg).
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **759** (12
+nuevas en `pick-exactly-one.test.ts`); `ux-lab` **183** (7 nuevas); `ux-themes`
+**3/3** con 173 escenas; `scripts/clash-shots.ts` pasa a 52 capturas. `REPRESENTED`
+pasa de **102** a **105**; quedan **43** de las 148.
+
+### El censo se recalcula, no se recuerda
+
+Antes de elegir el bloque se volvió a sacar el reparto del propio `match` de
+`human_response_model` (no de los nombres) cruzado con `REPRESENTED`, porque la
+pasada 68 dejó el número en 46 y una cuenta a mano se desvía. El resultado, con
+el pin `576e2bf5`: `ExactCandidates` **22**, `Select` **8**, `DirectChoices` **3**,
+`CoinFlipSequence` **2**, `ManaGroups` **2**, `TextChoice` **2**, `NumberRange`
+**1**, `OutsideSelection` **1**, `LoopShortcut` **1**, `ShortcutReply` **1**.
+
+### Upstream: un commit, y no toca contratos
+
+Revisado a petición: el pin va **29** commits por detrás de `main`, y el único
+nuevo desde la última revisión es `81d3830d` (`chore(card-data): refresh MTGJSON
+token & subtype catalogs`), que sólo toca `crates/phase-ast/data/mtgjson-vintage`
+y `oracle-subtypes.json`. `WaitingFor` sigue con **148** variantes y ninguna
+cambia de forma, así que subir el pin sigue siendo trabajo de su propio PR y no
+de una pasada de interfaz.
+
+### Lo que queda fuera, y por qué
+
+`CollectEvidenceChoice` es la siguiente de `Select` y **no** entra aquí: el motor
+sí publica las combinaciones completas (`ai_support/candidates.rs`), pero
+`effect_kind` y la suma mínima exigen mostrar el valor de maná de cada carta, y
+`ManaCost` se serializa sin `mana_value` (`phase-ast/src/types/mana.rs`) mientras
+que `mana_value` es método de `GameObject`, no campo. Reimplementar esa aritmética
+en TypeScript es justo lo que la casa prohíbe; se decidirá si el panel enseña las
+combinaciones tal cual o si espera a que el cable publique la suma.
