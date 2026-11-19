@@ -3682,3 +3682,157 @@ de arriba no se mueve cuando `scope` es `OrderOnly`—, y el segundo no publica
 cartas: publica `(jugador, cuántas)` y las cartas salen de la mano de ese
 jugador. Ninguno de los dos es una selección de subconjunto y meterlos aquí
 habría sido reutilizar un dibujo con otro contrato.
+
+## Comparación de tableros, medida y no recordada (7 nov 2026)
+
+Hasta aquí el port se verificaba **por pieza**: cada ventana de decisión tiene su
+escena en `/ux` y su captura en `docs/screenshots/ux-*.jpg`. Faltaba la pregunta
+anterior a todas: con la misma partida delante, ¿en qué se diferencian los dos
+tableros? Este bloque la responde con dos fotografías tomadas por el **mismo
+Chromium**: el tablero de Mesa y el del cliente **phase-rs 0.130.0** (`main` en
+el momento de la captura), a 1440×900, 1280×800 y 390×844.
+
+Los seis archivos son
+`docs/screenshots/comparar-{mesa,phase}-{1440,1280,390}.jpg`.
+Las cifras de abajo salen de medir el DOM de esas mismas páginas, no de mirar la
+imagen.
+
+### Cómo se hicieron
+
+Un escenario, dos puestas en escena, ninguna inventada por la interfaz:
+
+- **Escenario:** turno 1, fase `PreCombatMain`, prioridad al asiento 0, 20 vidas
+  por asiento, 33 cartas en biblioteca, 7 en mano, una carta en el cementerio,
+  cinco permanentes por lado (tres tierras y dos criaturas), una tierra girada
+  por lado. La ventana de decisión es `Priority`; el auto-paso queda **activo**,
+  como viene de fábrica, para que el consejo de primera vez también salga.
+- **Mesa:** `scripts/compare-boards-mesa-fixture.js` importa el *singleton*
+  `session` que sirve el propio Vite y le instala una instantánea
+  `EngineSnapshot`. `Board.svelte` la lee exactamente como lee al motor: no hay
+  ninguna rama «modo captura» dentro de la interfaz.
+- **phase-rs:** `scripts/seed-phase-board.ts` escribe dos módulos de desarrollo
+  en una copia del cliente upstream y los aliasea en su `vite.config.ts`: un
+  sustituto del `GameProvider` (el dueño de la sesión de motor) y un `GameState`
+  tipado en su store de zustand, con la forma que dan sus propias factorías
+  (`src/test/factories/gameStateFactory.ts`). `GamePageContent` y todos los
+  componentes de tablero son los que se envían, sin tocar.
+- **Captura:** `bun scripts/compare-boards-shots.ts --mesa … --phase …`, con
+  Playwright y el Chromium de `scripts/fetch-chromium.ts`. Se abortan
+  `api.scryfall.com` y `cards.scryfall.io`: el sandbox no tiene red hacia ese
+  CDN, y las dos interfaces deben fallar el arte **igual**, no una con imágenes
+  y la otra sin ellas.
+
+### Diferencias
+
+**1. Reparto del ancho.** El tablero de phase-rs ocupa 1120 px y el registro de
+partida se queda con una columna fija de 320 px (`x: 1120`) siempre abierta,
+desde la primera ventana de prioridad. Mesa da 1395 px a la mesa y pone el
+registro debajo de la pila, dentro del rail de decisión, plegado (`Pila 0`,
+`Resoluciones 0`): `Decisión pendiente` mide 362×236 en `x: 1026`.
+
+**2. Alto por campo.** A 1440×900 Mesa da 204 px de alto a cada campo de
+batalla (`y: 104…308` el rival, `315…519` el propio) y deja la mano a 98 px por
+carta. phase-rs reparte el campo por prácticamente los 900 px —el permanente más
+alto llega a `y: 520` y las tierras propias bajan a `y: 660…740`— y dibuja la
+mano a 106×90 en el borde inferior. Mesa reserva altura fija para mano y barra;
+phase-rs se la da al campo.
+
+**3. La barra de fases no cabe en su rail (el hallazgo accionable).** El
+`<ol>` de `Fases y paradas` sí desplaza (`scrollWidth` 868 contra `clientWidth`
+362, `overflow-x: auto`), pero **los pasos desaparecen sin ninguna señal**:
+
+| Ancho | Pasos visibles | Pasos ocultos |
+| --- | --- | --- |
+| 1440 | Enderezar, Mantener, Robar, Principal | Combate, Atacar, Bloquear, Daño, Fin combate, Principal 2, Final, Limpieza |
+| 1280 | Enderezar, Mantener, Robar | Combate, Atacar, Bloquear, Daño, Fin combate, Principal 2, Final, Limpieza |
+| 1024 | los doce | — |
+
+A 1024 caben los doce; **a 1280 y 1440 —las dos medidas que más se usan— se
+pierden dos tercios de la barra**. En phase-rs la misma información es una fila
+de chips que se ajusta al contenido y no recorta nada. Medido con la rueda: el
+`<ol>` desplaza hasta `scrollLeft: 506`, así que los pasos son alcanzables, pero
+nada en pantalla dice que haya más. Es el arreglo que sale de esta comparación:
+barra que quepa, o un indicador de que hay más. **No se arregla en este
+bloque**: cambia la chrome del tablero y merece sus propias capturas de antes y
+después, que es exactamente lo que este guion ya sabe producir.
+
+**4. El consejo de flujo.** Los dos tableros lo tienen y las dos frases son la
+misma —`CoachTip.svelte` lo portó de `coach.autoPass`—: «Los saltos de fase son
+automáticos. Usa Control cuando quieras ventanas de prioridad al estilo del
+papel», con `Descartar` / `Conocer el flujo` frente a `Dismiss` / `Learn Flow`.
+La diferencia es dónde y a qué precio:
+
+- phase-rs: tarjeta flotante de 384×126 anclada abajo a la derecha del campo
+  (`x: 720`, `y: 618` a 1440). Ahí no tapa ningún permanente: el hueco que ocupa
+  está vacío. A 390 se estrecha a 152×202 y **sí** tapa un permanente.
+- Mesa a 1440: 544×97 **en línea** por debajo del campo propio, sin tapar nada.
+- Mesa a 390: 356×115 en `y: 1089`, es decir **fuera de la primera pantalla**.
+  El `main.layout` mide 691 px de alto y 1729 de contenido con `overflow-y:
+  auto`, así que el consejo (`y: 1089…1203`), `Tu prioridad / Mano / Control`
+  (`y: 1207`) y el `Rendimiento del motor` viven por debajo del pliegue:
+  alcanzables deslizando, invisibles de entrada. En el teléfono el jugador ve
+  campo rival (`y: 187…519`), `Tu siguiente decisión` (`y: 529…770`) y la barra
+  `Mano 7` (`y: 775…819`); no ve ni el consejo ni la barra de estado.
+
+**5. La mano en el teléfono.** A 390, phase-rs mantiene las cartas de la mano en
+abanico a lo largo del borde inferior (`x: 21…368`, `y: 640…820`) y encima pone
+`Hand 7`, `Control`, `To Begin Combat` y `Pass →`, todo dentro de la única
+pantalla. Mesa enseña una barra `Mano 7 · Desliza para jugar` de 371×44 en
+`y: 775` y deja la mano en un cajón, de modo que el campo rival cabe entero
+(`y: 187…519`) a costa de esconder las siete cartas hasta que se pide el cajón.
+
+**6. Qué cuenta cada barra de asiento.** Los dos muestran vida, biblioteca y
+cementerio. Mesa los reúne en **una** franja por asiento de 760 px
+(`x: 140`, `Jugador 2 · 20 vidas · Mano 0 · Biblioteca 33 · Cementerio 0 ·
+Exilio 0 · Maná 0`) y repite la franja del jugador debajo del campo propio.
+phase-rs reparte lo mismo en widgets: la vida es un contador de 84×68 centrado
+sobre el campo (`x: 518`), la biblioteca y el exilio son pilas arriba a la
+derecha y el cementerio y el maná cuelgan de la esquina inferior izquierda. La
+primera se lee de un vistazo y ocupa altura; la segunda deja la altura al campo
+y obliga a barrer la pantalla con la vista. Ninguno enseña veneno ni energía
+porque valen cero en este escenario.
+
+**7. El marcador cuando no hay arte.** Las dos caen a un marcador de posición,
+pero no al mismo dibujo: phase-rs pinta un rectángulo oscuro con el nombre y el
+coste y anuncia el nombre en `aria-label` (sin `Loading` cuando el CDN está
+bloqueado: la consulta falla y cae al marcador), mientras Mesa pinta nombre,
+tipo y el texto «Sin conexión con el servicio de imágenes», con `Reintentar
+imagen`. La de Mesa dice más; la de phase-rs se lee como una carta vista desde
+lejos.
+
+**8. Idioma.** El cliente upstream está en inglés y Mesa en español. No es una
+diferencia de diseño y no se cuenta como tal, pero explica por qué estas
+capturas no se pueden comparar por texto sin traducir.
+
+### Qué deja abierto
+
+De las ocho diferencias, sólo una es un defecto y no una decisión de producto:
+**el rail de fases recorta ocho de los doce pasos a 1280 y 1440** (punto 3). Las
+otras siete son dos maneras defendibles de repartir la misma mesa, y quedan
+anotadas aquí para que la próxima pasada decida con las capturas delante en vez
+de volver a descubrirlas. La barra de fases no se toca en este bloque porque su
+arreglo cambia la chrome del tablero entero; el guion de captura ya está listo
+para fotografiar el antes y el después cuando se haga.
+
+### Lo que la comparación **no** puede decir
+
+El motor no está: `bun run engine:download` sigue fallando con `EOF` contra el
+blob de artefactos de GitHub y no hay Rust en el sandbox. Las dos instantáneas
+son datos, no reglas. La comparación cubre **geometría, jerarquía, reparto de
+espacio, rótulos y estados vacíos**, y no cubre nada que dependa de que el motor
+acepte o rechace una acción. Las capturas con motor real siguen siendo las del
+recorrido `docs/screenshots/tutorial-*.png`, que sí salen del WASM.
+
+### Reproducirlo
+
+```bash
+bun scripts/fetch-chromium.ts
+bun run dev --port 5173 &                        # Mesa
+bun scripts/seed-phase-board.ts --client /ruta/al/cliente/phase
+(cd /ruta/al/cliente/phase && npx vite --host 0.0.0.0 --port 5280) &
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=~/.cache/mesa-chromium/chromium \
+LD_LIBRARY_PATH=~/.cache/mesa-chromium/al2023/lib:~/.cache/mesa-chromium \
+  bun scripts/compare-boards-shots.ts --mesa http://127.0.0.1:5173 \
+    --phase http://127.0.0.1:5280 --out docs/screenshots
+bun scripts/seed-phase-board.ts --client /ruta/al/cliente/phase --remove
+```
