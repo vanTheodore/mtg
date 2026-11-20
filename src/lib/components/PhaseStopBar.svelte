@@ -176,6 +176,13 @@
     color: var(--ink);
   }
   .stop-bar[data-compact='true'] .caption .turn { display: none; }
+  /* En el rail de escritorio la forma compacta es el chip de Phase
+     (`MobilePhaseChip`): la fila de doce chips se queda para la tableta, donde
+     tiene ancho. Medido: la fila cuesta 89 px de un rail de 569 y la decisión
+     deja de caber entera, que es lo que mide `arena-ui.spec.ts`. */
+  @media (min-width: 1100px) and (max-height: 1000px) {
+    .stop-bar { display: none; }
+  }
   .step:hover { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
   .step:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .step[aria-current='step'] {

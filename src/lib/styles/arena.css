@@ -1556,8 +1556,14 @@
      del alto repartido entre huecos. */
   .app[data-board-style="arena"] .layout[data-room="tall"][data-board-grid="split"] {
     /* El registro (`auto`) cabe en la primera fila porque vive en la columna 2
-       con `grid-row: 1 / -1`; los campos se reparten el resto. */
-    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+       con `grid-row: 1 / -1`; los campos se reparten el resto.
+       `minmax(min-content, 1fr)` y no `minmax(0, 1fr)`: con la mesa llena (seis
+       tierras y cuatro criaturas por lado) las filas de permanentes son más
+       altas que su mitad, y con el mínimo en 0 se salían de su campo en vez de
+       dejar que la región desplazara. Así el reparto es exacto cuando sobra
+       alto y la región vuelve a desplazar cuando no alcanza, que es lo que
+       `arena-viewport-matrix.spec.ts` mide con la mesa llena. */
+    grid-template-rows: auto minmax(min-content, 1fr) minmax(min-content, 1fr) auto;
   }
   .app[data-board-style="arena"] .layout[data-room="tall"][data-board-grid="split"] > .battlefield[data-side="opponent"] { grid-row: 2; }
   .app[data-board-style="arena"] .layout[data-room="tall"][data-board-grid="split"] > .battlefield[data-side="player"] { grid-row: 3; }

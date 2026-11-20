@@ -38,21 +38,21 @@
     },
     "decision": {
       "x": 1098,
-      "y": 207,
+      "y": 112,
       "w": 290,
       "h": 275
     },
     "log": {
       "x": 1098,
-      "y": 529,
+      "y": 433,
       "w": 290,
       "h": 69
     },
     "stopBar": {
-      "x": 1098,
-      "y": 69,
-      "w": 290,
-      "h": 131
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
     },
     "opponentSeat": {
       "x": 220,
@@ -99,19 +99,19 @@
     "rivalHand": null
   },
   "phaseRail": {
-    "clientWidth": 290,
-    "scrollWidth": 290,
+    "clientWidth": 0,
+    "scrollWidth": 0,
     "visible": [
       "Enderezar",
       "Mantener",
       "Robar",
       "Principal",
-      "Comb.",
+      "Combate",
       "Atacar",
-      "Bloq.",
+      "Bloquear",
       "Daño",
-      "Fin c.",
-      "Princ. 2",
+      "Fin combate",
+      "Principal 2",
       "Final",
       "Limpieza"
     ],

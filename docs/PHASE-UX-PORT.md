@@ -3861,12 +3861,19 @@ misma fixture y escribe foto + medidas en el mismo pase.
 | --- | --- | --- |
 | **1. Reparto del ancho** | mesa 1395 px; rail de decisión de 392 px con el registro plegado dentro | mesa 1052 px + **columna de registro de 320 px** (`x: 1090`, ancho 320, alto 569); el rail vive en esa columna |
 | **2. Alto por campo** | 204 px por campo, 204 px de hueco entre los dos, y el contenedor del tablero desplazaba 225 px por dentro | 238 px por campo, los dos pegados al centro de su mitad, y `.layout` **sin desplazamiento interno** (`clientHeight` 628 = `scrollHeight` 628) |
-| **3. Barra de fases** | rail de 362 px, 868 px de chips, **4 de 12** pasos visibles con 8 sin señal | fila de 290 px, `scrollWidth` 290, **12 de 12** visibles; dos líneas con los cuatro rótulos largos abreviados |
+| **3. Barra de fases** | rail de 362 px, 868 px de chips, **4 de 12** pasos visibles con 8 sin señal | **12 de 12** alcanzables y ninguno escondido: en tableta, fila de chips que envuelve (290 px de rail, `scrollWidth` 290); en el rail de escritorio, el chip de paso de Phase (`Turno 1 · Principal · sin paradas ▾`) que abre una hoja con los doce y su parada |
 | **4. Consejo de flujo** | 544×97 en una fila propia entre el campo y la mano | 667×40 en la fila de chips de estado, **sin fila propia**: comparte fila con `Tu prioridad · Principal 1 · MANO 7 · CONTROL`, que es donde Phase pone `Your priority` / `HAND 7` / `CONTROL` |
 | **6. Barra de asiento** | franja única de 760 px centrada en la mesa | contador de 671 px (asiento rival) y 620 px (propio) pegados al ancho de su columna: la vida a la izquierda, las pilas a la derecha |
 
 A 1280 el mismo reparto da 892 px de campo, 320 px de registro, el registro
-visible entero (`y: 528`) y 12 de 12 pasos en una fila de 290 px.
+visible entero (`y: 528`) y los doce pasos a un clic del mismo chip.
+
+En el rail de escritorio la fila de doce chips cuesta 89 px de un rail de 569 y
+deja la decisión sin sitio: `arena-ui.spec.ts` mide que se ve **entera** dentro
+del rail y con la fila dejaba de caber. Se probó también ocultar sólo el
+subtítulo (58 px): tampoco alcanzaba. La forma compacta es la de Phase debajo de
+`lg` —un chip que nombra el paso y una hoja con los doce—, y la fila se queda en
+la tableta (641–1099 px), que sí tiene ancho.
 
 ### Lo que **no** se copió, y por qué
 

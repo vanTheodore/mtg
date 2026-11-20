@@ -22,13 +22,13 @@
       "x": 30,
       "y": 101,
       "w": 892,
-      "h": 189
+      "h": 198
     },
     "playerField": {
       "x": 30,
-      "y": 293,
+      "y": 302,
       "w": 892,
-      "h": 189
+      "h": 198
     },
     "middle": {
       "x": 930,
@@ -38,21 +38,21 @@
     },
     "decision": {
       "x": 938,
-      "y": 207,
+      "y": 112,
       "w": 290,
       "h": 275
     },
     "log": {
       "x": 938,
-      "y": 528,
+      "y": 433,
       "w": 290,
       "h": 69
     },
     "stopBar": {
-      "x": 938,
-      "y": 68,
-      "w": 290,
-      "h": 131
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
     },
     "opponentSeat": {
       "x": 140,
@@ -80,13 +80,13 @@
     },
     "statusDock": {
       "x": 30,
-      "y": 499,
+      "y": 509,
       "w": 375,
       "h": 26
     },
     "coach": {
       "x": 414,
-      "y": 485,
+      "y": 494,
       "w": 507,
       "h": 55
     },
@@ -99,19 +99,19 @@
     "rivalHand": null
   },
   "phaseRail": {
-    "clientWidth": 290,
-    "scrollWidth": 290,
+    "clientWidth": 0,
+    "scrollWidth": 0,
     "visible": [
       "Enderezar",
       "Mantener",
       "Robar",
       "Principal",
-      "Comb.",
+      "Combate",
       "Atacar",
-      "Bloq.",
+      "Bloquear",
       "Daño",
-      "Fin c.",
-      "Princ. 2",
+      "Fin combate",
+      "Principal 2",
       "Final",
       "Limpieza"
     ],
@@ -120,19 +120,19 @@
   "lands": [
     {
       "x": 124,
-      "y": 348,
+      "y": 362,
       "w": 70,
       "h": 98
     },
     {
       "x": 199,
-      "y": 348,
+      "y": 362,
       "w": 70,
       "h": 98
     },
     {
       "x": 275,
-      "y": 348,
+      "y": 362,
       "w": 70,
       "h": 98
     }
@@ -140,13 +140,13 @@
   "creatures": [
     {
       "x": 551,
-      "y": 318,
+      "y": 327,
       "w": 120,
       "h": 167
     },
     {
       "x": 677,
-      "y": 318,
+      "y": 327,
       "w": 120,
       "h": 167
     }
