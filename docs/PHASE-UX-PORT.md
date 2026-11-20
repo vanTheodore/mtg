@@ -218,6 +218,18 @@ es una **parada**.
   la geometría que esas reglas imponían: la barra abarca la fila entera del
   centro (doce pasos no caben en el carril de 362 px) y sigue yendo la última
   en las bandas apiladas.
+- **La barra vive en la mesa, no en el rail** (pasada del reparto, 7 nov 2026).
+  Metida en la columna de 320 px costaba 89 de los 569 px de alto —131 con su
+  subtítulo— y `arena-ui.spec.ts` mide que `Tu siguiente decisión` quepa
+  **entera** dentro del rail: con la barra dentro dejó de caber (medido: la
+  decisión empezaba en `y: 165` de un rail que acaba en 466). Phase pone la
+  fila de pasos sobre el tablero, y aquí se hizo lo mismo: `Board.svelte` la
+  saca de `.middle` a una banda propia (`.board-phases`) de la primera columna.
+  Medido a 1440×900: la barra va de `x: 30` a `1082` (1052 px) con los doce
+  pasos en una línea (`clientWidth` 1052 = `scrollWidth` 1052) y la decisión
+  vuelve a `y: 69…344`, entera dentro del rail. A 1280: 892 px de barra, doce
+  pasos, decisión `y: 68…343`. El chip del teléfono sigue siendo la forma por
+  debajo de 641 px.
 - **Dónde se ve.** El paso actual lleva `aria-current="step"`, la parada
   `aria-pressed` con relleno (visible sin pasar el ratón), el rótulo dice
   «Parada en \<paso\>» o «N paradas», y `StatusDock` añade la ficha `Parada`
@@ -3861,7 +3873,7 @@ misma fixture y escribe foto + medidas en el mismo pase.
 | --- | --- | --- |
 | **1. Reparto del ancho** | mesa 1395 px; rail de decisión de 392 px con el registro plegado dentro | mesa 1052 px + **columna de registro de 320 px** (`x: 1090`, ancho 320, alto 569); el rail vive en esa columna |
 | **2. Alto por campo** | 204 px por campo, 204 px de hueco entre los dos, y el contenedor del tablero desplazaba 225 px por dentro | 238 px por campo, los dos pegados al centro de su mitad, y `.layout` **sin desplazamiento interno** (`clientHeight` 628 = `scrollHeight` 628) |
-| **3. Barra de fases** | rail de 362 px, 868 px de chips, **4 de 12** pasos visibles con 8 sin señal | **12 de 12** alcanzables y ninguno escondido: en tableta, fila de chips que envuelve (290 px de rail, `scrollWidth` 290); en el rail de escritorio, el chip de paso de Phase (`Turno 1 · Principal · sin paradas ▾`) que abre una hoja con los doce y su parada |
+| **3. Barra de fases** | rail de 362 px, 868 px de chips, **4 de 12** pasos visibles con 8 sin señal | **12 de 12** visibles a la vez y ninguno recortado: la fila de pasos es una banda de la mesa (1052 px a 1440, 892 a 1280) con los doce chips en una línea; en tableta envuelve (290 px de rail, `scrollWidth` 290) y en el teléfono manda el chip de Phase con su hoja de doce paradas |
 | **4. Consejo de flujo** | 544×97 en una fila propia entre el campo y la mano | 667×40 en la fila de chips de estado, **sin fila propia**: comparte fila con `Tu prioridad · Principal 1 · MANO 7 · CONTROL`, que es donde Phase pone `Your priority` / `HAND 7` / `CONTROL` |
 | **6. Barra de asiento** | franja única de 760 px centrada en la mesa | contador de 671 px (asiento rival) y 620 px (propio) pegados al ancho de su columna: la vida a la izquierda, las pilas a la derecha |
 
@@ -3870,10 +3882,14 @@ visible entero (`y: 528`) y los doce pasos a un clic del mismo chip.
 
 En el rail de escritorio la fila de doce chips cuesta 89 px de un rail de 569 y
 deja la decisión sin sitio: `arena-ui.spec.ts` mide que se ve **entera** dentro
-del rail y con la fila dejaba de caber. Se probó también ocultar sólo el
-subtítulo (58 px): tampoco alcanzaba. La forma compacta es la de Phase debajo de
-`lg` —un chip que nombra el paso y una hoja con los doce—, y la fila se queda en
-la tableta (641–1099 px), que sí tiene ancho.
+del rail y con la fila dentro dejaba de caber (la decisión empezaba en `y: 165`
+de un rail que acaba en 466). Se probó ocultar sólo el subtítulo (58 px): tampoco
+alcanzaba, y sustituirla por el chip de Phase escondía los doce pasos en
+escritorio. La solución es la de Phase: **la fila de pasos pertenece a la mesa**,
+así que sale del rail a una banda propia de 1052 px a 1440 y 892 a 1280, con los
+doce pasos en una línea y sin recortar ninguno; `step-row-fit.test.ts` fija los
+tres anchos medidos (712, 892 y 1052) y la regla que deciden (746 px para los
+doce rótulos cortos, 656 con los cuatro largos abreviados).
 
 ### Lo que **no** se copió, y por qué
 

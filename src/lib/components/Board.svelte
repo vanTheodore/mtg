@@ -522,13 +522,19 @@
       {/if}
       <PlayerPanel player={rival!} showHand />
       <Battlefield objects={battlefieldObjects} {metas} owner={opponent} side="opponent" label={`Campo de batalla · Jugador ${opponent + 1}`} />
-      <div class="middle">
-        {#if session.boardStyle === 'arena'}
-          <!-- One preference, two shapes: twelve chips from 641 px up, one
-               line and a sheet below, where a 30 px chip is not tappable. -->
+      {#if session.boardStyle === 'arena'}
+        <!-- One preference, two shapes: the twelve-chip line where the table
+             has width for it, one chip and a sheet where a 30 px chip is not
+             tappable. Like Phase, the step row belongs to the *table*, not to
+             the log column: in the 320 px column it cost 89–131 px of the
+             height the decision needs (`arena-ui.spec.ts` measures that the
+             decision fits whole inside the column). -->
+        <div class="board-phases">
           <PhaseStopBar phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
           <MobilePhaseChip phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
-        {/if}
+        </div>
+      {/if}
+      <div class="middle">
         <div class="center">
           <StackPanel />
           <HistoryPanel compact={session.boardStyle === 'arena'} />
@@ -734,6 +740,7 @@
   .mini-back { width: 34px; height: 48px; border-radius: 5px; background: repeating-linear-gradient(45deg, var(--surface-3), var(--surface-3) 5px, var(--surface-2) 5px, var(--surface-2) 10px); border: 1px solid var(--line); flex: 0 0 auto; }
   .middle { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.3fr); gap: .8rem; align-items: start; }
   /* Chips de estado y consejo: comparten fila con el asiento propio. */
+  .board-phases { min-width: 0; }
   .table-status { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; min-width: 0; flex-wrap: wrap; }
   /* La fila de chips ocupa una celda de la rejilla: sin esto se dimensiona a su
      contenido en el eje cruzado y en escritorio (donde es la fila 4) los chips

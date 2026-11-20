@@ -122,19 +122,10 @@
 {/if}
 
 <style>
-  /* The chip is the compact form of the stop bar. It shows on phones — where a
-     30 px chip is untappable — and, since the desktop rail became a 320 px
-     column, also on the short-desktop rail.
-   *
-   * Evidence (`docs/evidence/tablero-despues-*.json`): the twelve-chip row costs
-     89 px of a 569 px rail — or 131 px while it still printed its caption — and
-     the decision beneath it owes ~275 px. `arena-ui.spec.ts` measures that the
-     decision fits whole inside the rail, and it did not. Phase's own client
-     does the same below `lg`: `MobilePhaseChip` names the step and the sheet
-     keeps all twelve stops one disclosure away. Tablets (641–1099 px) keep the
-     twelve-chip row, where it fits. */
+  /* The chip is the phone form of the stop bar; from 641 px up the bar has room
+     for twelve chips and the sheet would be a second way to do the same thing. */
   .phase-chip { display: none; }
-  @media (max-width: 640px), (min-width: 1100px) and (max-height: 1000px) {
+  @media (max-width: 640px) {
     .phase-chip { display: block; min-width: 0; }
   }
   .chip {

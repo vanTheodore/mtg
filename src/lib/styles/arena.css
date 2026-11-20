@@ -1533,17 +1533,23 @@
      La banda es la del rail: por encima de 1000 px de alto el tablero vuelve a
      la línea central (M11) y este reparto no debe aplicarse. */
   .app[data-board-style="arena"] .layout[data-room="tall"] {
-    /* Una cuadrícula de dos columnas y alto fijo: la mesa no crece con el
-       documento, se reparte el alto de la región (M11 ya dejó `.layout` como
-       la única región que desplaza en escritorio). */
+    /* Dos columnas: la mesa y una columna de 320 px, el ancho del Game Log de
+       Phase. M11 ya dejó `.layout` como la única región que desplaza. */
     grid-template-columns: minmax(0, 1fr) 320px;
-    grid-template-rows: minmax(0, 1fr);
+    /* Seis filas: las cuatro de contenido (asientos, barra de pasos y chips) se
+       quedan en su altura intrínseca y el sobrante va a los dos campos, que son
+       las únicas elásticas.
+     *
+     * Medido, esto es la diferencia entre repartir y recortar: con las seis
+       filas `auto` + `align-content: normal` el sobrante también entraba en las
+       filas `auto`, y a 1280×800 los campos se quedaban en 161 px con 33 px de
+       sus permanentes fuera (el campo de jugador acababa en y=482 con el asiento
+       propio encima). El `1fr` de los campos, con mínimo `max-content`, se queda
+       con lo que sobra sin bajar de lo que sus permanentes necesitan; cuando no
+       sobra nada, la región desplaza. */
+    grid-template-rows: max-content max-content minmax(max-content, 1fr) minmax(max-content, 1fr) max-content max-content;
     column-gap: .55rem;
-    align-items: stretch;
-    /* M11 dejó `align-content: start` y `grid-auto-rows: max-content` para que
-       la región no aplastara filas `auto`; `start` impide repartir el alto
-       sobrante (medido: campos de 141 px en una región de 626). Aquí el reparto
-       es justo lo que se busca, así que se estira. */
+    align-items: start;
     align-content: normal;
     grid-auto-rows: auto;
     height: 100%;
@@ -1551,26 +1557,42 @@
   .app[data-board-style="arena"] .layout[data-room="tall"] > * {
     grid-column: 1;
   }
-  /* La columna del tablero: rival arriba, propio abajo, cada uno con la mitad
-     exacta del alto disponible. Antes eran dos campos de 204 px con el resto
-     del alto repartido entre huecos. */
-  .app[data-board-style="arena"] .layout[data-room="tall"][data-board-grid="split"] {
-    /* El registro (`auto`) cabe en la primera fila porque vive en la columna 2
-       con `grid-row: 1 / -1`; los campos se reparten el resto.
-       `minmax(min-content, 1fr)` y no `minmax(0, 1fr)`: con la mesa llena (seis
-       tierras y cuatro criaturas por lado) las filas de permanentes son más
-       altas que su mitad, y con el mínimo en 0 se salían de su campo en vez de
-       dejar que la región desplazara. Así el reparto es exacto cuando sobra
-       alto y la región vuelve a desplazar cuando no alcanza, que es lo que
-       `arena-viewport-matrix.spec.ts` mide con la mesa llena. */
-    grid-template-rows: auto minmax(min-content, 1fr) minmax(min-content, 1fr) auto;
+  /* Fila 1: el asiento rival. Fila 2: la barra de pasos, que en Phase vive en
+     la mesa y no en la columna del registro —en 320 px costaba 89 px del alto
+     que la decisión necesita—. Filas 3 y 4: los dos campos. */
+  
+  /* La barra de pasos es una banda de la mesa, no una fila suelta: sobre la
+     pintura el subtítulo de 11,5 px se perdía (medido en la captura: gris
+     apagado sobre el cielo claro del `angelic-sky`) y el ojo leía doce chips
+     flotando. Se le da el mismo tratamiento que a las demás piezas de la mesa
+     —superficie, borde y radio— y el alto sigue siendo el suyo: una línea de
+     subtítulo más una de pasos. */
+  .app[data-board-style="arena"] .layout[data-room="tall"] > .board-phases {
+    grid-row: 2;
+    padding: .12rem .4rem .2rem;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
   }
-  .app[data-board-style="arena"] .layout[data-room="tall"][data-board-grid="split"] > .battlefield[data-side="opponent"] { grid-row: 2; }
-  .app[data-board-style="arena"] .layout[data-room="tall"][data-board-grid="split"] > .battlefield[data-side="player"] { grid-row: 3; }
+  .app[data-board-style="arena"] .layout[data-room="tall"] > .battlefield[data-side="opponent"] { grid-row: 3; }
+  .app[data-board-style="arena"] .layout[data-room="tall"] > .battlefield[data-side="player"] { grid-row: 4; }
+  /* Los dos asientos no llevan fila fija: llegan en el orden del documento
+     (rival, campos, propio, chips) y `grid-auto-flow` los coloca en la primera
+     fila libre de la columna 1. Fijarlos con `:nth-of-type` fue un error: el
+     cementerio y la mano oculta del rival son `section` como ellos, así que el
+     asiento propio se iba a la fila 5 dejando la 1 vacía (medido: 49 px de
+     hueco antes de la barra de pasos). */
+  
+  .app[data-board-style="arena"] .layout[data-room="tall"] > .table-status { grid-row: 6; }
   .app[data-board-style="arena"] .layout[data-room="tall"] > .battlefield[data-side] {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    /* El campo se lleva su fila entera: `align-items: start` del contenedor lo
+       dejaba en su altura de contenido y el sobrante de la fila quedaba vacío
+       (medido a 1100×700: 178 px de fila para 178 px de contenido, pero a
+       1440×900 la fila medía 211 y el campo 204). */
+    align-self: stretch;
   }
   /* Las filas de permanentes se centran en el alto que les toca: el campo
      crece, las cartas no. */
@@ -1578,28 +1600,27 @@
   .app[data-board-style="arena"] .layout[data-room="tall"] > .battlefield[data-side] > .middle-permanents {
     margin-block: auto;
   }
-  /* El registro es una columna, con su propio desplazamiento: crece con la
+  /* El registro es una columna con su propio desplazamiento: crece con la
      partida y nunca empuja la mesa. */
   .app[data-board-style="arena"] .layout[data-room="tall"] > .middle {
-    /* Sigue siendo `sticky` como en M1/M11: dentro de su propia columna de
-       rejilla no se mueve, y `arena-ui.spec.ts` mide ese `position` como el
-       contrato del rail. Lo que cambia no es cómo se pega, sino que ahora la
-       columna es fija (320 px) y la mesa no compite por el ancho. */
+    /* Sigue siendo `sticky`, que es el contrato que mide `arena-ui.spec.ts`.
+       `align-self: start` + `max-height` lo mantienen pegado y a la vista
+       aunque la mesa sea más alta que la región (M11). */
     position: sticky;
     top: .4rem;
     grid-column: 2;
     grid-row: 1 / -1;
-    align-self: stretch;
-    max-height: none;
+    align-self: start;
+    max-height: calc(100dvh - 1.2rem);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
     display: flex;
     flex-direction: column;
     /* `align-items: start` era para la rejilla de dos columnas; en una columna
-       flex dejaría la pila y el registro a su ancho de contenido (medido:
-       registro de 183 px dentro de una columna de 320). */
+       flex dejaría la pila y el registro a su ancho de contenido. */
     align-items: stretch;
     gap: .45rem;
     min-height: 0;
-    overflow: hidden;
   }
   .app[data-board-style="arena"] .layout[data-room="tall"] > .middle > .center {
     order: 2;
@@ -1630,15 +1651,12 @@
     margin-bottom: .3rem;
   }
 
-  /* Los chips de estado y el consejo ocupan la fila del asiento propio, a su
-     derecha: es la fila que Phase usa para `Your priority` + `HAND 7` +
-     `CONTROL` y para su tarjeta flotante. */
+  /* --- 4 y 6: los chips de estado y el consejo --------------------------- */
   .app[data-board-style="arena"] .layout[data-room="tall"] > .table-status {
-    grid-row: 4;
+    /* Los chips a la izquierda y el consejo a la derecha: es la banda donde
+       Phase pone `Your priority` / `HAND 7` / `CONTROL` y su tarjeta flotante,
+       y así el consejo no gasta una fila propia (medido antes: 97 px). */
     min-height: 0;
-    /* Los chips a la izquierda y el consejo a la derecha: se reparten el ancho
-       en vez de quedar pegados al centro (medido: con `space-between` y dos
-       hijos flex el segundo se iba al centro de la fila). */
     justify-content: flex-start;
     align-items: center;
     gap: .6rem;
@@ -1651,26 +1669,18 @@
     min-width: 0;
     flex: 0 0 auto;
   }
-  /* El consejo ocupa lo que queda de la fila, hasta su tope. */
-  .app[data-board-style="arena"] .layout[data-room="tall"] > .table-status > .coach {
-    margin-inline-start: auto;
-    /* La frase entera, en dos líneas: el ancho que queda entre los chips y el
-       borde de la fila (medidos 665 px a 1440). */
-    flex: 1 1 auto;
-  }
-
-  /* --- 4: el consejo flota, no empuja ------------------------------------ */
   /* El consejo compartía fila con el asiento, no la estrena.
    *
    * Phase lo flota sobre esa banda (`x: 720…1104`, `y: 618…744` a 1440×900) y
    * ahí no tapa nada porque su campo acaba en `y: 606`. En Mesa se probó igual
    * —`position: absolute`, anclado contra esta fila— y el resultado fue peor que
-   * el problema: la tarjeta de 416 px caía sobre las dos criaturas propias
-   * (`y: 496…593` sobre `Walking Corpse` y `Sengir Vampire`), tapando su P/T.
-   * Se queda en el flujo, pero en **una** línea en vez de las dos del bloque
-   * vertical: medido, 97 px → 33 px. */
+   * el problema: la tarjeta de 416 px caía sobre las dos criaturas propias,
+   * tapando su P/T. Se queda en el flujo, pero en **una** fila en vez de las dos
+   * del bloque vertical: medido, 97 px → 40 px. */
   .app[data-board-style="arena"] .layout[data-room="tall"] > .table-status > .coach {
     justify-self: end;
+    margin-inline-start: auto;
+    flex: 1 1 auto;
     max-width: none;
     min-width: 0;
     display: grid;
@@ -1682,9 +1692,6 @@
     font-size: .72rem;
   }
   .app[data-board-style="arena"] .layout[data-room="tall"] > .table-status > .coach p {
-    /* Hasta tres líneas: a 1440 la frase entera cabe en dos (medido, 667 px de
-       ancho) y a 1280 en tres (507 px). El recorte queda como red de seguridad,
-       no como lo que se ve: la frase completa está en las dos medidas. */
     line-height: 1.3;
     overflow: hidden;
   }
@@ -1702,10 +1709,10 @@
   /* --- 6: asiento = contador de vida + pilas en los extremos ------------- */
   .app[data-board-style="arena"] .layout[data-room="tall"] > .player-bar,
   .app[data-board-style="arena"] .board[data-room="tall"] > .player-bar {
-    /* La franja de 760 px pasa a ser una fila al pie de su campo: la vida a la
-       izquierda (contador), las pilas a la derecha. Sigue siendo una sola caja
-       —conserva el `section[aria-label="Jugador N"]`, el botón de objetivo y
-       `data-life`—, pero deja de ocupar el ancho de la mesa. */
+    /* La franja de 760 px pasa a ser una fila de ancho de contenido: la vida a
+       la izquierda (contador), las pilas a la derecha. Sigue siendo una sola
+       caja —conserva el `section[aria-label="Jugador N"]`, el botón de objetivo
+       y `data-life`—, pero deja de ocupar el ancho de la mesa. */
     width: max-content;
     max-width: 100%;
     justify-self: center;

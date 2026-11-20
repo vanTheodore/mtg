@@ -30,17 +30,17 @@
    * solves it the other way round: its phase row is a chip line that fits.
    *
    * So the row no longer scrolls sideways. What it does depends only on the
-   * width the rail *gives* it — never on its own content, because a measurement
+   * width the table *gives* it — never on its own content, because a measurement
    * that changes the labels that are measured oscillates (measured: 366 ↔ 362
-   * on every ResizeObserver tick).
+   * on every ResizeObserver tick). The bar now sits on the table, full width,
+   * and the numbers are the ones measured there (746 px for the twelve short
+   * labels, 656 px with the four long ones abbreviated):
    *
-   *   ≥ 470 px  one line, full short labels (twelve chips need ~440 px to read
-   *             whole; a narrower line only "fits" by clipping every label,
-   *             which is the same failure, quieter);
-   *   340–469   two lines with the full labels;
-   *   < 340     two lines with abbreviated labels (`tiny` in `phases.ts`) and
-   *             the caption naming the current step, because `aria-current`
-   *             alone is invisible when the eye scans twelve chips.
+   *   ≥ 746 px  one line, full short labels;
+   *   656–745   one line, the four long steps abbreviated (`tiny`);
+   *   < 656     two lines, abbreviated, and the caption names the current step
+   *             because `aria-current` alone is invisible when the eye scans
+   *             twelve chips.
    */
   let row = $state<HTMLOListElement | null>(null);
   let width = $state(0);
@@ -176,13 +176,6 @@
     color: var(--ink);
   }
   .stop-bar[data-compact='true'] .caption .turn { display: none; }
-  /* En el rail de escritorio la forma compacta es el chip de Phase
-     (`MobilePhaseChip`): la fila de doce chips se queda para la tableta, donde
-     tiene ancho. Medido: la fila cuesta 89 px de un rail de 569 y la decisión
-     deja de caber entera, que es lo que mide `arena-ui.spec.ts`. */
-  @media (min-width: 1100px) and (max-height: 1000px) {
-    .stop-bar { display: none; }
-  }
   .step:hover { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
   .step:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .step[aria-current='step'] {

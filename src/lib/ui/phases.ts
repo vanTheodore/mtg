@@ -112,8 +112,9 @@ export function seatStatus(waiting: WaitingLike, viewer: number): SeatStatus {
  * every ResizeObserver tick).
  *
  * The numbers are measured, not chosen: twelve chips with their short labels
- * need ~440 px to read whole, so a narrower one-line row only "fits" by
- * ellipsising every label — the same failure as clipping, quieter.
+ * need ~700 px to read whole, and 592 px with the four long ones abbreviated —
+ * so a narrower one-line row only "fits" by ellipsising every label, the same
+ * failure as clipping, quieter.
  */
 export type StepRowLayout = 'row' | 'wrap';
 
@@ -125,10 +126,21 @@ export interface StepRowFit {
   compact: boolean;
 }
 
-/** Below this the twelve short labels cannot be read on one line. */
-export const STEP_ROW_ONE_LINE_PX = 470;
-/** Below this the short labels themselves do not fit; use `tiny`. */
-export const STEP_ROW_ABBREVIATED_PX = 415;
+/**
+ * Below this the twelve short labels cannot be read on one line.
+ *
+ * Measured with the bar on the table (the repo's Chromium, injected fixture;
+ * `probe` in the notes of `docs/PHASE-UX-PORT.md`): the row needs **746 px** for
+ * the twelve short labels and **656 px** with the four long ones abbreviated.
+ * The rail band now gives the bar 712 px at 1100×700, 892 at 1280 and 1052 at
+ * 1440 — so 1100 is the width that decides this: there the twelve short labels
+ * do not fit (it wrapped, and the row measured `scrollWidth` 12 px short per
+ * chip at 1100 while reading whole at 1180), but the abbreviated ones do, on
+ * one line. Above 746 nothing is abbreviated; above 656 the row stays one line.
+ */
+export const STEP_ROW_ONE_LINE_PX = 746;
+/** Below this even the abbreviated labels do not fit on one line: wrap. */
+export const STEP_ROW_ABBREVIATED_PX = 656;
 
 export function stepRowFit(width: number): StepRowFit {
   if (!Number.isFinite(width) || width <= 0) {
@@ -137,8 +149,11 @@ export function stepRowFit(width: number): StepRowFit {
     return { layout: 'wrap', abbreviated: false, compact: false };
   }
   return {
-    layout: width < STEP_ROW_ONE_LINE_PX ? 'wrap' : 'row',
-    abbreviated: width < STEP_ROW_ABBREVIATED_PX,
+    // Una línea mientras quepa *algo* que se lea: primero se abrevian los
+    // cuatro rótulos largos (746 → 656 px) y sólo por debajo de 656 la fila
+    // envuelve en dos.
+    layout: width < STEP_ROW_ABBREVIATED_PX ? 'wrap' : 'row',
+    abbreviated: width < STEP_ROW_ONE_LINE_PX,
     compact: width < STEP_ROW_ABBREVIATED_PX
   };
 }
