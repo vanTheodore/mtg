@@ -218,6 +218,18 @@ es una **parada**.
   la geometría que esas reglas imponían: la barra abarca la fila entera del
   centro (doce pasos no caben en el carril de 362 px) y sigue yendo la última
   en las bandas apiladas.
+- **La barra vive en la mesa, no en el rail** (pasada del reparto, 7 nov 2026).
+  Metida en la columna de 320 px costaba 89 de los 569 px de alto —131 con su
+  subtítulo— y `arena-ui.spec.ts` mide que `Tu siguiente decisión` quepa
+  **entera** dentro del rail: con la barra dentro dejó de caber (medido: la
+  decisión empezaba en `y: 165` de un rail que acaba en 466). Phase pone la
+  fila de pasos sobre el tablero, y aquí se hizo lo mismo: `Board.svelte` la
+  saca de `.middle` a una banda propia (`.board-phases`) de la primera columna.
+  Medido a 1440×900: la barra va de `x: 30` a `1082` (1052 px) con los doce
+  pasos en una línea (`clientWidth` 1052 = `scrollWidth` 1052) y la decisión
+  vuelve a `y: 69…344`, entera dentro del rail. A 1280: 892 px de barra, doce
+  pasos, decisión `y: 68…343`. El chip del teléfono sigue siendo la forma por
+  debajo de 641 px.
 - **Dónde se ve.** El paso actual lleva `aria-current="step"`, la parada
   `aria-pressed` con relleno (visible sin pasar el ratón), el rótulo dice
   «Parada en \<paso\>» o «N paradas», y `StatusDock` añade la ficha `Parada`
@@ -3360,12 +3372,14 @@ publicada, y si no, la publicada.
 ### El pin sigue en `28b2f9e4`, y upstream ya está en v0.128.0
 
 `main` de Phase pasó de 23 a **38** commits por delante del pin, con release
-**v0.128.0**. El enum sigue en **148** variantes, pero **no es el mismo enum**:
-`SpellCopyOrderChoice` desapareció y en su lugar está `MemberOrderChoice` (misma
-forma más `purpose`, con valor por defecto). Ninguna de las 90 ventanas que Mesa
-ya representaba cambia de forma: lo comprobé comparando los bloques del enum
-publicado contra los del pin, y la única diferencia está en nombres que Mesa no
-había portado. El pin no se mueve en esta pasada.
+**v0.128.0**. El enum sigue en **148** variantes. Ninguna de las 90 ventanas que
+Mesa ya representaba cambia de forma, y la única que cambia entre las 148 es una
+que Mesa no había portado: `LoopShortcut` pierde `road: OfferRoad`, la etiqueta
+del productor que acuñó la oferta. El pin no se mueve en esta pasada; se movió en
+la siguiente, junto con la corrección de la frase que había aquí antes (decía que
+`SpellCopyOrderChoice` había desaparecido a favor de `MemberOrderChoice`, y es al
+revés: `SpellCopyOrderChoice` sigue en el enum con su forma de siempre y
+`MemberOrderChoice` no existe).
 
 ### Verificación de esta pasada
 
@@ -3375,3 +3389,544 @@ carta no publicada no entra en la pila, la acción es la permutación exacta, la
 `N` sólo la lleva el estruendo y una pila vacía no inventa cartas); el recuento
 vigilado pasa a **93** entradas en `REPRESENTED` (90 → 93). El motor no se tocó:
 `bun run engine:verify` sigue en verde con el mismo SHA.
+
+## Tres preguntas con la misma forma, y dos listas que no son ids (sexagésima séptima pasada, 18 nov 2026)
+
+Las cinco variantes de esta pasada están entre las **30** que el propio motor
+clasifica como `HumanResponseModel::ExactCandidates` en
+`game/interaction.rs`: el motor publica una lista cerrada y la respuesta elige uno
+de sus elementos. Eso no es una intuición sobre los nombres —es el `match` que
+decide cómo se materializa una respuesta humana—, y por eso tres de ellas
+comparten un solo panel.
+
+### `ChooseRingBearer`, `ChooseLegend` y `BattleProtectorChoice`
+
+Las tres preguntan lo mismo con otro sujeto y publican lo mismo: `candidates`.
+
+- `ChooseRingBearer` (CR 701.54a): el Anillo te tienta y eliges qué criatura lo
+  porta. La respuesta es `ChooseRingBearer { target }`.
+- `ChooseLegend` (CR 704.5j): dos legendarios homónimos bajo el mismo control y
+  eliges cuál se queda. `legend_name` es el nombre que colisiona y se pinta tal
+  cual; no se deduce de los candidatos ni se busca en ninguna tabla. La respuesta
+  es `ChooseLegend { keep }`.
+- `BattleProtectorChoice` (CR 310.11): al quedar una batalla sin protector, su
+  controlador elige qué jugador la protege. Aquí los candidatos son **asientos**,
+  no objetos, y la batalla en disputa se nombra si el cable publica su objeto.
+
+`ExactCandidatePrompt.svelte` pinta los candidatos en el orden del cable, sin
+filtrar, sin ordenar y sin completar. Un candidato sin acción publicada queda como
+fila sin botón (`data-exact-candidate-inert`), no como candidato descartado: lo
+que se lee es lo que el cable dijo. El botón que sí existe se busca en la
+intersección de candidatos y `legal.actions` (`exactCandidateOffers`), y despacha
+**el objeto publicado**, comprobado por identidad en las pruebas.
+
+Los dos legendarios del mismo lado se distinguen con el mismo criterio que ya usa
+el retarget: nombre, y si se repite, controlador, y si aún se repite, `#id`.
+
+### `ChooseDungeon` y `ChooseDungeonRoom`
+
+Van en otro bloque (`DungeonPrompt.svelte`) porque su lista **no son ids**: el
+motor manda `DungeonPreview` y `RoomPreview` con el nombre y el texto impresos, y
+la respuesta lleva un `DungeonId` o un `room_index`, no un objeto del campo. La
+regla de la capa de presentación prohíbe que el cliente tenga sus propias tablas
+de dungeons, así que el nombre que se lee es exactamente el que vino en la
+preview: CR 701.49a para elegir dungeon (con la habitación de entrada, CR 309.4a)
+y CR 309.5a para elegir a qué habitación avanza el marcador, con el nombre de la
+dungeon (`dungeon_name`) como contexto.
+
+### Una trampa de Svelte 5, anotada
+
+`DungeonId` viaja como objeto, así que `String(id)` es `[object Object]` para todas
+las dungeons y un `{#each ... (String(option.id))}` lanza `each_key_duplicate`: la
+ruta responde 500 y no se pinta nada. La clave tiene que ser la forma canónica del
+id (`JSON.stringify`), que es además la que usa `dungeonOffers` para indexar la
+acción. Sólo se veía con dos dungeons: con una, la clave repetida no se repite.
+
+### Escenas y verificación
+
+Escenas `ringBearer`, `ringBearerOne`, `ringBearerAway`, `legend`, `legendAway`,
+`protoProtector`, `protoOne`, `protoAway`, `dungeon`, `dungeonOne`, `dungeonAway`,
+`dungeonRoom`, `dungeonRoomOne` y `dungeonRoomAway`. Capturas
+`ux-portador-anillo-1440.jpg`, `ux-un-portador-anillo-1440.jpg`,
+`ux-portador-ajeno-1440.jpg`, `ux-regla-leyendas-1440.jpg`,
+`ux-leyendas-ajenas-1440.jpg`, `ux-protector-batalla-1440.jpg`,
+`ux-un-protector-batalla-1440.jpg`, `ux-protector-ajeno-1440.jpg`,
+`ux-elegir-dungeon-1440.jpg`, `ux-una-dungeon-1440.jpg`,
+`ux-dungeon-ajena-1440.jpg`, `ux-habitacion-dungeon-1440.jpg`,
+`ux-una-habitacion-1440.jpg` y `ux-habitacion-ajena-1440.jpg`, más sus pares de
+tema (152 escenas, 304 jpg).
+
+`bun run check` 0 errores; `bun test src/lib` **732** (12 nuevas en
+`exact-candidate.test.ts`); `ux-lab` **168** (11 nuevas); `ux-themes` **3/3** con
+152 escenas. `REPRESENTED` pasa de **93** a **98** (quedan **50** de las 148).
+
+**El contraste muerde.** `.type` con `opacity: .85` sobre el relleno de acento
+falla AA en tema claro; el texto secundario de un botón se separa por tamaño y
+peso, no por opacidad. Y la norma de es-419 veta «pulsa» incluso en un comentario
+de código: la prueba de locale recorre los `.svelte` línea a línea.
+
+## Cuatro ventanas que son ExactCandidates y no se parecen (sexagésima octava pasada, 18 nov 2026)
+
+El grupo de `ExactCandidates` sigue siendo el más rentable, pero no es homogéneo.
+Estas cuatro ofrecen una lista cerrada y eligen uno de sus elementos, y aun así
+**ninguna responde igual a las otras tres**:
+
+| Ventana | Respuesta del cable |
+| --- | --- |
+| `BeholdChoice` (CR 701.4a) | `SelectCards { cards: [una] }` |
+| `PopulateChoice` (CR 701.47a) | `ChooseTarget { Object(id) }` |
+| `SpecializeColor` (CR 253.2) | `ChooseSpecializeColor { color }` |
+| `ChooseRoomDoor` (CR 709.5f-g) | `ChooseRoomDoor { object_id, op, door }` |
+
+Dos de ellas comparten dibujo (`PickOnePrompt.svelte`) porque las dos eligen un
+objeto del campo, pero **no comparten parser de oferta ni despacho**: behold sólo
+acepta un `SelectCards` de una carta y populate sólo un `ChooseTarget` con
+`Object(id)`. Una prueba fija justo eso —la misma id en las dos ventanas, con la
+acción de la otra, no enciende ningún botón— porque es la tentación obvia al
+unificarlas.
+
+Las otras dos van por su cuenta, y cada una tiene su trampa:
+
+- **`SpecializeColor`** elige un color. El nombre sale de una tabla de cinco
+  entradas que es el propio enum del motor (`ManaColor`: White, Blue, Black, Red,
+  Green). Un valor fuera de esas cinco se dice **sin nombre**, no se traduce a la
+  brava: el panel muestra el valor del cable.
+- **`ChooseRoomDoor`** publica **pares** `(op, door)` y el motor exige que la
+  respuesta sea uno de esos pares. Por eso la lista de botones es la de pares
+  publicados y no el producto cartesiano de operaciones × mitades, que ofrecería
+  combinaciones que el motor rechaza. Una prueba lo fija: con `(Unlock, Left)` y
+  `(Lock, Right)` publicados, `(Lock, Left)` no es botón.
+
+`op` llega etiquetado por tipo (`DoorLockOp` es internamente etiquetado:
+`{ type: "Unlock" }`) y `door` como cadena simple (`Left` / `Right`); el parser
+acepta las dos formas de `op` para no atarse a la etiqueta de serde.
+
+### Una regla que casi se rompe
+
+El primer `PickOnePrompt` dibujaba el bloque sólo para el asiento que decide. La
+regla del proyecto es la contraria: **el asiento que no decide ve lo publicado y
+no recibe botón** (CR 400.2). Se vio al escribir la prueba del asiento ajeno, que
+esperaba el bloque y encontró el vacío. Corregido: la lista se lee y los botones
+no existen.
+
+### Escenas y verificación
+
+Escenas `behold`, `beholdOne`, `beholdAway`, `populate`, `populateOne`,
+`populateAway`, `specialize`, `specializeOne`, `specializeAway`, `roomDoor`,
+`roomDoorOne` y `roomDoorAway`; capturas `ux-behold-1440.jpg` … con sus pares de
+tema (162 escenas, 324 jpg de escena).
+
+`bun run check` 0 errores; `bun test src/lib` **747** (15 nuevas en
+`pick-one.test.ts`); `ux-lab` **176** (8 nuevas); `ux-themes` **3/3** con 162
+escenas. `REPRESENTED` pasa de **98** a **102**; quedan **46** de las 148.
+El motor no se toca: `engine:verify` sigue en verde con el pin `576e2bf5`.
+
+## Tres ventanas, un dibujo y dos acciones (sexagésima novena pasada, 18 nov 2026)
+
+El motor clasifica las tres igual —`HumanResponseModel::Select`, la familia de
+«elige un subconjunto de lo publicado»—, pero **no contestan igual**:
+
+| Ventana | Respuesta del cable | Quién la valida |
+| --- | --- | --- |
+| `BlightChoice` (CR 701.68a) | `SelectCards { cards: [una] }` | `ai_support/mod.rs` — `selection_mismatch(..., Some(1))` |
+| `HarmonizeTapChoice` (CR 702.180b) | `HarmonizeTap { creature_id }` | `game/engine.rs`, brazo `HarmonizeTap` |
+| `UnlessBounceChoice` (CR 118.12) | `SelectCards { cards: [uno] }` | `engine_payment_choices.rs::handle_unless_bounce_choice`, exige `chosen.len() == 1` |
+
+Las tres se dibujan con el mismo panel (`PickExactlyOnePrompt.svelte`) porque
+piden lo mismo —exactamente uno de una lista cerrada—, pero **cada botón despacha
+la acción que el parser emparejó para su ventana**, y eso no es cosmético:
+`SelectCards` de una carta enciende blight y «a menos que», nunca armonizar, y un
+`HarmonizeTap` no enciende las otras dos. Hay una prueba que fija justo esa
+tentación: la misma criatura, con la acción de la ventana hermana, no produce
+ningún botón.
+
+### El número que no se cuenta
+
+`BlightChoice` publica `counters` **y** `creatures` por separado, y no son lo
+mismo: dos contadores caen sobre **una** criatura (CR 701.68a), así que el panel
+lee `counters` del cable y lo escribe en la regla, en lugar de deducirlo del
+tamaño de la lista. La escena `blight` tiene `counters: 2` y dos criaturas
+elegibles precisamente para que una implementación que cuente candidatos falle.
+
+`UnlessBounceChoice` trae `remaining`, cuántos jugadores quedan por decidir. Se
+pinta sólo si es mayor que uno: anunciar «quedan 1» sobraba. Cuando el dato no
+viene, el parser asume uno y **no** inventa un recuento.
+
+### La opción que sí se puede inventar, y no se inventa
+
+`HarmonizeTapChoice` tiene una salida que no es un candidato: no reducir el
+coste, que el cable manda como `HarmonizeTap { creature_id: null }`. Ese `null`
+llega como acción publicada, así que el botón «No reducir el coste» sólo existe
+si el motor lo publicó. La escena `harmonizeDecline` es la misma ventana **sin**
+la acción nula: dos criaturas, dos botones y ninguna vía de escape. Es la regla
+de siempre —no inventar una opción— aplicada al único sitio de esta pasada donde
+inventarla habría sido razonable.
+
+### El asiento que no decide
+
+Las tres escenas `*Away` montan el bloque con `player: 1`: se lee la lista y no
+hay ni un botón (CR 400.2). Es la misma regla que ya se rompió una vez en la
+pasada 68 y que ahora tiene prueba propia en las tres ventanas.
+
+### Escenas y verificación
+
+Escenas `blight`, `blightOne`, `blightAway`, `harmonize`, `harmonizeDecline`,
+`harmonizeAway`, `bounce`, `bounceOne` y `bounceAway`; capturas
+`ux-malea-1440.jpg`, `ux-una-criatura-malea-1440.jpg`, `ux-malea-ajena-1440.jpg`,
+`ux-armonizar-1440.jpg`, `ux-armonizar-obligado-1440.jpg`,
+`ux-armonizar-ajena-1440.jpg`, `ux-devolver-a-la-mano-1440.jpg`,
+`ux-un-permanente-devolver-1440.jpg` y `ux-devolver-ajena-1440.jpg`, más sus
+pares de tema (173 escenas, 346 jpg).
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **759** (12
+nuevas en `pick-exactly-one.test.ts`); `ux-lab` **183** (7 nuevas); `ux-themes`
+**3/3** con 173 escenas; `scripts/clash-shots.ts` pasa a 52 capturas. `REPRESENTED`
+pasa de **102** a **105**; quedan **43** de las 148.
+
+### El censo se recalcula, no se recuerda
+
+Antes de elegir el bloque se volvió a sacar el reparto del propio `match` de
+`human_response_model` (no de los nombres) cruzado con `REPRESENTED`, porque la
+pasada 68 dejó el número en 46 y una cuenta a mano se desvía. El resultado, con
+el pin `576e2bf5`: `ExactCandidates` **22**, `Select` **8**, `DirectChoices` **3**,
+`CoinFlipSequence` **2**, `ManaGroups` **2**, `TextChoice` **2**, `NumberRange`
+**1**, `OutsideSelection` **1**, `LoopShortcut` **1**, `ShortcutReply` **1**.
+
+### Upstream: un commit, y no toca contratos
+
+Revisado a petición: el pin va **29** commits por detrás de `main`, y el único
+nuevo desde la última revisión es `81d3830d` (`chore(card-data): refresh MTGJSON
+token & subtype catalogs`), que sólo toca `crates/phase-ast/data/mtgjson-vintage`
+y `oracle-subtypes.json`. `WaitingFor` sigue con **148** variantes y ninguna
+cambia de forma, así que subir el pin sigue siendo trabajo de su propio PR y no
+de una pasada de interfaz.
+
+### Lo que queda fuera, y por qué
+
+`CollectEvidenceChoice` es la siguiente de `Select` y **no** entra aquí: el motor
+sí publica las combinaciones completas (`ai_support/candidates.rs`), pero
+`effect_kind` y la suma mínima exigen mostrar el valor de maná de cada carta, y
+`ManaCost` se serializa sin `mana_value` (`phase-ast/src/types/mana.rs`) mientras
+que `mana_value` es método de `GameObject`, no campo. Reimplementar esa aritmética
+en TypeScript es justo lo que la casa prohíbe; se decidirá si el panel enseña las
+combinaciones tal cual o si espera a que el cable publique la suma.
+
+## Cuatro `Select` que contestan lo mismo y no preguntan lo mismo (septuagésima pasada, 18 nov 2026)
+
+El grupo `Select` del motor no es «elige uno»: es «elige un subconjunto de lo
+que yo publiqué». Estas cuatro lo contestan **igual** —`SelectCards { cards }`
+sobre el conjunto del cable— y aun así la pregunta que hacen es distinta, porque
+la **ventana** de tamaños la fija cada una:
+
+| Ventana | Ventana de tamaños | De dónde sale |
+| --- | --- | --- |
+| `EffectZoneChoice` (CR 701.21a / CR 608.2d) | `count` exactas, o `min_count..=count` si `up_to` | `ai_support/mod.rs`, `selection_mismatch` |
+| `HeroEventChoice` (sin CR: producto casual) | `count` exactas, o `min..=count` si `up_to` | `engine_resolution_choices.rs:7136` |
+| `DrawnThisTurnTopdeckChoice` (CR 614.1) | `min_count..=count` **siempre** | `effects/drawn_this_turn_choice.rs` |
+| `SearchPartitionChoice` (CR 608.2d) | exactamente `primary_count` | `engine_resolution_choices.rs:6000` |
+
+Comparten dibujo (`SelectFromListPrompt.svelte`) y **no comparten aritmética**:
+ninguna rama del panel resta, cuenta ni acota por su cuenta. `min`, `max` y
+`window` se leen del cable; lo único que hace TypeScript es comparar la
+selección con esa ventana (`selectFromListReady`) y acotar el máximo al tamaño
+del conjunto publicado para no ofrecer de más.
+
+### Los tres números que se copian y no se calculan
+
+- **`DrawnThisTurnTopdeckChoice` no calcula la vida.** Cada carta que no va
+  arriba cuesta `life_payment` vidas, y el mínimo (cuántas **tienen** que ir
+  arriba) es `minimum_topdeck_count` en el motor: depende de la vida del
+  jugador, de `count` y de `life_payment`. El bloque pinta la ventana y el coste
+  por carta; no hace la resta. La escena `topdeck` publica `min_count: 1` con
+  `life_payment: 2`, y `topdeckOne` publica `min_count: 3` con `life_payment: 0`
+  —la misma ventana cerrada sin haber calculado nada—.
+- **`SearchPartitionChoice` no reparte.** `primary_count` y las dos zonas
+  (`primary_destination`, `rest_destination`) vienen del cable; el panel nombra
+  las zonas con una tabla de siete entradas que es el `Zone` del motor, y una
+  zona desconocida se dice con su propio nombre (`Somewhere`) en vez de
+  traducirse a la brava. La escena `partitionOne` tiene **una** carta encontrada:
+  el motor sigue pidiendo exactamente una, así que el botón no se habilita solo
+  porque no haya nada que repartir.
+- **`EffectZoneChoice` tiene dos familias y sólo una entra aquí.** Cuando publica
+  `mass_library_order` es un orden de biblioteca propiedad del dueño
+  (`change_zone.rs::mass_library_order_effect_zone_choice`), y ese ya tiene su
+  bloque desde la pasada 66 (`BottomOrderPrompt`). El parser devuelve `null` en
+  ese caso para no pintar la misma ventana dos veces con dos contratos.
+
+### El mínimo que no es cero
+
+`min_count`/`min` valen `0` en la mayoría de los «hasta N», y por eso la lista
+vacía es una respuesta legal **ahí**. Pero no en todas: Turtle Team-Up tiene
+mínimos de contribución (el «Krang's Stratagem» que ya usa el motor en su propio
+comentario), y `drawn-topdeck` sube el mínimo cuando no hay vida que pagar. El
+botón de cero existe sólo cuando el mínimo publicado es cero, y su etiqueta lo
+dice («No elegir ninguna»); con `min: 1` el mismo botón nace deshabilitado.
+
+### Escenas y verificación
+
+Escenas `sacrifice`, `sacrificeOne`, `sacrificeUpTo`, `sacrificeAway`,
+`heroEvent`, `heroEventOpen`, `heroEventAway`, `topdeck`, `topdeckOne`,
+`topdeckAway`, `partition`, `partitionOne` y `partitionAway`; capturas
+`ux-sacrificar-1440.jpg`, `ux-un-sacrificio-1440.jpg`,
+`ux-sacrificar-hasta-dos-1440.jpg`, `ux-sacrificio-ajeno-1440.jpg`,
+`ux-evento-heroe-1440.jpg`, `ux-evento-abierto-1440.jpg`,
+`ux-evento-ajeno-1440.jpg`, `ux-robado-este-turno-1440.jpg`,
+`ux-robado-obligatorio-1440.jpg`, `ux-robado-ajeno-1440.jpg`,
+`ux-reparto-busqueda-1440.jpg`, `ux-reparto-unico-1440.jpg` y
+`ux-reparto-ajeno-1440.jpg`, más sus pares de tema (199 escenas, 398 jpg).
+
+`bun run check` 0 errores (2 avisos previos); `bun test src/lib` **772** (13
+nuevas en `select-from-list.test.ts`); `ux-lab` **193** (10 nuevas); `ux-themes`
+**3/3** con 199 escenas; `scripts/clash-shots.ts` pasa a 65 capturas.
+`REPRESENTED` pasa de **105** a **109**; quedan **39** de las 148.
+
+### Lo que queda de `Select`, y por qué no entra aquí
+
+`ArrangePlanarDeckTopChoice` es un subconjunto *y* un orden a la vez
+(`keep_on_top` arriba en el orden enviado, el resto al fondo en cualquiera), y
+merece su propio bloque de dos pasos, no una rejilla de marcas.
+`CollectEvidenceChoice` sigue fuera por la razón de la pasada 69: la suma contra
+`minimum_mana_value` no se puede enseñar sin el valor de maná por carta, y el
+cable no lo manda. `DigRestSplitChoice` y `OpeningHandBottomCards` publican
+cosas distintas: el primero es una **permutación** completa del montón —el mismo
+contrato que `RippleBottomOrder`, con la restricción añadida de que el conjunto
+de arriba no se mueve cuando `scope` es `OrderOnly`—, y el segundo no publica
+cartas: publica `(jugador, cuántas)` y las cartas salen de la mano de ese
+jugador. Ninguno de los dos es una selección de subconjunto y meterlos aquí
+habría sido reutilizar un dibujo con otro contrato.
+
+## Comparación de tableros, medida y no recordada (7 nov 2026)
+
+Hasta aquí el port se verificaba **por pieza**: cada ventana de decisión tiene su
+escena en `/ux` y su captura en `docs/screenshots/ux-*.jpg`. Faltaba la pregunta
+anterior a todas: con la misma partida delante, ¿en qué se diferencian los dos
+tableros? Este bloque la responde con dos fotografías tomadas por el **mismo
+Chromium**: el tablero de Mesa y el del cliente **phase-rs 0.130.0** (`main` en
+el momento de la captura), a 1440×900, 1280×800 y 390×844.
+
+Los seis archivos son
+`docs/screenshots/comparar-{mesa,phase}-{1440,1280,390}.jpg`.
+Las cifras de abajo salen de medir el DOM de esas mismas páginas, no de mirar la
+imagen.
+
+### Cómo se hicieron
+
+Un escenario, dos puestas en escena, ninguna inventada por la interfaz:
+
+- **Escenario:** turno 1, fase `PreCombatMain`, prioridad al asiento 0, 20 vidas
+  por asiento, 33 cartas en biblioteca, 7 en mano, una carta en el cementerio,
+  cinco permanentes por lado (tres tierras y dos criaturas), una tierra girada
+  por lado. La ventana de decisión es `Priority`; el auto-paso queda **activo**,
+  como viene de fábrica, para que el consejo de primera vez también salga.
+- **Mesa:** `scripts/compare-boards-mesa-fixture.js` importa el *singleton*
+  `session` que sirve el propio Vite y le instala una instantánea
+  `EngineSnapshot`. `Board.svelte` la lee exactamente como lee al motor: no hay
+  ninguna rama «modo captura» dentro de la interfaz.
+- **phase-rs:** `scripts/seed-phase-board.ts` escribe dos módulos de desarrollo
+  en una copia del cliente upstream y los aliasea en su `vite.config.ts`: un
+  sustituto del `GameProvider` (el dueño de la sesión de motor) y un `GameState`
+  tipado en su store de zustand, con la forma que dan sus propias factorías
+  (`src/test/factories/gameStateFactory.ts`). `GamePageContent` y todos los
+  componentes de tablero son los que se envían, sin tocar.
+- **Captura:** `bun scripts/compare-boards-shots.ts --mesa … --phase …`, con
+  Playwright y el Chromium de `scripts/fetch-chromium.ts`. Se abortan
+  `api.scryfall.com` y `cards.scryfall.io`: el sandbox no tiene red hacia ese
+  CDN, y las dos interfaces deben fallar el arte **igual**, no una con imágenes
+  y la otra sin ellas.
+
+### Diferencias
+
+**1. Reparto del ancho.** El tablero de phase-rs ocupa 1120 px y el registro de
+partida se queda con una columna fija de 320 px (`x: 1120`) siempre abierta,
+desde la primera ventana de prioridad. Mesa da 1395 px a la mesa y pone el
+registro debajo de la pila, dentro del rail de decisión, plegado (`Pila 0`,
+`Resoluciones 0`): `Decisión pendiente` mide 362×236 en `x: 1026`.
+
+**2. Alto por campo.** A 1440×900 Mesa da 204 px de alto a cada campo de
+batalla (`y: 104…308` el rival, `315…519` el propio) y deja la mano a 98 px por
+carta. phase-rs reparte el campo por prácticamente los 900 px —el permanente más
+alto llega a `y: 520` y las tierras propias bajan a `y: 660…740`— y dibuja la
+mano a 106×90 en el borde inferior. Mesa reserva altura fija para mano y barra;
+phase-rs se la da al campo.
+
+**3. La barra de fases no cabe en su rail (el hallazgo accionable).** El
+`<ol>` de `Fases y paradas` sí desplaza (`scrollWidth` 868 contra `clientWidth`
+362, `overflow-x: auto`), pero **los pasos desaparecen sin ninguna señal**:
+
+| Ancho | Pasos visibles | Pasos ocultos |
+| --- | --- | --- |
+| 1440 | Enderezar, Mantener, Robar, Principal | Combate, Atacar, Bloquear, Daño, Fin combate, Principal 2, Final, Limpieza |
+| 1280 | Enderezar, Mantener, Robar | Combate, Atacar, Bloquear, Daño, Fin combate, Principal 2, Final, Limpieza |
+| 1024 | los doce | — |
+
+A 1024 caben los doce; **a 1280 y 1440 —las dos medidas que más se usan— se
+pierden dos tercios de la barra**. En phase-rs la misma información es una fila
+de chips que se ajusta al contenido y no recorta nada. Medido con la rueda: el
+`<ol>` desplaza hasta `scrollLeft: 506`, así que los pasos son alcanzables, pero
+nada en pantalla dice que haya más. Es el arreglo que sale de esta comparación:
+barra que quepa, o un indicador de que hay más. **No se arregla en este
+bloque**: cambia la chrome del tablero y merece sus propias capturas de antes y
+después, que es exactamente lo que este guion ya sabe producir.
+
+**4. El consejo de flujo.** Los dos tableros lo tienen y las dos frases son la
+misma —`CoachTip.svelte` lo portó de `coach.autoPass`—: «Los saltos de fase son
+automáticos. Usa Control cuando quieras ventanas de prioridad al estilo del
+papel», con `Descartar` / `Conocer el flujo` frente a `Dismiss` / `Learn Flow`.
+La diferencia es dónde y a qué precio:
+
+- phase-rs: tarjeta flotante de 384×126 anclada abajo a la derecha del campo
+  (`x: 720`, `y: 618` a 1440). Ahí no tapa ningún permanente: el hueco que ocupa
+  está vacío. A 390 se estrecha a 152×202 y **sí** tapa un permanente.
+- Mesa a 1440: 544×97 **en línea** por debajo del campo propio, sin tapar nada.
+- Mesa a 390: 356×115 en `y: 1089`, es decir **fuera de la primera pantalla**.
+  El `main.layout` mide 691 px de alto y 1729 de contenido con `overflow-y:
+  auto`, así que el consejo (`y: 1089…1203`), `Tu prioridad / Mano / Control`
+  (`y: 1207`) y el `Rendimiento del motor` viven por debajo del pliegue:
+  alcanzables deslizando, invisibles de entrada. En el teléfono el jugador ve
+  campo rival (`y: 187…519`), `Tu siguiente decisión` (`y: 529…770`) y la barra
+  `Mano 7` (`y: 775…819`); no ve ni el consejo ni la barra de estado.
+
+**5. La mano en el teléfono.** A 390, phase-rs mantiene las cartas de la mano en
+abanico a lo largo del borde inferior (`x: 21…368`, `y: 640…820`) y encima pone
+`Hand 7`, `Control`, `To Begin Combat` y `Pass →`, todo dentro de la única
+pantalla. Mesa enseña una barra `Mano 7 · Desliza para jugar` de 371×44 en
+`y: 775` y deja la mano en un cajón, de modo que el campo rival cabe entero
+(`y: 187…519`) a costa de esconder las siete cartas hasta que se pide el cajón.
+
+**6. Qué cuenta cada barra de asiento.** Los dos muestran vida, biblioteca y
+cementerio. Mesa los reúne en **una** franja por asiento de 760 px
+(`x: 140`, `Jugador 2 · 20 vidas · Mano 0 · Biblioteca 33 · Cementerio 0 ·
+Exilio 0 · Maná 0`) y repite la franja del jugador debajo del campo propio.
+phase-rs reparte lo mismo en widgets: la vida es un contador de 84×68 centrado
+sobre el campo (`x: 518`), la biblioteca y el exilio son pilas arriba a la
+derecha y el cementerio y el maná cuelgan de la esquina inferior izquierda. La
+primera se lee de un vistazo y ocupa altura; la segunda deja la altura al campo
+y obliga a barrer la pantalla con la vista. Ninguno enseña veneno ni energía
+porque valen cero en este escenario.
+
+**7. El marcador cuando no hay arte.** Las dos caen a un marcador de posición,
+pero no al mismo dibujo: phase-rs pinta un rectángulo oscuro con el nombre y el
+coste y anuncia el nombre en `aria-label` (sin `Loading` cuando el CDN está
+bloqueado: la consulta falla y cae al marcador), mientras Mesa pinta nombre,
+tipo y el texto «Sin conexión con el servicio de imágenes», con `Reintentar
+imagen`. La de Mesa dice más; la de phase-rs se lee como una carta vista desde
+lejos.
+
+**8. Idioma.** El cliente upstream está en inglés y Mesa en español. No es una
+diferencia de diseño y no se cuenta como tal, pero explica por qué estas
+capturas no se pueden comparar por texto sin traducir.
+
+### Qué deja abierto
+
+De las ocho diferencias, sólo una es un defecto y no una decisión de producto:
+**el rail de fases recorta ocho de los doce pasos a 1280 y 1440** (punto 3). Las
+otras siete son dos maneras defendibles de repartir la misma mesa, y quedan
+anotadas aquí para que la próxima pasada decida con las capturas delante en vez
+de volver a descubrirlas.
+
+**Resuelto en la pasada siguiente** (véase «Primera pasada del paso React →
+Svelte» más abajo): el punto 3 quedó arreglado con el guion de captura que este
+bloque dejó listo —doce pasos visibles de doce a 1440 y a 1280—, y con él se
+aplicaron los puntos 1, 2, 4 y 6. Siguen abiertos el 5 (la mano del teléfono es
+un cajón, no el abanico completo) y, por decisión de producto, el 7 y el 8.
+
+### Lo que la comparación **no** puede decir
+
+El motor no está: `bun run engine:download` sigue fallando con `EOF` contra el
+blob de artefactos de GitHub y no hay Rust en el sandbox. Las dos instantáneas
+son datos, no reglas. La comparación cubre **geometría, jerarquía, reparto de
+espacio, rótulos y estados vacíos**, y no cubre nada que dependa de que el motor
+acepte o rechace una acción. Las capturas con motor real siguen siendo las del
+recorrido `docs/screenshots/tutorial-*.png`, que sí salen del WASM.
+
+### Reproducirlo
+
+```bash
+bun scripts/fetch-chromium.ts
+bun run dev --port 5173 &                        # Mesa
+bun scripts/seed-phase-board.ts --client /ruta/al/cliente/phase
+(cd /ruta/al/cliente/phase && npx vite --host 0.0.0.0 --port 5280) &
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=~/.cache/mesa-chromium/chromium \
+LD_LIBRARY_PATH=~/.cache/mesa-chromium/al2023/lib:~/.cache/mesa-chromium \
+  bun scripts/compare-boards-shots.ts --mesa http://127.0.0.1:5173 \
+    --phase http://127.0.0.1:5280 --out docs/screenshots
+bun scripts/seed-phase-board.ts --client /ruta/al/cliente/phase --remove
+```
+
+## Primera pasada del paso React → Svelte (7 nov 2026)
+
+La comparación de arriba dice qué reparte cada tablero. Este bloque aplica al
+tablero **Arena** de Mesa la parte de ese reparto que no es cuestión de gusto, y
+mide el resultado con el mismo procedimiento: un Chromium, la misma instantánea
+`EngineSnapshot`, las mismas tres medidas.
+
+Evidencia: `docs/screenshots/tablero-{antes,despues}-{1440,1280,390}.jpg` y
+`docs/evidence/tablero-{antes,despues}-{1440,1280,390}.json`. Las cifras de esta
+sección salen de esos JSON, no de mirar las imágenes.
+
+Se reproduce con `bun scripts/board-shots.ts --tag antes|despues`, que instala la
+misma fixture y escribe foto + medidas en el mismo pase.
+
+### Qué cambió, con la diferencia de arriba al lado
+
+| Diferencia | Antes (medido) | Después (medido) |
+| --- | --- | --- |
+| **1. Reparto del ancho** | mesa 1395 px; rail de decisión de 392 px con el registro plegado dentro | mesa 1052 px + **columna de registro de 320 px** (`x: 1090`, ancho 320, alto 569); el rail vive en esa columna |
+| **2. Alto por campo** | 204 px por campo, 204 px de hueco entre los dos, y el contenedor del tablero desplazaba 225 px por dentro | 238 px por campo, los dos pegados al centro de su mitad, y `.layout` **sin desplazamiento interno** (`clientHeight` 628 = `scrollHeight` 628) |
+| **3. Barra de fases** | rail de 362 px, 868 px de chips, **4 de 12** pasos visibles con 8 sin señal | **12 de 12** visibles a la vez y ninguno recortado: la fila de pasos es una banda de la mesa (1052 px a 1440, 892 a 1280) con los doce chips en una línea; en tableta envuelve (290 px de rail, `scrollWidth` 290) y en el teléfono manda el chip de Phase con su hoja de doce paradas |
+| **4. Consejo de flujo** | 544×97 en una fila propia entre el campo y la mano | 667×40 en la fila de chips de estado, **sin fila propia**: comparte fila con `Tu prioridad · Principal 1 · MANO 7 · CONTROL`, que es donde Phase pone `Your priority` / `HAND 7` / `CONTROL` |
+| **6. Barra de asiento** | franja única de 760 px centrada en la mesa | contador de 671 px (asiento rival) y 620 px (propio) pegados al ancho de su columna: la vida a la izquierda, las pilas a la derecha |
+
+A 1280 el mismo reparto da 892 px de campo, 320 px de registro, el registro
+visible entero (`y: 528`) y los doce pasos a un clic del mismo chip.
+
+En el rail de escritorio la fila de doce chips cuesta 89 px de un rail de 569 y
+deja la decisión sin sitio: `arena-ui.spec.ts` mide que se ve **entera** dentro
+del rail y con la fila dentro dejaba de caber (la decisión empezaba en `y: 165`
+de un rail que acaba en 466). Se probó ocultar sólo el subtítulo (58 px): tampoco
+alcanzaba, y sustituirla por el chip de Phase escondía los doce pasos en
+escritorio. La solución es la de Phase: **la fila de pasos pertenece a la mesa**,
+así que sale del rail a una banda propia de 1052 px a 1440 y 892 a 1280, con los
+doce pasos en una línea y sin recortar ninguno; `step-row-fit.test.ts` fija los
+tres anchos medidos (712, 892 y 1052) y la regla que deciden (746 px para los
+doce rótulos cortos, 656 con los cuatro largos abreviados).
+
+### Lo que **no** se copió, y por qué
+
+- **El contador de vida suelto de Phase** (84×68 centrado sobre el campo, con
+  las pilas repartidas por las esquinas). Se probó y se descartó: en Mesa el
+  asiento lleva además el botón de objetivo (`Elegir Jugador N como objetivo`),
+  los contadores de veneno/energía, el aviso de cambio de vida y `data-life`, que
+  tres pruebas E2E leen. Partirlo en widgets dejaría esos datos sin sitio o
+  obligaría a duplicarlos. Lo que sí se copió es lo que se ve: dejó de ser una
+  franja de 760 px centrada y pasó a ser una fila al pie de su campo.
+- **El consejo flotando sobre el campo.** Phase lo ancla abajo a la derecha y no
+  tapa nada porque su campo acaba en `y: 606`. Aquí se probó igual
+  (`position: absolute` contra la fila de chips) y la tarjeta de 416 px caía
+  sobre las dos criaturas propias, tapando su P/T. Se quedó en el flujo, pero en
+  una fila de 40 px en vez de 97.
+- **La tira de cementerio.** Medía 198 px de los 630 del tablero con una sola
+  carta, que es justo el alto que este reparto da a los campos. En Arena el
+  cementerio sigue a un clic en la pila del asiento (`ZonePile` →
+  `ZoneViewer`) y el contador sigue en la fila del asiento. El cambio alcanza a
+  todo Arena, también al teléfono (donde esa tira quedaba fuera de la primera
+  pantalla y sólo alargaba el desplazamiento: 1729 → 1507 px de contenido a
+  390×844); el estilo Clásico la conserva tal cual.
+
+### Un defecto que sí se arregló de paso
+
+La mano de escritorio estaba **pegada a la izquierda**: la regla que centra el
+abanico sólo cubría `.layout .hand-zone` y `.board .hand-zone`, y desde M10 la
+mano es hija directa de `.app`. Medido a 1440: primera carta en `x: 19` y última
+en `x: 1152` de una franja de 1395 px. Añadido el selector que faltaba, el
+abanico queda centrado (`x: 425…1015`).
+
+### Lo que sigue sin ser el de Phase
+
+- La **mano del teléfono** sigue siendo un cajón, no el abanico completo de
+  Phase a 390 px (diferencia 5). Es el cambio más grande que queda y toca la
+  navegación del tablero, no sólo su reparto.
+- El **marcador sin arte** de la diferencia 7 y el registro en español de la 8
+  no se tocan: son decisiones de producto ya documentadas.
+- `arena-ui.spec.ts` sigue midiendo `position: sticky` en el rail: la columna
+  nueva es `sticky` dentro de su propia celda, así que el contrato no cambia.

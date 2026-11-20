@@ -3417,3 +3417,498 @@ test('la vista de asignación de daño nombra los repartos que propone Phase', a
   const serious = board.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''));
   expect(serious).toEqual([]);
 });
+
+// ── Pasada 67: ChooseRingBearer, ChooseLegend, BattleProtectorChoice ─────────
+
+test('el portador del Anillo se elige entre los candidatos publicados, en su orden', async ({ page }) => {
+  await page.goto('/ux?scene=ringBearer');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-exact-candidate-kind', 'ring-bearer');
+  await expect(block).toHaveAttribute('data-exact-candidate-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir portador del Anillo');
+  await expect(block.locator('[data-exact-candidate-rule]')).toContainText('CR 701.54a');
+
+  const options = block.locator('[data-exact-candidate-option]');
+  await expect(options).toHaveCount(2);
+  // The wire's order, not the label's: the ids are what the engine published.
+  await expect(options.nth(0)).toHaveAttribute('data-exact-candidate-option', '333');
+  await expect(options.nth(1)).toHaveAttribute('data-exact-candidate-option', '334');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un candidato que legal.actions no publicó no es un botón', async ({ page }) => {
+  await page.goto('/ux?scene=ringBearerOne');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block).toHaveAttribute('data-exact-candidate-count', '1');
+  await expect(block.locator('[data-exact-candidate-option]')).toHaveCount(1);
+  await expect(block.locator('[data-exact-candidate-option="334"]')).toHaveCount(0);
+});
+
+test('el portador ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=ringBearerAway');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('[data-exact-candidate-faces] li')).toHaveCount(2);
+  await expect(block.locator('[data-exact-candidate-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la regla de leyendas nombra el legendario con el nombre que vino del cable', async ({ page }) => {
+  await page.goto('/ux?scene=legend');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block).toHaveAttribute('data-exact-candidate-kind', 'legend');
+  await expect(block.locator('strong')).toHaveText('Elegir qué Gisela, the Broken Blade se queda');
+  await expect(block.locator('[data-exact-candidate-rule]')).toContainText('CR 704.5j');
+  const options = block.locator('[data-exact-candidate-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toContainText('Gisela, the Broken Blade');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la leyenda ajena la resuelve su controlador y no se pulsa desde aquí', async ({ page }) => {
+  await page.goto('/ux?scene=legendAway');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block.locator('[data-exact-candidate-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+});
+
+test('el protector de la batalla es un asiento publicado, y la batalla se nombra', async ({ page }) => {
+  await page.goto('/ux?scene=protoProtector');
+  const block = page.locator('[data-exact-candidate]');
+  await expect(block).toHaveAttribute('data-exact-candidate-kind', 'battle-protector');
+  await expect(block).toHaveAttribute('data-exact-candidate-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir protector de la batalla');
+  await expect(block.locator('[data-exact-candidate-battle]')).toContainText('Invasion of Kamigawa');
+  const options = block.locator('[data-exact-candidate-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toContainText('Jugador 1');
+  await expect(options.nth(1)).toContainText('Jugador 2');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un protector no publicado no es un botón, y el ajeno no se pulsa', async ({ page }) => {
+  await page.goto('/ux?scene=protoOne');
+  const one = page.locator('[data-exact-candidate]');
+  await expect(one.locator('[data-exact-candidate-option]')).toHaveCount(1);
+  await expect(one.locator('[data-exact-candidate-option="1"]')).toHaveCount(0);
+
+  await page.goto('/ux?scene=protoAway');
+  const away = page.locator('[data-exact-candidate]');
+  await expect(away.locator('button')).toHaveCount(0);
+  await expect(away.locator('[data-exact-candidate-other]')).toContainText('Jugador 2');
+});
+
+// ── Pasada 67: ChooseDungeon y ChooseDungeonRoom ─────────────────────────────
+
+test('la dungeon se elige con el nombre que el motor imprimió, sin tabla propia', async ({ page }) => {
+  await page.goto('/ux?scene=dungeon');
+  const block = page.locator('[data-dungeon]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-dungeon-kind', 'dungeon');
+  await expect(block).toHaveAttribute('data-dungeon-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir dungeon');
+  await expect(block.locator('[data-dungeon-rule]')).toContainText('CR 701.49a');
+  const options = block.locator('[data-dungeon-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toContainText('Lost Mine of Phandelver');
+  await expect(options.nth(1)).toContainText('Dungeon of the Mad Mage');
+  // CR 309.4a: the entry room comes from the preview, not from a client table.
+  await expect(options.nth(0)).toContainText('Cave Entrance');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una dungeon no publicada no es un botón, y la ajena no se pulsa', async ({ page }) => {
+  await page.goto('/ux?scene=dungeonOne');
+  const one = page.locator('[data-dungeon]');
+  await expect(one.locator('[data-dungeon-option]')).toHaveCount(1);
+  await expect(one.locator('[data-dungeon-option="Dungeon of the Mad Mage"]')).toHaveCount(0);
+
+  await page.goto('/ux?scene=dungeonAway');
+  const away = page.locator('[data-dungeon]');
+  await expect(away.locator('button')).toHaveCount(0);
+  await expect(away.locator('[data-dungeon-other]')).toContainText('Jugador 2');
+});
+
+test('la habitación de la dungeon se elige por el índice que publicó el motor', async ({ page }) => {
+  await page.goto('/ux?scene=dungeonRoom');
+  const block = page.locator('[data-dungeon]');
+  await expect(block).toHaveAttribute('data-dungeon-kind', 'room');
+  await expect(block).toHaveAttribute('data-dungeon-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir habitación');
+  await expect(block.locator('[data-dungeon-name]')).toContainText('Lost Mine of Phandelver');
+  const options = block.locator('[data-dungeon-room]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-dungeon-room', '1');
+  await expect(options.nth(0)).toContainText('Cave Entrance');
+  await expect(options.nth(1)).toHaveAttribute('data-dungeon-room', '2');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('una habitación no publicada no es un botón, y la ajena no se pulsa', async ({ page }) => {
+  await page.goto('/ux?scene=dungeonRoomOne');
+  const one = page.locator('[data-dungeon]');
+  await expect(one.locator('[data-dungeon-room]')).toHaveCount(1);
+  await expect(one.locator('[data-dungeon-room="2"]')).toHaveCount(0);
+
+  await page.goto('/ux?scene=dungeonRoomAway');
+  const away = page.locator('[data-dungeon]');
+  await expect(away.locator('button')).toHaveCount(0);
+});
+
+// ── Pasada 68: BeholdChoice, PopulateChoice, SpecializeColor, ChooseRoomDoor ──
+
+test('behold elige exactamente uno del conjunto mixto, en el orden del cable', async ({ page }) => {
+  await page.goto('/ux?scene=behold');
+  const block = page.locator('[data-pick-one]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pick-one-kind', 'behold');
+  await expect(block).toHaveAttribute('data-pick-one-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir qué mostrar');
+  await expect(block.locator('[data-pick-one-rule]')).toContainText('CR 701.4a');
+  const options = block.locator('[data-pick-one-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-pick-one-option', '100');
+  // The second candidate is in hand, not on the battlefield: the set is mixed.
+  await expect(options.nth(1)).toHaveAttribute('data-pick-one-option', '1001');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('behold no ofrece ni cero ni varios, y lo no publicado no es botón', async ({ page }) => {
+  await page.goto('/ux?scene=beholdOne');
+  const block = page.locator('[data-pick-one]');
+  await expect(block.locator('[data-pick-one-option]')).toHaveCount(1);
+  await expect(block.locator('[data-pick-one-option="1001"]')).toHaveCount(0);
+});
+
+test('el behold ajeno se nombra y no ofrece botones', async ({ page }) => {
+  await page.goto('/ux?scene=beholdAway');
+  const block = page.locator('[data-pick-one]');
+  await expect(block).toBeVisible();
+  // CR 400.2: the seat that does not decide sees the published set, without buttons.
+  await expect(block.locator('[data-pick-one-faces] li')).toHaveCount(2);
+  await expect(block.locator('[data-pick-one-other]')).toContainText('Jugador 2');
+  await expect(block.locator('button')).toHaveCount(0);
+});
+
+test('poblar despacha un objetivo, y la ventana es la suya', async ({ page }) => {
+  await page.goto('/ux?scene=populate');
+  const block = page.locator('[data-pick-one]');
+  await expect(block).toHaveAttribute('data-pick-one-kind', 'populate');
+  await expect(block.locator('strong')).toHaveText('Elegir qué ficha poblar');
+  await expect(block.locator('[data-pick-one-rule]')).toContainText('CR 701.47a');
+  const options = block.locator('[data-pick-one-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-pick-one-option', '100');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('especializar nombra los colores que el motor publicó', async ({ page }) => {
+  await page.goto('/ux?scene=specialize');
+  const block = page.locator('[data-specialize]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-specialize-count', '2');
+  await expect(block.locator('[data-specialize-rule]')).toContainText('CR 253.2');
+  const options = block.locator('[data-specialize-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-specialize-option', 'White');
+  await expect(options.nth(0)).toHaveText('Blanco');
+  await expect(options.nth(1)).toHaveText('Negro');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('la puerta de la Room se elige entre los pares publicados, no en producto cartesiano', async ({ page }) => {
+  await page.goto('/ux?scene=roomDoor');
+  const block = page.locator('[data-room-door]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-room-door-count', '2');
+  await expect(block.locator('[data-room-door-rule]')).toContainText('CR 709.5f');
+  const options = block.locator('[data-room-door-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-room-door-option', 'Unlock-Left');
+  await expect(options.nth(0)).toHaveText('Desbloquear la puerta izquierda');
+  await expect(options.nth(1)).toHaveAttribute('data-room-door-option', 'Lock-Right');
+  // The cross product would offer four; the wire published two.
+  await expect(block.locator('[data-room-door-option="Lock-Left"]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un solo par de puerta publicado deja un solo botón', async ({ page }) => {
+  await page.goto('/ux?scene=roomDoorOne');
+  const block = page.locator('[data-room-door]');
+  await expect(block.locator('[data-room-door-option]')).toHaveCount(1);
+  await expect(block.locator('[data-room-door-option="Lock-Right"]')).toHaveCount(0);
+});
+
+test('la especialización y la puerta ajenas no ofrecen botones', async ({ page }) => {
+  await page.goto('/ux?scene=specializeAway');
+  const spec = page.locator('[data-specialize]');
+  await expect(spec).toBeVisible();
+  await expect(spec.locator('button')).toHaveCount(0);
+  await expect(spec.locator('[data-specialize-other]')).toContainText('Jugador 2');
+
+  await page.goto('/ux?scene=roomDoorAway');
+  const door = page.locator('[data-room-door]');
+  await expect(door).toBeVisible();
+  await expect(door.locator('button')).toHaveCount(0);
+  await expect(door.locator('[data-room-door-other]')).toContainText('Jugador 2');
+});
+
+// ── Pasada 69: BlightChoice, HarmonizeTapChoice, UnlessBounceChoice ──
+
+test('blight pone sus contadores en una sola criatura, y las cuenta el motor', async ({ page }) => {
+  await page.goto('/ux?scene=blight');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pick-exactly-one-kind', 'blight');
+  await expect(block).toHaveAttribute('data-pick-exactly-one-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir qué criatura malea');
+  // CR 701.68a: two counters live on ONE creature, so the count is not the list's length.
+  await expect(block.locator('[data-pick-exactly-one-rule]')).toContainText('CR 701.68a');
+  await expect(block.locator('[data-pick-exactly-one-rule]')).toContainText('2 contador');
+  const options = block.locator('[data-pick-exactly-one-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-pick-exactly-one-option', '100');
+  await expect(options.nth(1)).toHaveAttribute('data-pick-exactly-one-option', '105');
+  // No «ninguno»: the wire published no empty answer for blight.
+  await expect(block.locator('[data-pick-exactly-one-decline]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('blight con una sola criatura elegible dibuja un solo botón', async ({ page }) => {
+  await page.goto('/ux?scene=blightOne');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block).toHaveAttribute('data-pick-exactly-one-count', '1');
+  await expect(block.locator('[data-pick-exactly-one-option]')).toHaveCount(1);
+  await expect(block.locator('[data-pick-exactly-one-option="100"]')).toHaveCount(0);
+});
+
+test('armonizar gira una criatura y despacha HarmonizeTap, no SelectCards', async ({ page }) => {
+  await page.goto('/ux?scene=harmonize');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pick-exactly-one-kind', 'harmonize');
+  await expect(block.locator('strong')).toHaveText('Elegir qué criatura girar');
+  await expect(block.locator('[data-pick-exactly-one-rule]')).toContainText('CR 702.180b');
+  const options = block.locator('[data-pick-exactly-one-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-pick-exactly-one-option', '100');
+  await expect(options.nth(1)).toHaveAttribute('data-pick-exactly-one-option', '105');
+  // The wire published `creature_id: null`, so declining exists — and only then.
+  await expect(block.locator('[data-pick-exactly-one-decline]')).toHaveText('No reducir el coste');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('sin la acción nula en el cable, armonizar no ofrece «no reducir»', async ({ page }) => {
+  await page.goto('/ux?scene=harmonizeDecline');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block.locator('[data-pick-exactly-one-option]')).toHaveCount(2);
+  // The UI must not synthesize the way out the engine did not publish.
+  await expect(block.locator('[data-pick-exactly-one-decline]')).toHaveCount(0);
+});
+
+test('«a menos que» devuelve uno de los permanentes publicados, con el recuento del cable', async ({ page }) => {
+  await page.goto('/ux?scene=bounce');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-pick-exactly-one-kind', 'unless-bounce');
+  await expect(block).toHaveAttribute('data-pick-exactly-one-count', '2');
+  await expect(block.locator('strong')).toHaveText('Elegir qué permanente devolver a la mano');
+  await expect(block.locator('[data-pick-exactly-one-rule]')).toContainText('CR 118.12');
+  await expect(block.locator('[data-pick-exactly-one-remaining]')).toContainText('Quedan 2 jugadores');
+  const options = block.locator('[data-pick-exactly-one-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-pick-exactly-one-option', '100');
+  await expect(options.nth(1)).toHaveAttribute('data-pick-exactly-one-option', '101');
+  await expect(block.locator('[data-pick-exactly-one-decline]')).toHaveCount(0);
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un solo permanente publicado deja un botón y ningún recuento que anunciar', async ({ page }) => {
+  await page.goto('/ux?scene=bounceOne');
+  const block = page.locator('[data-pick-exactly-one]');
+  await expect(block.locator('[data-pick-exactly-one-option]')).toHaveCount(1);
+  await expect(block.locator('[data-pick-exactly-one-option="101"]')).toHaveCount(0);
+  await expect(block.locator('[data-pick-exactly-one-remaining]')).toHaveCount(0);
+});
+
+test('las tres ventanas ajenas se nombran y no ofrecen botones', async ({ page }) => {
+  for (const scene of ['blightAway', 'harmonizeAway', 'bounceAway']) {
+    await page.goto(`/ux?scene=${scene}`);
+    const block = page.locator('[data-pick-exactly-one]');
+    await expect(block).toBeVisible();
+    await expect(block.locator('button')).toHaveCount(0);
+    await expect(block.locator('[data-pick-exactly-one-other]')).toContainText('Jugador 2');
+  }
+});
+
+// ── Pasada 70: EffectZoneChoice, HeroEventChoice, DrawnThisTurnTopdeckChoice, SearchPartitionChoice ──
+
+test('el sacrificio lista lo que el motor publicó y exige exactamente una', async ({ page }) => {
+  await page.goto('/ux?scene=sacrifice');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toBeVisible();
+  await expect(block).toHaveAttribute('data-select-from-list-kind', 'effect-zone');
+  await expect(block).toHaveAttribute('data-select-from-list-count', '2');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '1');
+  await expect(block).toHaveAttribute('data-select-from-list-max', '1');
+  await expect(block).toHaveAttribute('data-select-from-list-window', 'false');
+  await expect(block.locator('strong')).toHaveText('Elegir en el campo de batalla');
+  await expect(block.locator('[data-select-from-list-rule]')).toContainText('CR 608.2d');
+  const options = block.locator('[data-select-from-list-option]');
+  await expect(options).toHaveCount(2);
+  await expect(options.nth(0)).toHaveAttribute('data-select-from-list-option', '100');
+  await expect(options.nth(1)).toHaveAttribute('data-select-from-list-option', '105');
+
+  // The confirm button is dead until the engine's own count is met.
+  const confirm = block.locator('[data-select-from-list-confirm]');
+  await expect(confirm).toBeDisabled();
+  await options.nth(1).click();
+  await expect(options.nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(confirm).toBeEnabled();
+  // A second pick would be over the published maximum, so the click does nothing.
+  await options.nth(0).click();
+  await expect(options.nth(0)).toHaveAttribute('aria-pressed', 'false');
+  await expect(confirm).toContainText('Confirmar (1/1)');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un solo candidato de sacrificio sigue siendo una pregunta, no una elección hecha', async ({ page }) => {
+  await page.goto('/ux?scene=sacrificeOne');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block.locator('[data-select-from-list-option]')).toHaveCount(1);
+  await expect(block.locator('[data-select-from-list-option="105"]')).toHaveCount(0);
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeDisabled();
+});
+
+test('«hasta dos» abre la ventana que publicó el motor, con su mínimo', async ({ page }) => {
+  await page.goto('/ux?scene=sacrificeUpTo');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-window', 'true');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '0');
+  await expect(block).toHaveAttribute('data-select-from-list-max', '2');
+  // Zero cards is a real answer here, and the button says so.
+  const confirm = block.locator('[data-select-from-list-confirm]');
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('No elegir ninguna');
+  await block.locator('[data-select-from-list-option="100"]').click();
+  await expect(block.locator('[data-select-from-list-counts]')).toContainText('mínimo 0');
+});
+
+test('el evento de héroe pinta cuántas pide y de qué evento', async ({ page }) => {
+  await page.goto('/ux?scene=heroEvent');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-kind', 'hero-event');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '2');
+  await expect(block).toHaveAttribute('data-select-from-list-max', '2');
+  await expect(block.locator('[data-select-from-list-event]')).toHaveText('ChromeOverload');
+  const options = block.locator('[data-select-from-list-option]');
+  await options.nth(0).click();
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeDisabled();
+  await options.nth(1).click();
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('el evento con mínimo de contribución no acepta cero', async ({ page }) => {
+  await page.goto('/ux?scene=heroEventOpen');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-window', 'true');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '1');
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeDisabled();
+});
+
+test('lo robado este turno enseña la ventana y el coste en vida del cable', async ({ page }) => {
+  await page.goto('/ux?scene=topdeck');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-kind', 'drawn-topdeck');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '1');
+  await expect(block).toHaveAttribute('data-select-from-list-max', '3');
+  await expect(block.locator('[data-select-from-list-rule]')).toContainText('2 vida');
+  const options = block.locator('[data-select-from-list-option]');
+  await expect(options).toHaveCount(3);
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeDisabled();
+  await options.nth(0).click();
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeEnabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('sin vida que pagar, lo robado obliga a mandar todas arriba', async ({ page }) => {
+  await page.goto('/ux?scene=topdeckOne');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-window', 'false');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '3');
+  await expect(block).toHaveAttribute('data-select-from-list-max', '3');
+});
+
+test('el reparto de búsqueda es exactamente primary_count y nombra las dos zonas', async ({ page }) => {
+  await page.goto('/ux?scene=partition');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block).toHaveAttribute('data-select-from-list-kind', 'search-partition');
+  await expect(block).toHaveAttribute('data-select-from-list-min', '1');
+  await expect(block).toHaveAttribute('data-select-from-list-window', 'false');
+  await expect(block.locator('[data-select-from-list-rule]')).toContainText('el campo de batalla');
+  await expect(block.locator('[data-select-from-list-rule]')).toContainText('la mano');
+  const options = block.locator('[data-select-from-list-option]');
+  await expect(options).toHaveCount(2);
+  await options.nth(1).click();
+  // A second pick cannot be queued: the engine only accepts exactly one.
+  await options.nth(0).click();
+  await expect(block.locator('[data-select-from-list-confirm]')).toContainText('Confirmar (1/1)');
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('un reparto con una sola carta encontrada obliga a nombrarla', async ({ page }) => {
+  await page.goto('/ux?scene=partitionOne');
+  const block = page.locator('[data-select-from-list]');
+  await expect(block.locator('[data-select-from-list-option]')).toHaveCount(1);
+  await expect(block.locator('[data-select-from-list-confirm]')).toBeDisabled();
+  await expect(block.locator('[data-select-from-list-option="475"]')).toHaveCount(0);
+});
+
+test('las cuatro ventanas ajenas se leen y no ofrecen botones', async ({ page }) => {
+  // The away block lists exactly the published set, whatever its size.
+  for (const [scene, cards] of [['sacrificeAway', 2], ['heroEventAway', 2], ['topdeckAway', 3], ['partitionAway', 2]] as const) {
+    await page.goto(`/ux?scene=${scene}`);
+    const block = page.locator('[data-select-from-list]');
+    await expect(block).toBeVisible();
+    await expect(block.locator('button')).toHaveCount(0);
+    await expect(block.locator('[data-select-from-list-faces] li')).toHaveCount(cards);
+    await expect(block.locator('[data-select-from-list-other]')).toContainText('Jugador 2');
+  }
+});

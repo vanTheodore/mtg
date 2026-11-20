@@ -68,6 +68,13 @@
   import GiftRecipientPrompt from './GiftRecipientPrompt.svelte';
   import TopOrBottomPrompt from './TopOrBottomPrompt.svelte';
   import ClashOpponentPrompt from './ClashOpponentPrompt.svelte';
+  import ExactCandidatePrompt from './ExactCandidatePrompt.svelte';
+  import DungeonPrompt from './DungeonPrompt.svelte';
+  import PickOnePrompt from './PickOnePrompt.svelte';
+  import SpecializePrompt from './SpecializePrompt.svelte';
+  import RoomDoorPrompt from './RoomDoorPrompt.svelte';
+  import PickExactlyOnePrompt from './PickExactlyOnePrompt.svelte';
+  import SelectFromListPrompt from './SelectFromListPrompt.svelte';
   import ClashPlacementPrompt from './ClashPlacementPrompt.svelte';
   import SideboardPrompt from './SideboardPrompt.svelte';
   import PlayDrawPrompt from './PlayDrawPrompt.svelte';
@@ -126,7 +133,7 @@
   const pass = $derived(actions.find((a) => a.type === 'PassPriority'));
   const cancel = $derived(actions.find((a) => a.type === 'CancelCast'));
   const handled = new Set(['PassPriority', 'CancelCast', 'ChooseTarget', 'DeclareAttackers', 'DeclareBlockers', 'CastSpell', 'PlayLand', 'TapLandForMana', 'ActivateManaSource', 'MulliganDecision', 'SelectCards', 'DecideOptionalCost', 'ChooseModalFace', 'ChooseAlternativeCast', 'ChooseCastingVariant', 'ChoosePermanentTypeSlot', 'RespondToSpliceOffer', 'ChooseMutateMergeSide', 'CipherEncode', 'OrderCostReductions', 'ChooseResolutionOptionalPaymentBranch', 'ChooseGiftRecipient', 'ChooseTopOrBottom', 'ChooseClashOpponent', 'SubmitSideboard', 'ChoosePlayDraw', 'SelectCards']);
-  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'ChooseXValue', 'OrderTriggers', 'ModeChoice', 'AbilityModeChoice', 'SearchChoice', 'DigChoice', 'OptionalEffectChoice', 'OpponentMayChoice', 'PayAmountChoice', 'RevealChoice', 'PairChoice', 'ChooseTokenHost', 'GameOver', 'UnlessPayment', 'UnlessPaymentChooseCost', 'TributeChoice', 'WardSacrificeChoice', 'ChooseStartingPlayer', 'ScryChoice', 'SurveilChoice', 'CrewVehicle', 'SaddleMount', 'EquipTarget', 'StationTarget', 'MultiTargetSelection', 'DistributeAmong', 'MoveCountersDistribution', 'RetargetChoice', 'ChooseObjectsSelection', 'ProliferateChoice', 'TimeTravelChoice', 'CategoryChoice', 'EachPlayerCopyChosenSelection', 'KeepWithinTotalPowerChoice', 'KeepExactPermanentsChoice', 'RemoveCountersChoice', 'CopyRetarget', 'VoteChoice', 'ExploreChoice', 'SeparatePilesChooseOpponent', 'SeparatePilesPartition', 'SeparatePilesChoice', 'MiracleReveal', 'CastOffer', 'MeldPairChoice', 'MeldAttackTargetChoice', 'EntryAttackTargetChoice', 'ReplacementChoice', 'CopyTargetChoice', 'ResolveAllConsent', 'UntapChoice', 'ChooseUntapSubset', 'ExertChoice', 'EnlistChoice', 'PayCost', 'PhyrexianPayment', 'CombatTaxPayment', 'OptionalCostChoice', 'DefilerPayment', 'ChooseFromZoneChoice', 'ModalFaceChoice', 'AlternativeCastChoice', 'CastingVariantChoice', 'ChoosePermanentTypeSlot', 'SpliceOffer', 'MutateMergeChoice', 'CipherEncodeChoice', 'OrderCostReductions', 'ResolutionOptionalPaymentChoice', 'ChooseGiftRecipient', 'TopOrBottomChoice', 'ClashChooseOpponent', 'ClashCardPlacement', 'BetweenGamesSideboard', 'BetweenGamesChoosePlayDraw', 'RippleBottomOrder', 'RevealUntilBottomOrder', 'DigBottomOrder']);
+  const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'ChooseXValue', 'OrderTriggers', 'ModeChoice', 'AbilityModeChoice', 'SearchChoice', 'DigChoice', 'OptionalEffectChoice', 'OpponentMayChoice', 'PayAmountChoice', 'RevealChoice', 'PairChoice', 'ChooseTokenHost', 'GameOver', 'UnlessPayment', 'UnlessPaymentChooseCost', 'TributeChoice', 'WardSacrificeChoice', 'ChooseStartingPlayer', 'ScryChoice', 'SurveilChoice', 'CrewVehicle', 'SaddleMount', 'EquipTarget', 'StationTarget', 'MultiTargetSelection', 'DistributeAmong', 'MoveCountersDistribution', 'RetargetChoice', 'ChooseObjectsSelection', 'ProliferateChoice', 'TimeTravelChoice', 'CategoryChoice', 'EachPlayerCopyChosenSelection', 'KeepWithinTotalPowerChoice', 'KeepExactPermanentsChoice', 'RemoveCountersChoice', 'CopyRetarget', 'VoteChoice', 'ExploreChoice', 'SeparatePilesChooseOpponent', 'SeparatePilesPartition', 'SeparatePilesChoice', 'MiracleReveal', 'CastOffer', 'MeldPairChoice', 'MeldAttackTargetChoice', 'EntryAttackTargetChoice', 'ReplacementChoice', 'CopyTargetChoice', 'ResolveAllConsent', 'UntapChoice', 'ChooseUntapSubset', 'ExertChoice', 'EnlistChoice', 'PayCost', 'PhyrexianPayment', 'CombatTaxPayment', 'OptionalCostChoice', 'DefilerPayment', 'ChooseFromZoneChoice', 'ModalFaceChoice', 'AlternativeCastChoice', 'CastingVariantChoice', 'ChoosePermanentTypeSlot', 'SpliceOffer', 'MutateMergeChoice', 'CipherEncodeChoice', 'OrderCostReductions', 'ResolutionOptionalPaymentChoice', 'ChooseGiftRecipient', 'TopOrBottomChoice', 'ClashChooseOpponent', 'ClashCardPlacement', 'BetweenGamesSideboard', 'BetweenGamesChoosePlayDraw', 'RippleBottomOrder', 'RevealUntilBottomOrder', 'DigBottomOrder', 'ChooseRingBearer', 'ChooseLegend', 'BattleProtectorChoice', 'ChooseDungeon', 'ChooseDungeonRoom', 'BeholdChoice', 'PopulateChoice', 'SpecializeColor', 'ChooseRoomDoor', 'BlightChoice', 'HarmonizeTapChoice', 'UnlessBounceChoice', 'EffectZoneChoice', 'HeroEventChoice', 'DrawnThisTurnTopdeckChoice', 'SearchPartitionChoice']);
   const manaExtras = new Set(['UntapLandForMana', 'BackToManaPayment', 'PayManaAbilityMana', 'ChooseManaColor']);
   const globalActions = $derived(actions.filter((a) => !handled.has(a.type) && actionObjectId(a) === undefined && !isManaAction(a) && !(manaPrompt && manaExtras.has(a.type))));
   const attackDraft = $derived(Object.entries(session.attacks));
@@ -246,6 +253,8 @@
   const resolutionPayment = $derived(session.resolutionPaymentPrompt);
   const giftRecipient = $derived(session.giftRecipientPrompt);
   const topOrBottom = $derived(session.topOrBottomPrompt);
+  // CR 608.2d: cuatro `Select` que publican conjunto y ventana.
+  const selectFromList = $derived(session.selectFromListPrompt);
   const PHASES: Record<string, string> = { Untap: 'Enderezar', Upkeep: 'Mantenimiento', Draw: 'Robar', PreCombatMain: 'Fase principal', BeginCombat: 'Inicio de combate', DeclareAttackers: 'Ataque', DeclareBlockers: 'Bloqueo', CombatDamage: 'Daño de combate', EndCombat: 'Fin de combate', PostCombatMain: 'Fase principal posterior', End: 'Final', Cleanup: 'Limpieza' };
   function manaActionsFor(id?: number) { return manaActions(s, id); }
   function play(action: GameAction) { void session.dispatch(action); }
@@ -366,6 +375,8 @@
       <ResolutionPaymentPrompt />
     {:else if giftRecipient}
       <GiftRecipientPrompt />
+    {:else if selectFromList}
+      <SelectFromListPrompt />
     {:else if topOrBottom}
       <TopOrBottomPrompt />
       <ClashOpponentPrompt />
@@ -373,6 +384,12 @@
       <SideboardPrompt />
       <PlayDrawPrompt />
       <BottomOrderPrompt />
+      <ExactCandidatePrompt />
+      <DungeonPrompt />
+      <PickOnePrompt />
+      <SpecializePrompt />
+      <RoomDoorPrompt />
+      <PickExactlyOnePrompt />
     {:else if scry && scry.player === s.viewer}
       <ScryPrompt />
     {:else if startingPlayer && startingPlayer.player === s.viewer}

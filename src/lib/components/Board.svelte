@@ -301,6 +301,27 @@
   }
 
   const cardWidth = $derived(Math.round(148 * session.cardScale));
+
+  /**
+   * Reparto de Phase: cuando la mesa está en juego y hay sitio (escritorio
+   * Arena), `.layout` se reparte el alto de la región y el registro ocupa la
+   * columna de 320 px que en Phase ocupa su Game Log (`docs/PHASE-UX-PORT.md`,
+   * diferencias 1 y 2). `data-board-grid="split"` sólo se declara cuando los
+   * dos campos son los hijos 2 y 3 de la cuadrícula: con el paso de asiento en
+   * curso, la mano oculta del rival fuera o el cementerio presente, el orden de
+   * los hijos cambia y el reparto se queda en la versión de flujo.
+   */
+  const room = $derived(
+    session.boardStyle === 'arena' && !!snapshot && !needsHandoff ? 'tall' : undefined
+  );
+  /**
+   * El reparto de la columna del tablero sólo se puede fijar cuando los dos
+   * campos son hijos consecutivos de la rejilla: la mano oculta del rival (o el
+   * cementerio, que es el último hijo) desplazan al resto una fila. Decidirlo
+   * con los datos y no con `:nth-child` deja el caso raro en el flujo de
+   * siempre en lugar de en una rejilla mal alineada.
+   */
+  const splitFields = $derived(room !== undefined && !(rivalHand.length > 0));
   const arenaColor = $derived(mode === 'sparks' ? 'red' : mode === 'practice' ? 'white' : 'blue');
 </script>
 
@@ -486,7 +507,7 @@
     </section>
   {:else}
     <svelte:boundary>
-    <main class="layout" data-board-region inert={needsHandoff || session.handDrawerOpen} aria-hidden={needsHandoff}>
+    <main class="layout" data-board-region data-room={room} data-board-grid={splitFields ? 'split' : undefined} inert={needsHandoff || session.handDrawerOpen} aria-hidden={needsHandoff}>
       <!-- While the device changes hands the board is covered and inert, so
            the other seat's hand is not drawn either: the dialog promises that
            the previous player's hand stays hidden, and the count of those
@@ -501,13 +522,19 @@
       {/if}
       <PlayerPanel player={rival!} showHand />
       <Battlefield objects={battlefieldObjects} {metas} owner={opponent} side="opponent" label={`Campo de batalla · Jugador ${opponent + 1}`} />
-      <div class="middle">
-        {#if session.boardStyle === 'arena'}
-          <!-- One preference, two shapes: twelve chips from 641 px up, one
-               line and a sheet below, where a 30 px chip is not tappable. -->
+      {#if session.boardStyle === 'arena'}
+        <!-- One preference, two shapes: the twelve-chip line where the table
+             has width for it, one chip and a sheet where a 30 px chip is not
+             tappable. Like Phase, the step row belongs to the *table*, not to
+             the log column: in the 320 px column it cost 89–131 px of the
+             height the decision needs (`arena-ui.spec.ts` measures that the
+             decision fits whole inside the column). -->
+        <div class="board-phases">
           <PhaseStopBar phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
           <MobilePhaseChip phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
-        {/if}
+        </div>
+      {/if}
+      <div class="middle">
         <div class="center">
           <StackPanel />
           <HistoryPanel compact={session.boardStyle === 'arena'} />
@@ -523,11 +550,24 @@
            cartas hay, en qué paso estamos y el conmutador de control total.
            Va dentro de la rejilla para no tapar cartas en ningún alto. -->
       {#if session.boardStyle === 'arena'}
-        <CoachTip />
-        <StatusDock />
+        <!-- El estado de la mesa va en la misma fila que el asiento propio: son
+             dos chips que Phase dibuja pegados al borde inferior del campo
+             (`Your priority` / `HAND 7` / `CONTROL`), y así no gastan una fila
+             propia entre el campo y la mano (medidos 26 px + separación). -->
+        <div class="table-status">
+          <StatusDock />
+          <CoachTip />
+        </div>
       {/if}
 
-      {#if graveyardObjects.length}
+      <!-- El cementerio como tira de cartas es sólo del tablero Clásico.
+           Medido a 1440×900: con una sola carta ocupaba 198 px de los 630 que
+           tiene la región del tablero, y esa altura es justo la que el reparto
+           de Phase da a los campos (diferencia 2 de docs/PHASE-UX-PORT.md). En
+           Arena la misma información sigue a un clic: la pila del asiento
+           (`ZonePile`) abre el `ZoneViewer` con el cementerio entero, y el
+           contador sigue en la fila del asiento. -->
+      {#if graveyardObjects.length && session.boardStyle !== 'arena'}
         <section class="graveyard" aria-label="Tu cementerio">
           <h2>Cementerio <span class="count">{graveyardObjects.length}</span></h2>
           <div class="grave-scroll">
@@ -699,6 +739,13 @@
   .rival-hand { display: flex; gap: .3rem; overflow: hidden; padding: .2rem; }
   .mini-back { width: 34px; height: 48px; border-radius: 5px; background: repeating-linear-gradient(45deg, var(--surface-3), var(--surface-3) 5px, var(--surface-2) 5px, var(--surface-2) 10px); border: 1px solid var(--line); flex: 0 0 auto; }
   .middle { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.3fr); gap: .8rem; align-items: start; }
+  /* Chips de estado y consejo: comparten fila con el asiento propio. */
+  .board-phases { min-width: 0; }
+  .table-status { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; min-width: 0; flex-wrap: wrap; }
+  /* La fila de chips ocupa una celda de la rejilla: sin esto se dimensiona a su
+     contenido en el eje cruzado y en escritorio (donde es la fila 4) los chips
+     salían pegados a la izquierda de una celda de 1052 px. */
+  .layout > .table-status { justify-self: stretch; }
   .center { display: grid; gap: .8rem; min-width: 0; }
   .graveyard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: .65rem .8rem; }
   .graveyard h2 { margin: 0 0 .4rem; font-size: .9rem; }
