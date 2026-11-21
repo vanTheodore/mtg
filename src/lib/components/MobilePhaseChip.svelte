@@ -66,9 +66,40 @@
   function backdrop(event: MouseEvent) {
     if (event.target === dialog) close();
   }
+
+  /**
+   * El pie del teléfono es una pila: decisión de Phase, ficha de fase y botón de
+   * la mano, de abajo arriba. La ficha se fija contra el borde inferior porque
+   * en el flujo del tablero se quedaba debajo del panel de decisión —medido a
+   * 390×844: la ficha en `y: 522…558` y el panel empezando en 529, así que
+   * `elementFromPoint` sobre la ficha devolvía el panel— y en un teléfono
+   * desplazado ni siquiera estaba en la primera pantalla.
+   *
+   * Su alto se publica como `--phase-chip-h` para que el panel y la reserva de
+   * la región (arena.css) se apoyen en la medida real y no en una estimación:
+   * la ficha mide una línea o dos según el ancho.
+   */
+  let root = $state<HTMLElement | null>(null);
+  $effect(() => {
+    const element = root;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const publish = () => {
+      const height = Math.ceil(element.getBoundingClientRect().height);
+      // Sólo cuenta en el teléfono, que es donde la ficha se fija; en el resto
+      // de anchos no existe y la variable vuelve a 0.
+      document.documentElement.style.setProperty('--phase-chip-h', `${height}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty('--phase-chip-h');
+    };
+  });
 </script>
 
-<section class="phase-chip" data-current-phase={phase}>
+<section class="phase-chip" data-current-phase={phase} bind:this={root}>
   <button
     type="button"
     class="chip"
@@ -126,7 +157,20 @@
      for twelve chips and the sheet would be a second way to do the same thing. */
   .phase-chip { display: none; }
   @media (max-width: 640px) {
-    .phase-chip { display: block; min-width: 0; }
+    /* Fija al pie, en la pila del teléfono: por encima del botón de la mano
+       (44 px + su hueco) y por debajo del panel de decisión, que se aparta con
+       `--phase-chip-h`.
+     *
+     * El z-index va por debajo del panel (30) y por debajo de la hoja de la mano
+       (60), que son las dos piezas que deben poder taparla mientras están
+       abiertas: la ficha no compite con un diálogo. */
+    .phase-chip {
+      display: block;
+      position: fixed;
+      inset: auto .6rem calc(4.6rem + env(safe-area-inset-bottom, 0px)) .6rem;
+      z-index: 28;
+      min-width: 0;
+    }
   }
   .chip {
     display: flex;
@@ -166,6 +210,15 @@
     border-radius: 16px;
     background: var(--chrome-solid, var(--surface));
     color: var(--ink);
+    /* La hoja es una columna: cabecera y nota fijas, la lista de pasos con su
+       propio desplazamiento. Medido a 390×844 antes de esto: la hoja medía
+       118…726 y la lista se salía hasta 883 —el último paso caía 157 px por
+       debajo del diálogo y quedaba recortado, no desplazado—, así que tres de
+       los doce pasos no se podían alcanzar aunque el contenedor dijera que
+       desplazaba. */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   .phase-sheet::backdrop { background: rgb(3 6 10 / 62%); }
   .phase-sheet header {
@@ -173,8 +226,7 @@
     gap: .5rem;
     align-items: center;
     justify-content: space-between;
-    position: sticky;
-    top: 0;
+    flex: 0 0 auto;
     padding: .7rem .8rem .5rem;
     background: var(--chrome-solid, var(--surface));
   }
@@ -198,12 +250,18 @@
   }
   .rows {
     display: grid;
+    align-content: start;
     gap: .2rem;
     margin: 0;
     padding: 0 .5rem .7rem;
     list-style: none;
-    max-height: 60dvh;
+    /* El alto lo decide la hoja: la lista se queda con lo que sobra y desplaza
+       ella sola, así que los doce pasos son alcanzables sin que la cabecera se
+       vaya de la pantalla. */
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .row {
     display: flex;

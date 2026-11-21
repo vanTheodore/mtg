@@ -3930,3 +3930,57 @@ abanico queda centrado (`x: 425…1015`).
   no se tocan: son decisiones de producto ya documentadas.
 - `arena-ui.spec.ts` sigue midiendo `position: sticky` en el rail: la columna
   nueva es `sticky` dentro de su propia celda, así que el contrato no cambia.
+
+## El pie del teléfono, en pila (pasada del movimiento al bloque del registro, 7 nov 2026)
+
+Mover la fila de pasos del rail a la mesa dejó un defecto en el teléfono que sólo
+se ve midiendo con puntero táctil. A 390×844, con la fixture de capturas:
+
+| pieza | antes | después |
+| --- | --- | --- |
+| decisión de Phase | `y: 529…770`, fija | `y: 493…734`, fija |
+| ficha de fase | `y: 522…558`, **en el flujo** | `y: 734…770`, fija |
+| botón de la mano | `y: 775…819`, sticky | igual |
+
+La ficha vivía en el flujo del tablero y el panel de decisión —fijo, `z-index`
+30— la tapaba entera: `elementFromPoint` sobre su centro devolvía
+`decision svelte-…`, así que sus doce paradas no se podían abrir con el dedo, y en
+un tablero desplazado ni siquiera estaba en la primera pantalla. Phase pone la
+ficha en su barra de acción del pie (`GamePage.tsx`: `MobilePhaseChip` dentro de
+`actionRail`, `fixed` abajo); aquí se hace lo mismo y el pie pasa a ser una pila
+de tres piezas que no se tocan:
+
+- `MobilePhaseChip` se fija con `inset: auto .6rem calc(4.6rem + safe-area) .6rem`,
+  `z-index: 28` (por debajo del panel, 30, y de la hoja de la mano, 60).
+- Publica su alto medido como `--phase-chip-h`. El panel de decisión se aparta
+  con esa medida y la reserva de la región (`.layout > padding-bottom`) suma
+  decisión + ficha + mano, así que ninguna carta queda debajo del pie.
+- En el teléfono `.board-phases` pasa a `display: contents`: la barra de doce no
+  se dibuja y el contenedor deja de reservar una fila vacía de 36 px entre el
+  campo rival y el rail.
+
+Y un segundo defecto, encontrado al comprobar la hoja de paradas: la lista no
+desplazaba dentro de su diálogo. Medido a 390×844, el diálogo medía
+`y: 118…726` y la lista se salía hasta `y: 883` —el paso 12 quedaba 157 px **por
+debajo** del diálogo, recortado por el `overflow: hidden` de la capa superior, no
+desplazado—, así que `Dano de combate` en adelante eran inalcanzables. Ahora la
+hoja es una columna flex (cabecera y nota fijas, `ol.rows` con `flex: 1 1 auto;
+min-height: 0; overflow-y: auto`) y los doce pasos se alcanzan desplazando la
+lista: medido, `scrollTop` 168 = máximo y el último botón (`Limpieza`,
+`y: 715`) responde al puntero dentro del diálogo, que acaba en 726.
+
+Verificación de esta pasada:
+
+- `tests/e2e/arena-phone-footer.spec.ts` (nuevo, 9 pruebas, corre con la fixture
+  así que no necesita motor): a 390×844, 320×800, 360×640 y 412×915 mide que las
+  tres piezas estén dentro de la pantalla, en orden, sin solaparse y que
+  respondan en sus dos extremos (no sólo en el centro); que `--phase-chip-h`
+  coincida con el alto real; que la hoja abra desde la ficha, desplace hasta el
+  paso 12 y lo deje dentro del diálogo; que `Escape` devuelva el foco a la ficha;
+  y que a 844×390 la ficha no se dibuje y la decisión siga entera en su columna.
+- `ux-lab` (las tres de barra y ficha), `arena-mobile-drawer`, `hand-overflow`,
+  `arena-hand-fan` y la matriz de viewports siguen verdes en local. De
+  `arena-ui.spec.ts` siguen fallando en este entorno las cuatro que arrancan una
+  **partida real**: aquí no hay WASM (`engine:download` exige un CI verde de
+  `main` para el commit), así que ese contrato lo mide CI, como las veces
+  anteriores.
