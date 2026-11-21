@@ -90,6 +90,13 @@
   import GiftRecipientPrompt from '#lib/components/GiftRecipientPrompt.svelte';
   import TopOrBottomPrompt from '#lib/components/TopOrBottomPrompt.svelte';
   import ClashOpponentPrompt from '#lib/components/ClashOpponentPrompt.svelte';
+  import ExactCandidatePrompt from '#lib/components/ExactCandidatePrompt.svelte';
+  import DungeonPrompt from '#lib/components/DungeonPrompt.svelte';
+  import PickOnePrompt from '#lib/components/PickOnePrompt.svelte';
+  import SpecializePrompt from '#lib/components/SpecializePrompt.svelte';
+  import RoomDoorPrompt from '#lib/components/RoomDoorPrompt.svelte';
+  import PickExactlyOnePrompt from '#lib/components/PickExactlyOnePrompt.svelte';
+  import SelectFromListPrompt from '#lib/components/SelectFromListPrompt.svelte';
   import ClashPlacementPrompt from '#lib/components/ClashPlacementPrompt.svelte';
   import SideboardPrompt from '#lib/components/SideboardPrompt.svelte';
   import PlayDrawPrompt from '#lib/components/PlayDrawPrompt.svelte';
@@ -97,7 +104,7 @@
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway' | 'ringBearer' | 'ringBearerOne' | 'ringBearerAway' | 'legend' | 'legendAway' | 'protoProtector' | 'protoOne' | 'protoAway' | 'dungeon' | 'dungeonOne' | 'dungeonAway' | 'dungeonRoom' | 'dungeonRoomOne' | 'dungeonRoomAway' | 'behold' | 'beholdOne' | 'beholdAway' | 'populate' | 'populateOne' | 'populateAway' | 'specialize' | 'specializeOne' | 'specializeAway' | 'roomDoor' | 'roomDoorOne' | 'roomDoorAway' | 'blight' | 'blightOne' | 'blightAway' | 'harmonize' | 'harmonizeDecline' | 'harmonizeAway' | 'bounce' | 'bounceOne' | 'bounceAway' | 'sacrifice' | 'sacrificeOne' | 'sacrificeUpTo' | 'sacrificeAway' | 'heroEvent' | 'heroEventOpen' | 'heroEventAway' | 'topdeck' | 'topdeckOne' | 'topdeckAway' | 'partition' | 'partitionOne' | 'partitionAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -243,6 +250,54 @@
     { value: 'playDraw', label: 'Jugar o robar' },
     { value: 'playDrawDraw', label: 'Robar primero' },
     { value: 'playDrawAway', label: 'Elección ajena' },
+    { value: 'blight', label: 'Malea (blight)' },
+    { value: 'blightOne', label: 'Una criatura que malea' },
+    { value: 'blightAway', label: 'Blight ajeno' },
+    { value: 'harmonize', label: 'Armonizar (girar)' },
+    { value: 'harmonizeDecline', label: 'Armonizar sin no-reducir' },
+    { value: 'harmonizeAway', label: 'Armonizar ajeno' },
+    { value: 'bounce', label: 'Devolver a la mano' },
+    { value: 'bounceOne', label: 'Un permanente que devolver' },
+    { value: 'bounceAway', label: 'Devolver ajeno' },
+    { value: 'sacrifice', label: 'Sacrificar (una)' },
+    { value: 'sacrificeOne', label: 'Sacrificar, un solo candidato' },
+    { value: 'sacrificeUpTo', label: 'Sacrificar hasta dos' },
+    { value: 'sacrificeAway', label: 'Sacrificio ajeno' },
+    { value: 'heroEvent', label: 'Evento de héroe' },
+    { value: 'heroEventOpen', label: 'Evento con ventana' },
+    { value: 'heroEventAway', label: 'Evento ajeno' },
+    { value: 'topdeck', label: 'Robado este turno' },
+    { value: 'topdeckOne', label: 'Uno solo, y obligatorio' },
+    { value: 'topdeckAway', label: 'Robado ajeno' },
+    { value: 'partition', label: 'Reparto de búsqueda' },
+    { value: 'partitionOne', label: 'Reparto sin reparto' },
+    { value: 'partitionAway', label: 'Reparto ajeno' },
+    { value: 'behold', label: 'Mostrar (behold)' },
+    { value: 'beholdOne', label: 'Un objeto que mostrar' },
+    { value: 'beholdAway', label: 'Behold ajeno' },
+    { value: 'populate', label: 'Poblar' },
+    { value: 'populateOne', label: 'Una ficha que poblar' },
+    { value: 'populateAway', label: 'Poblar ajeno' },
+    { value: 'specialize', label: 'Especializar' },
+    { value: 'specializeOne', label: 'Un color de especialización' },
+    { value: 'specializeAway', label: 'Especializar ajeno' },
+    { value: 'roomDoor', label: 'Puerta de la Room' },
+    { value: 'roomDoorOne', label: 'Una puerta' },
+    { value: 'roomDoorAway', label: 'Puerta ajena' },
+    { value: 'ringBearer', label: 'Portador del Anillo' },
+    { value: 'ringBearerOne', label: 'Un portador del Anillo' },
+    { value: 'ringBearerAway', label: 'Portador ajeno' },
+    { value: 'legend', label: 'Regla de leyendas' },
+    { value: 'legendAway', label: 'Leyendas ajenas' },
+    { value: 'protoProtector', label: 'Protector de batalla' },
+    { value: 'protoOne', label: 'Un protector de batalla' },
+    { value: 'protoAway', label: 'Protector ajeno' },
+    { value: 'dungeon', label: 'Elegir dungeon' },
+    { value: 'dungeonOne', label: 'Una dungeon' },
+    { value: 'dungeonAway', label: 'Dungeon ajena' },
+    { value: 'dungeonRoom', label: 'Habitación de dungeon' },
+    { value: 'dungeonRoomOne', label: 'Una habitación' },
+    { value: 'dungeonRoomAway', label: 'Habitación ajena' },
     { value: 'bottomRipple', label: 'Fondo del estruendo' },
     { value: 'bottomReveal', label: 'Fondo de lo revelado' },
     { value: 'bottomDig', label: 'Fondo de lo mirado' },
@@ -397,6 +452,54 @@
     playDraw: 'BetweenGamesChoosePlayDraw · CR 103.1, jugar o robar',
     playDrawDraw: 'BetweenGamesChoosePlayDraw · sólo robar publicado',
     playDrawAway: 'BetweenGamesChoosePlayDraw · lo decide el otro asiento',
+    ringBearer: 'ChooseRingBearer · CR 701.54a, dos portadores publicados',
+    ringBearerOne: 'ChooseRingBearer · CR 701.54a, sólo el candidato que legal.actions publicó',
+    ringBearerAway: 'ChooseRingBearer · CR 701.54a, el asiento que no decide',
+    legend: 'ChooseLegend · CR 704.5j, el nombre legendario viene del cable',
+    legendAway: 'ChooseLegend · CR 704.5j, la regla de leyendas la resuelve su controlador',
+    protoProtector: 'BattleProtectorChoice · CR 310.11, los candidatos son asientos',
+    protoOne: 'BattleProtectorChoice · CR 310.11, sólo el asiento que legal.actions publicó',
+    protoAway: 'BattleProtectorChoice · CR 310.11, el asiento que no decide',
+    dungeon: 'ChooseDungeon · CR 701.49a, nombres impresos por el motor',
+    dungeonOne: 'ChooseDungeon · CR 701.49a, sólo la dungeon publicada',
+    dungeonAway: 'ChooseDungeon · CR 701.49a, el asiento que no decide',
+    dungeonRoom: 'ChooseDungeonRoom · CR 309.5a, la bifurcación del pasillo',
+    dungeonRoomOne: 'ChooseDungeonRoom · CR 309.5a, una sola salida publicada',
+    dungeonRoomAway: 'ChooseDungeonRoom · CR 309.5a, el asiento que no decide',
+    blight: 'BlightChoice · CR 701.68a, los contadores caen en UNA criatura',
+    blightOne: 'BlightChoice · CR 701.68a, una sola criatura elegible',
+    blightAway: 'BlightChoice · CR 701.68a, el asiento que no decide',
+    harmonize: 'HarmonizeTapChoice · CR 702.180b, girar para reducir',
+    harmonizeDecline: 'HarmonizeTapChoice · CR 702.180b, sin la vía de no reducir',
+    harmonizeAway: 'HarmonizeTapChoice · CR 702.180b, el asiento que no decide',
+    bounce: 'UnlessBounceChoice · CR 118.12, uno de los permanentes publicados',
+    bounceOne: 'UnlessBounceChoice · CR 118.12, un solo permanente',
+    bounceAway: 'UnlessBounceChoice · CR 118.12, el asiento que no decide',
+    sacrifice: 'EffectZoneChoice · CR 701.21a, una carta de las que el motor publicó',
+    sacrificeOne: 'EffectZoneChoice · CR 701.21a, un solo candidato',
+    sacrificeUpTo: 'EffectZoneChoice · CR 608.2d, ventana 0..2 publicada',
+    sacrificeAway: 'EffectZoneChoice · CR 701.21a, el asiento que no decide',
+    heroEvent: 'HeroEventChoice · evento de equipo, dos exactas',
+    heroEventOpen: 'HeroEventChoice · ventana con mínimo de contribución',
+    heroEventAway: 'HeroEventChoice · el asiento que no decide',
+    topdeck: 'DrawnThisTurnTopdeckChoice · ventana 1..3 por la vida disponible',
+    topdeckOne: 'DrawnThisTurnTopdeckChoice · todas obligatorias',
+    topdeckAway: 'DrawnThisTurnTopdeckChoice · el asiento que no decide',
+    partition: 'SearchPartitionChoice · CR 608.2d, una al campo y el resto a la mano',
+    partitionOne: 'SearchPartitionChoice · CR 608.2d, con una sola carta encontrada',
+    partitionAway: 'SearchPartitionChoice · el asiento que no decide',
+    behold: 'BeholdChoice · CR 701.4a, campo y mano en un solo conjunto',
+    beholdOne: 'BeholdChoice · CR 701.4a, exactamente uno',
+    beholdAway: 'BeholdChoice · CR 701.4a, el asiento que no decide',
+    populate: 'PopulateChoice · CR 701.47a, copia una ficha publicada',
+    populateOne: 'PopulateChoice · CR 701.47a, una sola ficha',
+    populateAway: 'PopulateChoice · CR 701.47a, el asiento que no decide',
+    specialize: 'SpecializeColor · CR 253.2, los colores del cable',
+    specializeOne: 'SpecializeColor · CR 253.2, un solo color',
+    specializeAway: 'SpecializeColor · CR 253.2, el asiento que no decide',
+    roomDoor: 'ChooseRoomDoor · CR 709.5f, pares (op, door) publicados',
+    roomDoorOne: 'ChooseRoomDoor · CR 709.5f, un solo par',
+    roomDoorAway: 'ChooseRoomDoor · CR 709.5f, el asiento que no decide',
     bottomRipple: 'RippleBottomOrder · CR 702.60a, el orden es la respuesta',
     bottomReveal: 'RevealUntilBottomOrder · CR 701.20a, lo que no se quedó va al fondo',
     bottomDig: 'DigBottomOrder · CR 701.20e, el resto de lo mirado',
@@ -1140,8 +1243,37 @@
     id, card_id: id, owner: 1, controller: 1, zone: 'Hand', name: 'Carta oculta', display_visible_to_viewer: false
   })) as GameObject[];
 
+  // CR 608.2d: cuatro ventanas `Select` que publican un conjunto y una ventana.
+  // El sacrificio tiene un permanente distinto en cada zona para que la lista
+  // mixta del cable se pueda leer tal cual; las cartas de la mano son las que
+  // el laboratorio ya usa en el descarte y en el beholder.
+  const sacrificeSource = {
+    id: 470, card_id: 470, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Grave Pact', card_types: { core_types: ['Enchantment'] },
+    oracle_text: 'Whenever a creature you control dies, each other player sacrifices a creature.'
+  } as GameObject;
+  const heroEventSource = {
+    id: 471, card_id: 471, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Chrome Overload', card_types: { core_types: ['Scheme'] },
+    oracle_text: 'Each hero sacrifices a tapped creature they control.'
+  } as GameObject;
+  const tintedBears = {
+    id: 475, card_id: 475, owner: 0, controller: 0, zone: 'Battlefield',
+    name: 'Runeclaw Bear', card_types: { core_types: ['Creature'] }, power: 2, toughness: 2,
+    oracle_text: 'A bear. Nothing more.'
+  } as GameObject;
+  const topdeckSource = {
+    id: 472, card_id: 472, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Robaran Mercenaries', card_types: { core_types: ['Creature'] },
+    oracle_text: 'Choose any number of cards you drew this turn. Put those cards on top of your library. For each card you did not put on top of your library, you lose 2 life.'
+  } as GameObject;
+  const cultivate = {
+    id: 473, card_id: 473, owner: 0, controller: 0, zone: 'Stack',
+    name: 'Cultivate', card_types: { core_types: ['Sorcery'] },
+    oracle_text: 'Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.'
+  } as GameObject;
   const objects = $derived(Object.fromEntries(
-    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, cyclonic, deepFiend, wear, lurrus, hawk, dryadArbor, glacialRay, peerThroughDepths, reachThroughMists, gemrazer, llanowarElves, hiddenStrings, invisibleStalker, tormentedSoul, altarsReap, fireCovenant, generousGift, banishingLight, clashRevealed, clashRevealedOther, rippleFirst, rippleSecond, rippleSource, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, ...hand, ...rivalHand]
+    [...viewerField, ...rivalField, ...viewerGrave, ...viewerExile, ...rivalGrave, ...(stackObject ? [stackObject] : []), discardSource, xSpell, modeSpell, tributeCreature, smogbelcherChariot, bonesplitter, orneryTumblewagg, entropicBattlecruiser, frostBreath, grusilda, graveElves, graveBears, forgottenAncient, suspendedVision, suspendedLotus, cataclysm, tragicArrogance, metaCrisis, slaughterTheStrong, raziasPurification, promiseOfLoyalty, rhysEvermore, hexParasite, counterBearer, rivalCounterBearer, twincast, shockCopy, mizzixsMastery, frostBreathCopy, emissaryGreen, councilsJudgment, terminus, graveShock, graveGrowth, bruna, giselaOne, giselaTwo, shinobi, invasion, kalitas, restInPeace, furnaceOfRath, gratuitousViolence, loam, mockingbird, esix, shackles, smoke, dismember, bushwhacker, chalice, duskMangler, coilingRebirth, castingBears, castingBearsAway, testZombie, valki, pathway, cyclonic, deepFiend, wear, lurrus, hawk, dryadArbor, glacialRay, peerThroughDepths, reachThroughMists, gemrazer, llanowarElves, hiddenStrings, invisibleStalker, tormentedSoul, altarsReap, fireCovenant, generousGift, banishingLight, clashRevealed, clashRevealedOther, rippleFirst, rippleSecond, rippleSource, zoneSource, merfolkLooter, rootwaterCommando, rootwaterMatriarch, rivalMerfolkLooter, rivalRootwaterCommando, ...searchPool, sacrificeSource, heroEventSource, tintedBears, topdeckSource, cultivate, ...hand, ...rivalHand]
       .map((object) => [String(object.id), object])
   ));
 
@@ -1705,6 +1837,206 @@
           player: scene === 'topBottomAway' ? 1 : 0,
           object_id: 448,
           ...(scene === 'topBottomNth' ? { top_position: { type: 'NthFromTop', n: 2 } } : {})
+        }
+      };
+    }
+    if (scene.startsWith('ringBearer')) {
+      return {
+        type: 'ChooseRingBearer',
+        data: {
+          player: scene === 'ringBearerAway' ? 1 : 0,
+          // CR 701.54a: dos criaturas que pueden portar el Anillo.
+          candidates: scene === 'ringBearerOne' ? [333] : [333, 334]
+        }
+      };
+    }
+    if (scene.startsWith('legend')) {
+      return {
+        type: 'ChooseLegend',
+        data: {
+          player: scene === 'legendAway' ? 1 : 0,
+          // CR 704.5j: dos Gisela bajo el mismo control.
+          legend_name: 'Gisela, the Broken Blade',
+          candidates: [406, 407]
+        }
+      };
+    }
+    if (scene.startsWith('proto')) {
+      return {
+        type: 'BattleProtectorChoice',
+        data: {
+          player: scene === 'protoAway' ? 1 : 0,
+          battle_id: 409,
+          // CR 310.11: los candidatos son asientos.
+          candidates: scene === 'protoOne' ? [0] : [0, 1]
+        }
+      };
+    }
+    if (scene.startsWith('dungeonRoom')) {
+      return {
+        type: 'ChooseDungeonRoom',
+        data: {
+          player: scene === 'dungeonRoomAway' ? 1 : 0,
+          dungeon: { type: 'LostMineOfPhandelver' },
+          dungeon_name: 'Lost Mine of Phandelver',
+          // CR 309.5a: dos salidas del mismo pasillo, con el texto impreso.
+          options: scene === 'dungeonRoomOne'
+            ? [{ index: 1, name: 'Cave Entrance', text: 'The entrance to the cave is dark.' }]
+            : [
+                { index: 1, name: 'Cave Entrance', text: 'The entrance to the cave is dark.' },
+                { index: 2, name: 'Mine Tunnels', text: 'The tunnels twist and turn.' }
+              ]
+        }
+      };
+    }
+    if (scene.startsWith('blight')) {
+      return {
+        type: 'BlightChoice',
+        data: {
+          player: scene === 'blightAway' ? 1 : 0,
+          // CR 701.68a: dos contadores en UNA criatura, no dos criaturas.
+          counters: 2,
+          creatures: scene === 'blightOne' ? [105] : [100, 105]
+        }
+      };
+    }
+    if (scene.startsWith('harmonize')) {
+      return {
+        type: 'HarmonizeTapChoice',
+        data: {
+          player: scene === 'harmonizeAway' ? 1 : 0,
+          eligible_creatures: [100, 105]
+        }
+      };
+    }
+    if (scene.startsWith('bounce')) {
+      return {
+        type: 'UnlessBounceChoice',
+        data: {
+          player: scene === 'bounceAway' ? 1 : 0,
+          permanents: scene === 'bounceOne' ? [100] : [100, 101],
+          remaining: scene === 'bounce' ? 2 : 1
+        }
+      };
+    }
+    if (scene.startsWith('sacrifice')) {
+      return {
+        type: 'EffectZoneChoice',
+        data: {
+          player: scene === 'sacrificeAway' ? 1 : 0,
+          cards: scene === 'sacrificeOne' ? [100] : [100, 105],
+          count: scene === 'sacrificeUpTo' ? 2 : 1,
+          min_count: scene === 'sacrificeUpTo' ? 0 : 1,
+          up_to: scene === 'sacrificeUpTo',
+          source_id: 470,
+          effect_kind: 'Sacrifice',
+          zone: 'Battlefield',
+          destination: null,
+          count_param: 0,
+          is_cost_payment: false
+        }
+      };
+    }
+    if (scene.startsWith('heroEvent')) {
+      return {
+        type: 'HeroEventChoice',
+        data: {
+          player: scene === 'heroEventAway' ? 1 : 0,
+          event: scene === 'heroEventOpen' ? { type: 'KrangStratagem', data: { remaining: 2 } } : { type: 'ChromeOverload' },
+          event_id: 471,
+          cards: [100, 105],
+          count: 2,
+          up_to: scene === 'heroEventOpen',
+          min: scene === 'heroEventOpen' ? 1 : 0,
+          remaining_heroes: [1],
+          answers: [],
+          copies_pending: 0
+        }
+      };
+    }
+    if (scene.startsWith('topdeck')) {
+      return {
+        type: 'DrawnThisTurnTopdeckChoice',
+        data: {
+          player: scene === 'topdeckAway' ? 1 : 0,
+          cards: [1000, 1001, 1002],
+          count: 3,
+          min_count: scene === 'topdeckOne' ? 3 : 1,
+          life_payment: 2,
+          source_id: 472
+        }
+      };
+    }
+    if (scene.startsWith('partition')) {
+      return {
+        type: 'SearchPartitionChoice',
+        data: {
+          player: scene === 'partitionAway' ? 1 : 0,
+          cards: scene === 'partitionOne' ? [105] : [105, 475],
+          primary_destination: 'Battlefield',
+          primary_count: 1,
+          primary_enter_tapped: false,
+          rest_destination: 'Hand',
+          source_id: 473
+        }
+      };
+    }
+    if (scene.startsWith('behold')) {
+      return {
+        type: 'BeholdChoice',
+        data: {
+          player: scene === 'beholdAway' ? 1 : 0,
+          // CR 701.4a: campo que controlas ∪ mano, en un solo conjunto.
+          choices: scene === 'beholdOne' ? [100] : [100, 1001]
+        }
+      };
+    }
+    if (scene.startsWith('populate')) {
+      return {
+        type: 'PopulateChoice',
+        data: {
+          player: scene === 'populateAway' ? 1 : 0,
+          source_id: 105,
+          // CR 701.47a: fichas que ya controlas, en el orden del cable.
+          valid_tokens: scene === 'populateOne' ? [100] : [100, 101]
+        }
+      };
+    }
+    if (scene.startsWith('specialize')) {
+      return {
+        type: 'SpecializeColor',
+        data: {
+          player: scene === 'specializeAway' ? 1 : 0,
+          object_id: 105,
+          // CR 253.2: los colores publicados, en el orden del cable.
+          options: scene === 'specializeOne' ? ['White'] : ['White', 'Black']
+        }
+      };
+    }
+    if (scene.startsWith('roomDoor')) {
+      return {
+        type: 'ChooseRoomDoor',
+        data: {
+          player: scene === 'roomDoorAway' ? 1 : 0,
+          object_id: 105,
+          // CR 709.5f-g: pares (op, door); `op` va etiquetado por tipo.
+          options: scene === 'roomDoorOne'
+            ? [[{ type: 'Unlock' }, 'Left']]
+            : [[{ type: 'Unlock' }, 'Left'], [{ type: 'Lock' }, 'Right']]
+        }
+      };
+    }
+    if (scene.startsWith('dungeon')) {
+      return {
+        type: 'ChooseDungeon',
+        data: {
+          player: scene === 'dungeonAway' ? 1 : 0,
+          options: scene === 'dungeonOne'
+            ? [{ dungeon: { type: 'LostMineOfPhandelver' }, name: 'Lost Mine of Phandelver', entry_room: { index: 1, name: 'Cave Entrance', text: 'The entrance to the cave is dark.' } }]
+            : [
+                { dungeon: { type: 'LostMineOfPhandelver' }, name: 'Lost Mine of Phandelver', entry_room: { index: 1, name: 'Cave Entrance', text: 'The entrance to the cave is dark.' } },
+                { dungeon: { type: 'DungeonOfTheMadMage' }, name: 'Dungeon of the Mad Mage', entry_room: { index: 1, name: 'Yawning Portal', text: 'The stairs descend into darkness.' } }
+              ]
         }
       };
     }
@@ -2889,7 +3221,52 @@
                                     ]
                                   : scene === 'giftOne'
                                     ? [{ type: 'ChooseGiftRecipient', data: { opponent: 1 } }]
-                                    : scene === 'bottomRipple' || scene === 'bottomAway'
+                                    : scene.startsWith('sacrifice')
+                                      ? (scene === 'sacrificeUpTo'
+                                          ? [[], [100], [105], [100, 105]]
+                                          : (scene === 'sacrificeOne' ? [100] : [100, 105]).map((id) => [id])
+                                        ).map((cards) => ({ type: 'SelectCards', data: { cards } }))
+                                      : scene.startsWith('heroEvent')
+                                        ? (scene === 'heroEventOpen' ? [[100], [100, 105]] : [[100, 105]]).map((cards) => ({ type: 'SelectCards', data: { cards } }))
+                                        : scene.startsWith('topdeck')
+                                          ? [1, 2, 3].map((n) => ({ type: 'SelectCards', data: { cards: [1000, 1001, 1002].slice(0, scene === 'topdeckOne' ? 3 : n) } }))
+                                          : scene.startsWith('partition')
+                                            ? (scene === 'partitionOne' ? [105] : [105, 475]).map((id) => ({ type: 'SelectCards', data: { cards: [id] } }))
+                                            : scene.startsWith('blight')
+                                      ? (scene === 'blightOne' ? [105] : [100, 105]).map((id) => ({ type: 'SelectCards', data: { cards: [id] } }))
+                                      : scene.startsWith('harmonize')
+                                        ? [
+                                            { type: 'HarmonizeTap', data: { creature_id: 100 } },
+                                            { type: 'HarmonizeTap', data: { creature_id: 105 } },
+                                            ...(scene === 'harmonizeDecline' ? [] : [{ type: 'HarmonizeTap', data: { creature_id: null } }])
+                                          ]
+                                        : scene.startsWith('bounce')
+                                          ? (scene === 'bounceOne' ? [100] : [100, 101]).map((id) => ({ type: 'SelectCards', data: { cards: [id] } }))
+                                          : scene.startsWith('behold')
+                                      ? (scene === 'beholdOne' ? [100] : [100, 1001]).map((id) => ({ type: 'SelectCards', data: { cards: [id] } }))
+                                      : scene.startsWith('populate')
+                                        ? (scene === 'populateOne' ? [100] : [100, 101]).map((id) => ({ type: 'ChooseTarget', data: { target: { Object: id } } }))
+                                        : scene.startsWith('specialize')
+                                          ? (scene === 'specializeOne' ? ['White'] : ['White', 'Black']).map((color) => ({ type: 'ChooseSpecializeColor', data: { color } }))
+                                          : scene.startsWith('roomDoor')
+                                            ? (scene === 'roomDoorOne'
+                                                ? [[{ type: 'Unlock' }, 'Left']]
+                                                : [[{ type: 'Unlock' }, 'Left'], [{ type: 'Lock' }, 'Right']]
+                                              ).map(([op, door]) => ({ type: 'ChooseRoomDoor', data: { object_id: 105, op, door } }))
+                                            : scene.startsWith('ringBearer')
+                                      ? (scene === 'ringBearerOne' ? [333] : [333, 334]).map((target) => ({ type: 'ChooseRingBearer', data: { target } }))
+                                      : scene.startsWith('legend')
+                                        ? [406, 407].map((keep) => ({ type: 'ChooseLegend', data: { keep } }))
+                                        : scene.startsWith('proto')
+                                          ? (scene === 'protoOne' ? [0] : [0, 1]).map((protector) => ({ type: 'ChooseBattleProtector', data: { protector } }))
+                                          : scene === 'dungeonRoom' || scene === 'dungeonRoomAway' || scene === 'dungeonRoomOne'
+                                            ? (scene === 'dungeonRoomOne' ? [1] : [1, 2]).map((room_index) => ({ type: 'ChooseDungeonRoom', data: { room_index } }))
+                                            : scene === 'dungeon' || scene === 'dungeonAway' || scene === 'dungeonOne'
+                                              ? (scene === 'dungeonOne'
+                                                  ? [{ dungeon: { type: 'LostMineOfPhandelver' } }]
+                                                  : [{ dungeon: { type: 'LostMineOfPhandelver' } }, { dungeon: { type: 'DungeonOfTheMadMage' } }]
+                                                ).map((data) => ({ type: 'ChooseDungeon', data }))
+                                              : scene === 'bottomRipple' || scene === 'bottomAway'
                                       ? [{ type: 'SelectCards', data: { cards: [532, 531] } }]
                                       : scene === 'bottomReveal' || scene === 'bottomDig'
                                         ? [{ type: 'SelectCards', data: { cards: [531, 532] } }]
@@ -3182,6 +3559,13 @@
         {#if scene.startsWith('clash')}<ClashOpponentPrompt />{/if}
         {#if scene.startsWith('sideboard')}<SideboardPrompt />{/if}
         {#if scene.startsWith('playDraw')}<PlayDrawPrompt />{/if}
+        {#if scene.startsWith('ringBearer') || scene.startsWith('legend') || scene.startsWith('proto')}<ExactCandidatePrompt />{/if}
+        {#if scene.startsWith('behold') || scene.startsWith('populate')}<PickOnePrompt />{/if}
+        {#if scene.startsWith('specialize')}<SpecializePrompt />{/if}
+        {#if scene.startsWith('roomDoor')}<RoomDoorPrompt />{/if}
+        {#if scene.startsWith('blight') || scene.startsWith('harmonize') || scene.startsWith('bounce')}<PickExactlyOnePrompt />{/if}
+        {#if scene.startsWith('sacrifice') || scene.startsWith('heroEvent') || scene.startsWith('topdeck') || scene.startsWith('partition')}<SelectFromListPrompt />{/if}
+        {#if scene.startsWith('dungeon')}<DungeonPrompt />{/if}
         {#if scene.startsWith('bottom')}<BottomOrderPrompt />{/if}
         {#if scene === 'revealAny'}<RevealPrompt />{/if}
         {#if scene === 'unlessRepeat'}<UnlessPrompt />{/if}

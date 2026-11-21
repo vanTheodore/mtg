@@ -107,6 +107,32 @@ laboratorio ahora obedece el mismo interruptor que `Board.svelte`.
 | `castVariantAuth` | `CastingVariantChoice` (permiso) | [claro](permiso-cementerio-claro.jpg) | [oscuro](permiso-cementerio-oscuro.jpg) |
 | `castVariantAway` | `CastingVariantChoice` (ajena) | [claro](variante-ajena-claro.jpg) | [oscuro](variante-ajena-oscuro.jpg) |
 | `unlessRepeat` | `UnlessPayment` (×N) | [claro](mantenimiento-acumulativo-claro.jpg) | [oscuro](mantenimiento-acumulativo-oscuro.jpg) |
+| `behold` | `BeholdChoice` | [claro](behold-claro.jpg) | [oscuro](behold-oscuro.jpg) |
+| `beholdOne` | `BeholdChoice` (un candidato) | [claro](un-behold-claro.jpg) | [oscuro](un-behold-oscuro.jpg) |
+| `beholdAway` | `BeholdChoice` (ajena) | [claro](behold-ajeno-claro.jpg) | [oscuro](behold-ajeno-oscuro.jpg) |
+| `populate` | `PopulateChoice` | [claro](poblar-claro.jpg) | [oscuro](poblar-oscuro.jpg) |
+| `populateOne` | `PopulateChoice` (una ficha) | [claro](un-poblar-claro.jpg) | [oscuro](un-poblar-oscuro.jpg) |
+| `populateAway` | `PopulateChoice` (ajena) | [claro](poblar-ajeno-claro.jpg) | [oscuro](poblar-ajeno-oscuro.jpg) |
+| `specialize` | `SpecializeColor` | [claro](especializar-claro.jpg) | [oscuro](especializar-oscuro.jpg) |
+| `specializeOne` | `SpecializeColor` (un color) | [claro](un-color-especializar-claro.jpg) | [oscuro](un-color-especializar-oscuro.jpg) |
+| `specializeAway` | `SpecializeColor` (ajena) | [claro](especializar-ajeno-claro.jpg) | [oscuro](especializar-ajeno-oscuro.jpg) |
+| `roomDoor` | `ChooseRoomDoor` | [claro](puerta-room-claro.jpg) | [oscuro](puerta-room-oscuro.jpg) |
+| `roomDoorOne` | `ChooseRoomDoor` (un par) | [claro](una-puerta-claro.jpg) | [oscuro](una-puerta-oscuro.jpg) |
+| `roomDoorAway` | `ChooseRoomDoor` (ajena) | [claro](puerta-ajena-claro.jpg) | [oscuro](puerta-ajena-oscuro.jpg) |
+| `ringBearer` | `ChooseRingBearer` | [claro](portador-anillo-claro.jpg) | [oscuro](portador-anillo-oscuro.jpg) |
+| `ringBearerOne` | `ChooseRingBearer` (un candidato) | [claro](un-portador-anillo-claro.jpg) | [oscuro](un-portador-anillo-oscuro.jpg) |
+| `ringBearerAway` | `ChooseRingBearer` (ajena) | [claro](portador-ajeno-claro.jpg) | [oscuro](portador-ajeno-oscuro.jpg) |
+| `legend` | `ChooseLegend` | [claro](regla-leyendas-claro.jpg) | [oscuro](regla-leyendas-oscuro.jpg) |
+| `legendAway` | `ChooseLegend` (ajena) | [claro](leyendas-ajenas-claro.jpg) | [oscuro](leyendas-ajenas-oscuro.jpg) |
+| `protoProtector` | `BattleProtectorChoice` | [claro](protector-batalla-claro.jpg) | [oscuro](protector-batalla-oscuro.jpg) |
+| `protoOne` | `BattleProtectorChoice` (un candidato) | [claro](un-protector-batalla-claro.jpg) | [oscuro](un-protector-batalla-oscuro.jpg) |
+| `protoAway` | `BattleProtectorChoice` (ajena) | [claro](protector-ajeno-claro.jpg) | [oscuro](protector-ajeno-oscuro.jpg) |
+| `dungeon` | `ChooseDungeon` | [claro](elegir-dungeon-claro.jpg) | [oscuro](elegir-dungeon-oscuro.jpg) |
+| `dungeonOne` | `ChooseDungeon` (una) | [claro](una-dungeon-claro.jpg) | [oscuro](una-dungeon-oscuro.jpg) |
+| `dungeonAway` | `ChooseDungeon` (ajena) | [claro](dungeon-ajena-claro.jpg) | [oscuro](dungeon-ajena-oscuro.jpg) |
+| `dungeonRoom` | `ChooseDungeonRoom` | [claro](habitacion-dungeon-claro.jpg) | [oscuro](habitacion-dungeon-oscuro.jpg) |
+| `dungeonRoomOne` | `ChooseDungeonRoom` (una) | [claro](una-habitacion-claro.jpg) | [oscuro](una-habitacion-oscuro.jpg) |
+| `dungeonRoomAway` | `ChooseDungeonRoom` (ajena) | [claro](habitacion-ajena-claro.jpg) | [oscuro](habitacion-ajena-oscuro.jpg) |
 | `clash` | `ClashChooseOpponent` | [claro](choque-claro.jpg) | [oscuro](choque-oscuro.jpg) |
 | `clashOne` | `ClashChooseOpponent` (un candidato) | [claro](un-oponente-choque-claro.jpg) | [oscuro](un-oponente-choque-oscuro.jpg) |
 | `clashAway` | `ClashChooseOpponent` (ajeno) | [claro](choque-ajeno-claro.jpg) | [oscuro](choque-ajeno-oscuro.jpg) |

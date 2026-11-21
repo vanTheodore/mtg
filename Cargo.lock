@@ -485,7 +485,7 @@ dependencies = [
 
 [[package]]
 name = "phase-ast"
-version = "0.128.0"
+version = "0.129.0"
 dependencies = [
  "im",
  "nom",
@@ -499,9 +499,10 @@ dependencies = [
 
 [[package]]
 name = "phase-engine"
-version = "0.128.0"
+version = "0.129.0"
 dependencies = [
  "assert_matches",
+ "crc32fast",
  "flate2",
  "im",
  "indexmap",
@@ -536,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "phase-parser"
-version = "0.128.0"
+version = "0.129.0"
 dependencies = [
  "insta",
  "nom",

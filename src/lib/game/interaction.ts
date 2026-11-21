@@ -5159,3 +5159,849 @@ export function objectSelectLabel(s: EngineSnapshot | null, id: ObjectId): strin
   if (s.state.waiting_for.type === 'DeclareBlockers' && s.state.combat?.attackers.some((a) => a.object_id === id)) return 'Elegir atacante para bloquear';
   return undefined;
 }
+
+// ── Pasada 67: `ChooseRingBearer`, `ChooseLegend`, `BattleProtectorChoice` ──
+//
+// Las tres son la misma pregunta con otro sujeto: «elige uno de estos», con la
+// lista cerrada que el motor publica. Por eso comparten un solo panel
+// (`ExactCandidatePrompt.svelte`) y un solo parser de ofertas: la forma de la
+// respuesta es idéntica (`ExactCandidates` en `human_response_model`), aunque
+// el objeto que se elige sea una criatura, un permanente legendario o un
+// jugador. Ninguna de las tres añade, quita ni reordena candidatos.
+
+/** El sujeto de una elección de candidato exacto. Decide el título del panel. */
+export type ExactCandidateKind = 'ring-bearer' | 'legend' | 'battle-protector';
+
+export type ExactCandidatePrompt = {
+  kind: ExactCandidateKind;
+  player: PlayerId;
+  /**
+   * Lo que el motor publicó, en su orden. Para `ring-bearer` y `legend` son
+   * objetos; para `battle-protector`, jugadores. El panel no los reordena ni
+   * los filtra: un candidato publicado sin acción publicada es una fila sin
+   * botón, no un candidato descartado.
+   */
+  candidates: (ObjectId | PlayerId)[];
+  /** CR 701.54a / CR 704.5j / CR 310.11: el objeto o la batalla en disputa. */
+  sourceId: ObjectId | null;
+  /** CR 310.11: la batalla cuyo protector se elige. Sólo `battle-protector`. */
+  battleId: ObjectId | null;
+  /** CR 704.5j: el nombre legendario que colisiona. Sólo `legend`. */
+  legendName: string | null;
+};
+
+function ints(raw: unknown): number[] {
+  return Array.isArray(raw)
+    ? raw.filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id >= 0)
+    : [];
+}
+
+/**
+ * CR 701.54a: el Anillo te tienta y eliges qué criatura lo porta.
+ * CR 704.5j: la regla de leyendas deja elegir cuál de los legendarios homónimos
+ * se queda; `legend_name` es el nombre que colisiona y se pinta tal cual, sin
+ * deducirlo de los candidatos.
+ * CR 310.11: al morir un planeswalker que protegía una batalla, su controlador
+ * elige qué jugador pasa a protegerla.
+ *
+ * Una sola función para las tres: la forma de la respuesta es la misma y el
+ * motor la clasifica igual (`HumanResponseModel::ExactCandidates`).
+ */
+export function exactCandidatePrompt(snapshot: EngineSnapshot | null): ExactCandidatePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting) return null;
+  const data = waiting.data ?? {};
+  const player = typeof data.player === 'number' ? data.player : snapshot!.viewer;
+  if (waiting.type === 'ChooseRingBearer') {
+    return {
+      kind: 'ring-bearer',
+      player,
+      candidates: ints(data.candidates),
+      sourceId: null,
+      battleId: null,
+      legendName: null
+    };
+  }
+  if (waiting.type === 'ChooseLegend') {
+    return {
+      kind: 'legend',
+      player,
+      candidates: ints(data.candidates),
+      sourceId: null,
+      battleId: null,
+      legendName: typeof data.legend_name === 'string' ? data.legend_name : null
+    };
+  }
+  if (waiting.type === 'BattleProtectorChoice') {
+    return {
+      kind: 'battle-protector',
+      player,
+      // CR 310.11: los candidatos son asientos, no objetos.
+      candidates: ints(data.candidates),
+      sourceId: null,
+      battleId: typeof data.battle_id === 'number' ? data.battle_id : null,
+      legendName: null
+    };
+  }
+  return null;
+}
+
+export type ExactCandidateOffers = {
+  /** `ChooseRingBearer { target }` por objeto, en el orden del cable. */
+  byObject: Map<number, GameAction>;
+  /** `ChooseLegend { keep }` por objeto, en el orden del cable. */
+  byLegend: Map<number, GameAction>;
+  /** `ChooseBattleProtector { protector }` por asiento, en el orden del cable. */
+  byProtector: Map<number, GameAction>;
+};
+
+/**
+ * Las tres respuestas del cable, indexadas por el valor que eligen. Un id que
+ * no es entero, o que el motor no publicó como acción, no produce botón: la
+ * lista de botones es la intersección de candidatos y acciones, no una
+ * reconstrucción de ninguna de las dos. Cuando el cable repite una acción gana
+ * la primera, igual que en `clashOffers`.
+ */
+export function exactCandidateOffers(actions: GameAction[]): ExactCandidateOffers {
+  const byObject = new Map<number, GameAction>();
+  const byLegend = new Map<number, GameAction>();
+  const byProtector = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type === 'ChooseRingBearer') {
+      const target = action.data?.target;
+      if (typeof target === 'number' && Number.isInteger(target) && target >= 0 && !byObject.has(target)) {
+        byObject.set(target, action);
+      }
+      continue;
+    }
+    if (action.type === 'ChooseLegend') {
+      const keep = action.data?.keep;
+      if (typeof keep === 'number' && Number.isInteger(keep) && keep >= 0 && !byLegend.has(keep)) {
+        byLegend.set(keep, action);
+      }
+      continue;
+    }
+    if (action.type === 'ChooseBattleProtector') {
+      const protector = action.data?.protector;
+      if (typeof protector === 'number' && Number.isInteger(protector) && protector >= 0 && !byProtector.has(protector)) {
+        byProtector.set(protector, action);
+      }
+    }
+  }
+  return { byObject, byLegend, byProtector };
+}
+
+/** La acción publicada para un candidato de este prompt, o nada. */
+export function exactCandidateAction(
+  offers: ExactCandidateOffers,
+  prompt: Pick<ExactCandidatePrompt, 'kind'>,
+  candidate: number
+): GameAction | undefined {
+  if (prompt.kind === 'ring-bearer') return offers.byObject.get(candidate);
+  if (prompt.kind === 'legend') return offers.byLegend.get(candidate);
+  return offers.byProtector.get(candidate);
+}
+
+/**
+ * `ChooseDungeon` y `ChooseDungeonRoom` — CR 701.49a y CR 309.5a.
+ *
+ * Van aparte de las tres de arriba porque su lista no son ids: el motor manda
+ * `DungeonPreview` / `RoomPreview` con el nombre y el texto impresos, y la
+ * respuesta lleva un índice o un id de dungeon, no un objeto del campo. Pintar
+ * el nombre desde la tabla de dungeons del cliente sería inventar: el nombre
+ * que se lee es el que vino en el cable.
+ */
+export type DungeonPrompt = {
+  player: PlayerId;
+  /** `null` para `ChooseDungeon`: todavía no hay dungeon elegida. */
+  dungeonName: string | null;
+  /** CR 701.49a: dungeons a los que se puede venturar. */
+  dungeons: { id: unknown; name: string; roomName: string; roomText: string }[];
+  /** CR 309.5a: habitaciones a las que se puede avanzar. */
+  rooms: { index: number; name: string; text: string }[];
+};
+
+export function dungeonPrompt(snapshot: EngineSnapshot | null): DungeonPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting) return null;
+  const data = waiting.data ?? {};
+  const player = typeof data.player === 'number' ? data.player : snapshot!.viewer;
+  const name = (value: unknown) => (typeof value === 'string' ? value : '');
+  if (waiting.type === 'ChooseDungeon') {
+    const raw = Array.isArray(data.options) ? data.options : [];
+    const dungeons = raw.map((option) => {
+      const entry = (option?.entry_room ?? {}) as Record<string, unknown>;
+      return {
+        id: option?.dungeon,
+        name: name(option?.name),
+        // CR 309.4a: la habitación de entrada, que es donde cae el marcador.
+        roomName: name(entry.name),
+        roomText: name(entry.text)
+      };
+    }).filter((option) => option.name !== '');
+    return { player, dungeonName: null, dungeons, rooms: [] };
+  }
+  if (waiting.type === 'ChooseDungeonRoom') {
+    const raw = Array.isArray(data.options) ? data.options : [];
+    const rooms = raw.map((option) => ({
+      index: typeof option?.index === 'number' ? option.index : -1,
+      name: name(option?.name),
+      text: name(option?.text)
+    })).filter((room) => room.index >= 0 && room.name !== '');
+    return {
+      player,
+      dungeonName: typeof data.dungeon_name === 'string' ? data.dungeon_name : null,
+      dungeons: [],
+      rooms
+    };
+  }
+  return null;
+}
+
+export type DungeonOffers = {
+  /** `ChooseDungeon { dungeon }` por el id publicado, comparado como JSON. */
+  byDungeon: Map<string, GameAction>;
+  /** `ChooseDungeonRoom { room_index }`. */
+  byRoom: Map<number, GameAction>;
+};
+
+/**
+ * El índice de una dungeon es un `DungeonId` serializado, y este lado no tiene
+ * por qué conocer su forma interna: se indexa por su JSON canónico, que es
+ * exactamente el valor que el motor publicó en `DungeonPreview.dungeon`.
+ */
+export function dungeonOffers(actions: GameAction[]): DungeonOffers {
+  const byDungeon = new Map<string, GameAction>();
+  const byRoom = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type === 'ChooseDungeon') {
+      const key = JSON.stringify(action.data?.dungeon ?? null);
+      if (!byDungeon.has(key)) byDungeon.set(key, action);
+      continue;
+    }
+    if (action.type === 'ChooseDungeonRoom') {
+      const index = action.data?.room_index;
+      if (typeof index === 'number' && Number.isInteger(index) && !byRoom.has(index)) {
+        byRoom.set(index, action);
+      }
+    }
+  }
+  return { byDungeon, byRoom };
+}
+
+// ── Pasada 68: `BeholdChoice`, `PopulateChoice`, `SpecializeColor`, `ChooseRoomDoor` ──
+//
+// Las cuatro son `ExactCandidates` en `human_response_model`, pero no comparten
+// forma de respuesta y por eso no comparten panel:
+//
+//   BeholdChoice      → `SelectCards { cards: [uno] }`
+//   PopulateChoice    → `ChooseTarget { Object(id) }`
+//   SpecializeColor   → `ChooseSpecializeColor { color }`
+//   ChooseRoomDoor    → `ChooseRoomDoor { object_id, op, door }`
+//
+// Lo que sí comparten es la regla: la lista es la que publicó el motor y la
+// respuesta es uno de sus elementos, sin añadir, quitar ni reordenar.
+
+/** CR 701.4a: «behold a [quality]» — un objeto del conjunto mixto que el motor publicó. */
+export type BeholdPrompt = {
+  player: PlayerId;
+  /** CR 701.4a: campo que controlas ∪ mano, en el orden del cable. */
+  choices: ObjectId[];
+};
+
+/**
+ * CR 701.4a + CR 608.2d: behold elige **exactamente uno** del conjunto mixto y
+ * la respuesta es `SelectCards` con esa única carta. El motor rechaza cualquier
+ * otro tamaño, así que el panel no ofrece «cero» ni «varios».
+ */
+export function beholdPrompt(snapshot: EngineSnapshot | null): BeholdPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'BeholdChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    choices: ints(data.choices)
+  };
+}
+
+export type BeholdOffers = { byCard: Map<number, GameAction> };
+
+/** La acción publicada es `SelectCards` con una sola carta; otra forma no es botón. */
+export function beholdOffers(actions: GameAction[]): BeholdOffers {
+  const byCard = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'SelectCards') continue;
+    const cards = action.data?.cards;
+    if (!Array.isArray(cards) || cards.length !== 1) continue;
+    const id = cards[0];
+    if (typeof id !== 'number' || !Number.isInteger(id) || id < 0) continue;
+    if (!byCard.has(id)) byCard.set(id, action);
+  }
+  return { byCard };
+}
+
+/** CR 701.47a: poblar crea una copia de una ficha que ya controlas. */
+export type PopulatePrompt = {
+  player: PlayerId;
+  sourceId: ObjectId | null;
+  /** CR 701.47a: las fichas que se pueden copiar, en el orden del cable. */
+  tokens: ObjectId[];
+};
+
+export function populatePrompt(snapshot: EngineSnapshot | null): PopulatePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'PopulateChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    sourceId: typeof data.source_id === 'number' ? data.source_id : null,
+    tokens: ints(data.valid_tokens)
+  };
+}
+
+export type PopulateOffers = { byToken: Map<number, GameAction> };
+
+/**
+ * La respuesta es `ChooseTarget` con un `Object(id)`; el motor comprueba que el
+ * id esté en `valid_tokens` y no ofrece nada más. Una acción con otro destino no
+ * es un botón de esta ventana.
+ */
+export function populateOffers(actions: GameAction[]): PopulateOffers {
+  const byToken = new Map<number, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChooseTarget') continue;
+    const target = action.data?.target;
+    if (!target || typeof target !== 'object') continue;
+    const id = (target as { Object?: unknown }).Object;
+    if (typeof id !== 'number' || !Number.isInteger(id) || id < 0) continue;
+    if (!byToken.has(id)) byToken.set(id, action);
+  }
+  return { byToken };
+}
+
+/**
+ * CR 253.2 + CR 702.168a: especializar. Al resolverse, la carta gana un color
+ * adicional y el jugador elige cuál de las opciones que el motor publicó.
+ *
+ * El nombre del color sale de una tabla de cinco entradas cerrada por el propio
+ * enum del motor (`ManaColor`: White, Blue, Black, Red, Green), no de los datos
+ * de la carta: no hay nada que inventar y nada que adivinar. Un valor que no sea
+ * uno de esos cinco se dice sin nombre.
+ */
+export type SpecializePrompt = {
+  player: PlayerId;
+  objectId: ObjectId | null;
+  /** Los colores publicados, en el orden del cable. */
+  options: string[];
+};
+
+const COLOR_NAMES: Record<string, string> = {
+  White: 'Blanco',
+  Blue: 'Azul',
+  Black: 'Negro',
+  Red: 'Rojo',
+  Green: 'Verde'
+};
+
+/** El nombre del color, o `null` si el cable publicó algo que no es un color. */
+export function colorName(value: unknown): string | null {
+  return typeof value === 'string' && value in COLOR_NAMES ? COLOR_NAMES[value]! : null;
+}
+
+export function specializePrompt(snapshot: EngineSnapshot | null): SpecializePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'SpecializeColor') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: typeof data.object_id === 'number' ? data.object_id : null,
+    options: Array.isArray(data.options) ? data.options.filter((option): option is string => typeof option === 'string') : []
+  };
+}
+
+export type SpecializeOffers = { byColor: Map<string, GameAction> };
+
+export function specializeOffers(actions: GameAction[]): SpecializeOffers {
+  const byColor = new Map<string, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChooseSpecializeColor') continue;
+    const color = action.data?.color;
+    if (typeof color !== 'string') continue;
+    if (!byColor.has(color)) byColor.set(color, action);
+  }
+  return { byColor };
+}
+
+/**
+ * CR 709.5f-g: la puerta de una Room. El motor publica pares `(op, door)` y
+ * exige que la respuesta sea **uno de esos pares**, así que la lista de botones
+ * es la de pares publicados, no el producto cartesiano de operaciones y puertas.
+ *
+ * `op` es `Unlock`, `Lock` o `LockOrUnlock`; `door` es `Left` o `Right`. Los
+ * nombres son los del propio enum del motor, traducidos; un valor distinto se
+ * dice sin nombre en vez de inventarle uno.
+ */
+export type RoomDoorPrompt = {
+  player: PlayerId;
+  objectId: ObjectId | null;
+  options: { op: string; door: string }[];
+};
+
+const OP_NAMES: Record<string, string> = {
+  Unlock: 'Desbloquear',
+  Lock: 'Bloquear',
+  LockOrUnlock: 'Bloquear o desbloquear'
+};
+
+const DOOR_NAMES: Record<string, string> = {
+  Left: 'puerta izquierda',
+  Right: 'puerta derecha'
+};
+
+export function opName(value: unknown): string | null {
+  return typeof value === 'string' && value in OP_NAMES ? OP_NAMES[value]! : null;
+}
+
+export function doorName(value: unknown): string | null {
+  return typeof value === 'string' && value in DOOR_NAMES ? DOOR_NAMES[value]! : null;
+}
+
+export function roomDoorPrompt(snapshot: EngineSnapshot | null): RoomDoorPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ChooseRoomDoor') return null;
+  const data = waiting.data ?? {};
+  const raw = Array.isArray(data.options) ? data.options : [];
+  const options: { op: string; door: string }[] = [];
+  const seen = new Set<string>();
+  for (const option of raw) {
+    // The wire sends `[op, door]`; `op` is `{type: "Unlock"}` because `DoorLockOp`
+    // is internally tagged, `door` is the plain `Left` / `Right` string.
+    if (!Array.isArray(option) || option.length < 2) continue;
+    const opRaw = option[0];
+    const op = typeof opRaw === 'string' ? opRaw : (opRaw as { type?: unknown } | null)?.type;
+    const door = option[1];
+    if (typeof op !== 'string' || typeof door !== 'string') continue;
+    const key = `${op}\u0000${door}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    options.push({ op, door });
+  }
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objectId: typeof data.object_id === 'number' ? data.object_id : null,
+    options
+  };
+}
+
+export type RoomDoorOffers = { byPair: Map<string, GameAction> };
+
+/** La misma clave `op\0door` que usa el prompt, para que un par sin acción no sea botón. */
+export function roomDoorOffers(actions: GameAction[]): RoomDoorOffers {
+  const byPair = new Map<string, GameAction>();
+  for (const action of actions) {
+    if (action.type !== 'ChooseRoomDoor') continue;
+    const opRaw = action.data?.op;
+    const op = typeof opRaw === 'string' ? opRaw : (opRaw as { type?: unknown } | null)?.type;
+    const door = action.data?.door;
+    if (typeof op !== 'string' || typeof door !== 'string') continue;
+    const key = `${op}\u0000${door}`;
+    if (!byPair.has(key)) byPair.set(key, action);
+  }
+  return { byPair };
+}
+
+export function roomDoorKey(op: string, door: string): string {
+  return `${op}\u0000${door}`;
+}
+
+/**
+ * La forma que consume `PickOnePrompt.svelte`: una lista de objetos y **la
+ * acción ya resuelta por candidato**, para que el panel no tenga que saber si
+ * detrás hay un `SelectCards` o un `ChooseTarget`.
+ *
+ * Son dos ventanas distintas con dos respuestas distintas, y el motor las
+ * clasifica por separado; unirlas aquí es sólo dibujo, no protocolo: cada id se
+ * empareja con la acción que su propia ventana publica, y las acciones de la
+ * otra ventana jamás aparecen como botón.
+ */
+export type PickOnePrompt = {
+  kind: 'behold' | 'populate';
+  player: PlayerId;
+  options: ObjectId[];
+  actions: Map<number, GameAction>;
+};
+
+export function pickOnePrompt(snapshot: EngineSnapshot | null): PickOnePrompt | null {
+  if (!snapshot) return null;
+  const actions = snapshot.legal.actions ?? [];
+  const behold = beholdPrompt(snapshot);
+  if (behold) {
+    return { kind: 'behold', player: behold.player, options: behold.choices, actions: beholdOffers(actions).byCard };
+  }
+  const populate = populatePrompt(snapshot);
+  if (populate) {
+    return { kind: 'populate', player: populate.player, options: populate.tokens, actions: populateOffers(actions).byToken };
+  }
+  return null;
+}
+
+/** Sólo se despacha una acción que la ventana actual publicó para un candidato suyo. */
+export function pickOneAction(snapshot: EngineSnapshot | null, action: GameAction): boolean {
+  const prompt = pickOnePrompt(snapshot);
+  if (!prompt) return false;
+  return [...prompt.actions.values()].includes(action);
+}
+
+// ── Pasada 69: `BlightChoice`, `HarmonizeTapChoice`, `UnlessBounceChoice` ──
+//
+// Tres formas de «elige exactamente uno», con tres respuestas distintas:
+//
+//   BlightChoice      → `SelectCards { cards: [esa] }`            (CR 701.68a)
+//   HarmonizeTapChoice→ `HarmonizeTap { creature_id }`            (CR 702.180b)
+//   UnlessBounceChoice→ `SelectCards { cards: [ese] }`            (CR 118.12)
+//
+// Las tres publican una lista cerrada y el motor exige exactamente un elemento
+// (o `HarmonizeTap { creature_id: null }` para no reducir, que también publica
+// él). Ninguna de las tres admite una lista de dos, así que el panel no ofrece
+// «cero» ni «varios» salvo donde el motor lo publicó.
+
+/** CR 701.68a: blight N pone N contadores -1/-1 en UNA criatura, no en N. */
+export type BlightPrompt = {
+  player: PlayerId;
+  /** Cuántos contadores -1/-1 lleva la criatura elegida. Se pinta; no se resta. */
+  counters: number;
+  /** Criaturas elegibles, en el orden del cable. */
+  creatures: ObjectId[];
+};
+
+export function blightPrompt(snapshot: EngineSnapshot | null): BlightPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'BlightChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    counters: typeof data.counters === 'number' ? data.counters : 0,
+    creatures: ints(data.creatures)
+  };
+}
+
+/** CR 702.180b: armonizar reduce el coste girando una criatura; el motor publica también «ninguna». */
+export type HarmonizePrompt = {
+  player: PlayerId;
+  creatures: ObjectId[];
+};
+
+export function harmonizePrompt(snapshot: EngineSnapshot | null): HarmonizePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'HarmonizeTapChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    creatures: ints(data.eligible_creatures)
+  };
+}
+
+/** CR 118.12: «a menos que» devuelve UN permanente a la mano, de los publicados. */
+export type UnlessBouncePrompt = {
+  player: PlayerId;
+  permanents: ObjectId[];
+  /** Cuántos jugadores quedan por decidir; el motor lo manda y se pinta. */
+  remaining: number;
+};
+
+export function unlessBouncePrompt(snapshot: EngineSnapshot | null): UnlessBouncePrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'UnlessBounceChoice') return null;
+  const data = waiting.data ?? {};
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    permanents: ints(data.permanents),
+    remaining: typeof data.remaining === 'number' ? data.remaining : 1
+  };
+}
+
+export type PickExactlyOneOffers = {
+  /** `SelectCards` con exactamente una carta, por esa carta. */
+  byCard: Map<number, GameAction>;
+  /** `HarmonizeTap` con una criatura, por esa criatura. */
+  byTap: Map<number, GameAction>;
+  /** `HarmonizeTap { creature_id: null }`: la vía de no reducir. */
+  declineTap: GameAction | null;
+};
+
+/**
+ * Las acciones publicadas para las tres ventanas. `SelectCards` sólo cuenta con
+ * **una** carta: dos cartas es la respuesta de otra ventana y no un botón de
+ * ésta. «Ninguna» no se inventa: sólo existe si el cable publicó
+ * `HarmonizeTap { creature_id: null }`.
+ */
+export function pickExactlyOneOffers(actions: GameAction[]): PickExactlyOneOffers {
+  const byCard = new Map<number, GameAction>();
+  const byTap = new Map<number, GameAction>();
+  let declineTap: GameAction | null = null;
+  for (const action of actions) {
+    if (action.type === 'SelectCards') {
+      const cards = action.data?.cards;
+      if (!Array.isArray(cards) || cards.length !== 1) continue;
+      const id = cards[0];
+      if (typeof id !== 'number' || !Number.isInteger(id) || id < 0) continue;
+      if (!byCard.has(id)) byCard.set(id, action);
+      continue;
+    }
+    if (action.type === 'HarmonizeTap') {
+      const creature = action.data?.creature_id;
+      if (creature === null) {
+        if (!declineTap) declineTap = action;
+        continue;
+      }
+      if (typeof creature !== 'number' || !Number.isInteger(creature) || creature < 0) continue;
+      if (!byTap.has(creature)) byTap.set(creature, action);
+    }
+  }
+  return { byCard, byTap, declineTap };
+}
+
+/** La forma que consume `PickExactlyOnePrompt.svelte`. */
+export type PickExactlyOnePrompt = {
+  kind: 'blight' | 'harmonize' | 'unless-bounce';
+  player: PlayerId;
+  candidates: ObjectId[];
+  /** CR 701.68a: sólo blight, cuántos contadores lleva la elegida. */
+  counters: number | null;
+  /** CR 118.12: sólo unless-bounce, cuántos quedan por decidir. */
+  remaining: number | null;
+  actions: Map<number, GameAction>;
+  /** La vía de «no reducir», sólo si el motor la publicó. */
+  decline: GameAction | null;
+  /** El nombre del objeto que pide la decisión, si el cable lo publica. */
+  sourceId: ObjectId | null;
+};
+
+export function pickExactlyOnePrompt(snapshot: EngineSnapshot | null): PickExactlyOnePrompt | null {
+  if (!snapshot) return null;
+  const actions = snapshot.legal.actions ?? [];
+  const offers = pickExactlyOneOffers(actions);
+  const blight = blightPrompt(snapshot);
+  if (blight) {
+    return {
+      kind: 'blight',
+      player: blight.player,
+      candidates: blight.creatures,
+      counters: blight.counters,
+      remaining: null,
+      actions: offers.byCard,
+      decline: null,
+      sourceId: null
+    };
+  }
+  const harmonize = harmonizePrompt(snapshot);
+  if (harmonize) {
+    return {
+      kind: 'harmonize',
+      player: harmonize.player,
+      candidates: harmonize.creatures,
+      counters: null,
+      remaining: null,
+      actions: offers.byTap,
+      // Only the wire's own null answer; the UI never adds one.
+      decline: offers.declineTap,
+      sourceId: null
+    };
+  }
+  const bounce = unlessBouncePrompt(snapshot);
+  if (bounce) {
+    return {
+      kind: 'unless-bounce',
+      player: bounce.player,
+      candidates: bounce.permanents,
+      counters: null,
+      remaining: bounce.remaining,
+      actions: offers.byCard,
+      decline: null,
+      sourceId: null
+    };
+  }
+  return null;
+}
+
+/** Sólo se despacha una acción que esta ventana publicó. */
+export function pickExactlyOneAction(snapshot: EngineSnapshot | null, action: GameAction): boolean {
+  const prompt = pickExactlyOnePrompt(snapshot);
+  if (!prompt) return false;
+  if (prompt.decline !== null && action === prompt.decline) return true;
+  return [...prompt.actions.values()].includes(action);
+}
+
+// ── Pasada 70: cuatro `Select` que responden `SelectCards` sobre una lista ──
+//
+// El motor clasifica las cuatro como `HumanResponseModel::Select` y las cuatro
+// contestan lo mismo —`SelectCards { cards }` sobre el conjunto que él mismo
+// publica—, pero la ventana que publican no es la misma:
+//
+//   EffectZoneChoice        → `count` exactas, o `min_count..=count` si `up_to`
+//   HeroEventChoice         → `count` exactas, o `min..=count` si `up_to`
+//   DrawnThisTurnTopdeckChoice → `min_count..=count` SIEMPRE (no hay exacta)
+//   SearchPartitionChoice   → exactamente `primary_count`, y ninguna otra
+//
+// El panel no calcula ninguna de esas cotas: las pinta. Y no filtra la lista:
+// las cartas son las que el cable publicó, en su orden.
+
+export type SelectFromListKind = 'effect-zone' | 'hero-event' | 'drawn-topdeck' | 'search-partition';
+
+export type SelectFromListPrompt = {
+  kind: SelectFromListKind;
+  player: PlayerId;
+  /** El conjunto publicado, tal cual llega y en su orden. */
+  cards: ObjectId[];
+  /** Cota inferior del cable. `0` es una respuesta legal, no «sin mínimo». */
+  min: number;
+  /** Cota superior, ya acotada al tamaño del conjunto para no ofrecer de más. */
+  max: number;
+  /**
+   * `true` sólo cuando el motor publica una **ventana**; con `false` la única
+   * respuesta legal es `min === max` y el botón no se habilita antes ni después.
+   */
+  window: boolean;
+  /** El objeto que pide la decisión, si el cable lo publica. */
+  sourceId: ObjectId | null;
+  /** CR 701.68a-style extra: sólo `drawn-topdeck`, la vida por carta que se queda. */
+  lifePayment: number | null;
+  /** Sólo `search-partition`: las zonas del reparto, tal como las nombró el motor. */
+  primaryDestination: string | null;
+  restDestination: string | null;
+  /** Sólo `effect-zone`: la zona de origen publicada. */
+  zone: string | null;
+  /** Sólo `hero-event`: el tipo de evento, para la cabecera. */
+  event: string | null;
+};
+
+const SELECT_FROM_LIST_ZONES: Record<string, string> = {
+  Library: 'la biblioteca',
+  Hand: 'la mano',
+  Battlefield: 'el campo de batalla',
+  Graveyard: 'el cementerio',
+  Exile: 'el exilio',
+  Stack: 'la pila',
+  Command: 'la zona de mando'
+};
+
+function clampCount(value: unknown, fallback: number, size: number): number {
+  const count = typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fallback;
+  return Math.min(count, size);
+}
+
+/**
+ * La ventana `[min, max]` de cada una de las cuatro, leída del cable. Ni una
+ * rama resta en TypeScript: `drawn-topdeck` no calcula cuántas cartas puede
+ * pagar, el motor ya publicó `min_count`; `search-partition` no deduce el
+ * reparto, el motor publicó `primary_count`.
+ */
+export function selectFromListPrompt(snapshot: EngineSnapshot | null): SelectFromListPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting) return null;
+  const data = waiting.data ?? {};
+  const player = typeof data.player === 'number' ? data.player : snapshot!.viewer;
+  const cards = ints(data.cards);
+  const zone = (value: unknown) => (typeof value === 'string' ? SELECT_FROM_LIST_ZONES[value] ?? value : null);
+
+  if (waiting.type === 'EffectZoneChoice') {
+    // Un orden de biblioteca propiedad del dueño tiene su propio bloque
+    // (`BottomOrderPrompt`): aquí sólo entran las selecciones de subconjunto.
+    if (data.mass_library_order !== undefined && data.mass_library_order !== null) return null;
+    const upTo = data.up_to === true;
+    const max = clampCount(data.count, cards.length, cards.length);
+    const min = upTo ? clampCount(data.min_count, 0, max) : max;
+    return {
+      kind: 'effect-zone',
+      player,
+      cards,
+      min,
+      max,
+      window: upTo,
+      sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+      lifePayment: null,
+      primaryDestination: null,
+      restDestination: null,
+      zone: zone(data.zone),
+      event: null
+    };
+  }
+  if (waiting.type === 'HeroEventChoice') {
+    const upTo = data.up_to === true;
+    const max = clampCount(data.count, cards.length, cards.length);
+    const min = upTo ? clampCount(data.min, 0, max) : max;
+    return {
+      kind: 'hero-event',
+      player,
+      cards,
+      min,
+      max,
+      window: upTo,
+      sourceId: typeof data.event_id === 'number' ? (data.event_id as ObjectId) : null,
+      lifePayment: null,
+      primaryDestination: null,
+      restDestination: null,
+      zone: null,
+      event: typeof (data.event as { type?: unknown } | null)?.type === 'string' ? ((data.event as { type: string }).type) : null
+    };
+  }
+  if (waiting.type === 'DrawnThisTurnTopdeckChoice') {
+    const max = clampCount(data.count, cards.length, cards.length);
+    const min = clampCount(data.min_count, 0, max);
+    return {
+      kind: 'drawn-topdeck',
+      player,
+      cards,
+      min,
+      max,
+      // Aunque `min < max`, el cable nunca llama a esto «up to»: la ventana es
+      // la que deja la vida que puedas pagar, y la dice el motor.
+      window: min < max,
+      sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+      lifePayment:
+        typeof data.life_payment === 'number' && Number.isInteger(data.life_payment) && data.life_payment >= 0
+          ? data.life_payment
+          : null,
+      primaryDestination: null,
+      restDestination: null,
+      zone: null,
+      event: null
+    };
+  }
+  if (waiting.type === 'SearchPartitionChoice') {
+    // CR 608.2d: exactamente `primary_count` para el destino primario. El motor
+    // rechaza cualquier otro tamaño, así que aquí no hay ventana.
+    const count = clampCount(data.primary_count, cards.length, cards.length);
+    return {
+      kind: 'search-partition',
+      player,
+      cards,
+      min: count,
+      max: count,
+      window: false,
+      sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
+      lifePayment: null,
+      primaryDestination: zone(data.primary_destination),
+      restDestination: zone(data.rest_destination),
+      zone: null,
+      event: null
+    };
+  }
+  return null;
+}
+
+/** Si el motor aceptaría esta respuesta tal como está. */
+export function selectFromListReady(prompt: SelectFromListPrompt, selected: ObjectId[]): boolean {
+  if (new Set(selected).size !== selected.length) return false;
+  if (!selected.every((id) => prompt.cards.includes(id))) return false;
+  return selected.length >= prompt.min && selected.length <= prompt.max;
+}
+
+/**
+ * El botón, sólo cuando la selección cae dentro de la ventana publicada. La
+ * lista vacía no se inventa como «ninguna»: sólo pasa el filtro cuando el
+ * propio motor publicó un mínimo de cero.
+ */
+export function selectFromListAction(prompt: SelectFromListPrompt, selected: ObjectId[]): GameAction | null {
+  return selectFromListReady(prompt, selected) ? selectCardsAction(selected) : null;
+}
