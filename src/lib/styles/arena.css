@@ -982,6 +982,14 @@
   .app.app[data-board-style="arena"] .stop-bar {
     display: none;
   }
+  /* En el teléfono la banda de fases no ocupa fila: la barra no se dibuja y la
+     ficha se fija al pie, así que el contenedor no debe dejar su hueco de
+     rejilla entre el campo rival y el rail. `display: contents` quita la caja y
+     deja la ficha (que sigue en el DOM y se mide) fuera del flujo. */
+  .app.app[data-board-style="arena"] .layout > .board-phases,
+  .app.app[data-board-style="arena"] .board > .board-phases {
+    display: contents;
+  }
   .app.app[data-board-style="arena"] .stop-bar .caption {
     font-size: .7rem;
   }
@@ -1088,12 +1096,13 @@
        desplaza. */
     align-content: start;
     grid-auto-rows: max-content;
-    /* El panel fijo tapa el final de la región: se le reserva su alto medido
-       (más el botón de la mano) para que todo se pueda traer a la vista. */
-    padding-bottom: calc(var(--decision-h, 8rem) + 4.9rem);
+    /* El pie fijo tapa el final de la región: se le reserva su alto medido
+       —decisión + ficha de fase + botón de la mano— para que todo se pueda
+       traer a la vista. `--phase-chip-h` lo publica la propia ficha. */
+    padding-bottom: calc(var(--decision-h, 8rem) + var(--phase-chip-h, 2.6rem) + 4.9rem);
     /* El teclado también: lo que se enfoca se trae a la vista por encima del
-       panel, nunca debajo de él. */
-    scroll-padding-block-end: calc(var(--decision-h, 8rem) + 4.9rem);
+       pie, nunca debajo de él. */
+    scroll-padding-block-end: calc(var(--decision-h, 8rem) + var(--phase-chip-h, 2.6rem) + 4.9rem);
   }
   /* Hacia abajo también: en el teléfono girado el `.layout` es una columna
      flex y los campos se encogían a 12 px (medido) en vez de dejar que la
@@ -1109,8 +1118,12 @@
     left: .6rem;
     right: .6rem;
     /* Por encima del botón de la mano, que medido ocupa de 731 a 775 en
-       320×800 (44 px de botón + 4,8 de hueco + 16 de métricas + relleno). */
-    bottom: calc(4.6rem + env(safe-area-inset-bottom, 0px));
+       320×800 (44 px de botón + 4,8 de hueco + 16 de métricas + relleno), y por
+       encima de la ficha de fase, que en el teléfono se fija justo ahí: el pie
+       es una pila de tres piezas —decisión, ficha, mano— y ninguna tapa a la
+       otra. Medido antes de mover la ficha: a 390×844 el panel empezaba en 529
+       y la ficha vivía en 522…558, así que el panel se la comía entera. */
+    bottom: calc(var(--phase-chip-h, 2.6rem) + 4.6rem + env(safe-area-inset-bottom, 0px));
     z-index: 30;
     max-height: calc(100dvh - 8rem);
     /* El panel no desplaza entero: desplaza su explicación. Los botones con la
