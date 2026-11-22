@@ -60,9 +60,9 @@ function represented(): string[] {
 }
 
 test('the engine still declares the variants this port counts against', () => {
-  // Pinned 0.128.0 (`576e2bf5`): 148 variants. A pin bump that changes this number
+  // Pinned 0.130.0 (`d01766e1`): 149 variants. A pin bump that changes this number
   // has to move this constant and the docs' census together.
-  expect(variants().length).toBe(148);
+  expect(variants().length).toBe(149);
 });
 
 test('every represented name is a real variant of the pinned engine', () => {
@@ -73,7 +73,7 @@ test('every represented name is a real variant of the pinned engine', () => {
 
 test('the represented set is exactly the number the docs publish', () => {
   // If a pass adds a view, it adds the name here and this number, together.
-  expect(represented().length).toBe(109);
+  expect(represented().length).toBe(110);
   // Duplicates would silently undercount the coverage.
   expect(new Set(represented()).size).toBe(represented().length);
 });
@@ -83,7 +83,7 @@ test('the last passes are registered, not just rendered', () => {
   // exist: the block drew fine in the lab because `/ux` mounts components itself,
   // so nothing caught the missing names.
   const names = represented();
-  for (const name of ['EntryAttackTargetChoice', 'ReplacementChoice', 'CopyTargetChoice', 'ResolveAllConsent', 'UntapChoice', 'ChooseUntapSubset', 'ExertChoice', 'EnlistChoice', 'PayCost', 'PhyrexianPayment', 'CombatTaxPayment', 'OptionalCostChoice', 'DefilerPayment', 'ChooseFromZoneChoice', 'ModalFaceChoice', 'AlternativeCastChoice', 'CastingVariantChoice', 'ChoosePermanentTypeSlot', 'SpliceOffer', 'MutateMergeChoice', 'CipherEncodeChoice', 'OrderCostReductions', 'ResolutionOptionalPaymentChoice', 'RippleBottomOrder', 'RevealUntilBottomOrder', 'DigBottomOrder', 'ChooseRingBearer', 'ChooseLegend', 'BattleProtectorChoice', 'ChooseDungeon', 'ChooseDungeonRoom', 'BeholdChoice', 'PopulateChoice', 'SpecializeColor', 'ChooseRoomDoor', 'BlightChoice', 'HarmonizeTapChoice', 'UnlessBounceChoice', 'EffectZoneChoice', 'HeroEventChoice', 'DrawnThisTurnTopdeckChoice', 'SearchPartitionChoice']) {
+  for (const name of ['EntryAttackTargetChoice', 'ReplacementChoice', 'CopyTargetChoice', 'ResolveAllConsent', 'UntapChoice', 'ChooseUntapSubset', 'ExertChoice', 'EnlistChoice', 'PayCost', 'PhyrexianPayment', 'CombatTaxPayment', 'OptionalCostChoice', 'DefilerPayment', 'ChooseFromZoneChoice', 'ModalFaceChoice', 'AlternativeCastChoice', 'CastingVariantChoice', 'ChoosePermanentTypeSlot', 'SpliceOffer', 'MutateMergeChoice', 'CipherEncodeChoice', 'OrderCostReductions', 'ResolutionOptionalPaymentChoice', 'RippleBottomOrder', 'RevealUntilBottomOrder', 'DigBottomOrder', 'ChooseRingBearer', 'ChooseLegend', 'BattleProtectorChoice', 'ChooseDungeon', 'ChooseDungeonRoom', 'BeholdChoice', 'PopulateChoice', 'SpecializeColor', 'ChooseRoomDoor', 'BlightChoice', 'HarmonizeTapChoice', 'UnlessBounceChoice', 'EffectZoneChoice', 'HeroEventChoice', 'DrawnThisTurnTopdeckChoice', 'SearchPartitionChoice', 'ReplacementDecisionOrder']) {
     expect(names).toContain(name);
   }
 });

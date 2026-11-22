@@ -4413,8 +4413,13 @@ fn scan_ability_condition(x: &AbilityCondition, mode: ScanMode) -> Axes<'_> {
             filter,
             use_lki: _,
             subject_slot: _,
+            subject,
         } => {
             let mut acc = Axes::NONE;
+            // CR 603.2: `EventSource` reads the object the current trigger event
+            // names; `Target` (the default) is declared state. One axes mapping for
+            // every `ObjectScope`, shared with the quantity scan.
+            acc = acc.or(scan_object_scope(subject));
             acc = acc.or(scan_target_filter(
                 filter,
                 FilterReadContext::SnapshotOrEvent,
@@ -4507,6 +4512,20 @@ fn scan_ability_condition(x: &AbilityCondition, mode: ScanMode) -> Axes<'_> {
         AbilityCondition::WasStartingPlayer { controller, .. } => {
             let mut acc = Axes::NONE;
             acc = acc.or(scan_controller_ref(controller));
+            acc
+        }
+        // Turn-structure ledger read (projected, cf. the static last-turn
+        // analog) plus the endpoint axes (`WasStartingPlayer` pattern).
+        AbilityCondition::PlayerAttackedPlayer { attacker, defender } => {
+            // The uncollapsed this-turn ledger is not a `HistoryMember`;
+            // mirrors `SpellCastWithVariantThisTurn` (projected, no history
+            // axis).
+            let mut acc = Axes {
+                projected: true,
+                ..Axes::NONE
+            };
+            acc = acc.or(scan_player_scope(attacker));
+            acc = acc.or(scan_player_scope(defender));
             acc
         }
         AbilityCondition::SpellCastWithVariantThisTurn { variant: _ } => Axes {
@@ -5466,9 +5485,10 @@ fn scan_trigger_constraint(x: &TriggerConstraint, mode: ScanMode) -> Axes<'_> {
         }
         // Turn/phase windows, a draw ordinal, and class levels: literal thresholds only. No
         // filter, no board aggregate, no player resource.
-        TriggerConstraint::NthDrawThisTurn { n: _ } => {
-            Axes::history_of(HistoryMember::CardsDrawnThisTurn)
-        }
+        TriggerConstraint::NthDrawThisTurn {
+            n: _,
+            comparator: _,
+        } => Axes::history_of(HistoryMember::CardsDrawnThisTurn),
         TriggerConstraint::OnlyDuringYourTurn
         | TriggerConstraint::OnlyDuringOpponentsTurn
         | TriggerConstraint::OnlyDuringYourMainPhase
@@ -5540,7 +5560,12 @@ fn scan_trigger_condition(x: &TriggerCondition, mode: ScanMode) -> Axes<'_> {
             history: HistoryReads::of(HistoryMember::TurnNumber),
             that_player: false,
         },
-        TriggerCondition::SourceAttackedThisCombat => Axes {
+        TriggerCondition::SourceAttackedThisCombat
+        | TriggerCondition::AttackersDeclaredCount {
+            subject: AttackersDeclaredCountSubject::CurrentCombat { exclude_source: _ },
+            comparator: _,
+            count: _,
+        } => Axes {
             event: false,
             sibling: SiblingReads::None,
             projected: true,
@@ -5919,18 +5944,19 @@ fn scan_trigger_condition(x: &TriggerCondition, mode: ScanMode) -> Axes<'_> {
         },
         TriggerCondition::ChosenLabelIs { label: _ } => Axes::NONE,
         TriggerCondition::AttackersDeclaredCount {
-            subject,
+            subject:
+                AttackersDeclaredCountSubject::Controller {
+                    scope: player,
+                    filter,
+                }
+                | AttackersDeclaredCountSubject::AttackTarget {
+                    controller: player,
+                    attacked: _,
+                    filter,
+                },
             comparator: _,
             count: _,
         } => {
-            let (player, filter) = match subject {
-                AttackersDeclaredCountSubject::Controller { scope, filter } => (scope, filter),
-                AttackersDeclaredCountSubject::AttackTarget {
-                    controller,
-                    attacked: _,
-                    filter,
-                } => (controller, filter),
-            };
             let mut acc = Axes::CONSERVATIVE.or(scan_controller_ref(player));
             if let Some(filter) = filter {
                 acc = acc.or(scan_target_filter(
@@ -6255,6 +6281,20 @@ fn scan_static_condition(x: &StaticCondition, mode: ScanMode) -> Axes<'_> {
             history: HistoryReads::NONE,
             that_player: false,
         },
+        // Turn-structure ledger read (same class as the last-turn analog
+        // above) plus the endpoint axes (WasStartingPlayer pattern).
+        StaticCondition::PlayerAttackedPlayer { attacker, defender } => {
+            // The uncollapsed this-turn ledger is not a `HistoryMember`;
+            // mirrors `SpellCastWithVariantThisTurn` (projected, no history
+            // axis).
+            let mut acc = Axes {
+                projected: true,
+                ..Axes::NONE
+            };
+            acc = acc.or(scan_controller_ref(attacker));
+            acc = acc.or(scan_controller_ref(defender));
+            acc
+        }
         StaticCondition::OpponentPoisonAtLeast { count: _ } => Axes {
             event: false,
             sibling: SiblingReads::None,
@@ -6293,7 +6333,7 @@ fn scan_static_condition(x: &StaticCondition, mode: ScanMode) -> Axes<'_> {
             that_player: false,
         },
         StaticCondition::SourceExertedThisTurn => Axes::CONSERVATIVE,
-        StaticCondition::SourceHasDealtDamage => Axes {
+        StaticCondition::SourceHasDealtDamage { kind: _ } => Axes {
             event: false,
             sibling: SiblingReads::None,
             projected: true,
@@ -6540,6 +6580,7 @@ fn scan_filter_prop(x: &FilterProp, mode: ScanMode) -> Axes<'_> {
             defender.as_ref().map_or(Axes::NONE, scan_controller_ref)
         }
         FilterProp::ProtectorMatches { controller } => scan_controller_ref(controller),
+        FilterProp::CastThisTurn { caster } => scan_controller_ref(caster),
         FilterProp::Owned { controller } => scan_controller_ref(controller),
         FilterProp::AttachedTo { to: AttachmentReferent::Player { player } } => scan_controller_ref(player),
         FilterProp::HasAttachment { controller, .. } => {
@@ -7595,6 +7636,7 @@ fn ability_definition_axes(def: &AbilityDefinition, mode: ScanMode) -> Axes<'_> 
         // and no runtime path reaches such a tree. See
         // `types::ability::UnloweredGuard`.)
         unlowered_guard: _,
+        linked_exile_return: _,
         face_down_in_exile: _,
         granting_object: _,
         // CR 113.2c + CR 602.5c: re-donation lineage; a usage-key input, not a
@@ -8672,6 +8714,10 @@ fn scan_continuous_modification(m: &ContinuousModification, mode: ScanMode) -> A
         | ContinuousModification::AssignDamageAsThoughUnblocked
         | ContinuousModification::AssignNoCombatDamage
         | ContinuousModification::ChangeController
+        // CR 613.1b + CR 725.5: designation-anchored control reads a scalar
+        // designation (`state.monarch`), no growing aggregate — read-free
+        // alongside its `ChangeController` sibling.
+        | ContinuousModification::ChangeControllerToDesignation { .. }
         | ContinuousModification::SetBasicLandType { .. }
         | ContinuousModification::SetChosenBasicLandType
         | ContinuousModification::SetChosenName
@@ -8715,6 +8761,7 @@ fn scan_resolved_continuous_static(
         per_player_condition,
         attack_defended,
         bypass_beneficiary,
+        bound_actor,
         // Restricts where `affected` is evaluated; `affected`'s own scan carries any read.
         affected_zone: _,
         // A location, a flag, a label, a fixed id, or an exemption over the protected object's
@@ -8795,6 +8842,11 @@ fn scan_resolved_continuous_static(
     }
     if let Some(beneficiary) = bypass_beneficiary {
         acc = acc.or(scan_controller_ref(beneficiary));
+    }
+    // Same controller-role vocabulary as the beneficiary above: the bound
+    // subject role is resolved at install against the resolving ability.
+    if let Some(actor) = bound_actor {
+        acc = acc.or(scan_controller_ref(actor));
     }
     if fail_closed {
         acc = Axes::CONSERVATIVE.or(acc);
@@ -9126,8 +9178,6 @@ fn scan_activation_restriction(
         | ActivationRestriction::DuringYourTurn
         | ActivationRestriction::DuringYourUpkeep
         | ActivationRestriction::DuringCombat
-        | ActivationRestriction::BeforeAttackersDeclared
-        | ActivationRestriction::BeforeCombatDamage
         | ActivationRestriction::OnlyOnceEachTurn
         | ActivationRestriction::OnlyOnce
         | ActivationRestriction::MaxTimesEachTurn { count: _ }
@@ -9144,6 +9194,16 @@ fn scan_activation_restriction(
             maximum: _,
         }
         | ActivationRestriction::MatchesCardCastTiming => Axes::NONE,
+        // The turn's step tally: a bare window closes once the first combat phase has ended.
+        ActivationRestriction::BeforeAttackersDeclared
+        | ActivationRestriction::BeforeCombatDamage => Axes {
+            event: false,
+            sibling: SiblingReads::None,
+            projected: true,
+            source_counters: false,
+            history: HistoryReads::NONE,
+            that_player: false,
+        },
     }
 }
 
@@ -9375,6 +9435,7 @@ pub(crate) fn transient_effect_history(
         id: _,
         source_id: _,
         controller: _,
+        bound_actor: _,
         timestamp: _,
         affected_recipient: _,
         duration_subject: _,
@@ -11732,11 +11793,14 @@ mod tests {
             matches!(
                 &effect,
                 Effect::Pump {
-                    power: PtValue::Quantity(QuantityExpr::Ref {
-                        qty: QuantityRef::PropertyAggregate(_)
-                    }),
+                    power: PtValue::Quantity(QuantityExpr::ClampMin { inner, minimum: 0 }),
                     ..
-                }
+                } if matches!(
+                    **inner,
+                    QuantityExpr::Ref {
+                        qty: QuantityRef::PropertyAggregate(_)
+                    }
+                )
             ),
             "fixture pin: the attack pump's `power` must be a `QuantityRef::PropertyAggregate` \
              (\"the greatest mana value among artifacts you control\"), else the paired \
