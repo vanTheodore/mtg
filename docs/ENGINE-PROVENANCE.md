@@ -27,6 +27,15 @@ la suite Chromium acompañan la comprobación. La autoridad de
 legalidad, estados de juego y visibilidad pertenece a Rust/WASM, no
 a los componentes Svelte.
 
+## Lo que el motor compila dentro y no está en `src/`
+
+`engine:verify` hashea `crates/phase-engine/src`; **no** acredita que un `include_str!` que apunta
+fuera del árbol resuelva. Desde v0.130.0 la librería compila `crates/phase-engine/data/basic-land-art-v1.json`
+(`game/deck_loading.rs::assign_basic_land_art`) además de `data/ai_commander_decks.json`
+(`ai_deck_manifest.rs`); sin el primero no compila ni el WASM ni la paridad. Esa comprobación la hace
+`src/lib/game/__tests__/engine-embedded-files.test.ts`, que recorre los tres árboles importados y
+resuelve cada ruta literal, con las tres excepciones heredadas declaradas y su razón.
+
 ## Adaptaciones locales deliberadas
 
 - `crates/mtg-engine-wasm` es un puente ABI C/JSON de Mesa, no el cliente

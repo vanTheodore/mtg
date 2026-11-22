@@ -27,6 +27,40 @@ La única alta del motor es `game/scoped_unless_poll.rs` (143 líneas): el estad
 sustituciones con alcance de jugador («a menos que» sobre varios jugadores). `game/mod.rs` ya lo
 declara, así que sin el fichero el `mod` no compila. Cero bajas.
 
+## El árbol que casi se queda fuera: `crates/engine/data/`
+
+El primer intento de este pin **rompió CI en los tres jobs que compilan Rust**, con el mismo error:
+
+```
+error: couldn't read `crates/phase-engine/src/game/../../data/basic-land-art-v1.json`:
+       No such file or directory (os error 2)
+ --> crates/phase-engine/src/game/deck_loading.rs:2512
+```
+
+`basic-land-art-v1.json` (11 489 B) es **nuevo en v0.130.0** y no vive en `src/`: vive en
+`crates/engine/data/`, junto al `ai_commander_decks.json` que Mesa importaba desde el primer pin. Y
+no lo usa una prueba: lo usa `assign_basic_land_art` —código de **librería** que compila el build WASM,
+la paridad y las regresiones—. Un `include_str!` de librería que no resuelve no es un aviso: es un
+crate que no compila.
+
+Por qué no lo cazó nada en local, que es lo que importa para la próxima vez:
+
+- `engine:verify` hashea los ficheros **que hay** en `crates/phase-engine/src`; una ruta que apunta
+  fuera y no existe no cambia el digest. El digest era correcto — y el motor, incompleto.
+- `bun test src/lib` no compila Rust, y el job `static` tampoco.
+- El árbol local no tiene `cargo`, así que el error sólo se podía ver en CI: dos jobs de dos minutos
+  por intento, con el log detrás de un blob que en este entorno devuelve `EOF`.
+
+Corregido importando el fichero, y **cerrado el agujero con una prueba** que no depende de tener
+toolchain: `src/lib/game/__tests__/engine-embedded-files.test.ts` recorre los tres árboles
+importados, quita comentarios (`source_census.rs` *cita* `include_str!("x.rs")` en su documentación)
+y resuelve cada `include_str!`/`include_bytes!` contra el árbol local. Las tres rutas que ya venían
+rotas de antes se declaran con su razón y la prueba falla si esa lista envejece en cualquier
+dirección: si aparece una nueva, y también si una de las declaradas deja de faltar.
+
+El otro árbol del prompt también se comprobó y no hace falta: `ai_commander_decks.feed-2026-09-08.json`
+(71 708 B) no lo referencia ningún `include_str!`; sólo se lee desde scripts de upstream.
+
 En las pruebas se mantiene la política de siempre: se copian las 2228 que Mesa ya conservaba (105 con
 cambios) y se dejan fuera las upstream que Mesa nunca importó. `tests/fixtures` gana 28 ficheros
 nuevos (tres `.json.gz` existentes se reescriben). Los cinco ficheros raíz de la suite
