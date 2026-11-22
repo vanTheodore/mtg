@@ -159,10 +159,12 @@ se borra: es el registro de que se hizo y de cuándo.
    `/ux` cubre la capa, no la composición de una partida larga.
 6. **La mano del teléfono** (diferencia 5), con objetivo corregido el 22 nov
    2026: no es «traer el abanico de Phase», porque a 390 el abanico de Phase
-   **no responde al dedo** (0 de 6 cartas tocables, medido con
-   `elementFromPoint`; ver `docs/PHASE-E2E-2026-11-22-V0131.md`). Phase juega
-   desde una hoja a pantalla completa con cartas de 188×700. Lo que falta en
-   Mesa es eso: tamaño de carta y jerarquía dentro de la hoja, no el abanico.
+   **no es tocable** —0 px de franja expuesta en las siete cartas, con el pie
+   fijo de `y 710` para abajo; ver `docs/PHASE-E2E-2026-11-22-V0131.md`—. Phase
+   juega desde una hoja a pantalla completa con cartas de 188×700. Lo que falta
+   en Mesa es eso: tamaño de carta y jerarquía dentro de la hoja, no el abanico.
+   Y en las dos, con la mano cerrada no se toca ninguna carta: la hoja no es un
+   adorno, es la única vía.
 
 Fuera de la mesa, el trabajo que queda vive en los issues: #55 comandante, auras
 y contadores de mesa; #56 draft; #57 lobby, multijugador, torneos y replay; #58
