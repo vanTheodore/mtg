@@ -5631,6 +5631,55 @@ export type PickOnePrompt = {
   actions: Map<number, GameAction>;
 };
 
+/**
+ * CR 101.4c + CR 616.1: `ReplacementDecisionOrder` — one staged population
+ * holds two or more simultaneous replacement decisions and the affected player
+ * chooses **which to make first**.
+ *
+ * Es una elección de exactamente uno, pero no la misma que `ReplacementChoice`:
+ * allí los candidatos son *reemplazos* con descripción y el motor contesta
+ * `ChooseReplacement { index }`; aquí son **objetos** —las cosas sobre las que
+ * se aplicará cada sustitución— y el motor contesta `SelectCards { cards: [ese] }`.
+ * Cambiar una acción por la otra sería inventar una respuesta, así que los
+ * botones salen de `legal.actions` y no de un índice reconstruido aquí.
+ *
+ * El orden de `objects` es el de anuncio del motor y se respeta: es la lista de
+ * lo que hay que ordenar, no un conjunto a reordenar por nombre.
+ */
+export type ReplacementOrderPrompt = {
+  player: PlayerId;
+  /** Objetos que el motor publicó, en su orden de anuncio. */
+  objects: ObjectId[];
+  /** `SelectCards { cards: [id] }` por objeto, cuando el motor lo ofrece. */
+  actions: Map<ObjectId, GameAction>;
+};
+
+export function replacementOrderPrompt(snapshot: EngineSnapshot | null): ReplacementOrderPrompt | null {
+  const waiting = snapshot?.state.waiting_for;
+  if (!waiting || waiting.type !== 'ReplacementDecisionOrder') return null;
+  const data = waiting.data ?? {};
+  const objects = ints(data.objects);
+  if (!objects.length) return null;
+  const byCard = pickExactlyOneOffers(snapshot!.legal.actions ?? []).byCard;
+  const actions = new Map<ObjectId, GameAction>();
+  for (const id of objects) {
+    const action = byCard.get(id);
+    if (action) actions.set(id, action);
+  }
+  return {
+    player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
+    objects,
+    actions
+  };
+}
+
+/** Sólo se despacha una acción que el motor publicó para esta ventana. */
+export function replacementOrderAction(snapshot: EngineSnapshot | null, action: GameAction): boolean {
+  const prompt = replacementOrderPrompt(snapshot);
+  if (!prompt) return false;
+  return [...prompt.actions.values()].includes(action);
+}
+
 export function pickOnePrompt(snapshot: EngineSnapshot | null): PickOnePrompt | null {
   if (!snapshot) return null;
   const actions = snapshot.legal.actions ?? [];

@@ -2944,6 +2944,13 @@ fn finish_action_boundary_with_lifecycle(
             EngineError::LifeChangeUnrepresentable { player },
         );
     }
+    // This transient, nonserialized producer-tail anchor expires at the first
+    // action boundary at the latest; depth-zero ability-chain exit retires it
+    // earlier for direct chains. Clearing here is retirement, not leak detection.
+    // In-action behavior is covered by devour_co_entry_regression's
+    // twilights_call_two_devourers_one_fodder_keeps_producer_tail_below_batch
+    // and twilights_call_two_devourers_under_censor_each_order_then_devour.
+    state.staged_population_parent = None;
     #[cfg(debug_assertions)]
     super::perf_counters::outside_take_cost(|| debug_assert_runtime_resolution_invariants(state));
     let lifecycle_facts = if reversed {
@@ -8708,6 +8715,7 @@ pub(crate) fn drain_pending_cost_move_resume(
                     | PendingCostMoveResume::LoyaltyActivation { .. }
                     | PendingCostMoveResume::CounterAdditionUnlessPayment { .. }
                     | PendingCostMoveResume::RandomDiscardUnlessPayment(..)
+                    | PendingCostMoveResume::PlayerScopeUnlessSettlement(..)
                     | PendingCostMoveResume::TurnFaceUpCostMove { .. }
             )
         ),
@@ -8740,6 +8748,7 @@ pub(crate) fn drain_pending_cost_move_resume(
                     | PendingCostMoveResume::LoyaltyActivation { .. }
                     | PendingCostMoveResume::CounterAdditionUnlessPayment { .. }
                     | PendingCostMoveResume::RandomDiscardUnlessPayment(..)
+                    | PendingCostMoveResume::PlayerScopeUnlessSettlement(..)
                     | PendingCostMoveResume::TurnFaceUpCostMove { .. }
             )
         ),
@@ -8786,6 +8795,14 @@ pub(crate) fn drain_pending_cost_move_resume(
         Some(PendingCostMoveResume::WardSacrificePayment { .. })
     ) {
         engine_payment_choices::resume_ward_sacrifice_payment(state, events)?
+    } else if matches!(
+        state.pending_cost_move_resume,
+        Some(PendingCostMoveResume::PlayerScopeUnlessSettlement(..))
+    ) {
+        // CR 118.12 + CR 101.4: a settled poll's discard paused on a CR 616.1
+        // choice; the payer already chose to pay, so the settlement continues
+        // whether the move was delivered or prevented.
+        super::scoped_unless_poll::resume_settlement(state, events)?
     } else if matches!(
         state.pending_cost_move_resume,
         Some(PendingCostMoveResume::ReplacementMayCost { .. })
@@ -10835,9 +10852,12 @@ fn complete_copy_walk_effect(
     });
     // CR 707.10c + CR 603.2: Copy observers (Magecraft) must drain only after
     // the copy's targets are finalized, not while `CopyRetarget` is still open.
-    if let Some(wf) =
-        triggers::drain_deferred_triggers_after_stack_object_announcement(state, events)
-    {
+    // CR 603.2c: the drain's windows run on the action buffer; claim them.
+    if let Some(wf) = triggers::drain_on_action_buffer(
+        state,
+        events,
+        triggers::drain_deferred_triggers_after_stack_object_announcement,
+    ) {
         if let Some(remaining) = paradigm_remaining_offers.filter(|offers| !offers.is_empty()) {
             effects::paradigm::stash_pending_remaining_offers(state, player, remaining);
         }
@@ -11600,6 +11620,10 @@ pub(super) fn transient_reveal_outlives_action_boundary(state: &GameState) -> bo
         | WaitingFor::RippleBottomOrder { .. }
         | WaitingFor::RevealUntilBottomOrder { .. }
         | WaitingFor::RevealUntilKeptChoice { .. }
+        // CR 701.20a + CR 101.4c: choosing which of a staged population's
+        // replacement decisions to make first answers none of them, so cards
+        // revealed before the selection stay public across it.
+        | WaitingFor::ReplacementDecisionOrder { .. }
         | WaitingFor::DigBottomOrder { .. } => true,
         // CR 701.20a + CR 701.20d + CR 401.4: "Put the revealed cards on the
         // bottom of your library in any order" pauses for the pile's owner to
@@ -15562,7 +15586,15 @@ fn apply_non_priority_pass_action(
                     let resumes_change_zone_iteration = state
                         .active_change_zone_frame()
                         .is_some_and(|frame| frame.pending.is_some());
-                    if !resumes_change_zone_iteration {
+                    // CR 608.2c: a staged ChangeZone batch owns the completion
+                    // event; its `ChangeZonePopulationSettled` tail emits the
+                    // single canonical `EffectResolved` after delivery.
+                    let staged_change_zone_owns_completion = state
+                        .active_batch_delivery()
+                        .is_some_and(
+                        crate::types::game_state::PendingBatchDeliveries::is_change_zone_population,
+                    );
+                    if !resumes_change_zone_iteration && !staged_change_zone_owns_completion {
                         events.push(crate::types::events::GameEvent::EffectResolved {
                             kind: crate::types::ability::EffectKind::ChangeZone,
                             source_id: pending.source_id,
@@ -16984,9 +17016,13 @@ fn apply_non_priority_pass_action(
                                 !triggers::is_pending_trigger_construction_active(state),
                                 "deferred-trigger drain entered with construction still active",
                             );
-                            if let Some(waiting_for) =
-                                triggers::drain_deferred_trigger_queue(state, &mut events)
-                            {
+                            // CR 603.2c: the drain's windows run on the action
+                            // buffer, so their collected ranges are claimed.
+                            if let Some(waiting_for) = triggers::drain_on_action_buffer(
+                                state,
+                                &mut events,
+                                triggers::drain_deferred_trigger_queue,
+                            ) {
                                 waiting_for
                             } else {
                                 WaitingFor::Priority { player: p }
@@ -18510,6 +18546,42 @@ pub(crate) fn modal_land_face_election_available(
     })
 }
 
+/// CR 712.12 + CR 712.8a: whether playing `obj` as a land puts its modal land
+/// BACK face onto the battlefield without a further choice — a spell//land
+/// modal double-faced card whose face election is still open. A land//land card
+/// is not covered: its played face is chosen at `ModalFaceChoice`. The single
+/// predicate shared by the special action's auto-election in `handle_play_land`
+/// and by [`land_face_played`], so the face a land play commits and the face its
+/// restrictions are read against cannot drift apart.
+pub(crate) fn land_play_elects_back_face(obj: &crate::game::game_object::GameObject) -> bool {
+    !obj.cast_face_committed
+        && modal_land_face_election_available(obj)
+        && !obj
+            .card_types
+            .core_types
+            .contains(&crate::types::card_type::CoreType::Land)
+}
+
+/// CR 712.12 + CR 101.2 + CR 201.4d: the face a land play of `obj` would
+/// present once elected, as a detached clone, or `None` when the play uses the
+/// object as it stands. CR 712.12 has the player choose the land face before
+/// putting it onto the battlefield, and the Bala Ged Recovery ruling says only
+/// the characteristics of the face being played count — so a "lands with the
+/// chosen name can't be played" prohibition (Conjurer's Ban) is judged on the
+/// land face's name, not on the front face the object presents in hand or exile
+/// (CR 712.8a). The clone shares the real object's zone, owner and links; the
+/// real object is never mutated, so a refused play leaves the state untouched.
+pub(crate) fn land_face_played(
+    obj: &crate::game::game_object::GameObject,
+) -> Option<crate::game::game_object::GameObject> {
+    if !land_play_elects_back_face(obj) {
+        return None;
+    }
+    let mut projected = obj.clone();
+    elect_modal_land_back_face(&mut projected);
+    Some(projected)
+}
+
 /// CR 305.2a + CR 305.2b + CR 305.3 + CR 305.9 + CR 805.4c: whether an effect
 /// that instructs `player` to play `object_id` as it resolves can be followed:
 /// the object is a land card outside the battlefield and stack, it is that
@@ -18871,7 +18943,7 @@ fn handle_play_land(
             });
         }
 
-        if land_face_election && !front_is_land {
+        if land_play_elects_back_face(obj) {
             // CR 712.12: Only back face is a land — auto-swap (player already chose "play as land")
             elect_modal_land_back_face(state.objects.get_mut(&object_id).unwrap());
         }
@@ -19520,7 +19592,12 @@ fn handle_equip_activation(
             "You don't control this equipment".to_string(),
         ));
     }
-    if !obj.card_types.subtypes.contains(&"Equipment".to_string()) {
+    if !obj
+        .card_types
+        .subtypes
+        .iter()
+        .any(|i: &String| i == "Equipment")
+    {
         return Err(EngineError::InvalidAction(
             "Object is not an equipment".to_string(),
         ));
@@ -19742,7 +19819,12 @@ fn handle_crew_activation(
             "You don't control this Vehicle".to_string(),
         ));
     }
-    if !obj.card_types.subtypes.contains(&"Vehicle".to_string()) {
+    if !obj
+        .card_types
+        .subtypes
+        .iter()
+        .any(|i: &String| i == "Vehicle")
+    {
         return Err(EngineError::InvalidAction(
             "Object is not a Vehicle".to_string(),
         ));
@@ -24527,8 +24609,9 @@ mod kilo_interruptibility_tests {
 /// Census rows for the CR 603.5 conjunct set.
 #[cfg(test)]
 mod bounded_offer_conjunct_tests {
-    /// F2c — **NO FOURTH COPY OF THE CR 603.5 CONJUNCT SET IS BUILT OUT OF THESE FIVE
-    /// PREDICATES, AND EVERY SURVIVING PRODUCTION CALLER IS INSIDE `game/effects/`.**
+    /// F2c — **NO FOURTH COPY OF THE CR 603.5 CONJUNCT SET IS BUILT OUT OF THESE
+    /// PREDICATES (the gate family's two spellings counted as one row pair), AND EVERY
+    /// SURVIVING PRODUCTION CALLER IS INSIDE `game/effects/`.**
     ///
     /// CR 603.5 + CR 608.2c + CR 608.2d + CR 603.12a. Three places used to answer *"does this
     /// ability open ONE up-front optional gate?"* — production's own branch, the mint's guard
@@ -24537,8 +24620,10 @@ mod bounded_offer_conjunct_tests {
     /// place the set is assembled, and the census is what keeps it that way.
     ///
     /// MEASURED counts, not derived ones. The plan's derivation predicted `2 / 2 / 2 / 1 / 2`
-    /// and the tree measures `2 / 2 / 2 / 1 / 2`; if these ever disagree the MEASURED value is
-    /// what belongs here.
+    /// and the tree measured `2 / 2 / 2 / 1 / 2`; the gate family's decline route then moved
+    /// from the wrapper spelling to the reason spelling, and the tree measures
+    /// `2 / 2 / 2 / 1 / 1 / 2`. If these ever disagree the MEASURED value is what belongs
+    /// here.
     ///
     /// | predicate | production sites | where |
     /// |---|---|---|
@@ -24546,7 +24631,8 @@ mod bounded_offer_conjunct_tests {
     /// | `has_member_driven_repeat_after_hydration` | 2 | `upfront_optional_gate` + `resolve_chain_body`'s driver guard |
     /// | `is_repeated_optional_payment` | 2 | `upfront_optional_gate` + `resolve_chain_body`'s driver dispatch |
     /// | `optional_prompt_player` | 2 | `upfront_optional_gate` + `offer_repeated_payment` (names who is asked each CR 603.12a payment offer; opens no up-front window) |
-    /// | `optional_effect_is_infeasible` | 2 | `upfront_optional_gate` + `resolve_chain_body`'s `CastFromZone` decline |
+    /// | `optional_effect_is_infeasible` | 1 | `upfront_optional_gate`'s probe arm (the decline route moved to the reason authority below) |
+    /// | `optional_effect_infeasibility` | 2 | the boolean wrapper's own body (`.is_some()`) + `resolve_chain_body`'s decline route, which needs the `Conjunction`/`Instruction` reason |
     ///
     /// **THE NON-AUTHORITY SITES ARE NOT COPIES, AND FOLDING THEM IN WOULD BE WRONG.**
     /// They consume these predicates to decide WHICH DRIVER RUNS — whether a counted repeat
@@ -24555,10 +24641,10 @@ mod bounded_offer_conjunct_tests {
     /// gate suppressed itself. That is a different question from "does one up-front window
     /// open", and it is asked after the gate has already declined.
     ///
-    /// **HONEST GUARANTEE.** This enforces that no fourth copy is built OUT OF THESE FIVE
+    /// **HONEST GUARANTEE.** This enforces that no fourth copy is built OUT OF THESE
     /// PREDICATES. A copy that re-derives the same conjunct from `ability.repeat_for` (or from
     /// `optional_for`, or from the effect discriminant) inline is NOT caught, and no census
-    /// over these five tokens can catch it — `has_kind_driven_repeat` is itself exactly such a
+    /// over these tokens can catch it — `has_kind_driven_repeat` is itself exactly such a
     /// re-derivation.
     ///
     /// The zero-outside-`game/effects/` assertion carries its own POSITIVE CONTROL, because a
@@ -24613,7 +24699,7 @@ mod bounded_offer_conjunct_tests {
         }
 
         // ASSEMBLED needles, so this row's own source cannot be counted by its own instrument.
-        let predicates: [(String, usize); 5] = [
+        let predicates: [(String, usize); 6] = [
             (format!("has_kind_driven{}repeat(", '_'), 2),
             (
                 format!("has_member_driven_repeat_after{}hydration(", '_'),
@@ -24621,7 +24707,14 @@ mod bounded_offer_conjunct_tests {
             ),
             (format!("is_repeated_optional{}payment(", '_'), 2),
             (format!("optional_prompt{}player(", '_'), 2),
-            (format!("optional_effect_is{}infeasible(", '_'), 2),
+            // The boolean wrapper and the reason-returning authority are ONE gate
+            // family, counted in the same census: the wrapper is the authority's
+            // `.is_some()`, and the decline route in `resolve_chain_body` reads the
+            // reason so an impossible CONJUNCTION declines like an impossible
+            // instruction without re-probing.
+            (format!("optional_effect_is{}infeasible(", '_'), 1),
+            // ASSEMBLED from two literals, so this row's line cannot contain it.
+            (format!("{}_infeasibility(", "optional_effect"), 2),
         ];
 
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -24698,7 +24791,10 @@ mod bounded_offer_conjunct_tests {
              `resolve_chain_body`'s `CastFromZone` decline probe — every one of them selects a \
              DRIVER rather than opening an up-front window — plus `offer_repeated_payment`, \
              which only names who is asked a driver's per-iteration offer, so a NEW site is a \
-             decision to adjudicate here and not a number to move.\nsites={sites:#?}"
+             decision to adjudicate here and not a number to move. Within the gate family \
+             itself, moving a site between the wrapper spelling (`optional_effect_is_infeasible`) \
+             and the reason spelling (`optional_effect_infeasibility`) is not a count change.\
+             \nsites={sites:#?}"
         );
 
         let outside: Vec<&String> = sites
@@ -24708,7 +24804,7 @@ mod bounded_offer_conjunct_tests {
             .collect();
         assert!(
             outside.is_empty(),
-            "SINGLE ASSEMBLER: every production consumer of these five predicates lives in \
+            "SINGLE ASSEMBLER: every production consumer of these predicates lives in \
              `game/effects/`, next to the authority that assembles them. A caller in another \
              module is by construction re-deriving the gate's conjunct set from outside it — \
              which is exactly what `analysis::resource::auto_may_answer_for` and \

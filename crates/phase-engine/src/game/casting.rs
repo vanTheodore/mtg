@@ -1355,14 +1355,16 @@ fn is_blocked_by_cant_cast_spells_for(
 /// CR 305.1 + CR 116.2a: Check if any `PlayLands` restriction prevents `player`
 /// from playing `land_obj` as a land. Filter-scoped sibling of
 /// `is_blocked_by_cant_cast_spells_for` — a land play is not a cast, so this
-/// reads the land's own `GameObject` directly through the generic per-object
-/// filter evaluator (`filter::matches_target_filter`) rather than a spell-record
-/// projection.
+/// reads the land's own `GameObject` through the generic per-object filter
+/// evaluator (`filter::matches_target_filter`) rather than a spell-record
+/// projection. CR 712.12: a spell//land modal card is read as the land back face
+/// it would be played as (`engine::land_face_played`), evaluated once per call.
 pub(crate) fn is_blocked_by_cant_play_lands(
     state: &GameState,
     player: PlayerId,
     land_obj: &GameObject,
 ) -> bool {
+    let played_face = std::cell::OnceCell::new();
     state.restrictions.iter().any(|restriction| {
         let GameRestriction::ProhibitActivity {
             source,
@@ -1385,11 +1387,8 @@ pub(crate) fn is_blocked_by_cant_play_lands(
 
         player_affected
             && match land_filter {
-                Some(filter) => super::filter::matches_target_filter(
-                    state,
-                    land_obj.id,
-                    filter,
-                    &super::filter::FilterContext {
+                Some(filter) => {
+                    let ctx = super::filter::FilterContext {
                         source_id: *source,
                         source_controller,
                         ability: None,
@@ -1404,8 +1403,20 @@ pub(crate) fn is_blocked_by_cant_play_lands(
                         declared_slot_view: None,
                         granting_object: None,
                         pre_entry_battlefield: None,
-                    },
-                ),
+                    };
+                    // CR 712.12 + CR 101.2: a spell//land modal card is played
+                    // as its land back face, so the prohibition is read on that
+                    // face. One face-evaluation path for discovery and for the
+                    // submitted play; the real object is not mutated.
+                    match played_face.get_or_init(|| super::engine::land_face_played(land_obj)) {
+                        Some(face) => super::filter::matches_target_filter_on_object(
+                            state, face, filter, &ctx,
+                        ),
+                        None => {
+                            super::filter::matches_target_filter(state, land_obj.id, filter, &ctx)
+                        }
+                    }
+                }
                 None => true,
             }
     })
@@ -5409,12 +5420,14 @@ pub(crate) fn single_use_play_from_exile_group(
 /// iterate `state.exile` alone, which silently did nothing for a grant whose pool
 /// is any other zone: Locke, Treasure Hunter's batch is MILLED, so its siblings
 /// sit in graveyards and kept a permission this call had just declared spent.
-/// Membership in the set is what the permission is scoped by — `single_use_group`
-/// is a `TrackedSetId`, not a zone — so the tracked set is the authority here.
-/// The exile zone is still swept as well, because a grant whose set is absent
-/// from `tracked_object_sets` (a deserialized state, a legacy grant) would
-/// otherwise lose the sweep it has today; the union can only strip permissions
-/// carrying this exact group, so the extra leg cannot over-reach.
+/// The sweep reads the grant's own population: every object carrying this
+/// group's single-use `PlayFromExile`, wherever it is. That population includes
+/// the CR 730.3c components the grant found outside the set and outside exile,
+/// and it subsumes the former set and exile legs, a deserialized or legacy grant
+/// included. It can strip only permissions carrying this exact group. It does
+/// not re-derive the population through the gated tracked-set authority,
+/// because a cast-time read of a carried group id is never the chain rung
+/// (CR 601.2a + CR 611.2a).
 ///
 /// `exile_play_single_use_consumed` is the belt to this sweep's braces — the
 /// eligibility gate in `play_from_exile_permission_source_at_index` consults it
@@ -5423,26 +5436,25 @@ pub(crate) fn single_use_play_from_exile_group(
 /// including the AI's legal-action surface.
 pub(crate) fn consume_single_use_play_from_exile(state: &mut GameState, group: TrackedSetId) {
     state.exile_play_single_use_consumed.insert(group);
-    let scoped: Vec<ObjectId> = state
-        .tracked_object_sets
-        .get(&group)
-        .cloned()
-        .unwrap_or_default()
-        .into_iter()
-        .chain(state.exile.iter().cloned())
+    let spent = |permission: &crate::types::ability::CastingPermission| {
+        matches!(
+            permission,
+            crate::types::ability::CastingPermission::PlayFromExile {
+                single_use_group,
+                single_use: true,
+                ..
+            } if *single_use_group == Some(group)
+        )
+    };
+    let carriers: Vec<ObjectId> = state
+        .objects
+        .iter()
+        .filter(|(_, obj)| obj.casting_permissions.iter().any(spent))
+        .map(|(id, _)| *id)
         .collect();
-    for obj_id in scoped {
+    for obj_id in carriers {
         if let Some(obj) = state.objects.get_mut(&obj_id) {
-            obj.casting_permissions.retain(|p| {
-                !matches!(
-                    p,
-                    crate::types::ability::CastingPermission::PlayFromExile {
-                        single_use_group,
-                        single_use: true,
-                        ..
-                    } if *single_use_group == Some(group)
-                )
-            });
+            obj.casting_permissions.retain(|p| !spent(p));
         }
     }
 }
@@ -6749,12 +6761,15 @@ fn holder_bound_condition_is_modeled(condition: &StaticCondition) -> bool {
         | StaticCondition::WasStartingPlayer { .. }
         | StaticCondition::SpellCastWithVariantThisTurn { .. }
         | StaticCondition::AnyPlayerAttackedYouLastTurn { .. }
+        // Reads source-object ledgers via layer-controller endpoints, never
+        // the ability holder: fail closed like its last-turn analog.
+        | StaticCondition::PlayerAttackedPlayer { .. }
         | StaticCondition::OpponentPoisonAtLeast { .. }
         | StaticCondition::UnlessPay { .. }
         | StaticCondition::Unrecognized { .. }
         | StaticCondition::SharesColorWithMostCommonColorAmongPermanents
         | StaticCondition::SourceEnteredThisTurn
-        | StaticCondition::SourceHasDealtDamage
+        | StaticCondition::SourceHasDealtDamage { .. }
         | StaticCondition::SourceExertedThisTurn
         | StaticCondition::WasCast { .. }
         | StaticCondition::IsRingBearer
@@ -7894,11 +7909,25 @@ pub(super) fn exile_land_play_authorization(
     land_id: ObjectId,
 ) -> Option<ExileLandPlayAuthorization> {
     let obj = state.objects.get(&land_id)?;
-    if !obj
+    // CR 712.8a: outside the battlefield and stack the card has only its front
+    // face's characteristics, so a spell//land modal card in exile is not a land
+    // card by itself. CR 712.12 nonetheless lets a player who plays it do so as
+    // a land by choosing its land face, which the shared play-land election
+    // (`handle_play_land`'s `modal_land_face_election_available` branch) then
+    // elects. The permission is read unchanged below (play mode, grantee,
+    // `card_filter` on the stored front face, frequency), so a Cast-mode grant
+    // still refuses the land face and only a Play-mode grant that authorizes the
+    // card (Light Up the Stage's "play those cards") reaches it. Exile only:
+    // `graveyard_lands_playable_by_permission` discovers graveyard lands by
+    // their front face and the gate must not admit what discovery never offers.
+    let front_is_land = obj
         .card_types
         .core_types
-        .contains(&crate::types::card_type::CoreType::Land)
-    {
+        .contains(&crate::types::card_type::CoreType::Land);
+    let modal_land_face_open = obj.zone == Zone::Exile
+        && !obj.cast_face_committed
+        && super::engine::modal_land_face_election_available(obj);
+    if !front_is_land && !modal_land_face_open {
         return None;
     }
     if let Some((casting_permission_index, source, frequency)) =
@@ -23247,7 +23276,7 @@ fn target_dependent_reduction_makes_payable(
             {
                 continue;
             }
-            if payable(&priced) || with_defiler.as_ref().is_some_and(&defiler_payable) {
+            if payable(&priced) || with_defiler.as_ref().is_some_and(defiler_payable) {
                 return true;
             }
             checked.push((priced, with_defiler));
@@ -25398,6 +25427,183 @@ fn effect_payment_permissions(
     let mana_spend_permission =
         player_mana_spend_permission_for_optional_spell(simulated, player, None);
     super::static_abilities::build_cost_permission_context(simulated, player, mana_spend_permission)
+}
+
+/// CR 608.2g: One way the payer may fund a resolution-time effect mana
+/// payment. "If an effect gives a player the option to pay mana, they may
+/// activate mana abilities before taking that action" — a permission that does
+/// not depend on a shortfall, so the automatic planner's own choice of sources
+/// is one legal funding among several, never the whole funding space.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum EffectManaFunding {
+    /// The automatic planner funds the payment from the pool and the sources
+    /// it prefers.
+    Planned,
+    /// The payer first activates this permanent's mana ability — even when the
+    /// pool already covers the payment or the planner would prefer another
+    /// source — and the planner funds what is left.
+    ActivatingFirst(ObjectId),
+}
+
+/// The most [`EffectManaFunding::ActivatingFirst`] fundings
+/// [`effect_mana_funding_candidates`] admits. A search over more is
+/// [`EffectManaFundingCandidates::exhausted`] and decides nothing.
+pub const EFFECT_MANA_FUNDING_PROBE_BUDGET: usize = 16;
+
+/// The fundings a resolution-time effect mana payment is judged under.
+pub(crate) struct EffectManaFundingCandidates {
+    /// The planner's own funding first, then at most
+    /// [`EFFECT_MANA_FUNDING_PROBE_BUDGET`] activations, in the planner's
+    /// preference order.
+    pub fundings: Vec<EffectManaFunding>,
+    /// More permanents could fund the payment than the budget admits, so a
+    /// search that finds no funding performable has not shown that none is.
+    pub exhausted: bool,
+}
+
+/// CR 608.2g + CR 605.3a: The fundings a resolution-time effect mana payment
+/// is judged under: the planner's own, then one per permanent whose mana
+/// ability the payer may activate first and whose activation can do more than
+/// add mana ([`super::casting_costs::auto_tap_sources_beyond_mana`]). Tapping
+/// any other source first leaves the same state as the planner's funding apart
+/// from the mana pool, so it decides nothing the planner's funding does not.
+/// The modeled space is at most one activation beyond the planner's choice,
+/// and at most [`EFFECT_MANA_FUNDING_PROBE_BUDGET`] such activations.
+pub(super) fn effect_mana_funding_candidates(
+    state: &GameState,
+    payer: PlayerId,
+) -> EffectManaFundingCandidates {
+    let sources = super::casting_costs::auto_tap_sources_beyond_mana(state, payer);
+    let exhausted = sources.len() > EFFECT_MANA_FUNDING_PROBE_BUDGET;
+    let fundings = std::iter::once(EffectManaFunding::Planned)
+        .chain(
+            sources
+                .into_iter()
+                .take(EFFECT_MANA_FUNDING_PROBE_BUDGET)
+                .map(EffectManaFunding::ActivatingFirst),
+        )
+        .collect();
+    EffectManaFundingCandidates {
+        fundings,
+        exhausted,
+    }
+}
+
+/// What one [`EffectManaFunding`] of a resolution-time effect mana payment
+/// leaves, as [`effect_mana_funding_probe`] simulates it.
+pub(crate) enum EffectManaFundingProbe {
+    /// The funding pays the cost; the state the effect's later instructions
+    /// then resolve in.
+    Funded(Box<GameState>),
+    /// CR 118.3: the funding leaves the cost unpaid.
+    Unpayable,
+    /// CR 605.3b + CR 616.1: a mana ability the funding activates paused for
+    /// a choice, so what the funding leaves is not decided.
+    Undecided,
+}
+
+/// CR 608.2g + CR 605.3a + CR 605.3b + CR 614.6: The state a resolution-time
+/// effect's later instructions resolve in once its `PayCost { Mana }` head's
+/// cost has been funded by `funding`, judged by the live payment's own funding
+/// pipeline: [`activate_mana_source_first`] for an
+/// [`EffectManaFunding::ActivatingFirst`] activation, then the effect-context
+/// auto-tap pass, with every activated mana ability resolved immediately
+/// (CR 605.3b). Mana abilities activated to pay for an effect resolve inline,
+/// so events their own resolution produces (Pristine Talisman's "You gain 1
+/// life") meet the standing replacement pipeline and a replacement can rewrite
+/// what the outer effect's later instructions read (Nefarious Lich: "If you
+/// would gain life, draw that many cards instead." adds the drawn cards to the
+/// hand during the outer resolution — Conspiracy Theorist's conjoined "discard
+/// a card" is then payable from that draw). The cost itself is judged by
+/// [`can_pay_effect_mana_cost_after_auto_tap`] in the state the
+/// first activation leaves.
+pub(super) fn effect_mana_funding_probe(
+    state: &GameState,
+    payer: PlayerId,
+    source_id: ObjectId,
+    cost: &crate::types::mana::ManaCost,
+    funding: EffectManaFunding,
+) -> EffectManaFundingProbe {
+    #[cfg(feature = "test-support")]
+    crate::game::perf_counters::record_effect_mana_funding_probe();
+    let mut simulated = effect_payment_probe_state(state);
+    let mut tap_events: Vec<crate::types::events::GameEvent> = Vec::new();
+    if let EffectManaFunding::ActivatingFirst(mana_source) = funding {
+        if !activate_mana_source_first(
+            &mut simulated,
+            payer,
+            source_id,
+            mana_source,
+            &mut tap_events,
+        ) {
+            return EffectManaFundingProbe::Undecided;
+        }
+    }
+    // CR 118.12: the head of a resolving effect pays through the
+    // `EffectPayCost` root, which can surface a paused source's choice.
+    if !can_pay_effect_mana_cost_after_auto_tap(
+        &simulated,
+        payer,
+        source_id,
+        cost,
+        PausedManaPayment::Resumable,
+    ) {
+        return EffectManaFundingProbe::Unpayable;
+    }
+    if run_effect_auto_tap_pass(&mut simulated, payer, source_id, cost, &mut tap_events) {
+        return EffectManaFundingProbe::Undecided;
+    }
+    EffectManaFundingProbe::Funded(Box::new(simulated))
+}
+
+/// CR 608.2g + CR 605.3a + CR 605.3b + CR 605.4a: The payer activates
+/// `mana_source`'s mana ability before a resolution-time effect payment, the
+/// [`EffectManaFunding::ActivatingFirst`] step shared by the probe
+/// ([`effect_mana_funding_probe`]) and the live payment, so both fund the same
+/// way. The effect-context planner is restricted to `mana_source` and asked
+/// for one generic unit beyond what the pool floats, so its already-funded
+/// fast path (CR 106.4) cannot skip the activation the payer chose. The
+/// activation resolves immediately (CR 605.3b), along with its coupled
+/// triggered mana abilities (CR 605.4a).
+///
+/// Returns `false` when the activation paused for a choice (CR 605.3b + CR
+/// 616.1) or left the waiting state changed; probes treat that funding as
+/// undecided, and the live payment never selects such a funding.
+pub(super) fn activate_mana_source_first(
+    state: &mut GameState,
+    payer: PlayerId,
+    source_id: ObjectId,
+    mana_source: ObjectId,
+    events: &mut Vec<GameEvent>,
+) -> bool {
+    super::layers::flush_layers(state);
+    let waiting_before = state.waiting_for.clone();
+    let events_before = events.len();
+    let others: HashSet<ObjectId> = state
+        .battlefield
+        .iter()
+        .copied()
+        .filter(|id| *id != mana_source)
+        .collect();
+    let demand = crate::types::mana::ManaCost::Cost {
+        shards: Vec::new(),
+        generic: effect_payment_pool_total(state, payer).saturating_add(1),
+    };
+    let effect_ctx = PaymentContext::Effect;
+    super::casting_costs::auto_tap_mana_sources_with_context_excluding(
+        state,
+        payer,
+        &demand,
+        events,
+        Some(source_id),
+        Some(&effect_ctx),
+        &others,
+    );
+    if mana_ability_cost_payment_is_paused(state) {
+        return false;
+    }
+    super::triggers::resolve_tap_mana_triggers_inline(state, events, events_before);
+    state.waiting_for == waiting_before
 }
 
 /// CR 118.1 + CR 605.3a + CR 605.4a + CR 106.12b: The mana a resolution-time
@@ -27982,6 +28188,144 @@ pub(super) fn find_one_of_cost(cost: &AbilityCost) -> Option<&Vec<AbilityCost>> 
     }
 }
 
+/// CR 702.6a + CR 702.29a: the keyword an `AlternativeKeywordCost` static can
+/// replace the cost of, for an activated ability carrying `tag`.
+fn alternative_keyword_kind(tag: AbilityTag) -> Option<KeywordKind> {
+    match tag {
+        AbilityTag::Equip => Some(KeywordKind::Equip),
+        AbilityTag::Cycling => Some(KeywordKind::Cycling),
+        AbilityTag::Boast
+        | AbilityTag::Evolve
+        | AbilityTag::Exhaust
+        | AbilityTag::Outlast
+        | AbilityTag::Backup
+        | AbilityTag::PowerUp
+        | AbilityTag::Augment => None,
+    }
+}
+
+/// Every ability tag [`alternative_keyword_kind`] maps, for the inverse lookup.
+const ALTERNATIVE_KEYWORD_TAGS: [AbilityTag; 2] = [AbilityTag::Equip, AbilityTag::Cycling];
+
+/// CR 602.2b + CR 118.9: An active keyword-cost static adds an alternative
+/// activation-cost branch before the shared cost lock. Its condition is already
+/// applied by `battlefield_active_statics`; the source filter and first-use
+/// frequency are evaluated against the activated ability and its controller.
+fn activation_cost_with_alternative_keyword_costs(
+    state: &GameState,
+    ability: &AbilityDefinition,
+    player: PlayerId,
+    source_id: ObjectId,
+    base_cost: AbilityCost,
+) -> AbilityCost {
+    use crate::types::statics::CastFrequency;
+
+    let Some((ability_tag, keyword)) = ability
+        .ability_tag
+        .and_then(|tag| alternative_keyword_kind(tag).map(|keyword| (tag, keyword)))
+    else {
+        return base_cost;
+    };
+
+    let mut alternatives = Vec::new();
+    for (static_source, definition) in
+        super::functioning_abilities::battlefield_active_statics(state)
+    {
+        if static_source.controller != player {
+            continue;
+        }
+        let StaticMode::AlternativeKeywordCost {
+            keyword: granted_keyword,
+            cost,
+            frequency,
+        } = &definition.mode
+        else {
+            continue;
+        };
+        if *granted_keyword != keyword {
+            continue;
+        }
+        let context =
+            super::filter::FilterContext::from_source_with_controller(static_source.id, player);
+        if definition.affected.as_ref().is_some_and(|filter| {
+            !super::filter::matches_target_filter(state, source_id, filter, &context)
+        }) {
+            continue;
+        }
+        let frequency_available = match frequency.unwrap_or(CastFrequency::Unlimited) {
+            CastFrequency::Unlimited => true,
+            // CR 611.3a: "the first <keyword> ability you activate each turn" is
+            // a fact about the turn's activation journal, read through the
+            // shared first-activation authority so loop detection keeps the
+            // same row.
+            CastFrequency::OncePerTurn => !earlier_activation_this_turn_qualified(
+                state,
+                ability_tag.keyword_str(),
+                ActivationExemption::None,
+                // CR 109.5: "you activate" — only the static controller's own
+                // earlier activations consume the once-per-turn option.
+                Some(&PlayerFilter::Controller),
+                definition.affected.as_ref(),
+                None,
+                static_source.id,
+                player,
+                &context,
+            ),
+            CastFrequency::OncePerTurnPerPermanentType => false,
+        };
+        if frequency_available && !alternatives.contains(cost) {
+            alternatives.push(cost.clone());
+        }
+    }
+
+    if alternatives.is_empty() {
+        return base_cost;
+    }
+    // Normalize first so legacy card-data equip disjunctions are already a
+    // `OneOf` when the alternatives are appended to them.
+    let base_cost = activation_cost_for_affordability(base_cost, Some(ability_tag));
+
+    // CR 702.29a: "Cycling [cost]" means "[cost], Discard this card: Draw a
+    // card." An alternative cost replaces only the cycling cost; discarding the
+    // card remains part of the activation cost. Equip's whole activation cost is
+    // the equip cost (CR 702.6a), so it is substituted whole.
+    let (keyword_cost, retained_legs) = match (keyword, base_cost) {
+        (KeywordKind::Cycling, AbilityCost::Composite { costs }) => {
+            let (retained, rest): (Vec<_>, Vec<_>) = costs.into_iter().partition(|leg| {
+                matches!(
+                    leg,
+                    AbilityCost::Discard {
+                        self_scope: crate::types::ability::DiscardSelfScope::SourceCard,
+                        ..
+                    }
+                )
+            });
+            match rest.len() {
+                0 => (AbilityCost::Composite { costs: retained }, Vec::new()),
+                1 => (rest.into_iter().next().expect("one leg"), retained),
+                _ => (AbilityCost::Composite { costs: rest }, retained),
+            }
+        }
+        (_, base_cost) => (base_cost, Vec::new()),
+    };
+    let folded = match keyword_cost {
+        AbilityCost::OneOf { mut costs } => {
+            costs.extend(alternatives);
+            AbilityCost::OneOf { costs }
+        }
+        keyword_cost => AbilityCost::OneOf {
+            costs: std::iter::once(keyword_cost).chain(alternatives).collect(),
+        },
+    };
+    if retained_legs.is_empty() {
+        folded
+    } else {
+        AbilityCost::Composite {
+            costs: std::iter::once(folded).chain(retained_legs).collect(),
+        }
+    }
+}
+
 /// CR 601.2h + CR 602.2b: Filter disjunctive activation-cost branches through the
 /// same affordability authority used by `can_activate_ability_now` and
 /// `handle_activate_ability`, each judged inside its `enclosing` total cost and
@@ -29143,9 +29487,14 @@ fn may_sacrifice_for_cost(
     // only requires paying the morph cost, so a face-down permanent matching the
     // cost's filter may pay it with itself unless the cost says "another", which
     // the filter carries.
-    // CR 701.21a: A permanent with "can't be sacrificed" cannot be sacrificed
-    // for any cost regardless of payment scope (e.g. Assault Suit).
-    if super::static_abilities::object_has_static_other(state, id, "CantBeSacrificed") {
+    // CR 109.5 + CR 701.21a: the only object-level bar check. An
+    // installer-bound bar (Call for Aid binds its caster) excludes the
+    // object for that actor alone; an unbound bar (printed or granted
+    // "can't be sacrificed", e.g. Assault Suit) excludes it for every
+    // actor, regardless of payment scope. Same authority as execution
+    // (`object_cant_be_sacrificed_by`); no actor-blind check may run
+    // before it or later controllers stay barred.
+    if super::static_abilities::object_cant_be_sacrificed_by(state, player, id) {
         return false;
     }
     matches!(scope, Some(super::costs::PaymentScope::TurnFaceUp { .. }))
@@ -29983,6 +30332,15 @@ pub(crate) fn activation_verdict(
     else {
         return ActivationVerdict::Illegal;
     };
+    if let Some(base_cost) = ability_def.cost.take() {
+        ability_def.cost = Some(activation_cost_with_alternative_keyword_costs(
+            state,
+            &ability_def,
+            player,
+            source_id,
+            base_cost,
+        ));
+    }
     if !matches!(
         activation_structural_eligibility(state, player, source_id, &ability_def),
         ActivationStructuralEligibility::Eligible
@@ -31586,6 +31944,13 @@ fn activate_with_cost_carrier(
             Some(snapshot)
         }
         None => ability_def.cost.clone().map(|base_cost| {
+            let base_cost = activation_cost_with_alternative_keyword_costs(
+                state,
+                &ability_def,
+                player,
+                source_id,
+                base_cost,
+            );
             let modifiers = collect_activation_cost_modifiers(
                 state,
                 &ability_def,
@@ -32022,6 +32387,22 @@ fn activate_with_cost_carrier(
     // `else_ability`, and other typed fields survive into resolution
     // (issue #310 — same root cause as the spell-cast path).
     let mut resolved = build_resolved_from_def(&ability_def, source_id, player);
+    // CR 113.7a + CR 602.2a + CR 608.2h + CR 400.7: pin the activation-time
+    // source identity (id + announcement incarnation) over the whole chain.
+    // This deliberately does NOT build a `TriggerSourceContext`: activated
+    // carriers supply only their incarnation epochs — pre-cost
+    // `announced_source_incarnation` (here) and post-cost `source_incarnation`
+    // (stamped at the stack-push boundary, stack.rs) — never `trigger_source`
+    // (the `ability_utils` carrier contract). The damage authority reads the
+    // pinned incarnation when the source has departed (CR 608.2h); every
+    // `trigger_source.is_some()` proxy keeps its pre-pin activated arm.
+    // `source_incarnation` is left `None` here so the stack push stamps the
+    // post-cost epoch; plot never pushes, so it stays `None` there and the
+    // `is_none_or` fail-open holds.
+    if let Some(source) = state.objects.get(&source_id) {
+        let incarnation = source.incarnation;
+        resolved.set_departure_pin_recursive(source_id, incarnation);
+    }
     // CR 602.2b -> CR 601.2b: activating an ability follows the spell-announcement rules
     // 601.2b-i identically, so a text-defined, announce-locked X ("where X is <count> as
     // you activate this ability") is measured HERE — at announcement, before targets are
@@ -34489,7 +34870,8 @@ fn filter_prop_reads_chosen_target(prop: &FilterProp, read: TargetRead) -> bool 
         FilterProp::DealtDamageThisTurn { recipient, .. } => recipient
             .as_ref()
             .is_some_and(|x| player_filter_reads_chosen_target(x, read)),
-        FilterProp::Owned { controller }
+        FilterProp::CastThisTurn { caster: controller }
+        | FilterProp::Owned { controller }
         | FilterProp::ProtectorMatches { controller }
         | FilterProp::AttachedTo {
             to: AttachmentReferent::Player { player: controller },
@@ -36481,16 +36863,45 @@ pub(crate) fn cost_observable_activation_journal(
                           affected: Option<&TargetFilter>,
                           static_source_id: ObjectId,
                           static_controller: PlayerId| {
-        let StaticMode::ReduceAbilityCost {
-            keyword,
-            exemption,
-            activator,
-            targets,
-            frequency: Some(CastFrequency::OncePerTurn),
-            ..
-        } = reduce_mode
-        else {
-            return;
+        // The gates each kind of modifier reads off a journal row, the same
+        // ones its pricing path passes to `first_qualifying_activation_this_turn`.
+        let (keyword, exemption, activator, targets) = match reduce_mode {
+            StaticMode::ReduceAbilityCost {
+                keyword,
+                exemption,
+                activator,
+                targets,
+                frequency: Some(CastFrequency::OncePerTurn),
+                ..
+            } => (
+                keyword.as_str(),
+                *exemption,
+                activator.as_ref(),
+                targets.as_ref(),
+            ),
+            // CR 118.9 + CR 611.3a + CR 109.5: "the first <keyword> ability you
+            // activate each turn" (Bruenor Battlehammer, Gavi, Kíli): only the
+            // static controller's own activations count (`Controller` gate,
+            // matching the pricing path) and no target gate applies.
+            StaticMode::AlternativeKeywordCost {
+                keyword,
+                frequency: Some(CastFrequency::OncePerTurn),
+                ..
+            } => {
+                let Some(tag) = ALTERNATIVE_KEYWORD_TAGS
+                    .into_iter()
+                    .find(|tag| alternative_keyword_kind(*tag) == Some(*keyword))
+                else {
+                    return;
+                };
+                (
+                    tag.keyword_str(),
+                    ActivationExemption::None,
+                    Some(&PlayerFilter::Controller),
+                    None,
+                )
+            }
+            _ => return,
         };
         let ctx = super::filter::FilterContext::from_source_with_controller(
             static_source_id,
@@ -36499,10 +36910,10 @@ pub(crate) fn cost_observable_activation_journal(
         if let Some(row) = first_qualifying_activation_this_turn(
             state,
             keyword,
-            *exemption,
-            activator.as_ref(),
+            exemption,
+            activator,
             affected,
-            targets.as_ref(),
+            targets,
             static_source_id,
             static_controller,
             &ctx,
@@ -36557,12 +36968,17 @@ pub(crate) fn cost_observable_activation_journal(
     journal
 }
 
-/// CR 611.3a: a "first activated ability … each turn" cost modifier, the one
-/// kind of modifier that reads the turn's activation journal.
+/// CR 611.3a: a "first activated ability … each turn" cost modifier, the kinds
+/// of modifier that read the turn's activation journal: a once-per-turn
+/// `ReduceAbilityCost` (Training Grounds-style discounts) and a once-per-turn
+/// `AlternativeKeywordCost` ("the first equip ability you activate each turn").
 fn is_first_activation_modifier(mode: &StaticMode) -> bool {
     matches!(
         mode,
         StaticMode::ReduceAbilityCost {
+            frequency: Some(CastFrequency::OncePerTurn),
+            ..
+        } | StaticMode::AlternativeKeywordCost {
             frequency: Some(CastFrequency::OncePerTurn),
             ..
         }
@@ -39881,5 +40297,162 @@ mod selected_impulse_authority_tests {
             Some(CastingPermissionIndex(4)),
         ));
         assert!(!exile_cast_pays_printed_mana_cost(state, obj, P0, None));
+    }
+}
+
+#[cfg(test)]
+mod alternative_keyword_cost_journal_tests {
+    use super::cost_observable_activation_journal;
+    use crate::game::scenario::{GameRunner, GameScenario, P0, P1};
+    use crate::types::ability::AbilityTag;
+    use crate::types::actions::GameAction;
+    use crate::types::game_state::{CastPaymentMode, WaitingFor};
+    use crate::types::identifiers::ObjectId;
+    use crate::types::mana::{ManaType, ManaUnit};
+    use crate::types::phase::Phase;
+
+    const BRUENOR: &str = "Each creature you control gets +2/+0 for each Equipment attached to it.\nYou may pay {0} rather than pay the equip cost of the first equip ability you activate each turn.";
+    const LEONIN_SHIKARI: &str =
+        "You may activate equip abilities any time you could cast an instant.";
+    const VULSHOK_MORNINGSTAR: &str = "Equipped creature gets +2/+2.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)";
+
+    /// P0 (the active player) with Bruenor Battlehammer (when `with_bruenor`)
+    /// and a Vulshok Morningstar; P1 with Leonin Shikari (instant-speed equip)
+    /// and its own Vulshok Morningstar.
+    fn build(with_bruenor: bool) -> (GameRunner, ObjectId, ObjectId) {
+        let mut scenario = GameScenario::new();
+        scenario.at_phase(Phase::PreCombatMain);
+        if with_bruenor {
+            scenario
+                .add_creature_from_oracle(P0, "Bruenor Battlehammer", 5, 3, BRUENOR)
+                .as_legendary()
+                .with_subtypes(vec!["Dwarf", "Warrior"]);
+        } else {
+            scenario.add_vanilla(P0, 5, 3);
+        }
+        let p0_equipment = scenario
+            .add_artifact_from_oracle(P0, "Vulshok Morningstar", VULSHOK_MORNINGSTAR)
+            .with_subtypes(vec!["Equipment"])
+            .id();
+        scenario
+            .add_creature_from_oracle(P1, "Leonin Shikari", 1, 1, LEONIN_SHIKARI)
+            .with_subtypes(vec!["Cat", "Soldier"]);
+        let p1_equipment = scenario
+            .add_artifact_from_oracle(P1, "Vulshok Morningstar", VULSHOK_MORNINGSTAR)
+            .with_subtypes(vec!["Equipment"])
+            .id();
+        let mut runner = scenario.build();
+        if !with_bruenor {
+            // No {0} alternative: P0 pays the ordinary {2}.
+            for _ in 0..2 {
+                runner.state_mut().players[0].mana_pool.add(ManaUnit::new(
+                    ManaType::Colorless,
+                    ObjectId(0),
+                    false,
+                    vec![],
+                ));
+            }
+        }
+        (runner, p0_equipment, p1_equipment)
+    }
+
+    fn activate_equip(runner: &mut GameRunner, equipment: ObjectId) {
+        runner
+            .act(GameAction::ActivateAbility {
+                source_id: equipment,
+                ability_index: 0,
+                payment_mode: CastPaymentMode::Auto,
+            })
+            .expect("equip activation is legal");
+    }
+
+    /// Runs both players' equip activations on P0's turn through the production
+    /// `ActivateAbility` path: P0's first (paying {0} when Bruenor offers it),
+    /// then P1's at instant speed (Leonin Shikari) paying the ordinary {2}.
+    fn both_players_equip(runner: &mut GameRunner, p0_equipment: ObjectId, p1_equipment: ObjectId) {
+        let result = runner
+            .act(GameAction::ActivateAbility {
+                source_id: p0_equipment,
+                ability_index: 0,
+                payment_mode: CastPaymentMode::Auto,
+            })
+            .expect("P0's equip activation is legal");
+        if let WaitingFor::ActivationCostOneOfChoice { .. } = result.waiting_for {
+            runner
+                .act(GameAction::ChooseActivationCostBranch { index: 0 })
+                .expect("the {0} branch is accepted");
+        }
+        runner.advance_until_stack_empty();
+
+        // CR 117.3d: P0 passes with an empty stack, so P1 receives priority and
+        // can equip at instant speed (Leonin Shikari).
+        runner
+            .act(GameAction::PassPriority)
+            .expect("P0 may pass priority");
+        assert_eq!(
+            runner.state().waiting_for,
+            WaitingFor::Priority { player: P1 },
+            "reach guard: P1 received priority"
+        );
+        for _ in 0..2 {
+            runner.state_mut().players[1].mana_pool.add(ManaUnit::new(
+                ManaType::Colorless,
+                ObjectId(0),
+                false,
+                vec![],
+            ));
+        }
+        activate_equip(runner, p1_equipment);
+        let journal = &runner.state().abilities_activated_this_turn_by_player;
+        assert_eq!(
+            journal.get(&P0).map(|rows| rows.len()),
+            Some(1),
+            "reach guard: P0's equip activation is journaled"
+        );
+        assert_eq!(
+            journal.get(&P1).map(|rows| rows.len()),
+            Some(1),
+            "reach guard: P1's equip activation is journaled"
+        );
+        assert_eq!(
+            journal[&P1][0].ability_tag,
+            Some(AbilityTag::Equip),
+            "the row comes from a real Equip ability"
+        );
+    }
+
+    /// CR 118.9 + CR 611.3a + CR 109.5 + CR 732.2a: Bruenor Battlehammer's "You
+    /// may pay {0} rather than pay the equip cost of the first equip ability you
+    /// activate each turn." reads the turn's activation journal, so loop
+    /// detection keeps each player's first equip row (judged per hypothetical
+    /// controller, CR 109.5) while a board with no such static strips them.
+    ///
+    /// Reverting the `AlternativeKeywordCost` arm of `is_first_activation_modifier`
+    /// / `cost_observable_activation_journal` empties the kept journal; dropping
+    /// the `Controller` activator gate lets P0's earlier row shadow P1's, so
+    /// P1's row is not kept for P1 as a hypothetical controller.
+    #[test]
+    fn once_per_turn_alternative_keyword_cost_keeps_each_controllers_first_equip_row() {
+        let (mut runner, p0_equipment, p1_equipment) = build(true);
+        both_players_equip(&mut runner, p0_equipment, p1_equipment);
+        let journal = cost_observable_activation_journal(runner.state());
+        assert_eq!(
+            journal.get(&P0).map(|rows| rows.len()),
+            Some(1),
+            "P0's first equip row is kept"
+        );
+        assert_eq!(
+            journal.get(&P1).map(|rows| rows.len()),
+            Some(1),
+            "P1's first equip row is kept for P1 as a hypothetical controller"
+        );
+
+        // Control: no first-activation modifier on the board, nothing is kept.
+        let (mut runner, p0_equipment, p1_equipment) = build(false);
+        both_players_equip(&mut runner, p0_equipment, p1_equipment);
+        assert!(
+            cost_observable_activation_journal(runner.state()).is_empty(),
+            "with no first-activation modifier on the board the rows are stripped"
+        );
     }
 }
