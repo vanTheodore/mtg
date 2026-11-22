@@ -82,6 +82,12 @@ Son capturas de Chromium 153 sobre `/ux`, no de una partida real: en ellas el
 arte falla a propósito (Scryfall bloqueado en la prueba), de modo que la
 composición no dependa de una imagen externa.
 
+El estado de estas capturas se refresca con el pin y con el upstream: las de
+`comparar-mesa-*.jpg` y `comparar-phase-*.jpg` se retomaron el 22 nov 2026
+contra Phase `4ab1091` (v0.131.0) con el procedimiento de
+`scripts/compare-boards-shots.ts`. El informe de esa ronda, con las medidas y la
+revisión del upstream, está en `docs/PHASE-E2E-2026-11-22-V0131.md`.
+
 ## Cómo verlo
 
 ```sh
@@ -151,6 +157,12 @@ se borra: es el registro de que se hizo y de cuándo.
    pasada (`DamageAssignment.svelte`).
 5. **Reparto de la columna derecha** (pila + historial + decisión): el E2E de
    `/ux` cubre la capa, no la composición de una partida larga.
+6. **La mano del teléfono** (diferencia 5), con objetivo corregido el 22 nov
+   2026: no es «traer el abanico de Phase», porque a 390 el abanico de Phase
+   **no responde al dedo** (0 de 6 cartas tocables, medido con
+   `elementFromPoint`; ver `docs/PHASE-E2E-2026-11-22-V0131.md`). Phase juega
+   desde una hoja a pantalla completa con cartas de 188×700. Lo que falta en
+   Mesa es eso: tamaño de carta y jerarquía dentro de la hoja, no el abanico.
 
 Fuera de la mesa, el trabajo que queda vive en los issues: #55 comandante, auras
 y contadores de mesa; #56 draft; #57 lobby, multijugador, torneos y replay; #58
