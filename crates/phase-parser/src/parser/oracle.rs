@@ -2451,6 +2451,7 @@ fn quantity_ref_uses_filter_prop(qty: &QuantityRef, pred: &impl Fn(&FilterProp) 
         | QuantityRef::NotedNumber
         | QuantityRef::PlayerChosenNumber { .. }
         | QuantityRef::DescendedThisTurn
+        | QuantityRef::CardsCycled { .. }
         | QuantityRef::LoyaltyAbilitiesActivatedThisTurn { .. }
         | QuantityRef::CardsDiscardedThisTurn { .. }
         | QuantityRef::PlayerActionsThisTurn { .. }
@@ -10238,6 +10239,9 @@ fn stays_on_resolution_line(def: &AbilityDefinition) -> bool {
         repeat_until,
         modal,
         mode_abilities,
+        // Only how `repeat_for`'s instances relate to each other (CR 608.2); it opens no
+        // path of its own, and `repeat_for` above already takes `def` off the line.
+        repeat_timing: _,
         // Walked by the caller: the effect's nested definitions and the next instruction.
         effect: _,
         sub_ability: _,

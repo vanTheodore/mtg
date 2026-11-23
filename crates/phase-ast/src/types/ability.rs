@@ -6768,7 +6768,7 @@ pub struct DamageAmountThreshold {
 /// (`crates/phase-server/src/persistence.rs` deserializing a
 /// `PersistedSession` whose `state` is a `PersistedGameState`, and
 /// `crates/server-core/src/persist.rs`), and the in-repo shared card fixture
-/// `crates/engine/tests/fixtures/integration_cards.json.gz`, which already
+/// `crates/engine/tests/fixtures/integration_cards/`, which already
 /// carries legacy `["GE",5]` / `["EQ",1]` arrays.
 /// Write-side counterpart to [`deserialize_damage_amount_compat`]: `PerSource`
 /// is the pre-axis pole, so it is emitted as the legacy tuple `["GE", 6]` —
@@ -10146,6 +10146,7 @@ pub fn quantity_ref_grammar_any(
         | QuantityRef::PlayerChosenNumber { .. }
         | QuantityRef::NotedNumber
         | QuantityRef::DescendedThisTurn
+        | QuantityRef::CardsCycled { .. }
         | QuantityRef::LoyaltyAbilitiesActivatedThisTurn { .. }
         | QuantityRef::CardsDiscardedThisTurn { .. }
         | QuantityRef::PlayerActionsThisTurn { .. }
@@ -11011,6 +11012,7 @@ fn rewrite_quantity_ref_filter_props<C>(
         | QuantityRef::PlayerChosenNumber { .. }
         | QuantityRef::NotedNumber
         | QuantityRef::DescendedThisTurn
+        | QuantityRef::CardsCycled { .. }
         | QuantityRef::LoyaltyAbilitiesActivatedThisTurn { .. }
         | QuantityRef::CardsDiscardedThisTurn { .. }
         | QuantityRef::PlayerActionsThisTurn { .. }
@@ -11136,8 +11138,7 @@ pub fn filter_reads_declared_slot(filter: &TargetFilter) -> bool {
 /// `ledger_guard_agrees_with_matcher` (test, `crate::game::restrictions`).
 ///
 /// Upgrade path, ascending cost: `HasSupertype` and `Named` are answerable from `record.supertypes`
-/// / `record.name` TODAY — one matcher arm plus one line here. `Token`/`NonToken` and `Tapped`
-/// need a new snapshot field on `BattlefieldEntryRecord`.
+/// / `record.name`. `Tapped` needs a new snapshot field on `BattlefieldEntryRecord`.
 ///
 /// `TypedFilter::type_filters` is intentionally NOT screened: `entry_type_filter_matches` is
 /// exhaustive; `Instant`/`Sorcery` answer `false` per CR 403.3, whose negation is correctly
@@ -11159,6 +11160,8 @@ pub fn ledger_filter_is_evaluable(filter: &TargetFilter) -> bool {
                             | FilterProp::WithKeyword { .. }
                             | FilterProp::FaceDown
                             | FilterProp::Another
+                            | FilterProp::Token
+                            | FilterProp::NonToken
                     )
                 })
         }
@@ -12319,6 +12322,13 @@ impl TurnWindow {
     }
 }
 
+/// Time span of a completed-cycling history read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CyclingHistoryWindow {
+    ThisTurn,
+    ThisGame,
+}
+
 /// CR 102 + CR 119 + CR 402: Player axis for player-scoped quantity references.
 ///
 /// Parameterizes the player whose hand size, life total, or other per-player
@@ -13404,6 +13414,7 @@ fn quantity_ref_has_unsupported_selected_ref(qty: &QuantityRef) -> bool {
         | QuantityRef::NotedNumber
         | QuantityRef::ChosenNumber
         | QuantityRef::DescendedThisTurn
+        | QuantityRef::CardsCycled { .. }
         | QuantityRef::DungeonsCompleted
         | QuantityRef::KickerCount
         | QuantityRef::AdditionalCostPaymentCount
@@ -15085,6 +15096,14 @@ pub enum QuantityRef {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         filter: Option<TargetFilter>,
     },
+    /// CR 702.29a + CR 702.29e + CR 702.29f: Completed cycling activations,
+    /// including typecycling, optionally restricted to a recorded card name.
+    CardsCycled {
+        scope: CountScope,
+        window: CyclingHistoryWindow,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+    },
     /// CR 122.1 + CR 122.6: Count counters put this turn by `actor` on objects
     /// matching `target`. `counters` narrows the counter kind; `CounterMatch::Any`
     /// counts every counter type. This parameterizes the legacy boolean
@@ -15372,6 +15391,7 @@ impl QuantityRef {
             | QuantityRef::NotedNumber
             | QuantityRef::AttackedThisTurn { .. }
             | QuantityRef::DescendedThisTurn
+            | QuantityRef::CardsCycled { .. }
             | QuantityRef::SpellsCastThisGame { .. }
             | QuantityRef::CounterAddedThisTurn { .. }
             | QuantityRef::DungeonsCompleted
@@ -15531,6 +15551,7 @@ impl QuantityRef {
             | QuantityRef::PlayerChosenNumber { .. }
             | QuantityRef::NotedNumber
             | QuantityRef::DescendedThisTurn
+            | QuantityRef::CardsCycled { .. }
             | QuantityRef::LoyaltyAbilitiesActivatedThisTurn { .. }
             | QuantityRef::CardsDrawnLastTurn { .. }
             | QuantityRef::OpponentSpellsCastSinceLastTurn { .. }
@@ -15644,6 +15665,7 @@ impl QuantityRef {
             | QuantityRef::NotedNumber
             | QuantityRef::AttackedThisTurn { .. }
             | QuantityRef::DescendedThisTurn
+            | QuantityRef::CardsCycled { .. }
             | QuantityRef::SpellsCastThisGame { .. }
             | QuantityRef::CounterAddedThisTurn { .. }
             | QuantityRef::DungeonsCompleted
@@ -16526,6 +16548,7 @@ pub fn quantity_ref_object_scope_read(qty: &QuantityRef) -> ObjectScopeRead {
         | QuantityRef::PlayerCount { .. } | QuantityRef::ControlledByEachPlayer { .. }
         | QuantityRef::ZoneChangeCountThisTurn { .. } | QuantityRef::ZoneChangeAggregateThisTurn { .. }
         | QuantityRef::SpellsCast { .. } | QuantityRef::SpellsCastBeforeTriggeringSpell { .. }
+        | QuantityRef::CardsCycled { .. }
         | QuantityRef::SpellsCastThisGame { .. } | QuantityRef::EventContextPlayerCount { .. }
         | QuantityRef::TargetZoneCardCount { .. } | QuantityRef::Devotion { .. }
         | QuantityRef::BasicLandTypeCount { .. } | QuantityRef::CardsExiledBySource | QuantityRef::DeployedBossCount
@@ -19084,6 +19107,10 @@ impl StaticCondition {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ParsedCondition {
+    /// CR 602.5: an activation restriction testing the source itself.
+    SourceMatchesFilter {
+        filter: TargetFilter,
+    },
     SourceInZone {
         zone: Zone,
     },
@@ -29022,6 +29049,7 @@ pub struct QuantitySlotDerivation {
 /// reads a value that needs no target slot.
 pub fn quantity_ref_target_slot_spec(qty: &QuantityRef) -> Option<QuantitySlotDerivation> {
     match qty {
+        QuantityRef::CardsCycled { .. } => None,
         // CR 208.1: power/toughness are creature numbers — the target slot is a creature.
         QuantityRef::Power {
             scope: ObjectScope::Target,
@@ -29460,6 +29488,7 @@ pub fn quantity_ref_recipient_read(qty: &QuantityRef) -> RecipientRead {
         | QuantityRef::ZoneChangeAggregateThisTurn { .. }
         | QuantityRef::SpellsCast { .. }
         | QuantityRef::SpellsCastBeforeTriggeringSpell { .. }
+        | QuantityRef::CardsCycled { .. }
         | QuantityRef::SpellsCastThisGame { .. }
         | QuantityRef::ManaSpentToCast { .. }
         | QuantityRef::TargetObjectManaValue { .. }
@@ -30534,6 +30563,29 @@ pub enum VoteVisibility {
 }
 
 impl TargetFilter {
+    /// CR 702.62b: exile, suspend, and at least one time counter on this card.
+    pub fn suspended_card(owner: Option<ControllerRef>) -> TargetFilter {
+        let mut properties = vec![
+            // CR 400.1: in the exile zone.
+            FilterProp::InZone { zone: Zone::Exile },
+            // CR 702.62b: has suspend.
+            FilterProp::HasKeywordKind {
+                value: KeywordKind::Suspend,
+            },
+            // CR 702.62b: bears at least one time counter.
+            FilterProp::Counters {
+                counters: CounterMatch::OfType(CounterType::Time),
+                comparator: Comparator::GE,
+                count: QuantityExpr::Fixed { value: 1 },
+            },
+        ];
+        if let Some(o) = owner {
+            // CR 108.3: owned by the given player reference.
+            properties.push(FilterProp::Owned { controller: o });
+        }
+        TargetFilter::Typed(TypedFilter::card().properties(properties))
+    }
+
     /// CR 608.2c + CR 110.1: the members of a reveal's published set that are
     /// permanents — "those creature cards" / "those permanents" after "Put those …
     /// cards onto the battlefield". The reveal publishes every card it revealed
@@ -37569,6 +37621,8 @@ pub struct AbilityDefinition {
     /// CR 608.2c: Repeat this ability N times, where N = resolve_quantity(repeat_for).
     /// Produced by "for each [X], [effect]" leading patterns.
     pub repeat_for: Option<QuantityExpr>,
+    /// CR 608.2: the iteration relation of `repeat_for`; see [`RepeatForTiming`].
+    pub repeat_timing: RepeatForTiming,
     /// Minimum legal announced value for X. Defaults to zero; set to one by
     /// "X can't be 0" annotations.
     pub min_x_value: u32,
@@ -38030,6 +38084,8 @@ struct AbilityDefinitionRepr<'a> {
     mode_abilities: &'a Vec<AbilityDefinition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     repeat_for: &'a Option<QuantityExpr>,
+    #[serde(skip_serializing_if = "RepeatForTiming::is_sequential")]
+    repeat_timing: RepeatForTiming,
     #[serde(skip_serializing_if = "is_zero_u32")]
     min_x_value: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -38111,6 +38167,7 @@ impl Serialize for AbilityDefinition {
             modal,
             mode_abilities,
             repeat_for,
+            repeat_timing,
             min_x_value,
             announced_x,
             cant_be_copied,
@@ -38166,6 +38223,7 @@ impl Serialize for AbilityDefinition {
             modal,
             mode_abilities,
             repeat_for,
+            repeat_timing: *repeat_timing,
             min_x_value: *min_x_value,
             announced_x,
             cant_be_copied: *cant_be_copied,
@@ -38285,6 +38343,8 @@ struct AbilityDefinitionDe {
     #[serde(default)]
     repeat_for: Option<QuantityExpr>,
     #[serde(default)]
+    repeat_timing: RepeatForTiming,
+    #[serde(default)]
     min_x_value: u32,
     #[serde(default)]
     announced_x: Option<QuantityExpr>,
@@ -38371,6 +38431,7 @@ impl<'de> Deserialize<'de> for AbilityDefinition {
             modal: de.modal,
             mode_abilities: de.mode_abilities,
             repeat_for: de.repeat_for,
+            repeat_timing: de.repeat_timing,
             min_x_value: de.min_x_value,
             announced_x: de.announced_x,
             cant_be_copied: de.cant_be_copied,
@@ -38581,6 +38642,33 @@ impl InstructionJoin {
     }
 }
 
+/// CR 608.2: how the iterations of a counted repeat (`repeat_for`) relate.
+/// Meaningful only when `repeat_for` is `Some`; producers never pair
+/// `SimultaneousInstances` with no count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum RepeatForTiming {
+    /// Each iteration completes before the next begins, as Torment of Hailfire's
+    /// ruling (2017-07-14) says: "Each repetition through this process is done
+    /// separately." Every producer other than the for-each prefix peel stamps this:
+    /// "repeat the following process", "twice" / "N times", difference counts,
+    /// and lifted and copy counts.
+    #[default]
+    Sequential,
+    /// CR 608.2c + CR 101.4: a leading "for each <count>, <instruction>" —
+    /// every iteration is an instance of one instruction. RUNTIME: read by the
+    /// engine's CR 101.4 admission authority (`effects::simultaneous_unless::admits`),
+    /// which resolves an admitted scoped unless poll choose-all-then-act; a shape
+    /// it does not admit resolves on the round-by-round driver like `Sequential`.
+    SimultaneousInstances,
+}
+
+impl RepeatForTiming {
+    /// `skip_serializing_if` predicate — the default needs no JSON byte.
+    pub fn is_sequential(timing: &Self) -> bool {
+        matches!(timing, Self::Sequential)
+    }
+}
+
 /// CR 608.2c + CR 107.1c: how a "repeat this process" loop decides whether to
 /// run another iteration. The non-count companion to `AbilityDefinition`'s
 /// `repeat_for` (a fixed `QuantityExpr` count) — this predicate decides
@@ -38779,6 +38867,7 @@ impl AbilityDefinition {
             modal: None,
             mode_abilities: Vec::new(),
             repeat_for: None,
+            repeat_timing: RepeatForTiming::Sequential,
             min_x_value: 0,
             announced_x: None,
             cant_be_copied: false,
@@ -45867,7 +45956,7 @@ mod tests {
     }
 
     fn legacy_worship_draw_replacement() -> serde_json::Value {
-        // Witnessed in integration_cards.json.gz at the original PR base.
+        // Witnessed in integration_cards/ at the original PR base.
         serde_json::json!({
             "type": "CreateDrawReplacement",
             "replacement_effect": { "type": "GainLife", "amount": { "type": "Fixed", "value": 5 } }
@@ -50238,6 +50327,47 @@ mod tests {
         assert_eq!(ability, deserialized);
     }
 
+    /// The repeat timing is omitted at its default,
+    /// round-trips when `SimultaneousInstances`, and legacy JSON without the
+    /// key reads `Sequential`.
+    #[test]
+    fn repeat_timing_serde_default_roundtrip_and_legacy() {
+        let base = AbilityDefinition::new(
+            AbilityKind::Spell,
+            Effect::Draw {
+                count: QuantityExpr::Fixed { value: 1 },
+                target: TargetFilter::Controller,
+            },
+        );
+
+        // (a) Sequential is the default and writes no key.
+        let sequential_json = serde_json::to_value(&base).unwrap();
+        assert!(sequential_json.get("repeat_timing").is_none());
+
+        // (b) SimultaneousInstances writes its key and round-trips equal.
+        let mut simultaneous = base.clone();
+        simultaneous.repeat_for = Some(QuantityExpr::Fixed { value: 2 });
+        simultaneous.repeat_timing = RepeatForTiming::SimultaneousInstances;
+        let json = serde_json::to_value(&simultaneous).unwrap();
+        assert_eq!(
+            json.get("repeat_timing"),
+            Some(&serde_json::json!("SimultaneousInstances"))
+        );
+        let round_trip: AbilityDefinition = serde_json::from_value(json).unwrap();
+        assert_eq!(round_trip, simultaneous);
+        assert_eq!(
+            round_trip.repeat_timing,
+            RepeatForTiming::SimultaneousInstances
+        );
+
+        // (c) Legacy JSON lacking the key reads Sequential.
+        let mut legacy = serde_json::to_value(&simultaneous).unwrap();
+        legacy.as_object_mut().unwrap().remove("repeat_timing");
+        let legacy: AbilityDefinition = serde_json::from_value(legacy).unwrap();
+        assert_eq!(legacy.repeat_timing, RepeatForTiming::Sequential);
+        assert_eq!(legacy.repeat_for, Some(QuantityExpr::Fixed { value: 2 }));
+    }
+
     #[test]
     fn exile_concealment_keeps_legacy_boolean_wire_shape() {
         assert_eq!(
@@ -54429,6 +54559,44 @@ mod spellbook_selection_serde_tests {
         assert!(
             err.to_string().contains("duplicate field"),
             "expected a duplicate-field error, got {err}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod cycling_quantity_serde_tests {
+    use super::*;
+
+    #[test]
+    fn phase3_v6_cycling_quantity_roundtrips_and_legacy_cast_history_decodes() {
+        let named = "Yidaro, Wandering Monster".to_owned();
+        for window in [
+            CyclingHistoryWindow::ThisTurn,
+            CyclingHistoryWindow::ThisGame,
+        ] {
+            for name in [None, Some(named.clone())] {
+                let expected_name = name
+                    .as_ref()
+                    .map(|value| serde_json::to_value(value).unwrap());
+                let qty = QuantityRef::CardsCycled {
+                    scope: CountScope::Controller,
+                    window,
+                    name,
+                };
+                let wire = serde_json::to_value(&qty).unwrap();
+                assert_eq!(wire["type"], "CardsCycled");
+                assert_eq!(wire["window"], serde_json::to_value(window).unwrap());
+                assert_eq!(wire.get("name"), expected_name.as_ref());
+                assert_eq!(serde_json::from_value::<QuantityRef>(wire).unwrap(), qty);
+                assert!(quantity_ref_target_slot_spec(&qty).is_none());
+            }
+        }
+        assert_eq!(
+            serde_json::from_str::<QuantityRef>(r#"{"type":"SpellsCastThisGame"}"#).unwrap(),
+            QuantityRef::SpellsCastThisGame {
+                scope: CountScope::Controller,
+                filter: None
+            },
         );
     }
 }

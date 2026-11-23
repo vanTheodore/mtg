@@ -8,7 +8,9 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use super::card::PrintedCardRef;
 use super::card_type::CoreType;
 use super::counter::CounterType;
-use super::game_state::{CastOccurrence, LKISnapshot, MayTriggerOrigin, TriggerSourceContext};
+use super::game_state::{
+    CastOccurrence, CyclingOccurrence, LKISnapshot, MayTriggerOrigin, TriggerSourceContext,
+};
 use super::game_state_kinds::{DistributionUnit, TargetSelectionConstraint};
 use super::identifiers::{
     CardId, EpicEffectId, ObjectId, ObjectIncarnationRef, LEGACY_INCARNATION,
@@ -1982,6 +1984,15 @@ pub struct SpellContext {
     /// ordinary ability-chain handoffs without widening every ability literal.
     #[serde(default, skip_serializing_if = "ExileConcealment::is_public")]
     pub face_down_in_exile: ExileConcealment,
+    /// CR 701.9a vs CR 118.12: why this node's discard happens. Node-local:
+    /// `apply_parent_chain_context` keeps a child's own cause, so a cost-paying
+    /// delivery node never makes a chained instruction's discard a cost. See
+    /// [`crate::types::game_state::DiscardCause`].
+    #[serde(
+        default,
+        skip_serializing_if = "crate::types::game_state::DiscardCause::is_effect"
+    )]
+    pub discard_cause: crate::types::game_state::DiscardCause,
     /// CR 201.5a: the granter stamped on the definition this ability was built from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub granting_object: Option<ObjectIncarnationRef>,
@@ -3400,6 +3411,9 @@ pub struct ResolvedAbility {
     /// resolving spell ability. Spell copies that were not cast carry `None`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cast_occurrence: Option<CastOccurrence>,
+    /// Coordinate of the completed cycling activation represented by this graph.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cycling_occurrence: Option<CyclingOccurrence>,
     /// CR 400.7: Exact source incarnation captured for self-transform guards.
     /// The full `trigger_source` context remains the authority for all triggered
     /// source facts; this field preserves the source epoch for activated and
@@ -3440,19 +3454,25 @@ pub struct ResolvedAbility {
     /// deliberately separate from the parsed grammatical selector on `Effect`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub force_block_attacker: Option<ObjectIncarnationRef>,
-    /// CR 400.7 + CR 603.7c: Incarnation pins for the object referents in
-    /// `targets`, captured when a delayed triggered ability snapshotted its
-    /// `ParentTarget` referent at creation. A delayed ability that refers to a
-    /// particular object must not affect a later object that merely reuses the
-    /// same storage `ObjectId` — CR 603.7c: "if that object left that zone and
-    /// then returned, it's a new object and thus won't be affected."
+    /// CR 400.7 + CR 603.7c: keyed incarnation pins for an ability's object
+    /// referents. Two producers write them:
+    /// - a delayed triggered ability snapshots its `ParentTarget` referent at
+    ///   creation, so it doesn't affect a later object that merely reuses the
+    ///   same storage `ObjectId` (CR 603.7c: "if that object left that zone and
+    ///   then returned, it's a new object and thus won't be affected");
+    /// - a triggered ability's event-context referents (`TriggeringSource`,
+    ///   `EventTarget`, and the perpetual / attach `ParentTarget` roles) are
+    ///   pinned to the incarnation the trigger event recorded, at collection,
+    ///   push and assignment (`triggers::seed_event_referent_pins`), and judged
+    ///   by `targeting::event_referent_is_findable`. A damage recipient's pin is
+    ///   occurrence-exact. The resolution's own zone move re-pins its arrival
+    ///   onto later chain nodes (CR 400.7j).
     ///
-    /// Empty for every ability that is not a pinned `ParentTarget` delayed
-    /// trigger — including delayed triggers whose own condition names a ZONE
-    /// CHANGE OF THE REFERENT, in either direction (CR 400.7e; see
-    /// `condition_names_referent_zone_change`), where the referent is EXPECTED
-    /// to have moved and must still be affected. An id with no pin here
-    /// resolves unchanged, so the guard is inert outside the pinned path.
+    /// A delayed trigger whose own condition names a ZONE CHANGE OF THE
+    /// REFERENT, in either direction (CR 400.7e; see
+    /// `condition_names_referent_zone_change`), takes no pin: the referent is
+    /// EXPECTED to have moved and must still be affected. An id with no pin
+    /// here resolves unchanged; `LEGACY_INCARNATION` pins are ignored.
     ///
     /// Element-level pins are deliberately non-`Option` so an individual
     /// referent can never degrade to "always matches" (contrast
@@ -3462,8 +3482,8 @@ pub struct ResolvedAbility {
     /// CR 400.7 + CR 601.2c: the incarnation announced for each target
     /// OCCURRENCE, aligned position-for-position with `targets` (`None` for a
     /// player, or an occurrence nothing pinned). Empty means every occurrence
-    /// is unpinned. Separate from `target_incarnations`, whose keyed pins are
-    /// reserved for delayed-trigger referents. Written only through the
+    /// is unpinned. Separate from `target_incarnations`, whose keyed pins hold
+    /// delayed-trigger and event-context referents. Written only through the
     /// occurrence authority (`game::target_occurrences`), which moves targets
     /// and pins together.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -3639,6 +3659,10 @@ pub struct ResolvedAbility {
     /// CR 608.2c: Repeat this ability N times (from "for each [X], [effect]").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repeat_for: Option<QuantityExpr>,
+    /// CR 608.2: the iteration relation of `repeat_for`, copied through from the
+    /// originating `AbilityDefinition`. See [`RepeatForTiming`].
+    #[serde(default, skip_serializing_if = "RepeatForTiming::is_sequential")]
+    pub repeat_timing: RepeatForTiming,
     /// Minimum legal announced value for X. Defaults to zero; set to one by
     /// "X can't be 0" annotations.
     #[serde(default, skip_serializing_if = "is_zero_u32")]
@@ -3988,6 +4012,7 @@ impl PartialEq for ResolvedAbility {
             reads_return_result: a_reads_return_result,
             source_id: a_source_id,
             cast_occurrence: a_cast_occurrence,
+            cycling_occurrence: a_cycling_occurrence,
             source_incarnation: a_source_incarnation,
             announced_source_incarnation: a_announced_source_incarnation,
             trigger_source: a_trigger_source,
@@ -4028,6 +4053,7 @@ impl PartialEq for ResolvedAbility {
             modal_instruction_ordinal: a_modal_instruction_ordinal,
             detached_remainder: a_detached_remainder,
             repeat_for: a_repeat_for,
+            repeat_timing: a_repeat_timing,
             min_x_value: a_min_x_value,
             announced_x: a_announced_x,
             cant_be_copied: a_cant_be_copied,
@@ -4072,6 +4098,7 @@ impl PartialEq for ResolvedAbility {
             reads_return_result: b_reads_return_result,
             source_id: b_source_id,
             cast_occurrence: b_cast_occurrence,
+            cycling_occurrence: b_cycling_occurrence,
             source_incarnation: b_source_incarnation,
             announced_source_incarnation: b_announced_source_incarnation,
             trigger_source: b_trigger_source,
@@ -4111,6 +4138,7 @@ impl PartialEq for ResolvedAbility {
             modal_instruction_ordinal: b_modal_instruction_ordinal,
             detached_remainder: b_detached_remainder,
             repeat_for: b_repeat_for,
+            repeat_timing: b_repeat_timing,
             min_x_value: b_min_x_value,
             announced_x: b_announced_x,
             cant_be_copied: b_cant_be_copied,
@@ -4155,6 +4183,7 @@ impl PartialEq for ResolvedAbility {
             && a_reads_return_result == b_reads_return_result
             && a_source_id == b_source_id
             && a_cast_occurrence == b_cast_occurrence
+            && a_cycling_occurrence == b_cycling_occurrence
             && a_source_incarnation == b_source_incarnation
             && a_announced_source_incarnation == b_announced_source_incarnation
             && a_trigger_source == b_trigger_source
@@ -4193,6 +4222,7 @@ impl PartialEq for ResolvedAbility {
             && a_modal_instruction_ordinal == b_modal_instruction_ordinal
             && a_detached_remainder == b_detached_remainder
             && a_repeat_for == b_repeat_for
+            && a_repeat_timing == b_repeat_timing
             && a_min_x_value == b_min_x_value
             && a_announced_x == b_announced_x
             && a_cant_be_copied == b_cant_be_copied
@@ -4746,6 +4776,7 @@ impl ResolvedAbility {
             reads_return_result: None,
             source_id,
             cast_occurrence: None,
+            cycling_occurrence: None,
             controller,
             original_controller: None,
             scoped_player: None,
@@ -4768,6 +4799,7 @@ impl ResolvedAbility {
             modal_instruction_ordinal: None,
             detached_remainder: DetachedRemainder::NoProducer,
             repeat_for: None,
+            repeat_timing: RepeatForTiming::Sequential,
             min_x_value: 0,
             announced_x: None,
             cant_be_copied: false,
@@ -4914,7 +4946,25 @@ impl ResolvedAbility {
         }
     }
 
+    pub(crate) fn set_cycling_occurrence_recursive(&mut self, occurrence: CyclingOccurrence) {
+        self.cycling_occurrence = Some(occurrence);
+        for (_, child) in self.child_links_mut() {
+            child.set_cycling_occurrence_recursive(occurrence);
+        }
+    }
+
+    pub(crate) fn cycling_occurrence_matches_recursive(
+        &self,
+        occurrence: CyclingOccurrence,
+    ) -> bool {
+        self.cycling_occurrence == Some(occurrence)
+            && self
+                .child_links()
+                .all(|(_, child)| child.cycling_occurrence_matches_recursive(occurrence))
+    }
+
     pub(crate) fn normalize_cast_occurrence_for_loop_recursive(&mut self) {
+        self.cycling_occurrence = None;
         if let Some(occurrence) = self.cast_occurrence.as_mut() {
             occurrence.turn_journal_index = 0;
         }
