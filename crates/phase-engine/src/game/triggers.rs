@@ -2139,6 +2139,26 @@ fn occurrence_trigger_events(
                     .collect(),
             );
         }
+        TriggerMode::AttacksOrBlocks => match event {
+            GameEvent::AttackersDeclared { .. } => {
+                return Some(
+                    m::attack_firings(event, trig_def, source_context, state)
+                        .into_iter()
+                        .map(|firing| FiringOccurrence {
+                            context: firing.context,
+                            causes: vec![firing.admitted],
+                        })
+                        .collect(),
+                );
+            }
+            GameEvent::BlockersDeclared { .. } => Some(m::matching_block_events(
+                event,
+                trig_def,
+                source_context,
+                state,
+            )),
+            _ => Some(Vec::new()),
+        },
         TriggerMode::YouAttack if ability.has_event_source_force_block_recursive() => {
             let matching = m::matching_you_attack_pairs(event, trig_def, source_context, state);
             Some(match event {
@@ -4405,7 +4425,7 @@ fn collect_matching_triggers_inner(
                 }
                 let later_equal_in_batch =
                     count_later_equal_damage_events_in_batch(event_batch, event, &trigger_event);
-                seed_damage_event_recipient_pin(
+                seed_event_referent_pins(
                     state,
                     &mut pending_ability,
                     Some(&trigger_event),
@@ -10161,7 +10181,12 @@ pub(crate) fn process_triggers_observing(
     // CR 603.3 + CR 603.3b + CR 608.2n: while an instant or sorcery owes its final
     // part, what triggers waits in the queue for the resolution's batch instead
     // of being put on the stack now.
-    if super::stack::resolving_spell_owes_final_part(state) {
+    // CR 603.3 + CR 117.2e: likewise while a choose-all-then-act unless poll holds
+    // its resolution open (Rottenmouth Viper): no player receives priority until it
+    // is delivered.
+    if super::stack::resolving_spell_owes_final_part(state)
+        || super::effects::simultaneous_unless::holds_resolution(state)
+    {
         collect_triggers_into_deferred_observing(state, events, action_departures);
         return;
     }
@@ -12161,11 +12186,30 @@ pub(crate) fn collect_departure_triggers_into_deferred(
     looked_back: Option<(ImmediatelyBeforeObservers, usize, usize)>,
 ) {
     collect_unclaimed_triggers_into_deferred(state, events, event_start, looked_back);
-    let claims = (event_start..events.len()).map(|index| ConsumedTriggerEventOccurrence {
-        event: events[index].clone(),
-        occurrence: trigger_event_occurrence(events, index),
-        scope: ConsumedTriggerEventScope::AllCollectors,
-    });
+    claim_trigger_event_occurrences(
+        state,
+        events,
+        event_start..events.len(),
+        ConsumedTriggerEventScope::AllCollectors,
+    );
+}
+
+/// CR 603.2c: record that a collector has taken the occurrences at `positions`
+/// of the full action buffer `events`, so a later scan of the same buffer does
+/// not collect them again for the collectors `scope` names.
+pub(crate) fn claim_trigger_event_occurrences(
+    state: &mut GameState,
+    events: &[GameEvent],
+    positions: impl IntoIterator<Item = usize>,
+    scope: ConsumedTriggerEventScope,
+) {
+    let claims = positions
+        .into_iter()
+        .map(|index| ConsumedTriggerEventOccurrence {
+            event: events[index].clone(),
+            occurrence: trigger_event_occurrence(events, index),
+            scope,
+        });
     state.consumed_before_priority_trigger_events.extend(claims);
 }
 
@@ -13438,7 +13482,7 @@ pub(crate) fn seed_event_context_parent_targets(
 /// Returns the destination incarnation recorded by the zone-change authority.
 /// Never consult live state here: trigger placement can be deferred until after
 /// the same storage id has already left and returned as a different object.
-fn zone_change_parent_target_pin(event: &GameEvent) -> Option<ObjectIncarnationRef> {
+pub(crate) fn zone_change_parent_target_pin(event: &GameEvent) -> Option<ObjectIncarnationRef> {
     let GameEvent::ZoneChanged {
         object_id,
         from,
@@ -13503,23 +13547,6 @@ fn effect_uses_parent_target(effect: &Effect) -> bool {
             .target_filter()
             .is_some_and(|f| matches!(f, TargetFilter::ParentTarget | TargetFilter::AttachedTo)),
     }
-}
-
-fn ability_uses_event_target_prevent_damage(ability: &ResolvedAbility) -> bool {
-    matches!(
-        &ability.effect,
-        Effect::PreventDamage {
-            target: TargetFilter::EventTarget,
-            ..
-        }
-    ) || ability
-        .sub_ability
-        .as_deref()
-        .is_some_and(ability_uses_event_target_prevent_damage)
-        || ability
-            .else_ability
-            .as_deref()
-            .is_some_and(ability_uses_event_target_prevent_damage)
 }
 
 fn count_later_equal_damage_events_in_batch(
@@ -13599,29 +13626,337 @@ fn damage_event_recipient_pin(
     Some(ObjectIncarnationRef::of(*target_id, incarnation))
 }
 
-/// CR 400.7 + CR 608.2k + CR 120.1: Pin the exact damage recipient incarnation
-/// on an ability chain that resolves `TargetFilter::EventTarget` into a
-/// prevention shield (`Effect::PreventDamage`). Captured when the trigger is
-/// collected / placed on the stack so that if the recipient leaves the
-/// battlefield and returns before the trigger resolves — even if the same
-/// dealer deals an equal amount of damage to the returned incarnation before
-/// the original trigger resolves — the original trigger remains bound to its
-/// own event's recipient incarnation and does not shield the new object.
-pub(crate) fn seed_damage_event_recipient_pin(
+/// CR 400.7 + CR 603.3 + CR 608.2k: capture, when the trigger is collected (and
+/// again, without overwriting, when it is placed on the stack), the exact
+/// incarnation of each event-context object every chain node names through an
+/// operand slot `effect_parent_ref_slots` surfaces: `TriggeringSource` and
+/// `EventTarget`, plus `ParentTarget` where the node's own resolver reads it
+/// from the event (an Attach operand, a perpetual boon's cast spell). The pins
+/// are keyed per node in `target_incarnations` and read by
+/// `targeting::resolve_event_referent`. A damage recipient's pin comes from the
+/// ledger record of this very event (`later_equal_in_batch` disambiguates equal
+/// hits in one batch), so a later equal hit on a returned object is not
+/// mistaken for it.
+pub(crate) fn seed_event_referent_pins(
     state: &GameState,
     ability: &mut ResolvedAbility,
     trigger_event: Option<&GameEvent>,
     later_equal_in_batch: usize,
 ) {
-    if !ability.target_incarnations.is_empty() || !ability_uses_event_target_prevent_damage(ability)
-    {
+    let Some(event) = trigger_event else {
         return;
+    };
+    let mut ids = Vec::new();
+    // CR 707.10 + CR 608.2h: a spell copy reads its source's information, from
+    // the departed-spell record once the spell has left the stack;
+    // `copy_spell::copy_source_entry` owns that identity, so it takes no pin.
+    let informs_only = matches!(ability.effect, Effect::CopySpell { .. });
+    for slot in crate::types::ability::effect_parent_ref_slots(&ability.effect)
+        .into_iter()
+        .filter(|_| !informs_only)
+    {
+        for anaphor in [TargetFilter::TriggeringSource, TargetFilter::EventTarget] {
+            if crate::types::ability::filter_refs_event_subject(slot, &anaphor) {
+                ids.extend(event_object(state, &anaphor, ability.source_id, event));
+            }
+        }
+        if *slot == TargetFilter::ParentTarget {
+            // CR 400.7 + CR 608.2k: an untargeted ParentTarget names an object
+            // from the trigger event only for these resolvers: a perpetual
+            // boon's subject, and the entering attachment of "attach it".
+            ids.extend(match &ability.effect {
+                Effect::ApplyPerpetual { .. } => {
+                    super::effects::perpetual::parent_object_from_trigger_event(Some(event))
+                }
+                Effect::Attach { attachment, .. } => std::ptr::eq(attachment, slot)
+                    .then(|| super::effects::attach::entering_object(event))
+                    .flatten(),
+                Effect::StartYourEngines { .. }
+                | Effect::ChangeSpeed { .. }
+                | Effect::DealDamage { .. }
+                | Effect::ApplyPostReplacementDamage { .. }
+                | Effect::ResumeDamageBatch { .. }
+                | Effect::EachDealsDamageEqualToPower { .. }
+                | Effect::EachSourceDealsDamage { .. }
+                | Effect::Draw { .. }
+                | Effect::Pump { .. }
+                | Effect::PairWith { .. }
+                | Effect::Destroy { .. }
+                | Effect::Regenerate { .. }
+                | Effect::RemoveAllDamage { .. }
+                | Effect::Counter { .. }
+                | Effect::CounterAll { .. }
+                | Effect::Token { .. }
+                | Effect::GainLife { .. }
+                | Effect::LoseLife { .. }
+                | Effect::SetTapState { .. }
+                | Effect::RemoveCounter { .. }
+                | Effect::Sacrifice { .. }
+                | Effect::DiscardCard { .. }
+                | Effect::Mill { .. }
+                | Effect::Scry { .. }
+                | Effect::PumpAll { .. }
+                | Effect::DamageAll { .. }
+                | Effect::DamageEachPlayer { .. }
+                | Effect::DestroyAll { .. }
+                | Effect::ChangeZone { .. }
+                | Effect::ChangeZoneAll { .. }
+                | Effect::Dig { .. }
+                | Effect::GainControl { .. }
+                | Effect::GainControlAll { .. }
+                | Effect::ControlNextTurn { .. }
+                | Effect::UnattachAll { .. }
+                | Effect::Surveil { .. }
+                | Effect::Fight { .. }
+                | Effect::Bounce { .. }
+                | Effect::BounceAll { .. }
+                | Effect::Explore
+                | Effect::ExploreAll { .. }
+                | Effect::Investigate
+                | Effect::Tribute { .. }
+                | Effect::TimeTravel
+                | Effect::BecomeMonarch { .. }
+                | Effect::NoOp
+                | Effect::Proliferate
+                | Effect::ProliferateTarget { .. }
+                | Effect::Populate
+                | Effect::Clash
+                | Effect::ExileTopCardContest { .. }
+                | Effect::Behold { .. }
+                | Effect::EndTheTurn
+                | Effect::EndCombatPhase
+                | Effect::Vote { .. }
+                | Effect::SeparateIntoPiles { .. }
+                | Effect::SwitchPT { .. }
+                | Effect::CopySpell { .. }
+                | Effect::EpicCopy { .. }
+                | Effect::CastCopyOfCard { .. }
+                | Effect::CopyTokenOf { .. }
+                | Effect::CreateTokenCopyFromPool { .. }
+                | Effect::Myriad
+                | Effect::Encore
+                | Effect::CombineHost { .. }
+                | Effect::ChooseAugmentAndCombineWithHost { .. }
+                | Effect::Meld { .. }
+                | Effect::ExileHaunting { .. }
+                | Effect::HideawayConceal { .. }
+                | Effect::CopyTokenBlockingAttacker { .. }
+                | Effect::BecomeCopy { .. }
+                | Effect::ChoosePermanent { .. }
+                | Effect::GainActivatedAbilitiesOfTarget { .. }
+                | Effect::ChooseCard { .. }
+                | Effect::PutCounter { .. }
+                | Effect::ChooseCounterKind { .. }
+                | Effect::PutChosenCounter { .. }
+                | Effect::PutCounterAll { .. }
+                | Effect::MultiplyCounter { .. }
+                | Effect::ChooseCounterAdjustment { .. }
+                | Effect::DoublePT { .. }
+                | Effect::DoublePTAll { .. }
+                | Effect::MoveCounters { .. }
+                | Effect::ReproduceEventCounters { .. }
+                | Effect::Animate { .. }
+                | Effect::ReturnAsAura { .. }
+                | Effect::RegisterBending { .. }
+                | Effect::GenericEffect { .. }
+                | Effect::Cleanup { .. }
+                | Effect::Mana { .. }
+                | Effect::Discard { .. }
+                | Effect::Shuffle { .. }
+                | Effect::Transform { .. }
+                | Effect::FlipPermanent { .. }
+                | Effect::SearchLibrary { .. }
+                | Effect::SearchOutsideGame { .. }
+                | Effect::OpenBoosterPack { .. }
+                | Effect::RevealHand { .. }
+                | Effect::RevealFromHand { .. }
+                | Effect::Reveal { .. }
+                | Effect::RevealChosenNumbers { .. }
+                | Effect::RevealTop { .. }
+                | Effect::ExileTop { .. }
+                | Effect::ExileFaceDownPile { .. }
+                | Effect::TargetOnly { .. }
+                | Effect::Choose { .. }
+                | Effect::OpponentGuess { .. }
+                | Effect::SwapChosenLabels { .. }
+                | Effect::ChooseDamageSource { .. }
+                | Effect::Suspect { .. }
+                | Effect::Unsuspect { .. }
+                | Effect::Connive { .. }
+                | Effect::PhaseOut { .. }
+                | Effect::PhaseIn { .. }
+                | Effect::ForceBlock { .. }
+                | Effect::ForceAttack { .. }
+                | Effect::SolveCase
+                | Effect::BecomePrepared { .. }
+                | Effect::BecomeUnprepared { .. }
+                | Effect::BecomeSaddled { .. }
+                | Effect::SetClassLevel { .. }
+                | Effect::CreateDelayedTrigger { .. }
+                | Effect::AddTargetReplacement { .. }
+                | Effect::AddRestriction { .. }
+                | Effect::ReduceNextSpellCost { .. }
+                | Effect::GrantNextSpellAbility { .. }
+                | Effect::AddPendingETBCounters { .. }
+                | Effect::AddPendingEntersModifications { .. }
+                | Effect::CreateEmblem { .. }
+                | Effect::CreateBoon { .. }
+                | Effect::NoteNumber { .. }
+                | Effect::PayCost { .. }
+                | Effect::CastFromZone { .. }
+                | Effect::FreeCastFromZones { .. }
+                | Effect::ExileResolvingSpellInsteadOfGraveyard { .. }
+                | Effect::PreventDamage { .. }
+                | Effect::CreateDamageReplacement { .. }
+                | Effect::CreateDrawReplacement { .. }
+                | Effect::CreatePlaneswalkReplacement { .. }
+                | Effect::LoseTheGame { .. }
+                | Effect::WinTheGame { .. }
+                | Effect::RollDie { .. }
+                | Effect::FlipCoins { .. }
+                | Effect::RingTemptsYou
+                | Effect::VentureIntoDungeon
+                | Effect::VentureInto { .. }
+                | Effect::TakeTheInitiative
+                | Effect::ArrangePlanarDeckTop { .. }
+                | Effect::Planeswalk
+                | Effect::AbandonScheme
+                | Effect::ChaosEnsues
+                | Effect::ReverseTurnOrder
+                | Effect::RedistributeLifeTotals
+                | Effect::OpenAttractions { .. }
+                | Effect::RollToVisitAttractions
+                | Effect::AssembleContraptions { .. }
+                | Effect::AssembleContraptionsFromRollDifference
+                | Effect::CrankContraptions { .. }
+                | Effect::ReassembleContraption { .. }
+                | Effect::AssembleContraptionOnSprocket { .. }
+                | Effect::ReassembleContraptionOnSprocket { .. }
+                | Effect::PutSticker { .. }
+                | Effect::ApplySticker { .. }
+                | Effect::ProcessRadCounters
+                | Effect::GrantCastingPermission { .. }
+                | Effect::ChooseFromZone { .. }
+                | Effect::RememberCard { .. }
+                | Effect::NoteManaSpent
+                | Effect::ForEachCategory { .. }
+                | Effect::ChooseObjectsIntoTrackedSet { .. }
+                | Effect::ChooseAndSacrificeRest { .. }
+                | Effect::EachPlayerCopyChosen { .. }
+                | Effect::Exploit { .. }
+                | Effect::GainEnergy { .. }
+                | Effect::GivePlayerCounter { .. }
+                | Effect::LoseAllPlayerCounters { .. }
+                | Effect::ExileFromTopUntil { .. }
+                | Effect::RevealUntil { .. }
+                | Effect::Discover { .. }
+                | Effect::PhysicalContest { .. }
+                | Effect::Heist { .. }
+                | Effect::HeistExile
+                | Effect::Cascade
+                | Effect::Ripple { .. }
+                | Effect::MiracleCast { .. }
+                | Effect::MadnessCast { .. }
+                | Effect::PutAtLibraryPosition { .. }
+                | Effect::ChooseDrawnThisTurnPayOrTopdeck { .. }
+                | Effect::PutOnTopOrBottom { .. }
+                | Effect::GiftDelivery { .. }
+                | Effect::Goad { .. }
+                | Effect::GoadAll { .. }
+                | Effect::Detain { .. }
+                | Effect::SetRoomDoorLock { .. }
+                | Effect::ExchangeControl { .. }
+                | Effect::ChangeTargets { .. }
+                | Effect::Manifest { .. }
+                | Effect::ManifestDread
+                | Effect::Cloak { .. }
+                | Effect::TurnFaceUp { .. }
+                | Effect::TurnFaceDown { .. }
+                | Effect::ExtraTurn { .. }
+                | Effect::GrantExtraLoyaltyActivations { .. }
+                | Effect::SkipNextTurn { .. }
+                | Effect::SkipNextStep { .. }
+                | Effect::AdditionalPhase { .. }
+                | Effect::ModifyAnnouncedX { .. }
+                | Effect::Double { .. }
+                | Effect::RuntimeHandled { .. }
+                | Effect::Incubate { .. }
+                | Effect::Amass { .. }
+                | Effect::EmpowerJace { .. }
+                | Effect::Monstrosity { .. }
+                | Effect::HordePlayCard { .. }
+                | Effect::Specialize
+                | Effect::Renown { .. }
+                | Effect::Bolster { .. }
+                | Effect::Adapt { .. }
+                | Effect::Learn
+                | Effect::Forage
+                | Effect::CompletePlayerAction { .. }
+                | Effect::Harness
+                | Effect::CollectEvidence { .. }
+                | Effect::Endure { .. }
+                | Effect::BlightEffect { .. }
+                | Effect::Seek { .. }
+                | Effect::SetLifeTotal { .. }
+                | Effect::ExchangeLifeWithStat { .. }
+                | Effect::ExchangeLifeTotals { .. }
+                | Effect::SetDayNight { .. }
+                | Effect::GiveControl { .. }
+                | Effect::RemoveFromCombat { .. }
+                | Effect::BecomeBlocked { .. }
+                | Effect::Conjure { .. }
+                | Effect::CreateCardCopyByName { .. }
+                | Effect::Intensify { .. }
+                | Effect::DraftFromSpellbook { .. }
+                | Effect::ChooseOneOf { .. }
+                | Effect::Unimplemented { .. } => None,
+            });
+        }
     }
-    if let Some(pin) = damage_event_recipient_pin(state, trigger_event, later_equal_in_batch) {
-        ability.set_target_incarnations_recursive(vec![pin]);
+    for id in ids {
+        if ability.target_incarnations.iter().any(|pin| {
+            pin.object_id == id && pin.incarnation != crate::types::identifiers::LEGACY_INCARNATION
+        }) {
+            continue;
+        }
+        let recipient = matches!(event, GameEvent::DamageDealt { target: TargetRef::Object(t), .. } if *t == id);
+        let pin = if recipient {
+            damage_event_recipient_pin(state, Some(event), later_equal_in_batch)
+        } else {
+            // CR 400.7 + CR 113.7a: the incarnation the event itself recorded (a
+            // zone change's arrival, a damage dealer's, tapped or attacking
+            // object's stamp) decides; the live object only when it recorded none.
+            super::targeting::event_recorded_pin(event, id).or_else(|| {
+                state
+                    .objects
+                    .get(&id)
+                    .map(ObjectIncarnationRef::from_object)
+            })
+        };
+        ability.target_incarnations.extend(pin);
+    }
+    for (_, child) in ability.child_links_mut() {
+        seed_event_referent_pins(state, child, Some(event), later_equal_in_batch);
     }
 }
 
+fn event_object(
+    state: &GameState,
+    filter: &TargetFilter,
+    source_id: ObjectId,
+    event: &GameEvent,
+) -> Option<ObjectId> {
+    // allow-raw-event-referent: names the event's object so its identity can be pinned
+    match super::targeting::resolve_event_context_target_for_event_or_state(
+        state,
+        filter,
+        source_id,
+        Some(event),
+    )? {
+        TargetRef::Object(id) => Some(id),
+        TargetRef::Player(_) => None,
+    }
+}
 pub(crate) fn push_pending_trigger_to_stack_with_event_batch(
     state: &mut GameState,
     trigger: PendingTrigger,
@@ -13756,7 +14091,7 @@ fn push_pending_trigger_to_stack_with_firing_and_duration_events(
         trigger_event.as_ref(),
         EventContextSeedTiming::StackPush,
     );
-    seed_damage_event_recipient_pin(state, &mut ability, trigger_event.as_ref(), 0);
+    seed_event_referent_pins(state, &mut ability, trigger_event.as_ref(), 0);
 
     let entry_id = ObjectId(state.next_object_id);
     state.next_object_id += 1;
@@ -14038,6 +14373,13 @@ fn assign_pending_trigger_entry_ability(
             StackEntryKind::TriggeredAbility { trigger_event, .. } => trigger_event.as_ref(),
             _ => None,
         });
+    let provisional_ability = state
+        .stack
+        .iter()
+        .rev()
+        .find(|entry| entry.id == entry_id)
+        .and_then(|entry| entry.ability())
+        .cloned();
     let mut assigned_ability = source_ability.clone();
     // CR 603.3c + CR 603.3d: Target/mode construction replaces the provisional stack
     // ability before any player receives priority. Rebind event-referential
@@ -14051,7 +14393,12 @@ fn assign_pending_trigger_entry_ability(
     // push time (`push_pending_trigger_to_stack_with_firing_and_duration_events`)
     // for "that spell" / self-cast "this spell".
     assigned_ability.context.triggering_spell = triggering_spell_pin(state, trigger_event);
-    seed_damage_event_recipient_pin(state, &mut assigned_ability, trigger_event, 0);
+    // CR 400.7 + CR 603.3d: the event pins captured at collection (with the
+    // batch ordinal) survive target construction; seeding then fills only gaps.
+    if let (Some(provisional), Some(event)) = (provisional_ability.as_ref(), trigger_event) {
+        carry_event_referent_pins(state, provisional, &mut assigned_ability, event);
+    }
+    seed_event_referent_pins(state, &mut assigned_ability, trigger_event, 0);
 
     let Some(entry) = state
         .stack
@@ -14070,14 +14417,36 @@ fn assign_pending_trigger_entry_ability(
     for duration_event in ability.latched_duration_events() {
         assigned_ability.record_duration_event_recursive(duration_event);
     }
-    if assigned_ability.target_incarnations.is_empty()
-        && !ability.target_incarnations.is_empty()
-        && ability_uses_event_target_prevent_damage(&assigned_ability)
-    {
-        assigned_ability.set_target_incarnations_recursive(ability.target_incarnations.clone());
-    }
     *ability = assigned_ability;
     true
+}
+
+/// Copies, node by node, the provisional entry's pins for objects the trigger
+/// `event` names onto the constructed ability (whose chain has the same shape).
+fn carry_event_referent_pins(
+    state: &GameState,
+    from: &ResolvedAbility,
+    to: &mut ResolvedAbility,
+    event: &GameEvent,
+) {
+    let named: Vec<ObjectId> = [TargetFilter::TriggeringSource, TargetFilter::EventTarget]
+        .iter()
+        .filter_map(|filter| event_object(state, filter, to.source_id, event))
+        .chain(super::targeting::extract_source_from_event(event))
+        .collect();
+    for pin in &from.target_incarnations {
+        if named.contains(&pin.object_id)
+            && !to
+                .target_incarnations
+                .iter()
+                .any(|own| own.object_id == pin.object_id)
+        {
+            to.target_incarnations.push(*pin);
+        }
+    }
+    for ((_, from_child), (_, to_child)) in from.child_links().zip(to.child_links_mut()) {
+        carry_event_referent_pins(state, from_child, to_child, event);
+    }
 }
 
 /// Outcome of dispatching one pending-trigger context through
@@ -15652,9 +16021,13 @@ pub(crate) fn resolution_completion_can_settle(state: &GameState) -> bool {
     // `CastOffer`) do not require a typed resolution-stack frame. They still
     // suspend the parent object, so its carrier and deferred observers must
     // remain live until the shared choice dispatcher has completed them.
+    // CR 101.4 + CR 117.2e: an open choose-all-then-act unless poll
+    // (Rottenmouth Viper) suspends its resolution across several players'
+    // prompts; it stays the resolving object until the poll is delivered.
     if state.resolving_stack_entry.is_some()
         && (super::engine_resolution_choices::handles(&state.waiting_for)
-            || matches!(state.waiting_for, WaitingFor::CopyRetarget { .. }))
+            || matches!(state.waiting_for, WaitingFor::CopyRetarget { .. })
+            || super::effects::simultaneous_unless::holds_resolution(state))
     {
         return false;
     }
@@ -15741,6 +16114,16 @@ pub(super) fn can_drain_deferred_triggers(
     policy: DeferredTriggerDrainPolicy,
 ) -> bool {
     if matches!(policy, DeferredTriggerDrainPolicy::Skip) {
+        return false;
+    }
+    // CR 510.2 + CR 510.3a + CR 603.3b: while a combat damage batch is parked no
+    // player would receive priority, so nothing queued is put on the stack; the
+    // batch's one placement takes each queued context whose `ZoneChanged` witness
+    // it folded (`collect_combat_damage_batch_triggers`); any other waits for the
+    // drain after it (D4c, pre-existing). Not part of
+    // `resolution_completion_can_settle` (that predicate also gates a resolution's
+    // final part).
+    if state.combat_damage_batch_parked() {
         return false;
     }
     if state.deferred_triggers.is_empty() || !resolution_completion_can_settle(state) {
@@ -18136,6 +18519,8 @@ fn quantity_ref_binding_diverges(qty: &QuantityRef) -> bool {
         QuantityRef::DamageDealtThisTurn { source, target, .. } => {
             filter_binding_diverges(source) || filter_binding_diverges(target)
         }
+        // CR 603.4: a scoped cycling count can bind to a different seat at resolution.
+        QuantityRef::CardsCycled { scope, .. } => count_scope_binding_diverges(scope),
         // Same filter axis, optional: a `None` filter names no population to
         // re-scope, so only the `Some` arm can diverge.
         QuantityRef::ZoneCardCount { filter, .. }
@@ -33844,6 +34229,79 @@ pub mod tests {
             "CR 603.4: `oracle_trigger` rewrites `Another` to `OtherThanTriggerObject` on \
              the fire-time leg only, so the two legs would count DIFFERENT populations"
         );
+    }
+
+    #[test]
+    fn scoped_cycling_gate_uses_the_delayed_abilitys_player_binding() {
+        use crate::types::ability::{Comparator, CountScope, CyclingHistoryWindow};
+        use crate::types::game_state::CyclingRecord;
+
+        let mut state = setup();
+        let controller = PlayerId(0);
+        let scoped_player = PlayerId(1);
+        state.active_player = controller;
+        state.priority_player = controller;
+        let source = make_creature(&mut state, controller, "Delayed Source", 1, 1);
+        let victim = make_creature(&mut state, controller, "Doomed Squire", 1, 1);
+        let record = CyclingRecord {
+            name: "Street Wraith".into(),
+            turn: state.turn_number,
+        };
+        state
+            .cycles_completed_this_game_by_player
+            .insert(controller, im::vector![record.clone()]);
+        state
+            .cycles_completed_this_game_by_player
+            .insert(scoped_player, im::vector![record.clone(), record]);
+        let death = battlefield_departure_event_from_live(
+            &state,
+            victim,
+            Zone::Battlefield,
+            Zone::Graveyard,
+        );
+
+        for (scope, expected_stack_size) in
+            [(CountScope::Controller, 0), (CountScope::ScopedPlayer, 1)]
+        {
+            let mut state = state.clone();
+            let mut ability = ResolvedAbility::new(
+                Effect::BecomeMonarch {
+                    target: TargetFilter::Controller,
+                },
+                vec![],
+                source,
+                controller,
+            );
+            ability.scoped_player = Some(scoped_player);
+            ability.condition = Some(AbilityCondition::QuantityCheck {
+                lhs: QuantityExpr::Ref {
+                    qty: QuantityRef::CardsCycled {
+                        scope,
+                        window: CyclingHistoryWindow::ThisTurn,
+                        name: None,
+                    },
+                },
+                comparator: Comparator::GE,
+                rhs: QuantityExpr::Fixed { value: 2 },
+            });
+            state.delayed_triggers.push(DelayedTrigger::new(
+                DelayedTriggerCondition::WhenDies {
+                    filter: TargetFilter::Any,
+                },
+                Box::new(ability),
+                controller,
+                source,
+                true,
+            ));
+            check_delayed_triggers(&mut state, std::slice::from_ref(&death));
+            assert_eq!(state.stack.len(), expected_stack_size);
+            if expected_stack_size == 1 {
+                let mut events = Vec::new();
+                crate::game::stack::resolve_top(&mut state, &mut events);
+                assert!(state.stack.is_empty());
+                assert_eq!(state.monarch, Some(controller));
+            }
+        }
     }
 
     /// CR 400.1 + CR 603.4: the ZONE axis of the same two-legs-must-agree rule.
@@ -51075,6 +51533,229 @@ pub mod tests {
             drain_deferred_trigger_queue(&mut state, &mut events),
             Some(WaitingFor::OrderTriggers { .. })
         ));
+    }
+
+    /// Parse one printed trigger line into its first trigger definition.
+    fn parsed_printed_trigger(name: &str, oracle: &str) -> TriggerDefinition {
+        crate::parser::oracle::parse_oracle_text(
+            oracle,
+            name,
+            &[],
+            &[String::from("Creature")],
+            &[],
+        )
+        .triggers
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| panic!("{name}: the trigger line parses to a trigger"))
+    }
+
+    /// Rottenmouth Viper's trigger line, verbatim from its Oracle text.
+    const VIPER_TRIGGER: &str = "Whenever this creature enters or attacks, put a blight counter on it. Then for each blight counter on it, each opponent loses 4 life unless that player sacrifices a nonland permanent of their choice or discards a card.";
+
+    /// Psychosis Crawler's trigger line, verbatim from its Oracle text.
+    const CRAWLER_TRIGGER: &str = "Whenever you draw a card, each opponent loses 1 life.";
+
+    /// The per-opponent unless instruction of Rottenmouth Viper's trigger, as the
+    /// parser builds it and a resolution reaches it (the `LoseLife` link carrying
+    /// the counted repeat and the "unless that player sacrifices a nonland
+    /// permanent of their choice or discards a card" modifier).
+    fn viper_unless_link(source: ObjectId) -> ResolvedAbility {
+        let trigger = parsed_printed_trigger("Rottenmouth Viper", VIPER_TRIGGER);
+        let execute = trigger.execute.expect("Viper's trigger has an effect");
+        let mut node =
+            crate::game::ability_utils::build_resolved_from_def(&execute, source, PlayerId(0));
+        loop {
+            if node.unless_pay.is_some() {
+                node.sub_ability = None;
+                return node;
+            }
+            node = *node
+                .sub_ability
+                .expect("Viper's trigger chain reaches its unless instruction");
+        }
+    }
+
+    /// Rottenmouth Viper's "each opponent loses 4 life unless that player
+    /// sacrifices a nonland permanent of their choice or discards a card" is
+    /// mid-resolution with its unless prompt raised and no resolution-stack frame,
+    /// plus a battlefield Psychosis Crawler ("Whenever you draw a card, each
+    /// opponent loses 1 life.") whose trigger is not part of it.
+    fn unless_prompt_mid_resolution() -> (GameState, GameEvent) {
+        let mut state = setup();
+        let source = create_object(
+            &mut state,
+            CardId(9_601),
+            PlayerId(0),
+            "Rottenmouth Viper".to_string(),
+            Zone::Battlefield,
+        );
+        let entry = create_object(
+            &mut state,
+            CardId(9_602),
+            PlayerId(0),
+            "Rottenmouth Viper".to_string(),
+            Zone::Stack,
+        );
+        let unless_link = viper_unless_link(source);
+        let unless_cost = unless_link
+            .unless_pay
+            .as_ref()
+            .expect("the unless link carries its modifier")
+            .cost
+            .clone();
+        assert!(
+            matches!(&unless_cost, AbilityCost::OneOf { costs } if costs.len() == 2),
+            "Viper's unless cost is the two-branch sacrifice-or-discard choice"
+        );
+        let mut pending_effect = unless_link.clone();
+        pending_effect.unless_pay = None;
+        state.resolving_stack_entry = Some(crate::types::game_state::StackEntry {
+            id: entry,
+            source_id: source,
+            controller: PlayerId(0),
+            kind: StackEntryKind::TriggeredAbility {
+                source_id: source,
+                ability: Box::new(unless_link),
+                condition: None,
+                trigger_event: None,
+                description: None,
+                source_name: String::new(),
+                subject_match_count: None,
+                die_result: None,
+                provenance: None,
+            },
+        });
+        state.waiting_for = WaitingFor::UnlessPayment {
+            player: PlayerId(1),
+            repeat: None,
+            cost: unless_cost,
+            pending_effect: Box::new(pending_effect),
+            trigger_event: None,
+            effect_description: None,
+            remaining: Vec::new(),
+            affected_object: None,
+        };
+
+        let watcher = create_object(
+            &mut state,
+            CardId(9_603),
+            PlayerId(0),
+            "Psychosis Crawler".to_string(),
+            Zone::Battlefield,
+        );
+        let trigger = parsed_printed_trigger("Psychosis Crawler", CRAWLER_TRIGGER);
+        assert_eq!(trigger.mode, TriggerMode::Drawn);
+        state
+            .objects
+            .get_mut(&watcher)
+            .unwrap()
+            .trigger_definitions
+            .push(trigger);
+        let drawn = create_object(
+            &mut state,
+            CardId(9_604),
+            PlayerId(0),
+            "Drawn Card".to_string(),
+            Zone::Hand,
+        );
+        let draw = GameEvent::CardDrawn {
+            player_id: PlayerId(0),
+            object_id: drawn,
+            nth_in_turn: 1,
+            nth_in_step: 1,
+        };
+        (state, draw)
+    }
+
+    /// An open choose-all-then-act poll's carrier, as Rottenmouth Viper's
+    /// resolution installs it: its own unless modifier (the OneOf sacrifice or
+    /// discard cost, paid by the scoped player) over its two blight counters.
+    fn simultaneous_unless_carrier(
+        state: &GameState,
+    ) -> crate::types::game_state::PendingSimultaneousUnless {
+        let entry = state.resolving_stack_entry.as_ref().unwrap();
+        let StackEntryKind::TriggeredAbility { ability, .. } = &entry.kind else {
+            unreachable!("the fixture resolves a triggered ability");
+        };
+        // The coordinator's per-instance template: the instruction with its
+        // count and unless modifier removed (`per_instance_template`).
+        let mut template = ability.clone();
+        let unless_pay = template
+            .unless_pay
+            .take()
+            .expect("Viper's unless link carries its modifier");
+        template.repeat_for = None;
+        crate::types::game_state::PendingSimultaneousUnless {
+            ability: template,
+            unless_pay,
+            instances: 2,
+            phase: crate::types::game_state::SimultaneousUnlessPhase::Collecting(
+                crate::types::game_state::SimultaneousUnlessCollection {
+                    current_player: PlayerId(1),
+                    next_instance: 0,
+                    remaining_players: Vec::new(),
+                    answers: Vec::new(),
+                    hidden_discards: Vec::new(),
+                },
+            ),
+            trigger_event: None,
+            resolving_entry: Some(entry.id),
+        }
+    }
+
+    /// CR 608.2c + CR 117.2e + CR 101.4: a generic unless prompt does not keep
+    /// its resolving ability open (its prompt carries the rest), but an open
+    /// choose-all-then-act poll does, until its carrier is taken. Keyed on the
+    /// carrier, not on the prompt's shape.
+    #[test]
+    fn an_open_simultaneous_unless_poll_holds_its_resolution_until_taken() {
+        let (mut state, _) = unless_prompt_mid_resolution();
+        assert!(
+            resolution_completion_can_settle(&state),
+            "a generic unless prompt settles its resolving ability, as before"
+        );
+
+        state.pending_simultaneous_unless = Some(Box::new(simultaneous_unless_carrier(&state)));
+        assert!(
+            !resolution_completion_can_settle(&state),
+            "the poll holds its resolution while it collects"
+        );
+
+        state.pending_simultaneous_unless.take();
+        assert!(
+            resolution_completion_can_settle(&state),
+            "taking the carrier releases the resolution"
+        );
+    }
+
+    /// CR 603.3 + CR 117.2e: what triggers while a choose-all-then-act poll
+    /// holds its resolution waits in the queue instead of going on the stack
+    /// over the poll's prompt. Control: without the poll the same trigger is put
+    /// on the stack.
+    #[test]
+    fn triggers_park_while_a_simultaneous_unless_poll_holds_its_resolution() {
+        let (mut state, draw) = unless_prompt_mid_resolution();
+        let mut control = state.clone();
+        process_triggers(&mut control, std::slice::from_ref(&draw));
+        assert_eq!(
+            control.stack.len(),
+            1,
+            "positive control: with no poll the draw trigger goes on the stack"
+        );
+        assert!(control.deferred_triggers.is_empty());
+
+        state.pending_simultaneous_unless = Some(Box::new(simultaneous_unless_carrier(&state)));
+        process_triggers(&mut state, std::slice::from_ref(&draw));
+        assert!(
+            state.stack.is_empty(),
+            "nothing is put on the stack while the poll holds its resolution"
+        );
+        assert_eq!(
+            state.deferred_triggers.len(),
+            1,
+            "the draw trigger waits in the deferred queue"
+        );
     }
 
     /// Build a `TriggeredManaResume` naming `node`, with an otherwise inert

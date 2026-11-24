@@ -9,6 +9,7 @@
 // recursion limit of 128 (a future-incompatibility error on newer toolchains).
 #![recursion_limit = "512"]
 
+mod event_referent_identity;
 pub mod support;
 
 mod dark_confidant_upkeep;

@@ -9,6 +9,7 @@
 // recursion limit of 128 (a future-incompatibility error on newer toolchains).
 #![recursion_limit = "512"]
 
+mod issue_8079_past_in_flames_flashback;
 pub mod support;
 
 mod issue_5274_call_the_spirit_dragons;

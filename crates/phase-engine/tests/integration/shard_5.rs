@@ -8,6 +8,7 @@
 // recursion limit of 128 (a future-incompatibility error on newer toolchains).
 #![recursion_limit = "512"]
 
+mod scoped_unless_choose_all_then_act;
 pub mod support;
 
 mod reflexive_body_token_referent;
@@ -302,6 +303,7 @@ mod top_of_library_object_form_permission;
 mod torch_the_tower_die_exile;
 mod tracked_set_anaphor_quantity_binds;
 mod tracked_set_anaphor_source;
+mod trample_lethal_assigned_this_step;
 mod treasure_map_landmark_transform;
 mod treasured_find_regression;
 mod trench_behemoth_landfall_force_attack;
@@ -420,10 +422,12 @@ mod xantid_swarm_defending_player_cant_cast;
 mod yare_extra_blockers;
 mod yavimaya_enchantress_dynamic_pump;
 mod yenna_aura_token_copy;
+mod yidaro_cycle_publication;
 mod you_have_been_caught_stealing_any_damage;
 mod yuna_grand_summoner;
 mod yunas_whistle;
 mod zero_life_mid_cast_payment;
 mod zhulodok_double_cascade;
+mod zilortha_lethal_damage_by_power;
 mod zimone_all_questioning;
 mod zone_change_reflexive_this_way;
