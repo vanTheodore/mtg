@@ -70,11 +70,13 @@ Escritorio intacto: a 768/1440 px sigue mandando el abanico (`wideFan`), y las s
 
 ## 7. Evidencia
 
-Ejecutado aquí (sin motor): `arena-hand-sheet` 12 pasan / 3 omitidos con motivo; `arena-quality-gate` 7/7 (axe en 320/375/390/768/844/1024/1440); `hand-overflow-evidence` 6/6; `arena-card-tools-reachability` 2/2; `arena-hand-fan`, `arena-zones`, `visibility`, `ux-themes`, `arena-phone-footer` 29/29; `bun test src/lib` 790/790; `bun run check` 0 errores; `bun run build` correcto; axe-core 0 violaciones en claro/oscuro a 320 y 390.
+Ejecutado aquí (sin motor): `arena-hand-sheet` 12 pasan / 3 omitidos con motivo (las mismas tres corren en CI con el motor); `arena-quality-gate` 7/7 (axe en 320/375/390/768/844/1024/1440); `hand-overflow-evidence` 6/6; `arena-card-tools-reachability` 2/2; `arena-hand-fan`, `arena-zones`, `visibility`, `ux-themes`, `arena-phone-footer` 29/29; `bun test src/lib` 790/790; `bun run check` 0 errores; `bun run build` correcto; axe-core 0 violaciones en claro/oscuro a 320 y 390.
 
 `arena-touch-play` se reescribió para el contrato nuevo: antes codificaba el flujo de tres pasos (tocar la cara → enfocar un botón del panel → pulsarlo), que es justo lo que la hoja sustituye. Ahora comprueba que **una** pulsación en la acción de la carta cambia el estado del motor (revisión, mano −1, campo +1), que el tablero deja de estar `inert`, y que con teclado la hoja se cierra y el foco queda en un control real, nunca en `<body>`.
 
-Ejecutado en Mesa CI con motor real (run 45335450475): typecheck + unitarios + build estáticos verdes, paridad nativa y mecánicas verdes, WASM verdes. El job de Chromium encontró `arena-viewport-matrix`, `arena-mobile-drawer` y las dos variantes de `arena-touch-play` en rojo; las tres causas (foco robado por `Board.svelte`, espera imposible de un botón de acción en el primer fotograma, y foco al jugar) están corregidas arriba y se vuelven a medir en el siguiente run.
+Ejecutado en Mesa CI con motor real: **run 45367492765, los cuatro jobs verdes** — typecheck + unitarios + build estático (41 s), paridad nativa y mecánicas (7 m 55 s), WASM con Rust y lockfile fijados (16 m 8 s) y **Chromium con la partida real (26 m 17 s)**.
+
+Ese job no salió verde a la primera, y lo que encontró vale más que el resultado: cuatro runs seguidos midieron `arena-viewport-matrix`, `arena-mobile-drawer` y `arena-touch-play` en rojo. Las causas, todas corregidas: `Board.svelte` robaba el foco a la hoja (dos manejadores de Escape y un efecto que enfocaba el scrollport colapsado); la hoja interceptaba Escape de un `<dialog>` nativo; y `arena-touch-play` seguía codificando el flujo de tres pasos que esta misión sustituye. Nada de eso era observable en este entorno sin WASM.
 
 No ejecutado aquí: `arena-touch-play`, `arena-mobile-drawer`, `arena-viewport-matrix`, `arena-ui` y las dos pruebas de motor de la hoja. Todas navegan a `/?autostart` y necesitan `static/wasm/mtg_engine_wasm.wasm`; compilar Rust está fuera de esta misión y el artefacto de CI está en Azure, bloqueado. Corren en Mesa CI. No se presenta su resultado como evidencia local.
 
