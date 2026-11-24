@@ -108,9 +108,12 @@ async function playFromHand(page: Page) {
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   // UX-HAND: the sheet gives each playable card its own labelled action, so
   // playing is one press on a 44px control instead of "tap the face to close
-  // the drawer and focus a button elsewhere".
+  // the drawer and focus a button elsewhere". Legality arrives with an engine
+  // reply *after* priority moves (Inicio → tu turno), so the control is waited
+  // for rather than demanded in the first frame — that race was a red CI run.
   const playWhenReady = page.locator('.hand-sheet .sheet-play').first();
-  await expect(playWhenReady).toBeInViewport({ timeout: 30_000 });
+  await expect(playWhenReady).toBeVisible({ timeout: 60_000 });
+  await expect(playWhenReady).toBeInViewport();
   const playable = page.locator('.hand-sheet [data-card-id]').first();
   await expect(playable).toBeInViewport();
   await fingerTap(page, playWhenReady);

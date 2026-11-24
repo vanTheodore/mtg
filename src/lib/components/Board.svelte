@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import ArenaSurface from './ArenaSurface.svelte';
   import PhaseStopBar from './PhaseStopBar.svelte';
   import MobilePhaseChip from './MobilePhaseChip.svelte';
@@ -124,23 +124,17 @@
     if (needsHandoff) handoffButton?.focus();
   });
 
-  /**
-   * The phone hand sheet is a modal surface: while it is open the board is
-   * inert so a stray tap cannot target a hidden permanent, and focus moves
-   * into the sheet. Closing returns focus to the summary button (Hand.svelte
-   * does that itself). Nothing here reads or changes Phase state.
+  /*
+   * Focus for the open phone hand lives in HandSheet.svelte, which owns that
+   * surface and moves focus to its own first control. An effect here used to
+   * focus `#mesa-hand-sheet .hand-scroll` — the inline strip, collapsed to 1px
+   * on a phone — and because it ran after the sheet's own `tick`, it pulled
+   * focus back out of the dialogs onto an invisible element. Measured in Mesa
+   * CI: `toBeFocused` on the sheet's close button never held.
    *
-   * The focus call has to wait for the sheet to be laid out (`tick`), and the
-   * hand region itself is a tab stop, so it is a safe target even when the
-   * hand is empty.
+   * The board is still made `inert` while the hand is open (see the `main`
+   * below): a stray tap must not target a permanent the player cannot see.
    */
-  $effect(() => {
-    if (!session.handDrawerOpen) return;
-    void tick().then(() => {
-      const target = document.querySelector<HTMLElement>('#mesa-hand-sheet .hand-scroll');
-      target?.focus();
-    });
-  });
 
   /** Escape closes the phone hand sheet from anywhere (the board is inert). */
   function onWindowKeydown(event: KeyboardEvent) {

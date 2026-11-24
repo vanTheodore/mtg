@@ -56,6 +56,8 @@ Escritorio intacto: a 768/1440 px sigue mandando el abanico (`wideFan`), y las s
 - **El cajón viejo reaparecía al abrir la hoja**, con sus flechas, su pista y una segunda copia tabulable de la misma mano. Se retira en la vista angosta: la zona queda montada y colapsada, sin `sheet-open`, y el `overflow` que alimenta flechas y pista ya no se calcula en móvil.
 - **La pista «Hay más cartas fuera de la vista» desapareció del escritorio** al atarla al abanico: `useFan` es falso con 30 cartas. Se ata a la presentación en línea, no al abanico.
 - **El foco quedaba en `<body>`** al cerrar la hoja con Escape. Ahora vuelve al disparador por efecto, no dentro de la función de cierre.
+- **`Board.svelte` robaba el foco a la hoja** (encontrado por Mesa CI, no aquí): un efecto antiguo enfocaba `#mesa-hand-sheet .hand-scroll` —el scrollport en línea, colapsado a 1 px en el teléfono— y, al ejecutarse después del `tick` de la hoja, sacaba el foco de los diálogos a un elemento invisible. Se retira: el foco de la hoja es de la hoja.
+- **El contrato de foco al jugar no era evidente.** `arena-touch-play` exige que, al lanzar, el foco quede en la acción que la carta desbloqueó, no en el disparador. Ahora `play()` enfoca ese botón antes de cerrar y `Hand.svelte` no recoloca el foco si hay un destino deliberado.
 
 ## 6. Integridad
 
@@ -69,6 +71,8 @@ Escritorio intacto: a 768/1440 px sigue mandando el abanico (`wideFan`), y las s
 ## 7. Evidencia
 
 Ejecutado aquí (sin motor): `arena-hand-sheet` 12 pasan / 3 omitidos con motivo; `arena-quality-gate` 7/7 (axe en 320/375/390/768/844/1024/1440); `hand-overflow-evidence` 6/6; `arena-card-tools-reachability` 2/2; `arena-hand-fan`, `arena-zones`, `visibility`, `ux-themes`, `arena-phone-footer` 29/29; `bun test src/lib` 790/790; `bun run check` 0 errores; `bun run build` correcto; axe-core 0 violaciones en claro/oscuro a 320 y 390.
+
+Ejecutado en Mesa CI con motor real (run 45335450475): typecheck + unitarios + build estáticos verdes, paridad nativa y mecánicas verdes, WASM verdes. El job de Chromium encontró `arena-viewport-matrix`, `arena-mobile-drawer` y las dos variantes de `arena-touch-play` en rojo; las tres causas (foco robado por `Board.svelte`, espera imposible de un botón de acción en el primer fotograma, y foco al jugar) están corregidas arriba y se vuelven a medir en el siguiente run.
 
 No ejecutado aquí: `arena-touch-play`, `arena-mobile-drawer`, `arena-viewport-matrix`, `arena-ui` y las dos pruebas de motor de la hoja. Todas navegan a `/?autostart` y necesitan `static/wasm/mtg_engine_wasm.wasm`; compilar Rust está fuera de esta misión y el artefacto de CI está en Azure, bloqueado. Corren en Mesa CI. No se presenta su resultado como evidencia local.
 

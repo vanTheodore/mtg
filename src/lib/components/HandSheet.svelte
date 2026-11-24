@@ -106,10 +106,6 @@
    * so a fast tap never guesses which of two options the player wanted.
    */
   function quickPlay(objectId: number) {
-    // A double tap must not queue two casts. `dispatch` already serialises and
-    // a stale revision is dropped by the engine, but there is no reason to ask
-    // twice: while one action is in flight the control is disabled.
-    if (session.busy) return;
     const actions = actionsOf(objectId);
     const commit =
       actions.find((a) => a.type === 'PlayLand') ??
@@ -118,12 +114,30 @@
         ? actions.find((a) => a.type === 'ActivateAbility')
         : undefined);
     if (!commit) { openCard(objectId); return; }
-    void session.dispatch(commit);
+    void play(commit);
   }
-  function play(action: GameAction) {
+
+  /**
+   * Dispatch, then hand the player back to the table only if the engine
+   * accepted it.
+   *
+   * Closing on success and staying on failure is the difference between "your
+   * card resolved, here is the prompt it opened" and "that was rejected while
+   * you were looking at a full-screen sheet". `session.dispatch` resolves
+   * after the reply is applied, so the revision tells us which happened — and
+   * a double tap is refused before that, by `busy`.
+   */
+  async function play(action: GameAction) {
     if (session.busy) return;
-    void session.dispatch(action);
+    const before = session.snapshot?.revision ?? -1;
     detailId = null;
+    await session.dispatch(action);
+    if ((session.snapshot?.revision ?? -1) <= before) return;
+    // Focus first, close second: the sheet is not a native dialog, so moving
+    // focus while it is still open lets Hand.svelte see a live destination and
+    // leave it alone instead of pulling focus back to the trigger.
+    document.querySelector<HTMLButtonElement>('section[aria-label="Decisión pendiente"] .actions button:not([disabled])')?.focus();
+    session.setHandDrawer(false);
   }
 
   function close() {

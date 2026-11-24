@@ -142,7 +142,13 @@
   $effect(() => {
     if (session.handDrawerOpen || !restoreFocus) return;
     restoreFocus = false;
-    trigger?.focus();
+    void tick().then(() => {
+      // A deliberate destination wins: when a card is played the sheet sends
+      // focus to the action it unlocked, and that focus must not be stolen.
+      const active = document.activeElement;
+      if (active && active !== document.body && active.isConnected) return;
+      trigger?.focus();
+    });
   });
 
   $effect(() => {
