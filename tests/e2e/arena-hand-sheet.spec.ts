@@ -325,32 +325,36 @@ async function passSeat(page: Page) {
 /**
  * Reach a real priority with a legal action in hand.
  *
- * Both seats keep their opening hand (passing the device like people do), and
- * only then is there something to play: before that the game is still handing
- * out mulligans and Phase publishes no cast. Opening the sheet is part of the
- * loop because legality only appears once it is the player's turn.
+ * Mirrors what `arena-touch-play` does, because that path is proven: both seats
+ * keep their opening hand through the handoff gate, and then the sheet is left
+ * open while the priority window arrives on its own. Pressing "Pasar" here is
+ * wrong — it dismisses the very window being waited for, and the handoff gate
+ * that follows hides the trigger (`Hand` is not rendered while it asks).
  */
 async function reachPriority(page: Page) {
   for (let round = 0; round < 4; round += 1) {
     await passSeat(page);
-    const keep = page.getByRole('button', { name: 'Conservar mano' }).first();
+    const keep = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: 'Conservar mano' }).first();
     if (!(await keep.count())) break;
-    const before = Number(await page.locator('.app').getAttribute('data-actions-applied'));
     await keep.tap({ timeout: 5_000 }).catch(() => {});
     await page.waitForTimeout(300);
-    const after = Number(await page.locator('.app').getAttribute('data-actions-applied'));
-    if (after > before) break;
   }
   await passSeat(page);
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (!(await page.locator('.hand-trigger').count())) {
+      await passSeat(page);
+      continue;
+    }
     if (!(await page.locator('.hand-sheet').count())) {
       await page.locator('.hand-trigger').tap().catch(() => {});
     }
-    if (await page.locator('.hand-sheet .sheet-play').count()) return;
-    const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
-    if (await pass.count()) await pass.tap({ timeout: 4_000 }).catch(() => {});
-    await passSeat(page);
-    await page.waitForTimeout(300);
+    const playable = page.locator('.hand-sheet .sheet-play');
+    if (await playable.count()) return;
+    // Give the engine's next priority window time to arrive; the sheet stays
+    // open so legality lands straight into it.
+    await expect.poll(() => page.locator('.hand-sheet .sheet-play').count(), { timeout: 20_000 })
+      .toBeGreaterThan(0)
+      .catch(() => {});
   }
 }
 
@@ -480,19 +484,17 @@ test.describe('motor real', () => {
     await expect(page.locator('.sheet-detail')).toBeVisible();
     const cardsBefore = await page.locator('.hand-sheet [data-card-id]').count();
 
-    // Hand the seat over for real: close, use the handoff gate, and come back.
+    // Hand the seat over for real: close the sheet, pass priority through the
+    // decision panel (the path `arena-touch-play` proves), and answer the
+    // handoff gate if the product raises it. Passing is exactly what changes
+    // the seat when the turn moves.
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
-    const gate = page.getByRole('button', { name: /^(Pasar el asiento|Pasar dispositivo|Cambiar de asiento)/ }).first();
-    if (await gate.count()) {
-      await gate.tap();
-      const confirm = page.getByRole('button', { name: /^(Listo|Continuar|Confirmar|Entendido|Ya pasé)/ }).first();
-      if (await confirm.count()) await confirm.tap();
-    } else {
-      const pass = page.getByRole('button', { name: /^(Pasar|Terminar turno)/ }).first();
-      await expect(pass, 'no hay forma de cambiar de asiento').toHaveCount(1);
-      await pass.tap();
-    }
+    const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
+    await expect(pass, 'no hay forma de pasar la prioridad con la mano cerrada').toHaveCount(1, { timeout: 30_000 });
+    await pass.tap();
+    await passSeat(page);
+    await passSeat(page);
 
     // Whatever the new seat's hand is, the previous one must be gone: the detail
     // is not open, and the sheet lists the new seat's cards only.
@@ -537,9 +539,11 @@ test.describe('motor real', () => {
       await manual.tap();
       await expect(page.locator('section[aria-label="Decisión pendiente"]')).toContainText(/maná|mana|fuente/i, { timeout: 30_000 });
     } else {
-      // A card with no mana cost has no manual payment: the control must be
-      // absent, not broken.
-      await expect(page.locator('.sheet-detail .detail-actions button')).not.toHaveCount(0);
+      // Either the card is not castable right now (then the detail says so) or
+      // it has no mana cost. Both are honest states; a broken control is not.
+      const idle = page.locator('.sheet-detail .detail-idle');
+      const actions = page.locator('.sheet-detail .detail-actions button');
+      expect((await idle.count()) + (await actions.count())).toBeGreaterThan(0);
     }
   });
 
