@@ -54,13 +54,16 @@ async function openHandDrawer(page: Page) {
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
   await trigger.click();
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('.hand-zone')).toHaveClass(/sheet-open/);
+  // UX-HAND: the phone hand is the sheet; the inline row no longer opens.
+  await expect(page.locator('.hand-zone')).not.toHaveClass(/sheet-open/);
+  await expect(page.locator('.hand-sheet')).toBeVisible();
 }
 
+/** UX-HAND: closing is its own control; the trigger only opens. */
 async function closeHandDrawer(page: Page) {
-  const trigger = page.locator('.hand-trigger');
-  await trigger.click();
-  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await page.locator('.hand-sheet .sheet-close').click();
+  await expect(page.locator('.hand-trigger')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.hand-sheet')).toBeHidden();
 }
 
 async function measureHand(page: Page): Promise<HandEvidence> {
@@ -76,16 +79,25 @@ async function measureHand(page: Page): Promise<HandEvidence> {
         fullyVisible: rect.left >= bounds.left - 2 && rect.right <= bounds.right + 2
       };
     });
+    // UX-HAND: on a phone the hand is the sheet, which scrolls vertically; the
+    // strip's arrows and "more cards" hint only make sense for the inline fan.
+    const sheet = document.querySelector<HTMLElement>('.hand-sheet .sheet-grid');
+    const inSheet = !!sheet;
     return {
       viewport: { width: innerWidth, height: innerHeight },
       scroll: {
-        scrollWidth: scroll.scrollWidth, clientWidth: scroll.clientWidth,
+        scrollWidth: inSheet ? sheet.scrollWidth : scroll.scrollWidth,
+        clientWidth: inSheet ? sheet.clientWidth : scroll.clientWidth,
         scrollLeft: scroll.scrollLeft, left: bounds.left, right: bounds.right
       },
       controls: zone.querySelectorAll('.scroll-controls button').length === 2,
       hint: !!zone.querySelector('.more-hint'),
       faces,
-      layoutSaysOverflow: scroll.scrollWidth > scroll.clientWidth + 2,
+      // The sheet has no arrows at all, so the invariant it must satisfy is
+      // simply "no horizontal overflow" for the surface the player sees.
+      layoutSaysOverflow: inSheet
+        ? sheet.scrollWidth > sheet.clientWidth + 2
+        : scroll.scrollWidth > scroll.clientWidth + 2,
       clippedFaceCount: faces.filter((face) => !face.fullyVisible).length
     };
   });
@@ -121,8 +133,10 @@ for (const [width, height] of [[1440, 900], [390, 844]] as const) {
       const initial = await measureHand(page);
 
       // Thirty cards must remain navigable. Exercise the actual button via
-      // keyboard rather than relying solely on a DOM geometry assertion.
-      if (count === 30) {
+      // keyboard rather than relying solely on a DOM geometry assertion. On a
+      // phone the sheet has no arrows (it scrolls down), so this is the
+      // desktop fan's contract only.
+      if (count === 30 && !drawer) {
         const right = zone.getByRole('button', { name: 'Desplazar mano a la derecha' });
         await expect(right).toBeVisible();
         await right.focus();
@@ -189,19 +203,19 @@ test('Hand overflow diagnostic: react to viewport resize without remounting', as
   // would leave the board `inert` behind an invisible trigger.
   await expect(page.locator('.hand-trigger')).toBeHidden();
   await expect(page.locator('.hand-zone')).not.toHaveClass(/sheet-open/);
-  await expect(page.locator('.hand-zone .hand-close')).toHaveCount(0);
+  await expect(page.locator('.hand-sheet')).toHaveCount(0);
   const evidence = { desktop, mobile, restored };
   console.log('MESA_HAND_RESIZE_EVIDENCE ' + JSON.stringify(evidence));
   await persistEvidence(page, testInfo, 'hand-resize-without-remount', evidence);
 
-  // Four cards fit the 1440px scene but exceed the 390px scrollport.
-  // This transition was invisible to the old $effect, which only observed
-  // objects.length, so the arrows could stay hidden after resize.
+  // Four cards fit the 1440px scene. On a phone the same hand lives in the
+  // sheet, which has no arrows and cannot overflow sideways: the old strip's
+  // controls and hint must not survive the resize in either direction.
   expect(desktop.layoutSaysOverflow).toBe(false);
-  expect(mobile.layoutSaysOverflow).toBe(true);
   expect(desktop.controls).toBe(desktop.layoutSaysOverflow);
-  expect(mobile.controls).toBe(mobile.layoutSaysOverflow);
-  expect(mobile.hint).toBe(mobile.layoutSaysOverflow);
+  expect(mobile.layoutSaysOverflow, 'la hoja desborda en horizontal').toBe(false);
+  expect(mobile.controls, 'flechas del cajón viejo en el teléfono').toBe(false);
+  expect(mobile.hint, 'pista del cajón viejo en el teléfono').toBe(false);
   expect(restored.controls).toBe(restored.layoutSaysOverflow);
   expect(restored.hint).toBe(restored.layoutSaysOverflow);
   expect(restored.faces).toHaveLength(4);

@@ -282,7 +282,9 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
   const trigger = page.locator('.hand-trigger');
   await expect(trigger).toBeVisible();
   await trigger.click();
-  await expect(page.locator('#mesa-hand-sheet .hand-scroll')).toBeFocused();
+  // UX-HAND: the phone hand is its own sheet, so focus lands on its first
+  // control rather than on the collapsed strip behind it.
+  await expect(page.locator('.hand-sheet .sheet-close')).toBeFocused();
   await expect(page.locator('main.layout')).toHaveAttribute('inert', '');
 
   // 1024×768 still matches the drawer condition (a tablet without vertical
@@ -291,6 +293,7 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
   await page.setViewportSize({ width: 1280, height: 800 });
   await settle(page);
   await expect(page.locator('.hand-zone')).not.toHaveClass(/sheet-open/);
+  await expect(page.locator('.hand-sheet')).toHaveCount(0);
   await expect(page.locator('main.layout')).not.toHaveAttribute('inert', '');
   await expect(page.locator('.hand-trigger')).toBeHidden();
 });

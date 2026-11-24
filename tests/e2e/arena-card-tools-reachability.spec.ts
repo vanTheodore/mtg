@@ -99,7 +99,9 @@ test.describe('móvil con puntero táctil', () => {
     await trigger.tap();
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');
 
-    const first = page.locator('.hand-zone .hand-card').first();
+    // UX-HAND: the phone hand is HandSheet; its cards and their "Ampliar"
+    // controls live in the sheet, not in the collapsed inline strip.
+    const first = page.locator('.hand-sheet .sheet-cell').first();
     await first.scrollIntoViewIfNeeded();
     const inspect = first.getByRole('button', { name: /^Ampliar / });
     // No hover exists on touch: the control is laid out in flow and always visible.

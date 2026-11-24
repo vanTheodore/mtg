@@ -82,9 +82,7 @@ async function playFromHand(page: Page) {
   }
   await passSeat(page);
   await expect
-    .poll(() => page.locator('.hand-card').filter({ hasText: 'Disponible para jugar' }).count(), {
-      timeout: 30_000
-    })
+    .poll(() => page.locator('.hand-sheet .sheet-play').count(), { timeout: 30_000 })
     .toBeGreaterThan(0);
 
   const before = {
@@ -108,9 +106,14 @@ async function playFromHand(page: Page) {
   expect(triggerHit, 'otra capa tapa el botón de la mano').toBe(true);
   await fingerTap(page, trigger);
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-  const playable = page.locator('.hand-card').filter({ hasText: 'Disponible para jugar' }).first();
+  // UX-HAND: the sheet gives each playable card its own labelled action, so
+  // playing is one press on a 44px control instead of "tap the face to close
+  // the drawer and focus a button elsewhere".
+  const playWhenReady = page.locator('.hand-sheet .sheet-play').first();
+  await expect(playWhenReady).toBeInViewport({ timeout: 30_000 });
+  const playable = page.locator('.hand-sheet [data-card-id]').first();
   await expect(playable).toBeInViewport();
-  await fingerTap(page, playable.locator('[data-card-id]'));
+  await fingerTap(page, playWhenReady);
 
   // 2) The sheet closes and the action it unlocked is the pointer target.
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
@@ -160,11 +163,11 @@ async function playFromHand(page: Page) {
 
   // 5) Keyboard reaches the same path: focus a card and press Enter, and the
   //    drawer closes for the keyboard too.
-  const keyboardCard = page.locator('.hand-card').filter({ hasText: 'Disponible para jugar' }).first();
+  const keyboardCard = page.locator('.hand-sheet .sheet-play').first();
   if (await keyboardCard.count()) {
     await trigger.tap();
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    await keyboardCard.locator('[data-card-id]').focus();
+    await keyboardCard.focus();
     await page.keyboard.press('Enter');
     await expect(trigger).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('section[aria-label="Decisión pendiente"] .actions button:focus')).toHaveCount(1);

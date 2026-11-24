@@ -99,11 +99,15 @@ for (const profile of PROFILES) {
       expect(hit.inside, `el centro de la carta no es la carta (${hit.tag}) a ${profile.width}px`).toBe(true);
 
       // 4) Keyboard: card -> its own Ampliar -> dialog -> Escape.
+      // UX-HAND: on a phone the hand is the sheet; on desktop it is the fan.
       await showHand(page);
-      const handCard = page.locator('.hand-zone .hand-card').first();
+      // The wrapper holds the card face and its own "Ampliar" control, in the
+      // sheet and in the fan alike.
+      const handCard = page.locator('.hand-sheet .sheet-cell, .hand-zone .hand-card').first();
+      const face = handCard.locator('[data-card-id]').first();
       const inspect = handCard.getByRole('button', { name: /^Ampliar / });
-      await handCard.locator('.card').focus();
-      await expect(handCard.locator('.card')).toBeFocused();
+      await face.focus();
+      await expect(face).toBeFocused();
       await page.keyboard.press('Tab');
       await expect(inspect).toBeFocused();
       await page.keyboard.press('Enter');
@@ -131,7 +135,7 @@ for (const profile of PROFILES) {
       // Close the phone drawer again before measuring: a closed drawer is the
       // resting state of the hand and must not reserve card height.
       if (profile.touch && profile.width <= 640) {
-        await page.locator('.hand-zone .hand-close').click();
+        await page.locator('.hand-sheet .sheet-close').click();
         await expect(page.locator('.hand-trigger')).toHaveAttribute('aria-expanded', 'false');
       }
 
