@@ -33,7 +33,8 @@ export type TutorialStatus = 'idle' | 'loading' | 'running' | 'completed' | 'err
 /** What the controller needs from the engine. Swapped in tests. */
 export interface TutorialEngine {
   readonly snapshot: EngineSnapshot | null;
-  dispatch: (action: GameAction) => Promise<void>;
+  /** The outcome is available, but the tutorial only needs it to settle. */
+  dispatch: (action: GameAction) => Promise<unknown>;
 }
 
 const sessionEngine: TutorialEngine = {

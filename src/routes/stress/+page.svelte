@@ -6,6 +6,8 @@
   import { session } from '#lib/game/session.svelte.ts';
   import type { CardMeta, GameObject } from '#lib/engine/types.ts';
   import { onMount } from 'svelte';
+  import { EngineClient } from '#lib/engine/client.ts';
+  import type { EngineSnapshot, GameAction } from '#lib/engine/types.ts';
 
   // This route is a deterministic UI fixture, not a rules simulation.
   // Gameplay fidelity is tested against the real WASM engine on /.
@@ -16,6 +18,19 @@
   let tokenCount = $state(initialTokens >= 0 && initialTokens <= 60 ? initialTokens : 12);
   let imageMode = $state<'fallback' | 'hidden'>(initialParams.get('images') === 'hidden' ? 'hidden' : 'fallback');
   let mirrorEnabled = $state(initialParams.get('mirror') === '1');
+  /**
+   * `?actions=1` publishes explicit legality for the hand cards through a
+   * scripted engine client.
+   *
+   * HandSheet reads exactly one thing from the snapshot — `legal.by_object` —
+   * and dispatches through `session`. This fixture therefore needs no rules: it
+   * returns a fixed legal action set per card and answers dispatches with a new
+   * revision. That is enough to test the sheet's own contracts (ambiguous
+   * actions open the detail instead of guessing, an activation is never
+   * invisible, a rejection keeps the sheet open) without pretending to be Phase.
+   * Real gameplay guarantees stay in the WASM suites.
+   */
+  const actionsMode = $state(initialParams.get('actions') === '1');
 
   onMount(() => {
     const params = new URLSearchParams(location.search);
@@ -67,6 +82,84 @@
     attached_to: typeof obj.attached_to === 'number' ? obj.attached_to + 5000 : undefined,
     attachments: obj.attachments?.map((id) => id + 5000) ?? []
   })));
+  /**
+   * Scripted legality for `?actions=1`.
+   *
+   * Card ids are the fixture's own (1000+i). The shape is Phase's
+   * `legal.by_object`; every entry is written out here rather than derived, so
+   * a test can point at exactly which ambiguity it is exercising:
+   *
+   *   0 Forest        PlayLand
+   *   1 Grizzly Bears CastSpell
+   *   2 Insectile Aberration  CastSpell + ActivateAbility  (ambiguous on purpose)
+   *   3 Lightning Bolt CastSpell, two faces               (alternatives)
+   *   4 Forest        ActivateAbility outside a mana window (must stay visible)
+   *   5 any           nothing                             (idle card)
+   */
+  const scriptedLegal = $derived.by(() => {
+    const byObject: Record<string, GameAction[]> = {};
+    if (!actionsMode) return byObject;
+    for (const object of hand) {
+      const id = object.id;
+      const slot = (id - 1000) % 6;
+      if (slot === 0) byObject[String(id)] = [{ type: 'PlayLand', data: { object_id: id, card_id: object.card_id } } as GameAction];
+      else if (slot === 1) byObject[String(id)] = [{ type: 'CastSpell', data: { object_id: id, card_id: object.card_id, targets: [] } } as GameAction];
+      else if (slot === 2) byObject[String(id)] = [
+        { type: 'CastSpell', data: { object_id: id, card_id: object.card_id, targets: [] } } as GameAction,
+        { type: 'ActivateAbility', data: { object_id: id, ability_index: 0, label: 'Transformar' } } as GameAction
+      ];
+      else if (slot === 3) byObject[String(id)] = [
+        { type: 'CastSpell', data: { object_id: id, card_id: object.card_id, targets: [] } } as GameAction,
+        { type: 'CastSpell', data: { object_id: id, card_id: object.card_id, targets: [], face: 'Adventure' } } as GameAction
+      ];
+      else if (slot === 4) byObject[String(id)] = [
+        { type: 'ActivateAbility', data: { object_id: id, ability_index: 0, label: 'Ciclar {2}' } } as GameAction
+      ];
+    }
+    return byObject;
+  });
+
+  /**
+   * A scripted engine client: it answers `view` with the fixture's snapshot and
+   * `action` with a new revision, so the sheet's dispatch path runs for real.
+   * Nothing here evaluates a rule; it echoes what the test asked for.
+   */
+  onMount(() => {
+    if (!actionsMode) return;
+    const objects = Object.fromEntries([...hand, ...battlefield].map((object) => [String(object.id), object]));
+    let revision = 1;
+    const snapshot = (): EngineSnapshot => ({
+      ok: true,
+      revision,
+      viewer: 0,
+      state: {
+        viewer: 0,
+        turn_number: 1,
+        active_player: 0,
+        priority_player: 0,
+        players: {},
+        objects,
+        waiting_for: { type: 'Priority' },
+        battlefield: battlefield.map((object) => object.id),
+        outcome: null
+      },
+      legal: { actions: [], by_object: scriptedLegal, spell_costs: {} },
+      derived: { copied_permanents: [] },
+      events: [],
+      metrics: {}
+    } as unknown as EngineSnapshot);
+    session.snapshot = snapshot();
+    session.status = 'ready';
+    const client = (session as unknown as { client: EngineClient }).client;
+    client.view = async () => snapshot();
+    client.action = async (_viewer, _action, _revision) => {
+      revision += 1;
+      session.snapshot = snapshot();
+      return snapshot();
+    };
+    session.error = null;
+  });
+
   const allObjects = $derived(Object.fromEntries([...hand, ...battlefield, ...(mirrorEnabled ? rivalBattlefield : [])].map((o) => [String(o.id), o])));
   const cardWidth = $derived(Math.round(148 * session.cardScale));
 </script>

@@ -17,7 +17,7 @@
     meta,
     costLabel = '',
     playLabel = null,
-    playCount = 0,
+    choiceCount = 0,
     busy = false,
     onplay,
     oninspect,
@@ -29,8 +29,11 @@
     costLabel?: string;
     /** `null` when the card has no playable action right now. */
     playLabel?: string | null;
-    /** How many distinct casts the card offers (several variants show a count). */
-    playCount?: number;
+    /**
+     * How many different actions Phase publishes for this card. With more than
+     * one, the visible control asks the player to choose instead of guessing.
+     */
+    choiceCount?: number;
     /** An action is in flight: the button stays visible but cannot double-fire. */
     busy?: boolean;
     onplay?: () => void;
@@ -46,7 +49,12 @@
   {/if}
   {#if playLabel !== null}
     <button class="sheet-play" type="button" disabled={busy} onclick={() => onplay?.()} aria-label={playLabel}>
-      {playLabel}{playCount > 1 ? ` (${playCount})` : ''}
+      {playLabel}
+    </button>
+  {:else if choiceCount > 1}
+    <!-- Several different actions: a single press cannot pick one for the player. -->
+    <button class="sheet-choose" type="button" disabled={busy} onclick={() => onopen?.()} aria-label={`Elegir entre ${choiceCount} acciones`}>
+      Elegir ({choiceCount})
     </button>
   {:else}
     <!--
@@ -109,6 +117,18 @@
   }
   .sheet-play:active { transform: scale(.98); }
   .sheet-play[disabled] { opacity: .6; }
+  .sheet-choose {
+    min-height: 44px;
+    padding: .35rem .5rem;
+    border-radius: 9px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-size: .78rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .sheet-choose[disabled] { opacity: .6; }
   .sheet-idle {
     position: absolute;
     width: 1px;

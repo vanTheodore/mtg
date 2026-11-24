@@ -222,11 +222,23 @@
 -->
 <HandSheet objects={objects} {metas} {title} />
 
+<!--
+  On a phone the hand is the sheet, so this inline region is pure bookkeeping:
+  it stays mounted (counts, the accessibility list and every test that reads the
+  hand keep working) but it is `inert`. Clipping it to 1px was not enough — its
+  cards and its tab stop were still reachable by Tab, which is a second,
+  invisible copy of the same hand. `inert` fixes that and keeps the region in
+  the accessibility tree, which is what the documented hand list relies on; an
+  `aria-hidden` on top of it emptied `role=region` and made seven cards vanish
+  from the accessible snapshot at 320px, where the sheet is the thing that
+  actually shows them.
+-->
 <section
   class="hand-zone"
   class:sheet-open={open && !narrowViewport}
   aria-label={title}
   id="mesa-hand-sheet"
+  inert={narrowViewport}
   bind:this={sheet}
 >
   <header class="zone-head">

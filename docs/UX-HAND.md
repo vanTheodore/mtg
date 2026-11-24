@@ -88,3 +88,72 @@ Capturas en `docs/screenshots/ux-hand/`: hoja 390×844 claro/oscuro, 320×844, 8
 - Dos columnas a 320 px es lo máximo que cabe sin bajar de 132 px de carta.
 - El detalle reutiliza el texto del motor (inglés) cuando existe; el texto publicado en español se sigue mostrando en la cara de la carta vía `impressions`.
 - Las pruebas con motor real no se pudieron ejecutar en este entorno: quedan como contrato para CI, no como resultado.
+
+---
+
+# UX-HAND 1.1 — integridad de interacción
+
+Tres defectos del código de 1.0, cada uno con su RED ejecutado antes del arreglo.
+
+## A. Acciones ambiguas (P0)
+
+`quickPlay` elegía con tres `find` independientes —PlayLand, un único CastSpell, una única ActivateAbility— lo que no demuestra que exista **una** acción, sino que existe una de cada categoría. Con un lanzamiento *y* una activación despachaba una de las dos sin preguntar.
+
+- **RED**: `src/lib/game/__tests__/hand-sheet-actions.test.ts` → `Cannot find module '../handSheetActions.ts'`, 0 pasan.
+- **Arreglo**: `src/lib/game/handSheetActions.ts` proyecta `legal.by_object` en `{ quick?, choices, manualPayment }`. `quick` existe **solo** si hay exactamente una acción publicada. La hoja muestra `Elegir (n)` cuando hay varias y cada control del detalle lleva su etiqueta real (`Lanzar`, `Jugar tierra`, `Activar`, `Producir maná`), con `· alternativa` para la segunda cara del mismo lanzamiento.
+- No se duplica ninguna regla: la lista es literalmente la de Phase, y el juicio de maná sigue siendo `isManaPrompt`/`manaActions`.
+- **GREEN**: 9/9 en la prueba unitaria; E2E `una carta con lanzamiento y activación no se ejecuta de un toque` verifica que pulsar abre el detalle con las dos acciones y **no** despacha nada.
+
+## B. Habilidades invisibles (P0)
+
+`isManaAction` cuenta `ActivateAbility` como maná; `manaActions` la excluye fuera de ventana de maná; el detalle filtraba con `!isManaAction(a)`. Una habilidad activada desde la mano no aparecía en **ninguna** de las dos listas.
+
+- **RED**: `una habilidad activada fuera de ventana de maná sigue siendo una acción` y `en una ventana de maná… no se duplica`.
+- **Arreglo**: una sola lista (`choices`), sin segundo filtro. El maná se marca con el mismo criterio que ya usa `manaActions` (taps siempre; `ActivateAbility` sólo dentro de ventana). Deduplicación por forma JSON, igual que `manaActions`.
+- **GREEN**: E2E `una habilidad activada sigue visible y accionable` (fixture con `ActivateAbility` explícita) y `la proyección no duplica ni pierde acciones publicadas`.
+
+## C. Resultado explícito del despacho
+
+La hoja deducía éxito de que la revisión subiera. Tras `stale_action` el re-view mueve la revisión, así que un rechazo podía parecer aceptado.
+
+- **RED**: `src/lib/game/__tests__/dispatch-outcome.test.ts` (5 casos, incluido "el resultado nunca depende de que la revisión suba").
+- **Arreglo**: `classifyDispatch` → `accepted | stale | rejected | failed | unavailable`. `session.dispatch` devuelve `Promise<DispatchOutcome>` (antes `void`; ningún consumidor leía el valor, y el tutorial sólo lo usa para esperar). La hoja **sólo cierra** con `accepted`; en los demás casos queda abierta, muestra el mensaje del motor en `role="alert"` dentro de la hoja y la acción sigue ahí para reintentar.
+- El bucle de 20×25 ms para el foco se sustituyó por una transición determinista: cerrar, `tick()`, y dos `requestAnimationFrame` para enfocar la acción que desbloqueó la jugada, ya sin `inert`.
+- **GREEN**: los 6 casos unitarios; E2E `cancelar o rechazar deja el error visible y permite reintentar` (motor real) y la prueba de doble pulsación, que ahora exige **exactamente +1** en `data-actions-applied`.
+
+## D. Pruebas que no pueden pasar vacías
+
+- **Fixture con legalidad explícita**: `/stress?actions=1` publica un `legal.by_object` escrito a mano (tierra, lanzamiento, lanzamiento+activación, dos caras, activación sola, nada) y responde despachos con un cliente guionizado. No evalúa reglas: existe para probar los contratos de la hoja. `HandSheet` sólo lee `legal.by_object` y `session`.
+- **Guarda dura de motor**: las pruebas de WASM ahora **fallan** si el motor no está (`MESA_ENGINE_REQUIRED=0` permite omitirlas a propósito). El skip silencioso desapareció.
+- Se retiraron las que podían pasar vacías: el `return` temprano de la prueba de lanzamiento, el `void revision`, y el `skip` cuando no había acciones.
+- La revisión que se mide es `data-actions-applied` de `Board.svelte` (contador del motor), y la prueba comprueba que **se mueve** al aplicar una acción.
+- Doble pulsación: `dblclick` sobre una acción legal + `+1` exacto de `data-actions-applied`.
+- Cambio de asiento con hoja y detalle abiertos: se cierra, se usa la compuerta de handoff (o `Pasar`), y se exige que el detalle anterior no sobreviva y que la mano sea la del asiento nuevo.
+- Objetivos, pago manual y cancelación/rechazo: con motor real.
+- **Orden de Tab y Shift+Tab**: se recorre y se comprueba que cada paso queda dentro de la hoja. Medido: la mano colapsada mantenía 36 controles enfocables (scrollport, cartas, "Ampliar", "Reintentar"), es decir una segunda copia invisible de la mano en el orden de teclado. Ahora la zona es `inert` en vista angosta.
+
+### Dos defectos que sólo aparecieron escribiendo esta prueba
+
+1. **La mano colapsada era navegable.** `inert` lo arregla. Un `aria-hidden` añadido por mi parte además vaciaba `role=region` y hacía desaparecer siete cartas del árbol accesible a 320 px: se retiró, porque el contenedor es accesible y la parte operativa está inerte.
+2. **El foco de apertura dependía de un `tick` que aún no tenía el elemento**: se capturaba `sheetEl` en el cuerpo del efecto, cuando sigue siendo `undefined`, y el foco se quedaba en `<body>`. Ahora se lee dentro del callback diferido.
+
+## E. Estado y RED/GREEN por prueba
+
+| Suite | Local (sin motor) | CI (motor real) |
+|---|---|---|
+| `hand-sheet-actions.test.ts` (nueva) | 9/9 | — |
+| `dispatch-outcome.test.ts` (nueva) | 6/6 | — |
+| `arena-hand-sheet` (fixture + teclado) | 16 pasan | — |
+| `arena-hand-sheet` (motor) | 7 fallan a propósito sin WASM | pendiente de este run |
+| `arena-quality-gate` | 7/7 | — |
+| `hand-overflow-evidence` | 6/6 | — |
+| `arena-card-tools-reachability` | 2/2 | — |
+| `arena-hand-fan` | 3/3 | — |
+| `visibility` | 10/10 | — |
+| `ux-themes`, `a11y`, `arena-zones` | verdes | — |
+| `arena-phone-footer` | 9 fallan **también en `main`**: exigen motor | — |
+| `arena-mobile-drawer`, `arena-touch-play`, `arena-viewport-matrix`, `arena-ui` | exigen motor | cubiertas en CI |
+
+`bun test src/lib` 805/805, `bun run check` 0 errores, `bun run build` correcto.
+
+RED conservados: módulo ausente (A, B) y clasificador ausente (C), más tres RED ejecutados (foco de apertura, orden de Tab, `role=region` vacío a 320 px) que sólo se manifiestan en navegador.

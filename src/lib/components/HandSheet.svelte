@@ -25,8 +25,9 @@
   import { tick } from 'svelte';
   import HandSheetCard from './HandSheetCard.svelte';
   import { session } from '#lib/game/session.svelte.ts';
-  import { actionsForObject, describeAction } from '#lib/game/actions.ts';
-  import { isManaAction, manaActions, manualCast } from '#lib/game/interaction.ts';
+  import { describeAction } from '#lib/game/actions.ts';
+  import { manualCast } from '#lib/game/interaction.ts';
+  import { sheetActions } from '#lib/game/handSheetActions.ts';
   import { manaText } from '#lib/game/cards.ts';
   import type { CardMeta, GameObject, GameAction } from '#lib/engine/types.ts';
 
@@ -48,6 +49,8 @@
   let detailEl = $state<HTMLElement | undefined>();
   let closeButton = $state<HTMLButtonElement | undefined>();
   let lastFocused = $state<HTMLElement | null>(null);
+  /** Engine's own words when it refused an action. Shown inside the sheet. */
+  let sheetError = $state<string | null>(null);
 
   /**
    * The detail card is resolved from the *current* snapshot, so a card that
@@ -58,6 +61,7 @@
   const detail = $derived(detailId === null ? undefined : objects.find((o) => o.id === detailId));
   $effect(() => { if (open && detailId !== null && !detail) detailId = null; });
   $effect(() => { if (!open && detailId !== null) detailId = null; });
+  $effect(() => { if (!open && sheetError !== null) sheetError = null; });
 
   /**
    * Opening moves focus into the sheet. The board behind is `inert`, so if
@@ -67,28 +71,32 @@
    */
   $effect(() => {
     if (!open) return;
-    void tick().then(() => sheetEl?.querySelector<HTMLElement>('.sheet-close')?.focus());
+    // Read the element inside the deferred callback, not in the effect body:
+    // `sheetEl` is still undefined on the tick that opens the sheet, so
+    // capturing it here focused nothing and focus stayed on `<body>` outside
+    // the dialog. Measured in the Tab-order test: first stop was `BODY`.
+    void tick().then(() => {
+      sheetEl?.querySelector<HTMLElement>('.sheet-close')?.focus();
+    });
   });
 
-  /** Phase's own legality list for one object, split the way the panel does. */
-  function actionsOf(id: number): GameAction[] {
-    return actionsForObject(snapshot?.legal.by_object ?? {}, id);
+  /**
+   * Everything the sheet knows about one card's actions comes from this one
+   * projector, which reads Phase's `legal.by_object` and nothing else.
+   *
+   * It replaces three independent `find`s and a `!isManaAction(a)` filter. Those
+   * made two mistakes the tests now pin down: "there is a land / one cast / one
+   * activation" does not prove "there is one thing to do", so a fast press
+   * could pick one of two different actions; and generic activations vanished
+   * from both lists, because `isManaAction` counts them as mana while
+   * `manaActions` withholds them outside a mana window.
+   */
+  function actionsOf(id: number) {
+    return sheetActions(snapshot, id);
   }
-  function castsOf(id: number): GameAction[] {
-    return actionsOf(id).filter((a) => a.type === 'CastSpell');
-  }
-  function manaOf(id: number): GameAction[] {
-    return manaActions(snapshot, id);
-  }
-  function playLabel(objectId: number): string | null {
-    const kinds = new Set(actionsOf(objectId).map((a) => a.type));
-    if (kinds.has('CastSpell')) return 'Lanzar';
-    if (kinds.has('PlayLand')) return 'Jugar tierra';
-    if (kinds.has('ActivateAbility')) return 'Activar';
-    if (kinds.has('Foretell')) return 'Predecir';
-    if (castsOf(objectId).length) return 'Lanzar';
-    if (manaOf(objectId).length) return 'Producir maná';
-    return null;
+  function quickLabel(id: number): string | null {
+    const quick = actionsOf(id).quick;
+    return quick ? quick.label : null;
   }
   function openCard(objectId: number) {
     lastFocused = (document.activeElement as HTMLElement | null) ?? null;
@@ -101,58 +109,63 @@
     void tick().then(() => back?.focus());
   }
   /**
-   * The single obvious action for a card, dispatched straight from the grid.
-   * Everything else (several casts, manual mana, abilities) opens the detail,
-   * so a fast tap never guesses which of two options the player wanted.
+   * One press on the card's action.
+   *
+   * Only when Phase offers exactly one thing for this card. If there are two
+   * different things (a cast and an activation, two activations, two cast
+   * faces) the press opens the detail instead: guessing would dispatch one of
+   * them at random from the player's point of view.
    */
   function quickPlay(objectId: number) {
-    const actions = actionsOf(objectId);
-    const commit =
-      actions.find((a) => a.type === 'PlayLand') ??
-      (castsOf(objectId).length === 1 ? castsOf(objectId)[0] : undefined) ??
-      (actions.filter((a) => a.type === 'ActivateAbility').length === 1
-        ? actions.find((a) => a.type === 'ActivateAbility')
-        : undefined);
-    if (!commit) { openCard(objectId); return; }
-    void play(commit);
+    const quick = actionsOf(objectId).quick;
+    if (!quick) { openCard(objectId); return; }
+    void play(quick.action);
   }
 
   /**
-   * Dispatch, then hand the player back to the table only if the engine
-   * accepted it.
+   * Dispatch and act on what the engine actually said.
    *
-   * Closing on success and staying on failure is the difference between "your
-   * card resolved, here is the prompt it opened" and "that was rejected while
-   * you were looking at a full-screen sheet". `session.dispatch` resolves
-   * after the reply is applied, so the revision tells us which happened — and
-   * a double tap is refused before that, by `busy`.
+   * The sheet closes only on `accepted`. A `stale` re-view, a rejection or a
+   * transport failure keeps it open — the player is looking at the card they
+   * tried to play, and the message explaining what happened sits in front of
+   * them with the action still there to retry. Inferring this from a revision
+   * bump could not tell "applied" from "re-viewed after stale_action", because
+   * the re-view moves the revision too.
    */
   async function play(action: GameAction) {
     if (session.busy) return;
-    const before = session.snapshot?.revision ?? -1;
     detailId = null;
-    await session.dispatch(action);
+    const outcome = await session.dispatch(action);
+    if (outcome.kind !== 'accepted') {
+      // Keep the message where the player is: the sheet covers the panel.
+      sheetError = outcome.message ?? 'Phase no aceptó la acción.';
+      return;
+    }
+    sheetError = null;
+    // Close first, then let focus settle on the next step with one deterministic
+    // transition: the board stops being `inert` and the panel that the action
+    // unlocked is focusable again.
+    session.setHandDrawer(false);
     await tick();
-    if ((session.snapshot?.revision ?? -1) <= before) return;
-    /*
-     * The action this play unlocked is the next thing the player needs: focus
-     * it before closing, and wait for it to exist. After a land drop the panel
-     * may keep showing the previous prompt for one commit, and focusing a
-     * button that is about to be replaced leaves focus on `<body>` — measured
-     * in Mesa CI, where the focused element was `.actions button` at a moment
-     * when that node had already been swapped out.
-     */
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    focusNextStep();
+  }
+
+  /**
+   * Hand focus to the action this play unlocked, once, after `inert` is gone.
+   *
+   * This replaces a 20×25ms polling loop. Two rAFs cover "styles recalculated,
+   * `inert` removed, panel rendered"; if the panel still shows the previous
+   * prompt, focusing it is correct anyway — it is a real enabled control the
+   * player can use.
+   */
+  function focusNextStep() {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       const panel = document.querySelector('section[aria-label="Decisión pendiente"]');
       const target = panel?.querySelector<HTMLButtonElement>(
         '[aria-label^="Carta seleccionada"] .actions button:not([disabled]), .actions button:not([disabled])'
       );
-      if (target) target.focus();
-      if (target && document.activeElement === target) break;
-      if ((session.snapshot?.revision ?? -1) > before && target) break;
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    }
-    session.setHandDrawer(false);
+      target?.focus();
+    }));
   }
 
   function close() {
@@ -218,6 +231,18 @@
       </button>
     </header>
 
+    {#if sheetError}
+      <!--
+        The engine refused (or the view moved under us): say so here, where the
+        player is, with the actions still on screen to retry. The sheet stays
+        open on purpose — closing it would hide the reason and look like a play.
+      -->
+      <p class="sheet-error" role="alert">
+        {sheetError}
+        <button type="button" class="sheet-error-dismiss" onclick={() => (sheetError = null)} aria-label="Descartar el aviso">Entendido</button>
+      </p>
+    {/if}
+
     <div class="sheet-grid" role="list" aria-label="Cartas en la mano">
       {#each objects as object (object.id)}
         <div class="sheet-cell" role="listitem">
@@ -225,8 +250,8 @@
             {object}
             meta={metas[object.printed_ref?.oracle_id ?? ''] ?? metas[object.name.toLowerCase()]}
             costLabel={manaText(snapshot?.legal.spell_costs[String(object.id)] ?? object.mana_cost)}
-            playLabel={playLabel(object.id)}
-            playCount={castsOf(object.id).length}
+            playLabel={quickLabel(object.id)}
+            choiceCount={actionsOf(object.id).choices.length}
             busy={session.busy}
             onplay={() => quickPlay(object.id)}
             onopen={() => openCard(object.id)}
@@ -248,19 +273,30 @@
           {detail.oracle_text ?? 'Sin texto de reglas publicado por Phase para esta carta.'}
         </p>
         <div class="detail-actions">
-          {#each castsOf(detail.id) as action, i (i)}
-            <button type="button" class="primary" disabled={session.busy} onclick={() => play(action)}>
-              Lanzar{castsOf(detail.id).length > 1 ? ` · opción ${i + 1}` : ''}
+          <!--
+            One control per action Phase published, in its own order. `choice`
+            carries the label that describes the behaviour ("Lanzar", "Producir
+            maná", "Activar"); alternatives of the same cast are marked so two
+            similar buttons are never a puzzle.
+          -->
+          {#each actionsOf(detail.id).choices as choice, i (i)}
+            <button
+              type="button"
+              class:primary={!choice.alternative && choice.kind !== 'mana'}
+              disabled={session.busy}
+              onclick={() => play(choice.action)}
+              aria-label={choice.alternative ? `${choice.label} (alternativa)` : choice.label}
+            >
+              {choice.label}{choice.alternative ? ' · alternativa' : ''}
+              {#if choice.kind === 'other'}<span class="choice-note">{describeAction(choice.action, snapshot?.state.objects ?? {})}</span>{/if}
             </button>
-            <button type="button" disabled={session.busy} onclick={() => play(manualCast(action))}>Elegir maná manualmente</button>
+            {#if choice.kind === 'cast'}
+              <button type="button" disabled={session.busy} onclick={() => play(manualCast(choice.action))}>
+                Elegir maná manualmente
+              </button>
+            {/if}
           {/each}
-          {#each actionsOf(detail.id).filter((a) => a.type !== 'CastSpell' && !isManaAction(a)) as action, i (i)}
-            <button type="button" disabled={session.busy} onclick={() => play(action)}>{describeAction(action, snapshot?.state.objects ?? {})}</button>
-          {/each}
-          {#each manaOf(detail.id) as action, i (i)}
-            <button type="button" disabled={session.busy} onclick={() => play(action)}>{describeAction(action, snapshot?.state.objects ?? {})}</button>
-          {/each}
-          {#if !actionsOf(detail.id).length && !manaOf(detail.id).length}
+          {#if !actionsOf(detail.id).choices.length}
             <p class="detail-idle">Phase no ofrece ninguna acción para esta carta ahora.</p>
           {/if}
         </div>
@@ -380,6 +416,31 @@
   }
   .detail-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
   .detail-idle { margin: 0; color: var(--ink-muted); font-size: .82rem; }
+  .choice-note { display: block; font-weight: 500; font-size: .74rem; color: var(--ink-muted); margin-top: .15rem; }
+  .sheet-error {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: 0;
+    padding: .5rem .6rem;
+    border-radius: 10px;
+    border: 1px solid var(--danger, #b3261e);
+    background: color-mix(in srgb, var(--danger, #b3261e) 12%, var(--surface));
+    color: var(--ink);
+    font-size: .82rem;
+    line-height: 1.3;
+  }
+  .sheet-error-dismiss {
+    margin-left: auto;
+    min-height: 32px;
+    padding: .2rem .6rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: .76rem;
+    font-weight: 650;
+  }
 
   /*
    * Landscape keeps the same 132px floor: at 844×390 that is five columns of

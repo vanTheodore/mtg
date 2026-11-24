@@ -24,6 +24,7 @@ import {
   type BottomOrderPrompt
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
+import { classifyDispatch, type DispatchOutcome } from './dispatchOutcome.ts';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type BoardStyle = 'arena' | 'classic';
@@ -242,19 +243,44 @@ class GameSession {
     this.busy = false;
   }
 
-  dispatch(action: GameAction): Promise<void> {
+  /**
+   * Send one action to Phase and say what happened.
+   *
+   * The returned {@link DispatchOutcome} is the only honest summary: a revision
+   * bump alone cannot tell an applied action from a silent re-view after
+   * `stale_action`, and this method re-views on purpose. Callers that branched
+   * on `snapshot.revision` were reading a number that can move for reasons
+   * other than their action. The value used to be `void`; no consumer read it,
+   * so returning a result changes nothing for them.
+   */
+  dispatch(action: GameAction): Promise<DispatchOutcome> {
+    let outcome: DispatchOutcome = { kind: 'unavailable', message: 'No hay una partida activa que pueda aceptar esa acción.' };
     const run = async () => {
-      if (!this.snapshot || this.busy || this.snapshot.outcome) return;
+      if (!this.snapshot || this.busy || this.snapshot.outcome) return outcome;
+      const actionRevision = this.snapshot.revision;
       this.busy = true; this.error = null;
+      let reply: EngineReply | null = null;
+      let reViewed = false;
+      let failure: unknown;
       try {
-        const reply = await this.client.action(this.snapshot.viewer, action, this.snapshot.revision);
+        reply = await this.client.action(this.snapshot.viewer, action, actionRevision);
         await this.apply(reply);
-        if (!reply.ok && reply.code === 'stale_action') await this.apply(await this.client.view(this.snapshot.viewer));
-      } catch (e) { this.error = e instanceof Error ? e.message : String(e); }
-      finally { this.busy = false; }
+        if (!reply.ok && reply.code === 'stale_action') {
+          await this.apply(await this.client.view(this.snapshot.viewer));
+          reViewed = true;
+        }
+      } catch (e) {
+        failure = e;
+        this.error = e instanceof Error ? e.message : String(e);
+      } finally { this.busy = false; }
+      outcome = classifyDispatch({ actionRevision, snapshotBefore: actionRevision, reply, reViewed, error: failure });
+      // A rejection or a stale re-view leaves a sentence on screen: the player
+      // has to know the card did not resolve, and be able to try again.
+      if (outcome.kind === 'stale' || outcome.kind === 'failed') this.error = outcome.message ?? this.error;
+      return outcome;
     };
     this.queue = this.queue.then(run, run);
-    return this.queue as Promise<void>;
+    return this.queue as Promise<DispatchOutcome>;
   }
 
   openCardMenu(id: ObjectId) { this.cardMenu = id; }
