@@ -81,8 +81,11 @@ async function playFromHand(page: Page) {
     if (!(await tapDecisionButton(page, 'Conservar mano'))) break;
   }
   await passSeat(page);
+  // The hand itself is always mounted (the inline region), so it is the right
+  // thing to wait for here. The sheet's action buttons only exist while the
+  // sheet is open — polling them before opening it can only ever see zero.
   await expect
-    .poll(() => page.locator('.hand-sheet .sheet-play').count(), { timeout: 30_000 })
+    .poll(() => page.locator('.hand-zone [data-card-id]').count(), { timeout: 30_000 })
     .toBeGreaterThan(0);
 
   const before = {
@@ -113,6 +116,9 @@ async function playFromHand(page: Page) {
   // for rather than demanded in the first frame — that race was a red CI run.
   const playWhenReady = page.locator('.hand-sheet .sheet-play').first();
   await expect(playWhenReady).toBeVisible({ timeout: 60_000 });
+  // A player scrolls the grid to the card they want; do the same so the tap
+  // lands where the finger would be, not on an off-screen control.
+  await playWhenReady.scrollIntoViewIfNeeded();
   await expect(playWhenReady).toBeInViewport();
   const playable = page.locator('.hand-sheet [data-card-id]').first();
   await expect(playable).toBeInViewport();
@@ -166,15 +172,15 @@ async function playFromHand(page: Page) {
 
   // 5) Keyboard reaches the same path: focus a card and press Enter, and the
   //    drawer closes for the keyboard too.
+  // Open first, then look inside: the sheet is only in the DOM while open.
+  await trigger.tap();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   const keyboardCard = page.locator('.hand-sheet .sheet-play').first();
-  if (await keyboardCard.count()) {
-    await trigger.tap();
-    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    await keyboardCard.focus();
-    await page.keyboard.press('Enter');
-    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.locator('section[aria-label="Decisión pendiente"] .actions button:focus')).toHaveCount(1);
-  }
+  await expect(keyboardCard).toBeVisible({ timeout: 60_000 });
+  await keyboardCard.focus();
+  await page.keyboard.press('Enter');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('section[aria-label="Decisión pendiente"] .actions button:focus')).toHaveCount(1);
 }
 
 test.describe('teléfono con puntero táctil', () => {
