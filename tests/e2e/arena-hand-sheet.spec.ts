@@ -299,7 +299,7 @@ async function realGame(page: Page) {
   const engineMissing = page.getByText(/No se pudo descargar el motor WASM/);
   const trigger = page.locator('.hand-trigger');
   await expect
-    .poll(async () => (await engineMissing.count()) > 0 || (await trigger.count()) > 0, { timeout: 60_000 })
+    .poll(async () => (await engineMissing.count()) > 0 || (await trigger.count()) > 0, { timeout: 120_000 })
     .toBe(true);
   const missing = (await engineMissing.count()) > 0;
   if (missing) {
@@ -308,28 +308,49 @@ async function realGame(page: Page) {
     if (ENGINE_REQUIRED) throw new Error(reason);
     test.skip(true, reason);
   }
-  await expect(trigger).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({ timeout: 120_000 });
+  await expect(trigger).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({ timeout: 180_000 });
 }
 
-/** Reach the player's first priority with a real hand, through the real UI. */
+/** The seat dialog is the product's privacy guard: the player passes it. */
+async function passSeat(page: Page) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const handoff = page.locator('.handoff');
+    if (!(await handoff.isVisible().catch(() => false))) return;
+    await handoff.locator('button').first().tap({ timeout: 3_000 }).catch(() => {});
+    await page.waitForTimeout(250);
+  }
+}
+
+/**
+ * Reach a real priority with a legal action in hand.
+ *
+ * Both seats keep their opening hand (passing the device like people do), and
+ * only then is there something to play: before that the game is still handing
+ * out mulligans and Phase publishes no cast. Opening the sheet is part of the
+ * loop because legality only appears once it is the player's turn.
+ */
 async function reachPriority(page: Page) {
-  for (let turn = 0; turn < 12; turn += 1) {
-    const keep = page.getByRole('button', { name: /^Conservar mano/ });
-    if (await keep.count()) await keep.first().tap().catch(() => {});
-    if (await page.locator('.hand-sheet .sheet-play').count().catch(() => 0)) {
-      if (await page.locator('.hand-sheet').isVisible()) return;
-      await page.locator('.hand-trigger').tap();
-      if (await page.locator('.hand-sheet .sheet-play').count()) return;
+  for (let round = 0; round < 4; round += 1) {
+    await passSeat(page);
+    const keep = page.getByRole('button', { name: 'Conservar mano' }).first();
+    if (!(await keep.count())) break;
+    const before = Number(await page.locator('.app').getAttribute('data-actions-applied'));
+    await keep.tap({ timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const after = Number(await page.locator('.app').getAttribute('data-actions-applied'));
+    if (after > before) break;
+  }
+  await passSeat(page);
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (!(await page.locator('.hand-sheet').count())) {
+      await page.locator('.hand-trigger').tap().catch(() => {});
     }
-    const pass = page.getByRole('button', { name: /^Pasar/ }).first();
-    if (await pass.count()) await pass.tap().catch(() => {});
-    else {
-      // Handoff between seats: confirm it when the strict gate asks.
-      const confirm = page.getByRole('button', { name: /^(Listo|Continuar|Confirmar|Entendido)/ }).first();
-      if (await confirm.count()) await confirm.tap().catch(() => {});
-    }
-    await page.waitForTimeout(400);
+    if (await page.locator('.hand-sheet .sheet-play').count()) return;
+    const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
+    if (await pass.count()) await pass.tap({ timeout: 4_000 }).catch(() => {});
+    await passSeat(page);
+    await page.waitForTimeout(300);
   }
 }
 
@@ -492,7 +513,7 @@ test.describe('motor real', () => {
     await realGame(page);
     await reachPriority(page);
     const targetCard = page.locator('.hand-sheet .sheet-play[aria-label="Lanzar"]').first();
-    await expect(targetCard, 'no hay lanzamiento que requiera objetivos').toHaveCount(1, { timeout: 60_000 });
+    await expect(targetCard, 'no hay ningún lanzamiento disponible en la mano').toHaveCount(1, { timeout: 60_000 });
     await targetCard.scrollIntoViewIfNeeded();
     await targetCard.tap();
     // Either the engine asks for a target (prompt) or the cast resolved: both

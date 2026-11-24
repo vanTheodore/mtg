@@ -176,9 +176,15 @@ test('Arena de escritorio ajusta la densidad al viewport sin cambiar Clásico ni
   await expect(hand.locator('[data-card-id]')).toHaveCount(7);
   const mobileWidth = await first.evaluate((node) => parseFloat(getComputedStyle(node).width));
   expect(mobileWidth).toBeGreaterThan(125);
+  // UX-HAND: at 390px the hand is the sheet, and the inline region is `inert`
+  // (a collapsed copy that must not take focus). The cards are still reported:
+  // the region keeps them in the accessibility tree, which is what this test
+  // is about — the style switch never changes the Phase-reported hand.
   const region = hand.getByRole('region', { name: /Tu mano/ });
   await expect(region).toBeVisible();
-  const lastCard = region.locator('[data-card-id]').last();
+  await expect(region.locator('[data-card-id]')).toHaveCount(7);
+  await page.locator('.hand-trigger').click();
+  const lastCard = page.locator('.hand-sheet [data-card-id]').last();
   await lastCard.scrollIntoViewIfNeeded();
   await lastCard.focus();
   await expect(lastCard).toBeFocused();
