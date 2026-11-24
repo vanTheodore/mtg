@@ -113,10 +113,34 @@ Primer intento del RED, fallido y por eso anotado: con la clave `zzz roto` la pr
 porque `b` < `zzz` mantiene el orden. La prueba no estaba floja; mi caso de prueba sí. Restaurado el
 shard byte-idéntico y vuelto a verde.
 
-## Contrato: mismas ventanas, mismas acciones
+## Contrato: mismos enums, campos y atributos serde
 
 `GameAction` y `WaitingFor` **no cambian de número** en este rango: 142 = 142 y 149 = 149, altas y
-bajas vacías en los dos. Por este pin la interfaz de Mesa no necesita trabajo; sólo registro.
+bajas vacías en los dos.
+
+Un recuento de variantes no demuestra que los payloads sean iguales, así que la comparación se hizo
+**estructural**: se parsearon los dos enums en el tarball del pin y en el árbol local y se comparó,
+variante a variante, el conjunto de campos, el tipo de cada campo y los atributos `#[serde(...)]` de
+variante y de campo (incluidos `rename` y `skip`).
+
+| Enum | Variantes pin/mesa | Altas | Bajas | Diferencias de campos, tipos o serde |
+| --- | --- | --- | --- | --- |
+| `GameAction` | 142 / 142 | 0 | 0 | **0** |
+| `WaitingFor` | 149 / 149 | 0 | 0 | **0** |
+
+Los dos ficheros que definen los enums (`types/actions.rs`, `types/game_state.rs`) son además
+byte-idénticos al tarball, pero eso es la comprobación débil; la fuerte es la de arriba, y es la que
+se hizo primero.
+
+**El puente de Mesa tampoco cambia.** `crates/mtg-engine-wasm/src/lib.rs` serializa el valor entero
+(`"waiting_for": state.waiting_for`) y sólo **desestructura una variante**:
+`WaitingFor::GameOver { winner }`, que en el pin conserva el único campo `winner: Option<PlayerId>`,
+sin `serde` de variante ni de campo. Es la única variante que Mesa lee campo a campo, y no cambió.
+`GameAction` entra al motor por `serde_json` completo (`action: GameAction`), así que cualquier
+cambio de payload habría importado; no lo hubo.
+
+Por tanto, para este pin, la afirmación correcta es: **cero diferencias estructurales en los dos
+enums y en el único campo que el puente consume**. No «no añade variantes, luego es inocuo».
 
 `REPRESENTED` sigue en **110** de 149, y el censo vigilado por
 `src/lib/game/__tests__/represented-variants.test.ts` no se mueve.
@@ -139,6 +163,142 @@ Consecuencia para Mesa: el `decode` de un estado guardado por el pin nuevo puede
 Mesa no conoce, y un estado guardado por Mesa no los trae. Ninguna de las dos direcciones cambia el
 número de variantes, así que no hay ventana nueva que portar. Queda anotado como el contrato a
 vigilar en el siguiente salto, no como deuda de éste.
+
+## Corrección de esta importación: la suite conservada no se había sincronizado
+
+La primera versión de este pin sincronizó `src` y **17** ficheros de prueba, y dio la suite por
+completa. No lo estaba. El cruce exhaustivo de `crates/phase-engine/tests` contra el tarball del pin
+—hash por fichero, no por intuición— encontró **23 ficheros distintos**, y el revisor independiente
+señaló cuatro de ellos. Los veintitrés, clasificados:
+
+| Clase | Ficheros | Diagnóstico |
+| --- | --- | --- |
+| Idénticos al pin **anterior** (`d01766e1`), sin tocar en este rango localmente | 17 | Gap puro de sincronización: la copia de Mesa era la de v0.130.0 |
+| Ediciones locales de Mesa (`main.rs`, `shard_2`…`shard_5`) | 5 | Poda deliberada de `mod` hacia ficheros que Mesa no importa |
+| Cambio de contenido binario | 1 | `fixtures/cr733/authority_matrix.json.gz`: 355 entradas de `fields` frente a 353 |
+
+Los 17 del primer grupo se copiaron del tarball y quedan byte-idénticos. Entre ellos los cuatro que
+el revisor destacó (`bbfu10_entered_this_turn_snapshot`, `deterministic_game_state_serde`,
+`compound_ward_cost_pays_every_part`, `issue_2916_torment_repeat_unless`), y además
+`condition_gates_fail_closed`, `cr733_resolved_stack_entry_finalize`, `doran_attack_block_pump`,
+`ironscale_hydra_combat_prevention`, `issue_3665_smugglers_share`,
+`issue_9775_non_controller_activation_offered`, `jeskai_ascendancy_pump_untap_anaphora_6857`,
+`kashi_tribe_damage_tap_freeze`, `lasting_play_from_exile_permission`,
+`mold_folk_sacrifice_type_union`, `park_heights_pegasus_draw_condition_runtime`,
+`scoped_unless_payer_per_iteration`, `the_chain_veil_loyalty_grants`.
+
+El caso que citó el revisor es exactamente el esperado: `bbfu10_entered_this_turn_snapshot` crece
+**+658 líneas** porque upstream reescribió sus expectativas sobre `NonToken` junto con la
+implementación nueva. La copia anterior afirmaba «`battlefield_entry_matches_filter` responde sólo a
+4 de las 98 variantes de `FilterProp` y falla cerrado en el resto»; el pin ya no. Conservarla habría
+dejado una prueba que documenta el comportamiento viejo como si fuera el vigente.
+
+### Las cinco raíces: se sincronizan, sólo se podan los `mod` sin fichero
+
+`main.rs` y `shard_2`…`shard_5` sí cambian en el rango, pero su diferencia con el pin no es
+semántica: son líneas `mod`. Se regeneraron desde el tarball conservando **sólo** las declaraciones
+cuyo fichero existe en local, con resolución real de módulos (`x.rs`, `x/mod.rs` y `#[path = ...]`,
+que es como resuelve Rust). Resultado, medido:
+
+| Raíz | `mod` conservados | `mod` podados |
+| --- | --- | --- |
+| `main.rs` | 284 | 91 |
+| `shard_2.rs` | 352 | 67 |
+| `shard_3.rs` | 615 | 71 |
+| `shard_4.rs` | 546 | 56 |
+| `shard_5.rs` | 418 | 71 |
+
+Poda total: **356**. Líneas de diferencia con el tarball que **no** son un `mod`: **0** en las cinco.
+Cada `mod` conservado resuelve a un fichero; ningún fichero de prueba queda declarado en dos raíces
+(salvo `support`, que por diseño se declara en las cinco); el único fichero sin declarar es
+`shorten_efficacy.rs`, propio de Mesa. Los cuatro `mod` que apuntan a directorios o a `#[path]`
+(`census_release_batch_1`, `census_release_batch_2`, `p3_referent_predicates`, `source_census`) se
+resolvieron antes de podar nada: una primera pasada los contó como huérfanos porque sólo miraba
+`x.rs`.
+
+### Pruebas upstream nuevas incorporadas para las mecánicas del pin
+
+La política es no importar en bloque pruebas de subsistemas que Mesa no usa, pero sí las que cubren
+lo que este pin cambia. Cuatro módulos upstream entraron por eso, verbatim del tarball y declarados en
+el shard que upstream indica:
+
+| Módulo | Mecánica | Pruebas | Shard |
+| --- | --- | --- | --- |
+| `trample_lethal_assigned_this_step` | Mínimo letal al arrollar contando daño ya asignado (CR 702.19b) | 6 | `shard_5` |
+| `zilortha_lethal_damage_by_power` | Daño letal determinado por la fuerza (CR 120.6, 704.5g) | 24 | `shard_5` |
+| `scoped_unless_choose_all_then_act` | «A menos que» con alcance de jugador: elegir todos, luego actuar (CR 101.4) | 14 | `shard_5` |
+| `issue_8079_past_in_flames_flashback` | Flashback de Past in Flames (CR 611.2c) | 17 | `shard_4` |
+
+Las otras cuatro mecánicas del encargo ya tenían cobertura upstream **conservada** y ahora
+sincronizada: identidad de referentes y Greater Gargantón suspendido en
+`mold_folk_sacrifice_type_union` (15 pruebas, con `GARGADON` y su texto de suspend literal),
+no-fichas entradas este turno en `bbfu10_entered_this_turn_snapshot` (29), ward y ventanas de maná en
+`compound_ward_cost_pays_every_part` (11), y unless secuencial en `scoped_unless_payer_per_iteration`
+(64). Historial de cycling: el gancho nuevo (`de804c61`) no trae prueba propia en el pin; lo que hay
+es `yidaro_cycle_publication` y los snapshots de `oracle_ir` importados, y se declara así en vez de
+afirmar una cobertura que no existe.
+
+## Procedencia ampliada: cinco árboles, no uno
+
+`engine:verify` hasheaba **sólo** `crates/phase-engine/src`. Los árboles de AST, parser y datos se
+importan igual de literales, así que un parser corrupto pasaba la verificación de procedencia sin que
+nadie lo notara. El manifiesto declara ahora los cinco árboles y el script los verifica todos con la
+misma función de hash (`sha256` sobre la secuencia ordenada `ruta \0 sha256(fichero)`; el algoritmo
+no cambió, por eso `sourceSha256` sigue siendo válido).
+
+| Árbol local | Upstream | Ficheros | SHA-256 |
+| --- | --- | --- | --- |
+| `crates/phase-engine/src` | `crates/engine/src` | 502 | `66f5ae9a…82fc18` |
+| `crates/phase-ast/src` | `crates/phase-ast/src` | 34 | `abff252ae284c91e6d891089280cec58789e50633a46263c6f6571777396f3b6` |
+| `crates/phase-ast/data` | `crates/phase-ast/data` | 5 | `101baa5e9f2f1127385cf4aec0e3eecfef75673b5898978d5a1ac2f3ad0dcfad` |
+| `crates/phase-parser/src` | `crates/phase-parser/src` | 400 | `31c975e8a7782f827226e85ed24e12c13bf01407837866933488c3e9c74446bd` |
+| `crates/phase-engine/data` | `crates/engine/data` | 3 | `86b8a76846990d24538ebbfd51cac4a9cb65953feb882b9307415d4812703bd8` |
+
+Los cinco son idénticos al tarball. `bun run engine:verify` sin argumentos verifica los cinco;
+`bun run engine:verify -- <dir>` conserva el modo de un solo árbol. RED comprobado árbol a árbol:
+añadir una línea a un fichero de cada uno de los cuatro nuevos pone la verificación en rojo, y
+restaurarlo la devuelve a verde.
+
+## Las 17 rutas `include_*!` sin fichero: de 17 a 3
+
+Barrido sobre los cuatro árboles: **204** llamadas `include_*!`. Al cerrar la primera versión de este
+pin, 17 rutas no resolvían. Clasificadas por naturaleza, que es lo que el encargo pedía distinguir:
+
+| Naturaleza | Rutas | Decisión |
+| --- | --- | --- |
+| **Texto, no ruta** | 1 (`src/source_census.rs` cita `include_str!("x.rs")` como ejemplo en su doc) | No es una ruta; se excluye del recuento |
+| **Código de librería** (`#[cfg(test)]` de `src/types/format.rs`) | 3 | Resueltas materializando `client/src/...` |
+| **Pruebas de contrato** (`format_axis_census`, `interaction_contract`) | 3 | Resueltas igual |
+| **Fixtures de contrato** (`fixtures/adapter-contract/*.json`) | 7 | Materializadas desde el pin |
+| **Dependencia no importada a propósito** (`engine-wasm/src/lib.rs`) | 2 | Se quedan: Mesa no tiene ese crate |
+| **Binario opcional** (`resolution_face_census.rs` → script de auditoría) | 1 | Se queda: `required-features = ["test-support"]`, CI descarga el script |
+
+Resueltas: **14 de 17** (de 17 a 3). Las tres que quedan son las dos de `engine-wasm` y la del
+binario opcional, todas deliberadas.
+
+Las referencias a `client/src` se resolvieron **sin tocar una sola línea de Rust**: se materializaron
+las rutas que el propio upstream escribe, con copias exactas del pin. Las cinco de `format.rs` y
+`format_axis_census.rs` y la sexta de `interaction_contract.rs` —que los informes anteriores no
+contaban— resuelven ahora a ficheros reales:
+
+| Fichero materializado | Origen en el pin | Bytes | SHA-256 |
+| --- | --- | --- | --- |
+| `client/src/adapter/types.ts` | `client/src/adapter/types.ts` | 292 454 | `3617a857…` |
+| `client/src/data/formatRegistry.ts` | `client/src/data/formatRegistry.ts` | 27 768 | `9f4547ed…` |
+| `client/src/adapter/generated/interaction/index.ts` | `client/src/adapter/generated/interaction/index.ts` | 23 848 | `ff80f190…` |
+| `fixtures/adapter-contract/*.json` (9) | `fixtures/adapter-contract/` | — | idénticos |
+
+No se introduce modificación innecesaria en el código de reglas: no se reescribe ningún `include_*!`,
+no se toca ningún `mod` del motor y el único cambio de Rust en esta ronda es el script de
+verificación, que no es código de reglas. Los dos primeros ficheros son además **byte-idénticos** al
+espejo histórico `crates/phase-engine/client-mirror/`, así que no hay dos fuentes de verdad: el
+espejo y la ruta upstream son ahora el mismo contenido.
+
+Efecto secundario buscado: el guardián `engine-embedded-files.test.ts` tenía dos excepciones
+declarando ausentes precisamente las rutas de `format.rs`. Al existir los ficheros, la prueba falló
+—su comprobación de que «una excepción que sobra se poda»— y se quitaron las dos. Sigue habiendo una
+tercera excepción viva, la del binario opcional. RED y GREEN quedan así registrados por la propia
+suite.
 
 ## Versión del workspace y dependencias
 
@@ -239,12 +399,17 @@ Lo que **sí** se ejecutó en local (este entorno, sin `cargo`):
 
 | Comprobación | Resultado |
 | --- | --- |
-| `bun run engine:verify` | `ok: true`, digest `66f5ae9a…82fc18`, 502 ficheros |
+| `bun run engine:verify` | `ok: true` en los **cinco** árboles (502 + 34 + 5 + 400 + 3 ficheros) |
+| RED de procedencia por árbol | 4/4 árboles nuevos en rojo al corromper un fichero, verde al restaurar |
+| Cruce `tests` vs tarball (hash por fichero) | 23 diferencias → 5 (sólo raíces, sólo `mod`) |
+| Coherencia de raíces | 0 `mod` sin fichero, 0 ficheros sin declarar (salvo `shorten_efficacy`, propio) |
+| Barrido `include_*!` | 204 llamadas, 3 sin fichero (todas deliberadas), desde 17 |
+| Comparación estructural de enums | 0 diferencias en 142 + 149 variantes (campos, tipos, serde) |
 | `bun run check` | 0 errores, 2 avisos (preestablecidos) |
 | `bun test src/lib` | **790 pass**, 0 fail, 108 ficheros |
 | `bun run build` | `Wrote site to "build"` |
 | `bun test src/lib/game/__tests__/engine-integration-fixture.test.ts` | 2 pass + RED demostrado |
-| Barrido `include_*!` (204 llamadas) | 17 sin fichero, todas preexistentes |
+| `engine-embedded-files.test.ts` | RED al materializar `client/src` (2 excepciones caducadas) → podadas → verde |
 | Coherencia de shards (28 ficheros, 8 468 registros) | 0 errores, 0 duplicados |
 | `censo` `GameAction`/`WaitingFor` | 142/142 y 149/149 |
 
@@ -255,8 +420,9 @@ Lo que **no** se pudo ejecutar aquí y queda pendiente de CI:
   invocan `cargo run` y en este entorno no hay cadena Rust. No se declaran verdes.
 - **Compilación Rust y WASM** de cualquier tipo: no hay `rustc`/`cargo` ni red a
   `static.rust-lang.org`.
-- **Las pruebas de integración de Rust** (`cargo test -p phase-engine`): los 17 ficheros corregidos
-  quedan byte-idénticos al tarball, pero eso prueba que el texto es el del pin, **no** que compile.
+- **Las pruebas de integración de Rust** (`cargo test -p phase-engine`): los 22 ficheros
+  sincronizados quedan byte-idénticos al tarball, pero eso prueba que el texto es el del pin, **no**
+  que compile. La suite COMPLETA no está verde ni se declara: sigue siendo una suite seleccionada.
   Es exactamente lo que el job `phase-source-regressions` tiene que confirmar: compila
   `tests/integration/support.rs`, que es uno de los que cambió, y `support.rs` es el que ahora llama
   a `integration_fixture::exists()`.

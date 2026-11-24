@@ -114,6 +114,84 @@ jobs:
         run: cargo test --locked -p phase-engine --test mesa_phase_regressions board_wipe_co_departure_scaling -- --test-threads=1
       - name: Nightmare Shepherd copy exceptions (original upstream test)
         run: cargo test --locked -p phase-engine --test mesa_phase_regressions issue_8065_nightmare_shepherd -- --test-threads=1
+      # UP-131: the eight mechanics the v0.131.0 pin changed. Each module below is
+      # an ORIGINAL upstream test file, copied verbatim from the pinned tarball
+      # (same names, same fixtures, no re-implementation), and every one of them
+      # only depends on `support`, so they can share one target. This is a
+      # SELECTED suite, not `cargo test -p phase-engine`: it covers the mechanics
+      # the pin touched, and it says nothing about the 357 upstream modules Mesa
+      # prunes on purpose.
+      - name: Assemble the pinned-mechanics target from upstream's own tests
+        run: |
+          cat > crates/phase-engine/tests/mesa_phase_pin_mechanics.rs <<'RUST'
+          // Selected coverage for the mechanics v0.131.0 changed. Original upstream
+          // files, unmodified; see docs/PHASE-UPSTREAM-2026-11-23-31123E2B.md.
+          #[path = "integration/support.rs"]
+          mod support;
+          // Lethal damage, trample and damage assignment (CR 120.6, 704.5g, 702.19b).
+          #[path = "integration/trample_lethal_assigned_this_step.rs"]
+          mod trample_lethal_assigned_this_step;
+          #[path = "integration/zilortha_lethal_damage_by_power.rs"]
+          mod zilortha_lethal_damage_by_power;
+          // Simultaneous and sequential unless resolution (CR 101.4).
+          #[path = "integration/scoped_unless_choose_all_then_act.rs"]
+          mod scoped_unless_choose_all_then_act;
+          #[path = "integration/scoped_unless_payer_per_iteration.rs"]
+          mod scoped_unless_payer_per_iteration;
+          #[path = "integration/issue_2916_torment_repeat_unless.rs"]
+          mod issue_2916_torment_repeat_unless;
+          // Non-token creatures that entered this turn (BattlefieldEntryRecord::token_status).
+          #[path = "integration/bbfu10_entered_this_turn_snapshot.rs"]
+          mod bbfu10_entered_this_turn_snapshot;
+          // Ward and mana windows.
+          #[path = "integration/compound_ward_cost_pays_every_part.rs"]
+          mod compound_ward_cost_pays_every_part;
+          // Referent identity across zone changes, plus Greater Gargadon while suspended
+          // (the suspended-activation leg lives in mold_folk).
+          #[path = "integration/mold_folk_sacrifice_type_union.rs"]
+          mod mold_folk_sacrifice_type_union;
+          // Past in Flames flashback.
+          #[path = "integration/issue_8079_past_in_flames_flashback.rs"]
+          mod issue_8079_past_in_flames_flashback;
+          RUST
+      - name: Assert the pinned-mechanics modules compile and register their tests
+        run: |
+          set -o pipefail
+          cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics -- --list 2>&1 \
+            | tee /tmp/pin-mechanics.log > /tmp/pin-mechanics.txt
+          for name in \
+            trample_lethal_assigned_this_step:: \
+            zilortha_lethal_damage_by_power:: \
+            scoped_unless_choose_all_then_act:: \
+            scoped_unless_payer_per_iteration:: \
+            issue_2916_torment_repeat_unless:: \
+            bbfu10_entered_this_turn_snapshot:: \
+            compound_ward_cost_pays_every_part:: \
+            mold_folk_sacrifice_type_union:: \
+            issue_8079_past_in_flames_flashback::; do
+            grep -Fq "$name" /tmp/pin-mechanics.txt || {
+              echo "Missing pinned-mechanics module: $name" >&2
+              exit 1
+            }
+          done
+          echo "registered: $(grep -c ': test' /tmp/pin-mechanics.txt) tests"
+      - name: Execute lethal damage, trample and damage assignment
+        run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics trample_lethal_assigned_this_step -- --test-threads=1
+      - name: Execute Zilortha lethal-by-power
+        run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics zilortha_lethal_damage_by_power -- --test-threads=1
+      - name: Execute simultaneous and sequential unless resolution
+        run: |
+          cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics scoped_unless_choose_all_then_act -- --test-threads=1
+          cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics scoped_unless_payer_per_iteration -- --test-threads=1
+          cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics issue_2916_torment_repeat_unless -- --test-threads=1
+      - name: Execute non-token entered-this-turn counting
+        run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics bbfu10_entered_this_turn_snapshot -- --test-threads=1
+      - name: Execute ward and mana windows
+        run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics compound_ward_cost_pays_every_part -- --test-threads=1
+      - name: Execute referent identity and suspended Greater Gargadon
+        run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics mold_folk_sacrifice_type_union -- --test-threads=1
+      - name: Execute Past in Flames flashback
+        run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics issue_8079_past_in_flames_flashback -- --test-threads=1
       # The job log lives behind a blob download that is unreachable on some
       # networks; annotations are plain JSON on api.github.com.
       - name: Annotate Rust errors

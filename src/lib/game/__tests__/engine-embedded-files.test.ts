@@ -26,14 +26,6 @@ const CRATES = ['crates/phase-engine/src', 'crates/phase-ast/src', 'crates/phase
  */
 const KNOWN_MISSING = new Map<string, string>([
   [
-    'crates/phase-engine/src/types/format.rs -> client/src/adapter/types.ts',
-    'sólo `#[test]`; las copias viven en `client-mirror/`. Ningún job de CI compila este módulo.'
-  ],
-  [
-    'crates/phase-engine/src/types/format.rs -> client/src/data/formatRegistry.ts',
-    'sólo `#[test]`; las copias viven en `client-mirror/`.'
-  ],
-  [
     'crates/phase-engine/src/bin/resolution_face_census.rs -> scripts/audit-resolution-face-casting.sh',
     'binario con `required-features = ["test-support"]`; `engine:build` construye `--lib` y el job de regresiones descarga el script antes de compilar.'
   ]

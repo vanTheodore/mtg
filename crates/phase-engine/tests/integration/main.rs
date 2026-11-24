@@ -10,6 +10,7 @@
 // RUST_MIN_STACK = 16 MiB (.cargo/config.toml) and server runtime threads with 32 MiB.
 #![allow(clippy::large_unopt_stack_frames)]
 #[path = "../../src/source_census.rs"]
+mod source_census;
 
 mod abdel_adrian_animate_dead_altar_board;
 mod abigale_integration;

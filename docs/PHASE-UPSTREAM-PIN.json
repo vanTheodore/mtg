@@ -7,5 +7,37 @@
     "phase-engine",
     "phase-ast",
     "phase-parser"
+  ],
+  "trees": [
+    {
+      "local": "crates/phase-engine/src",
+      "upstream": "crates/engine/src",
+      "files": 502,
+      "sha256": "66f5ae9aa1fdd867442b29fa0f2df37640aef43e4bf00d173c6c52ca7c82fc18"
+    },
+    {
+      "local": "crates/phase-ast/src",
+      "upstream": "crates/phase-ast/src",
+      "files": 34,
+      "sha256": "abff252ae284c91e6d891089280cec58789e50633a46263c6f6571777396f3b6"
+    },
+    {
+      "local": "crates/phase-ast/data",
+      "upstream": "crates/phase-ast/data",
+      "files": 5,
+      "sha256": "101baa5e9f2f1127385cf4aec0e3eecfef75673b5898978d5a1ac2f3ad0dcfad"
+    },
+    {
+      "local": "crates/phase-parser/src",
+      "upstream": "crates/phase-parser/src",
+      "files": 400,
+      "sha256": "31c975e8a7782f827226e85ed24e12c13bf01407837866933488c3e9c74446bd"
+    },
+    {
+      "local": "crates/phase-engine/data",
+      "upstream": "crates/engine/data",
+      "files": 3,
+      "sha256": "86b8a76846990d24538ebbfd51cac4a9cb65953feb882b9307415d4812703bd8"
+    }
   ]
 }
