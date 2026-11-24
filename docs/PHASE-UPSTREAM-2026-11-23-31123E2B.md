@@ -228,15 +228,30 @@ el shard que upstream indica:
 | `zilortha_lethal_damage_by_power` | Daño letal determinado por la fuerza (CR 120.6, 704.5g) | 24 | `shard_5` |
 | `scoped_unless_choose_all_then_act` | «A menos que» con alcance de jugador: elegir todos, luego actuar (CR 101.4) | 14 | `shard_5` |
 | `issue_8079_past_in_flames_flashback` | Flashback de Past in Flames (CR 611.2c) | 17 | `shard_4` |
+| `yidaro_cycle_publication` | Historial de ciclos completados, su diario y su edición de libro mayor (CR 702.29) | 27 | `shard_5` |
+| `event_referent_identity` | Identidad del referente de evento a través de cambios de zona (CR 400.7) | 27 | `shard_3` |
 
 Las otras cuatro mecánicas del encargo ya tenían cobertura upstream **conservada** y ahora
 sincronizada: identidad de referentes y Greater Gargantón suspendido en
 `mold_folk_sacrifice_type_union` (15 pruebas, con `GARGADON` y su texto de suspend literal),
 no-fichas entradas este turno en `bbfu10_entered_this_turn_snapshot` (29), ward y ventanas de maná en
-`compound_ward_cost_pays_every_part` (11), y unless secuencial en `scoped_unless_payer_per_iteration`
-(64). Historial de cycling: el gancho nuevo (`de804c61`) no trae prueba propia en el pin; lo que hay
-es `yidaro_cycle_publication` y los snapshots de `oracle_ir` importados, y se declara así en vez de
-afirmar una cobertura que no existe.
+`compound_ward_cost_pays_every_part` (11), y unless secuencial en
+`scoped_unless_payer_per_iteration` (64).
+
+### Corrección: sí hay cobertura de cycling, y es extensa
+
+La versión anterior de este informe afirmaba que «el gancho `de804c61` no trae prueba propia en el
+pin». **Es falso**, y la afirmación se hizo sin abrir el fichero. El pin contiene
+`yidaro_cycle_publication.rs` con **27 pruebas**, entre ellas
+`phase2_v3_cycle_survives_resolution_turn_cleanup_and_departure`,
+`phase2_v3_stifle_counters_cycling_without_erasing_history`,
+`phase2_v7_v8_resolved_journal_replays_both_cycles_and_rejects_corruption`,
+`phase3_v1_counts_repeated_cycles_across_turn_windows` y
+`phase3_v3_counts_recorded_names_and_excludes_ordinary_discard`. El módulo estaba en la poda de Mesa
+—no se había importado nunca—, así que el error no fue de lectura del tarball únicamente: también de
+haber concluido «sin cobertura» a partir de la lista de ficheros podados en lugar de comprobar el
+contenido. Está importado, declarado en `shard_5` y en `mesa_phase_pin_mechanics`, y su recuento se
+verifica por número en CI.
 
 ## Procedencia ampliada: cinco árboles, no uno
 
@@ -405,6 +420,8 @@ Lo que **sí** se ejecutó en local (este entorno, sin `cargo`):
 | Coherencia de raíces | 0 `mod` sin fichero, 0 ficheros sin declarar (salvo `shorten_efficacy`, propio) |
 | Barrido `include_*!` | 204 llamadas, 3 sin fichero (todas deliberadas), desde 17 |
 | Comparación estructural de enums | 0 diferencias en 142 + 149 variantes (campos, tipos, serde) |
+| Ciclo y referentes importados | `yidaro_cycle_publication` (27) y `event_referent_identity` (27) byte-idénticos al pin |
+| Coherencia de raíces tras UP-131.2 | 0 `mod` sin fichero; los dos módulos declarados una sola vez (`shard_5`, `shard_3`) |
 | `bun run check` | 0 errores, 2 avisos (preestablecidos) |
 | `bun test src/lib` | **790 pass**, 0 fail, 108 ficheros |
 | `bun run build` | `Wrote site to "build"` |

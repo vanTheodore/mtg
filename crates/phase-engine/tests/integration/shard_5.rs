@@ -422,6 +422,7 @@ mod xantid_swarm_defending_player_cant_cast;
 mod yare_extra_blockers;
 mod yavimaya_enchantress_dynamic_pump;
 mod yenna_aura_token_copy;
+mod yidaro_cycle_publication;
 mod you_have_been_caught_stealing_any_damage;
 mod yuna_grand_summoner;
 mod yunas_whistle;

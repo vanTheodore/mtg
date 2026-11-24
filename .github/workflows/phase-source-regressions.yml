@@ -153,6 +153,16 @@ jobs:
           // Past in Flames flashback.
           #[path = "integration/issue_8079_past_in_flames_flashback.rs"]
           mod issue_8079_past_in_flames_flashback;
+          // Completed cycling history and its journal/ledger edits (CR 702.29).
+          #[path = "integration/yidaro_cycle_publication.rs"]
+          mod yidaro_cycle_publication;
+          // Event-referent identity across zone changes (CR 400.7).
+          #[path = "integration/event_referent_identity.rs"]
+          mod event_referent_identity;
+          // Round-trip determinism of the saved state, which this pin extends with
+          // pending_simultaneous_unless and BattlefieldEntryRecord::token_status.
+          #[path = "integration/deterministic_game_state_serde.rs"]
+          mod deterministic_game_state_serde;
           RUST
       - name: Assert the pinned-mechanics modules compile and register their tests
         run: |
@@ -168,13 +178,30 @@ jobs:
             bbfu10_entered_this_turn_snapshot:: \
             compound_ward_cost_pays_every_part:: \
             mold_folk_sacrifice_type_union:: \
-            issue_8079_past_in_flames_flashback::; do
+            issue_8079_past_in_flames_flashback:: \
+            yidaro_cycle_publication:: \
+            event_referent_identity:: \
+            deterministic_game_state_serde::; do
             grep -Fq "$name" /tmp/pin-mechanics.txt || {
               echo "Missing pinned-mechanics module: $name" >&2
               exit 1
             }
           done
           echo "registered: $(grep -c ': test' /tmp/pin-mechanics.txt) tests"
+          # A filter that matches nothing still exits 0, so the two counting
+          # modules are checked by number, not just by presence: 27 + 27 = 54.
+          for module in yidaro_cycle_publication event_referent_identity; do
+            found=$(grep -cE "^ *$module::" /tmp/pin-mechanics.txt || true)
+            test "$found" -eq 27 || {
+              echo "$module registered $found tests, expected 27" >&2
+              exit 1
+            }
+          done
+          found=$(grep -cE "^ *deterministic_game_state_serde::" /tmp/pin-mechanics.txt || true)
+          test "$found" -eq 12 || {
+            echo "deterministic_game_state_serde registered $found tests, expected 12" >&2
+            exit 1
+          }
       - name: Execute lethal damage, trample and damage assignment
         run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics trample_lethal_assigned_this_step -- --test-threads=1
       - name: Execute Zilortha lethal-by-power
@@ -192,6 +219,14 @@ jobs:
         run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics mold_folk_sacrifice_type_union -- --test-threads=1
       - name: Execute Past in Flames flashback
         run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics issue_8079_past_in_flames_flashback -- --test-threads=1
+      # No --exact: these are module prefixes. The count assertion above is what
+      # proves the prefix is not an empty green no-op.
+      - name: Execute completed cycling history
+        run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics yidaro_cycle_publication -- --test-threads=1
+      - name: Execute event-referent identity across zone changes
+        run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics event_referent_identity -- --test-threads=1
+      - name: Execute deterministic save/restore serialization regressions
+        run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics deterministic_game_state_serde -- --test-threads=1
       # The job log lives behind a blob download that is unreachable on some
       # networks; annotations are plain JSON on api.github.com.
       - name: Annotate Rust errors
