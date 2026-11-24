@@ -132,11 +132,26 @@
     const before = session.snapshot?.revision ?? -1;
     detailId = null;
     await session.dispatch(action);
+    await tick();
     if ((session.snapshot?.revision ?? -1) <= before) return;
-    // Focus first, close second: the sheet is not a native dialog, so moving
-    // focus while it is still open lets Hand.svelte see a live destination and
-    // leave it alone instead of pulling focus back to the trigger.
-    document.querySelector<HTMLButtonElement>('section[aria-label="Decisión pendiente"] .actions button:not([disabled])')?.focus();
+    /*
+     * The action this play unlocked is the next thing the player needs: focus
+     * it before closing, and wait for it to exist. After a land drop the panel
+     * may keep showing the previous prompt for one commit, and focusing a
+     * button that is about to be replaced leaves focus on `<body>` — measured
+     * in Mesa CI, where the focused element was `.actions button` at a moment
+     * when that node had already been swapped out.
+     */
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const panel = document.querySelector('section[aria-label="Decisión pendiente"]');
+      const target = panel?.querySelector<HTMLButtonElement>(
+        '[aria-label^="Carta seleccionada"] .actions button:not([disabled]), .actions button:not([disabled])'
+      );
+      if (target) target.focus();
+      if (target && document.activeElement === target) break;
+      if ((session.snapshot?.revision ?? -1) > before && target) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     session.setHandDrawer(false);
   }
 
@@ -145,17 +160,33 @@
   }
 
   /**
+   * Escape is the sheet's, and only the sheet's. The board behind is `inert`,
+   * so a listener on the sheet element would miss the key whenever focus sat
+   * on `<body>` (for example after a card was dispatched). One window listener
+   * here replaces the one Board.svelte used to keep: two handlers on the same
+   * key reopened race conditions and stole focus.
+   */
+  $effect(() => {
+    if (!open) return;
+    const onWindowKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      // A native modal (the enlarged card) owns Escape while it is open: it
+      // was shown on top of the sheet, so it is what the player means.
+      if (document.querySelector('dialog[open]')) return;
+      event.preventDefault();
+      if (detailId !== null) { closeDetail(); return; }
+      close();
+    };
+    window.addEventListener('keydown', onWindowKey);
+    return () => window.removeEventListener('keydown', onWindowKey);
+  });
+
+  /**
    * Focus lives inside the sheet while it is open, and Escape leaves.
    * `session.setHandDrawer(false)` is the only close path so the trigger keeps
    * ownership of focus restoration (Hand.svelte focuses it back).
    */
   function onkeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      if (detailId !== null) { closeDetail(); return; }
-      close();
-      return;
-    }
     if (event.key !== 'Tab' || !sheetEl) return;
     const focusable = [...sheetEl.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
       .filter((el) => el.offsetParent !== null);

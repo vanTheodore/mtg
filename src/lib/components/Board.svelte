@@ -136,15 +136,6 @@
    * below): a stray tap must not target a permanent the player cannot see.
    */
 
-  /** Escape closes the phone hand sheet from anywhere (the board is inert). */
-  function onWindowKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && session.handDrawerOpen) {
-      event.preventDefault();
-      session.setHandDrawer(false);
-      document.querySelector<HTMLElement>('.hand-trigger')?.focus();
-    }
-  }
-
   onMount(async () => {
     try {
       lessonDone = localStorage.getItem(TUTORIAL_STORAGE_KEY) === '1';
@@ -163,7 +154,6 @@
       decks = deckData;
       const params = new URLSearchParams(location.search);
       if (params.has('autostart')) await start();
-      window.addEventListener('keydown', onWindowKeydown);
     } catch (e) {
       loadError = e instanceof Error ? e.message : String(e);
     }
