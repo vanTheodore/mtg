@@ -94,7 +94,8 @@ async function playFromHand(page: Page) {
     field: await page.locator('section.battlefield[data-side="player"] [data-card-id]').count()
   };
 
-  // 1) Open the drawer and tap the card — with the finger, at scrollY 0.
+  // 1) Open the hand sheet and press the card's own action — with the finger,
+  //    at scrollY 0.
   expect(await page.evaluate(() => scrollY), 'la partida arranca desplazada').toBe(0);
   const trigger = page.locator('.hand-trigger');
   const triggerBox = (await trigger.boundingBox())!;
@@ -124,41 +125,19 @@ async function playFromHand(page: Page) {
   await expect(playable).toBeInViewport();
   await fingerTap(page, playWhenReady);
 
-  // 2) The sheet closes and the action it unlocked is the pointer target.
+  // 2) UX-HAND: the press on the card's own action IS the play. The sheet
+  //    closes and the board it was covering is no longer inert, so a stray tap
+  //    cannot land on a permanent the player could not see. There is no second
+  //    confirmation step in the panel to wait for any more: the previous
+  //    contract (tap the face → focus a panel button → press it) is precisely
+  //    what this sheet replaced.
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('.hand-zone')).not.toHaveClass(/sheet-open/);
-  const action = page.locator('section[aria-label="Decisión pendiente"] .actions button').first();
-  await expect(action).toBeVisible();
-  // The action that the card unlocked is the one that takes focus, not just
-  // any button in the panel.
-  const cardPrompt = page.locator(
-    'section[aria-label="Decisión pendiente"] [aria-label^="Carta seleccionada"]'
-  );
-  if (await cardPrompt.count()) {
-    await expect(cardPrompt.locator('.actions button').first()).toBeFocused();
-  } else {
-    await expect(action).toBeFocused();
-  }
-  const hit = await action.evaluate((button) => {
-    const rect = button.getBoundingClientRect();
-    const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-    return {
-      inside: !!target && (target === button || button.contains(target)),
-      insideViewport: rect.top >= 0 && rect.bottom <= innerHeight,
-      tag: target?.tagName ?? null
-    };
-  });
-  expect(hit.inside, `la acción no recibe el toque (${hit.tag})`).toBe(true);
-  expect(hit.insideViewport, 'la acción quedó fuera del viewport').toBe(true);
-  // The board is no longer inert: the sheet really closed, it did not just hide.
   await expect(page.locator('main.layout')).not.toHaveAttribute('inert', '');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 
-  // 3) Tap the action: Phase applies it, the card leaves the hand and lands
-  //    on the battlefield.
-  await page.evaluate(() => scrollTo(0, 0));
-  expect(hit.insideViewport).toBe(true);
-  await fingerTap(page, action);
+  // 3) Phase really applied it, not just the UI: the revision moved, the card
+  //    left the hand and a permanent joined the battlefield.
   await expect.poll(() => revision(page), { timeout: 20_000 }).toBeGreaterThan(before.revision);
   await expect.poll(() => page.locator('.hand-zone [data-card-id]').count()).toBe(before.hand - 1);
   await expect
@@ -170,9 +149,9 @@ async function playFromHand(page: Page) {
   const passed = await tapDecisionButton(page, /^Pasar/);
   expect(passed, 'la prioridad no se pudo pasar con el dedo').toBe(true);
 
-  // 5) Keyboard reaches the same path: focus a card and press Enter, and the
-  //    drawer closes for the keyboard too.
-  // Open first, then look inside: the sheet is only in the DOM while open.
+  // 5) Keyboard reaches the same path: open, focus a card's action, press
+  //    Enter, and the sheet closes for the keyboard too. Whatever the engine
+  //    does next, the board is reachable again and the sheet is gone.
   await trigger.tap();
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   const keyboardCard = page.locator('.hand-sheet .sheet-play').first();
@@ -180,18 +159,30 @@ async function playFromHand(page: Page) {
   await keyboardCard.focus();
   await page.keyboard.press('Enter');
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('section[aria-label="Decisión pendiente"] .actions button:focus')).toHaveCount(1);
+  await expect(page.locator('.hand-sheet')).toHaveCount(0);
+  await expect(page.locator('main.layout')).not.toHaveAttribute('inert', '');
+  // Focus must land somewhere real and reachable, never on `<body>`: if the
+  // engine opened a prompt, that prompt has focus; if it did not, the hand's
+  // own trigger does (the sheet's documented close path).
+  const focus = await page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || active === document.body) return 'body';
+    if (active.closest('section[aria-label="Decisión pendiente"]')) return 'panel';
+    if (active.closest('.hand-trigger')) return 'trigger';
+    return active.tagName.toLowerCase();
+  });
+  expect(['panel', 'trigger']).toContain(focus);
 }
 
 test.describe('teléfono con puntero táctil', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
-  test('390×844: tocar una carta del cajón ofrece la acción y Phase la acepta', async ({ page }) => {
+  test('390×844: la acción de la carta en la hoja juega y Phase la acepta', async ({ page }) => {
     await page.route('**/api.scryfall.com/**', (route) => route.abort());
     await playFromHand(page);
   });
 
-  test('320×800: el cajón más estrecho también juega', async ({ page }) => {
+  test('320×800: la hoja más estrecha también juega', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await page.route('**/api.scryfall.com/**', (route) => route.abort());
     await playFromHand(page);
