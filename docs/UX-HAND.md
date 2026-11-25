@@ -360,3 +360,15 @@ distingue `(ajeno)`.
 La guarda de «mano vacía no es un escenario» también estaba sobreespecificada:
 pedía un control jugable concreto. Pide cartas visibles, que es lo que de verdad
 significa tener mano, y deja que cada escenario exija **su** carta.
+
+### Octava corrección: los escenarios esperan el robo, no la mano inicial
+
+La corrida `45691183271` confirmó que la prioridad ya llegaba al asiento correcto,
+pero el Lightning Bolt no necesariamente estaba entre las siete cartas iniciales.
+El motor inicia con semilla fija `42`; el mazo también es fijo. La mano inicial
+es, por tanto, repetible, pero no contiene obligatoriamente cada carta requerida.
+Los escenarios 1–3 ahora avanzan por prioridad, limpieza y cambio de asiento reales
+hasta el siguiente turno propio, y esperan a que el robo natural publique el Bolt.
+Fallan explícitamente tras diez robos si la carta no llega; nunca pasan por una
+mano aleatoria ni por la ausencia del estado funcional. El contrato sigue exigiendo
+la carta y su acción publicada por Phase.

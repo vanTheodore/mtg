@@ -532,6 +532,65 @@ async function openScenarioSheet(page: Page) {
  * the card never becomes playable: a scenario whose precondition never arrived
  * did not reach its state, and that is a failure, never a skip.
  */
+/** Read actual decision identity and turn published by the engine. */
+async function scenarioState(page: Page) {
+  return page.evaluate(() => {
+    const app = document.querySelector('.app');
+    const line = document.querySelector('section[aria-label="Decisión pendiente"] .phase')?.textContent ?? '';
+    return {
+      turn: Number(/Turno\s+(\d+)/.exec(line)?.[1] ?? 0),
+      phase: app?.getAttribute('data-phase') ?? 'desconocida',
+      waiting: app?.getAttribute('data-waiting') ?? 'desconocida',
+      mine: /Jugador\s+(\d+)/.exec(line)?.[1] === String(Number(app?.getAttribute('data-viewer') ?? -1) + 1)
+    };
+  });
+}
+
+/** Pass real priority and cleanup decisions until this seat's next main phase. */
+async function advanceToOwnMainAfter(page: Page, previousTurn: number) {
+  const deadline = Date.now() + 120_000;
+  const panel = page.locator('section[aria-label="Decisión pendiente"]');
+  while (Date.now() < deadline) {
+    if (await page.locator('.handoff').isVisible().catch(() => false)) {
+      await passSeat(page);
+      continue;
+    }
+    const state = await scenarioState(page);
+    if (state.turn > previousTurn && state.mine && MAIN_PHASES.includes(state.phase)) return;
+    const keep = panel.locator('button').filter({ hasText: /Conservar|^Mantener/ }).first();
+    const pass = panel.locator('button').filter({ hasText: /^Pasar/ }).first();
+    if (await keep.count()) await keep.tap({ timeout: 5_000 });
+    else if (state.waiting === 'DiscardToHandSize') {
+      const prompt = page.locator('[data-discard="cleanup"]');
+      const cards = prompt.locator('li, button');
+      const needed = (await prompt.innerText()).match(/\((\d+)\/(\d+)\)/);
+      const count = needed ? Number(needed[2]) : 1;
+      for (let i = 0; i < count; i += 1) await cards.nth(i).tap({ timeout: 5_000 });
+      await prompt.locator('button.primary').first().tap({ timeout: 5_000 });
+    } else if (await pass.count()) await pass.tap({ timeout: 5_000 });
+    else await page.waitForTimeout(150);
+  }
+  throw new Error(`no se avanzó de forma real al siguiente turno propio después de ${previousTurn}`);
+}
+
+/** Draw naturally until the fixed-seed library supplies the named card. */
+async function findCardInHand(page: Page, name: string) {
+  for (let draw = 0; draw <= 10; draw += 1) {
+    await openScenarioSheet(page);
+    const card = page.locator('.hand-sheet .sheet-cell').filter({ hasText: name }).first();
+    if (await card.count()) return card;
+    if (draw === 10) break;
+    const state = await scenarioState(page);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
+    await expect(pass, 'no hay una ventana real para avanzar y robar').toHaveCount(1);
+    await pass.tap();
+    await advanceToOwnMainAfter(page, state.turn);
+  }
+  throw new Error(`${name} no llegó a la mano tras diez robos reales del mazo determinista`);
+}
+
 async function playCard(page: Page, name: string) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     await openScenarioSheet(page);
@@ -629,19 +688,9 @@ test.describe('escenarios deterministas (mazo propio, motor real)', () => {
     await playCard(page, 'Mountain');
 
     const panel = page.locator('section[aria-label="Decisión pendiente"]');
-    const boltCell = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
+    const boltCell = await findCardInHand(page, 'Lightning Bolt');
     const bolt = boltCell.locator('.sheet-play');
-    // Opening the sheet is not the same as casting: the control is only there in
-    // a window where the bolt is legal, and that window is entered on purpose.
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      await openScenarioSheet(page);
-      if (await bolt.count()) break;
-      await page.keyboard.press('Escape');
-      const pass = panel.locator('button').filter({ hasText: /^Pasar/ }).first();
-      if (await pass.count()) await pass.tap({ timeout: 5_000 }).catch(() => {});
-      await page.waitForTimeout(150);
-    }
-    await expect(bolt, 'ni con una Mountain en juego hay un Lightning Bolt lanzable').toHaveCount(1, { timeout: 30_000 });
+    await expect(bolt, 'Phase no publicó el control de lanzamiento para Lightning Bolt').toHaveCount(1, { timeout: 30_000 });
 
     const before = Number(await page.locator('[data-player-id="1"]').getAttribute('data-life'));
     await bolt.tap();
@@ -660,16 +709,7 @@ test.describe('escenarios deterministas (mazo propio, motor real)', () => {
     await startScenarioDeck(page);
     await playCard(page, 'Mountain');
     const panel = page.locator('section[aria-label="Decisión pendiente"]');
-    const boltCell = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      await openScenarioSheet(page);
-      if (await boltCell.locator('.sheet-play').count()) break;
-      await page.keyboard.press('Escape');
-      const pass = panel.locator('button').filter({ hasText: /^Pasar/ }).first();
-      if (await pass.count()) await pass.tap({ timeout: 5_000 }).catch(() => {});
-      await page.waitForTimeout(150);
-    }
-    await expect(boltCell, 'ni con una Mountain en juego hay un Lightning Bolt lanzable').toHaveCount(1, { timeout: 30_000 });
+    const boltCell = await findCardInHand(page, 'Lightning Bolt');
     // Measured BEFORE the cast: a count taken afterwards could only ever be
     // "less than or equal", which is an assertion that cannot fail.
     const handBefore = await page.locator('.hand-zone [data-card-id]').count();
@@ -720,10 +760,7 @@ test.describe('escenarios deterministas (mazo propio, motor real)', () => {
   test('3 · cancelación real: la carta vuelve a la mano y el estado se restaura', async ({ page }) => {
     await startScenarioDeck(page);
     await playCard(page, 'Mountain');
-    await openScenarioSheet(page);
-
-    const bolt = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
-    await expect(bolt).toHaveCount(1, { timeout: 60_000 });
+    const bolt = await findCardInHand(page, 'Lightning Bolt');
     const handBefore = await page.locator('.hand-zone [data-card-id]').count();
     const appliedBefore = Number(await page.locator('.app').getAttribute('data-actions-applied'));
     await bolt.locator('[data-card-id]').first().click();
