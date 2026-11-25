@@ -38,16 +38,20 @@ test.describe('teléfono con puntero táctil', () => {
 
     await trigger.tap();
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    await expect(sheet).toHaveClass(/sheet-open/);
+    // UX-HAND: the phone hand is its own full-screen sheet now; the inline
+    // strip stays collapsed behind it and never opens.
+    await expect(page.locator('.hand-sheet')).toBeVisible();
+    await expect(sheet).not.toHaveClass(/sheet-open/);
 
     // The board is inert while the sheet is open: a stray tap cannot target a
     // permanent the player cannot see.
     await expect(page.locator('main.layout')).toHaveAttribute('inert', '');
-    // Focus moves into the sheet, and the sheet itself is the tab stop.
-    await expect(page.locator('#mesa-hand-sheet .hand-scroll')).toBeFocused();
+    // Focus moves into the sheet itself (it is a dialog), not to the collapsed
+    // strip behind it.
+    await expect(page.locator('.hand-sheet .sheet-close')).toBeFocused();
 
-    // Every hand card is reachable by keyboard inside the sheet's scrollport.
-    const cards = sheet.locator('[data-card-id]');
+    // Every hand card is reachable by keyboard inside the sheet's grid.
+    const cards = page.locator('.hand-sheet [data-card-id]');
     const count = await cards.count();
     expect(count).toBeGreaterThan(0);
     for (let index = 0; index < count; index += 1) {
@@ -73,15 +77,15 @@ test.describe('teléfono con puntero táctil', () => {
     await trigger.tap();
 
     const geometry = await page.evaluate(() => {
-      const scroll = document.querySelector<HTMLElement>('#mesa-hand-sheet .hand-scroll')!;
-      const cards = [...document.querySelectorAll<HTMLElement>('#mesa-hand-sheet [data-card-id]')];
+      const grid = document.querySelector<HTMLElement>('.hand-sheet .sheet-grid')!;
+      const cards = [...document.querySelectorAll<HTMLElement>('.hand-sheet [data-card-id]')];
       const widths = cards.map((card) => card.getBoundingClientRect().width);
       return {
         horizontalOverflow: document.documentElement.scrollWidth - innerWidth,
         documentHeight: document.documentElement.scrollHeight,
         viewportHeight: innerHeight,
-        scrollWidth: scroll.scrollWidth,
-        clientWidth: scroll.clientWidth,
+        scrollWidth: grid.scrollWidth,
+        clientWidth: grid.clientWidth,
         minCardWidth: Math.min(...widths),
         cards: cards.length
       };
@@ -89,16 +93,18 @@ test.describe('teléfono con puntero táctil', () => {
 
     expect(geometry.cards).toBe(30);
     expect(geometry.horizontalOverflow).toBeLessThanOrEqual(1);
-    // Thirty cards are one swipeable strip, not a vertical marathon.
-    expect(geometry.scrollWidth).toBeGreaterThan(geometry.clientWidth);
-    expect(geometry.minCardWidth).toBeGreaterThan(100);
+    // Thirty cards are a grid of large faces, scrolled in the direction a
+    // thumb already knows. The faces are bigger than the old strip's 147px.
+    expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1);
+    expect(geometry.minCardWidth).toBeGreaterThan(147);
     // The sheet itself must not push the document taller than it already is.
     expect(geometry.documentHeight).toBeLessThan(geometry.viewportHeight * 2.2);
 
-    // The far end of the strip is reachable by scrolling, and the cards there
-    // are real elements with the same accessible name as a card on screen.
-    await page.locator('#mesa-hand-sheet .hand-scroll').evaluate((element) => { element.scrollLeft = element.scrollWidth; });
-    await expect(page.locator('#mesa-hand-sheet .hand-card').last()).toBeVisible();
+    // The far end of the grid is reachable by scrolling, and the card there is
+    // a real, pressable element.
+    const last = page.locator('.hand-sheet [data-card-id]').last();
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toBeInViewport();
   });
 
   test('el campo de batalla cabe en una pantalla y sus cartas no se apilan en una columna', async ({ page }) => {

@@ -53,10 +53,12 @@ function walk(suite: JsonSuite, file: string) {
       );
       if (!failed.length) continue;
       const first = failed[0];
+      // Keep Playwright's Expected/Received lines on one readable annotation;
+      // these often contain the actual engine state (waiting_for, selected card)
+      // that the short first line omits. The workflow command caps this below.
       const message = (first.error?.message ?? first.status ?? 'fallo sin mensaje')
         .split('\n')
         .filter(Boolean)
-        .slice(0, 2)
         .join(' · ');
       annotation(currentFile || spec.file || 'tests/e2e', spec.line ?? 1, spec.title ?? 'prueba sin título', message);
       emitted += 1;

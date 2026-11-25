@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import ArenaSurface from './ArenaSurface.svelte';
   import PhaseStopBar from './PhaseStopBar.svelte';
   import MobilePhaseChip from './MobilePhaseChip.svelte';
@@ -124,32 +124,17 @@
     if (needsHandoff) handoffButton?.focus();
   });
 
-  /**
-   * The phone hand sheet is a modal surface: while it is open the board is
-   * inert so a stray tap cannot target a hidden permanent, and focus moves
-   * into the sheet. Closing returns focus to the summary button (Hand.svelte
-   * does that itself). Nothing here reads or changes Phase state.
+  /*
+   * Focus for the open phone hand lives in HandSheet.svelte, which owns that
+   * surface and moves focus to its own first control. An effect here used to
+   * focus `#mesa-hand-sheet .hand-scroll` — the inline strip, collapsed to 1px
+   * on a phone — and because it ran after the sheet's own `tick`, it pulled
+   * focus back out of the dialogs onto an invisible element. Measured in Mesa
+   * CI: `toBeFocused` on the sheet's close button never held.
    *
-   * The focus call has to wait for the sheet to be laid out (`tick`), and the
-   * hand region itself is a tab stop, so it is a safe target even when the
-   * hand is empty.
+   * The board is still made `inert` while the hand is open (see the `main`
+   * below): a stray tap must not target a permanent the player cannot see.
    */
-  $effect(() => {
-    if (!session.handDrawerOpen) return;
-    void tick().then(() => {
-      const target = document.querySelector<HTMLElement>('#mesa-hand-sheet .hand-scroll');
-      target?.focus();
-    });
-  });
-
-  /** Escape closes the phone hand sheet from anywhere (the board is inert). */
-  function onWindowKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && session.handDrawerOpen) {
-      event.preventDefault();
-      session.setHandDrawer(false);
-      document.querySelector<HTMLElement>('.hand-trigger')?.focus();
-    }
-  }
 
   onMount(async () => {
     try {
@@ -168,8 +153,21 @@
       metas = meta as Record<string, CardMeta>;
       decks = deckData;
       const params = new URLSearchParams(location.search);
+      const e2eScenario = import.meta.env.DEV ? params.get('e2e-scenario') : null;
+      if (e2eScenario) {
+        if (!/^[a-z0-9-]+$/.test(e2eScenario)) throw new Error('Identificador de GameScenario inválido.');
+        const response = await fetch(`/e2e-scenarios/${e2eScenario}.json`);
+        if (!response.ok) throw new Error(`No se pudo cargar el estado GameScenario (${response.status}).`);
+        session.modeLabel = `E2E · ${e2eScenario}`;
+        await session.startE2EScenario(await response.json());
+        if (e2eScenario === 'privacy-handoff') {
+          window.addEventListener('mesa:e2e-pass-priority', () => {
+            void session.dispatch({ type: 'PassPriority' });
+          });
+        }
+        return;
+      }
       if (params.has('autostart')) await start();
-      window.addEventListener('keydown', onWindowKeydown);
     } catch (e) {
       loadError = e instanceof Error ? e.message : String(e);
     }
@@ -270,10 +268,19 @@
     return true;
   }
 
+  /**
+   * Start a game from the start screen, or replace the one on the board.
+   *
+   * Called twice on the same page it used to keep the previous game's snapshot,
+   * prompts and seat flags until the new reply arrived, and the board rendered a
+   * mix of the two. `session.prepareStart()` clears that first, exactly as
+   * `session.start` does.
+   */
   async function start() {
     if (!decks) return;
     if (mode === 'custom' && !customLines.length) return;
     try {
+      if (session.snapshot) session.prepareStart();
       const deck = mode === 'custom' ? toEngineDeck(customLines) : deckFor(mode);
       const label = mode === 'custom' ? (customName || 'Mazo propio')
         : mode === 'practice' ? 'Duelo de práctica'
@@ -354,7 +361,7 @@
   }}
 />
 
-<div class="app" data-board-style={session.boardStyle} data-chrome={session.boardStyle === 'arena' && snapshot && !needsHandoff ? 'arena' : undefined} style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2)); --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
+<div class="app" data-board-style={session.boardStyle} data-chrome={session.boardStyle === 'arena' && snapshot && !needsHandoff ? 'arena' : undefined} style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2)); --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-phase={snapshot?.state.phase ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
   {#if session.boardStyle === 'arena'}
     <ArenaSurface color={arenaColor} />
   {/if}

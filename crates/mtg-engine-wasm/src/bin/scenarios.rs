@@ -194,6 +194,12 @@ fn main() {
     let stale_rejected = stale["ok"] == false && stale["code"] == "stale_action";
     let after_stale = wrapper(3, &serde_json::json!({}));
     let revision_unchanged = after_stale["revision"] == init["revision"];
+    // Operation 5 belongs only to the separately built E2E bridge. This binary
+    // uses the default production feature set and must reject it.
+    let scenario_restore_rejected = wrapper(5, &serde_json::json!({})) == serde_json::json!({
+        "ok": false,
+        "error": "unknown operation"
+    });
 
     let scenarios = vec![
         Scenario { name: "mana_and_cast", p0: deck(&[("Plains",18),("Savannah Lions",22)]), p1: deck(&[("Island",40)]), max_steps: 160, required: &["mana","cast","stack","creature"] },
@@ -214,10 +220,11 @@ fn main() {
         "harness": "explicit mechanics parity: direct Phase API vs raw wrapper ABI",
         "engine_source": "phase c2fbb7a6634a440c7c6b47e6a87a554cc7382f05",
         "protocol_rejected": protocol_rejected, "stale_rejected": stale_rejected, "revision_unchanged": revision_unchanged,
+        "production_scenario_restore_rejected": scenario_restore_rejected,
         "parity_ok": parity_ok, "goals_ok": goals_ok, "reports": reports
     });
     println!("{}", serde_json::to_string_pretty(&report).unwrap());
-    if !parity_ok || !goals_ok || !protocol_rejected || !stale_rejected || !revision_unchanged { std::process::exit(1); }
+    if !parity_ok || !goals_ok || !protocol_rejected || !stale_rejected || !revision_unchanged || !scenario_restore_rejected { std::process::exit(1); }
 }
 
 fn fingerprint(bytes: &[u8]) -> u64 {

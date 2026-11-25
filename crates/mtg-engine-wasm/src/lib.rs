@@ -89,6 +89,30 @@ fn err(msg: impl Into<String>) -> Vec<u8> {
     serde_json::to_vec(&ErrorReply { ok: false, error: msg.into() }).unwrap()
 }
 
+#[cfg(feature = "e2e-scenarios")]
+#[derive(Deserialize)]
+struct ScenarioInitRequest {
+    id: String,
+    seed: u64,
+    state: GameState,
+}
+
+#[cfg(feature = "e2e-scenarios")]
+fn initialize_scenario(input: &[u8]) -> Vec<u8> {
+    let req: ScenarioInitRequest = match serde_json::from_slice(input) {
+        Ok(value) => value,
+        Err(error) => return err(format!("scenario payload: {error}")),
+    };
+    if req.state.players.len() != 2 {
+        return err(format!("scenario {} must contain exactly two players", req.id));
+    }
+    let waiting = req.state.waiting_for.clone();
+    SESSION.with(|session| {
+        *session.borrow_mut() = Some(Session { state: req.state, seed: req.seed, actions: 0 });
+    });
+    snapshot_reply(ActionResult::applied(vec![], waiting), 0.0, 0.0)
+}
+
 fn initialize(input: &[u8]) -> Vec<u8> {
     let req: InitRequest = match serde_json::from_slice(input) {
         Ok(v) => v,
@@ -310,6 +334,8 @@ fn dispatch(op: u32, input: &[u8]) -> Vec<u8> {
                 })).unwrap()
             })
         }
+        #[cfg(feature = "e2e-scenarios")]
+        5 => initialize_scenario(input),
         _ => err("unknown operation"),
     }
 }

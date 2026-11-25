@@ -40,17 +40,24 @@ test('el modo clásico y la mano de 30 mantienen desplazamiento sin abanico', as
   await expect(plain.locator('[data-card-id]')).toHaveCount(7);
 });
 
-test('a 320px las siete cartas siguen accesibles por scroll y teclado', async ({ page }) => {
+test('a 320px las siete cartas siguen accesibles, ahora en la hoja de la mano', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto('/stress?hand=7&tokens=0');
+  // UX-HAND: at 320px the hand is the full-screen sheet, not the inline strip.
+  // The strip is still in the DOM (counts, aria list) but `inert`, so it must
+  // not take focus; the cards are reachable in the sheet that replaced it.
   const region = page.getByRole('region', { name: /Mano de prueba, 7 cartas/ });
-  const items = region.locator('[data-card-id]');
+  await expect(region.locator('[data-card-id]')).toHaveCount(7);
+  await page.locator('.hand-trigger').click();
+  await expect(page.locator('.hand-sheet')).toBeVisible();
+  const items = page.locator('.hand-sheet [data-card-id]');
   await expect(items).toHaveCount(7);
   for (let i = 0; i < 7; i++) {
     await items.nth(i).scrollIntoViewIfNeeded();
     await items.nth(i).focus();
     await expect(items.nth(i)).toBeFocused();
   }
-  const transform = await region.locator('.hand-card').first().evaluate((el) => getComputedStyle(el).transform);
+  // No fan at this width on either surface: the sheet is a flat grid.
+  const transform = await page.locator('.hand-sheet .sheet-cell').first().evaluate((el) => getComputedStyle(el).transform);
   expect(transform).toBe('none');
 });

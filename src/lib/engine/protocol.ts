@@ -1,4 +1,4 @@
-export const OP = { INIT: 1, ACTION: 2, SNAPSHOT: 3, VIEW: 4 } as const;
+export const OP = { INIT: 1, ACTION: 2, SNAPSHOT: 3, VIEW: 4, E2E_SCENARIO: 5 } as const;
 
 export interface WorkerRequest {
   id: number;

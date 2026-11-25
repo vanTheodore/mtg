@@ -78,12 +78,9 @@ jobs:
         run: |
           set -o pipefail
           bun run engine:build 2>&1 | tee /tmp/wasm-build.log
-      # Cargo's failure is an exit code plus a job log behind a blob download
-      # that is unreachable on some networks; the annotation is plain JSON.
-      - name: Annotate Rust errors
-        if: failure()
-        run: bun scripts/rust-annotations.ts /tmp/wasm-build.log
-      - name: Record artifact identity
+      - name: Verify production WASM rejects scenario restore
+        run: bun run engine:verify-no-e2e-op
+      - name: Record production artifact identity
         run: |
           set -euo pipefail
           WASM=static/wasm/mtg_engine_wasm.wasm
@@ -91,10 +88,35 @@ jobs:
           sha256sum "$WASM" | tee static/wasm/mtg_engine_wasm.wasm.sha256
           sha256sum Cargo.lock | tee static/wasm/Cargo.lock.sha256
           rustc -Vv | tee static/wasm/rustc-version.txt
+      - name: Build isolated GameScenario E2E bridge
+        env:
+          CARGO_TARGET_DIR: target-wasm
+          CARGO_LOCKED: "1"
+          ENGINE_FEATURES: e2e-scenarios
+          ENGINE_WASM_OUT: static/wasm-e2e/mtg_engine_wasm_e2e.wasm
+        run: |
+          set -o pipefail
+          bun run engine:build 2>&1 | tee /tmp/wasm-e2e-build.log
+      - name: Verify separated WASM artifacts
+        run: |
+          test -s static/wasm/mtg_engine_wasm.wasm
+          test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
+      # Cargo's failure is an exit code plus a job log behind a blob download
+      # that is unreachable on some networks; annotate both builds when present.
+      - name: Annotate Rust errors
+        if: failure()
+        run: |
+          test ! -s /tmp/wasm-build.log || bun scripts/rust-annotations.ts /tmp/wasm-build.log
+          test ! -s /tmp/wasm-e2e-build.log || bun scripts/rust-annotations.ts /tmp/wasm-e2e-build.log
       - uses: actions/upload-artifact@v4
         with:
           name: mtg-engine-wasm
           path: static/wasm
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mtg-engine-wasm-e2e
+          path: static/wasm-e2e/mtg_engine_wasm_e2e.wasm
           retention-days: 7
   native-integration:
     name: Native parity and explicit mechanics scenarios
@@ -127,6 +149,12 @@ jobs:
         run: |
           set -o pipefail
           bun run engine:scenarios 2>&1 | tee /tmp/scenarios.log
+      - name: Prepare isolated Phase GameScenario fixtures for browser E2E
+        env:
+          CARGO_TARGET_DIR: target-native
+          CARGO_LOCKED: "1"
+          MESA_E2E_SCENARIOS_DIR: static/e2e-scenarios
+        run: bun run e2e:scenarios
       - name: Annotate Rust errors
         if: failure()
         run: |
@@ -141,11 +169,21 @@ jobs:
             docs/scenarios-report.json
           if-no-files-found: warn
           retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-scenario-fixtures
+          path: static/e2e-scenarios
+          if-no-files-found: warn
+          retention-days: 7
 
   browser:
     name: Chromium integration and visual interaction
-    needs: [wasm]
+    needs: [wasm, native-integration]
     runs-on: ubuntu-latest
+    # GameScenario fixtures place Phase directly in the state each E2E needs;
+    # the browser suite no longer plays through random draws to find a card.
+    # Keep the measured 40-minute ceiling, with each test independently bounded.
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -166,12 +204,34 @@ jobs:
         with:
           name: mtg-engine-wasm
           path: static/wasm
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm-e2e
+          path: static/wasm-e2e
+      - uses: actions/download-artifact@v4
+        with:
+          name: e2e-scenario-fixtures
+          path: static/e2e-scenarios
+      - name: Verify isolated GameScenario artifacts
+        run: |
+          test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
+          for fixture in target-cast manual-payment cancel-cast privacy-handoff; do
+            test -s "static/e2e-scenarios/$fixture.json"
+          done
       # The JSON report feeds the annotation step below: the directory names
       # alone say which test broke, the message says why. `list` keeps the
       # readable console output.
       - run: bun --bun playwright test --reporter=list,json
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/report.json
+      # The job summary is the evidence and the gate: it publishes passed /
+      # failed / skipped / retries plus the per-test rows of the hand sheet, and
+      # fails the job when a required UX-HAND test was skipped. A `test.skip`
+      # written inside a spec leaves the runner green, which is exactly the hole
+      # the WASM guard cannot see (`docs/UX-HAND.md`, section G).
+      - name: Publish Playwright summary and gate skipped UX-HAND tests
+        if: always()
+        run: bun scripts/e2e-summary.ts
       # The HTML report, the traces and the job log live behind an artifact
       # download that some networks cannot reach; annotations are plain JSON on
       # the API, so every failure is repeated there with its error message.

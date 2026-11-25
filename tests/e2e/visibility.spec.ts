@@ -20,13 +20,24 @@ for (const width of widths) {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(1);
 
-    // Every card can be scrolled into view and focused, even when the hand overflows.
+    // Every card can be scrolled into view and focused. UX-HAND: on a phone
+    // the hand is the sheet, so the cards live there and the inline strip is
+    // `inert`; on desktop it is the fan/strip and the region's own cards are
+    // the focusable ones.
+    const sheetTrigger = page.locator('.hand-trigger');
+    const isPhone = await sheetTrigger.isVisible();
+    if (isPhone) await sheetTrigger.click();
+    const focusable = isPhone ? page.locator('.hand-sheet [role="button"][data-card-id]') : cards;
+    await expect(focusable).toHaveCount(30);
     for (let i = 0; i < 30; i++) {
-      const card = cards.nth(i);
+      const card = focusable.nth(i);
       await card.scrollIntoViewIfNeeded();
       await expect(card).toBeVisible();
       await card.focus();
       await expect(card).toBeFocused();
+    }
+    if (isPhone) {
+      await page.locator('.hand-sheet .sheet-close').click();
     }
 
     // Token-heavy board: collapsed group exposes an expansion control and all members after expansion.

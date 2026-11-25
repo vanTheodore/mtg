@@ -9,7 +9,12 @@ export class EngineClient {
 
   private ensure(): Worker {
     if (this.worker) return this.worker;
-    this.worker = new Worker(new URL('./engine.worker.ts', import.meta.url), { type: 'module' });
+    const workerUrl = new URL('./engine.worker.ts', import.meta.url);
+    const scenario = import.meta.env.DEV
+      ? new URLSearchParams(location.search).get('e2e-scenario')
+      : null;
+    if (scenario) workerUrl.searchParams.set('e2e-scenario', scenario);
+    this.worker = new Worker(workerUrl, { type: 'module' });
     this.worker.addEventListener('message', (event: MessageEvent<WorkerResponse>) => {
       const { id, reply, error, metrics } = event.data;
       const entry = this.pending.get(id);
@@ -51,6 +56,12 @@ export class EngineClient {
 
   async init(payload: unknown): Promise<EngineReply> {
     return this.send(OP.INIT, payload, 120_000);
+  }
+
+  /** Development-only bridge for browser E2E states built by Phase GameScenario. */
+  async e2eScenario(payload: unknown): Promise<EngineReply> {
+    if (!import.meta.env.DEV) throw new Error('Phase GameScenario is available only in the E2E development build.');
+    return this.send(OP.E2E_SCENARIO, payload, 120_000);
   }
 
   async action(actor: number, action: GameAction, expectedRevision?: number): Promise<EngineReply> {

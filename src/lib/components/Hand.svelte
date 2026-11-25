@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import BoardCard from './BoardCard.svelte';
+  import HandSheet from './HandSheet.svelte';
   import { wideFan } from '#lib/ui/wideFan.ts';
   import { session } from '#lib/game/session.svelte.ts';
   import { actionsForObject } from '#lib/game/actions.ts';
@@ -43,14 +44,15 @@
   const fanWidth = $derived(Math.round(148 * session.cardScale * 1.1));
 
   /**
-   * `overflow` is a *layout* fact. With the drawer closed on a phone the
-   * scrollport is deliberately collapsed to 1px (see the drawer CSS), which is
-   * not "this hand overflows, show the arrows": the arrows belong to the open
-   * sheet and to the desktop fan, where the scrollport is always laid out.
+   * `overflow` describes the *inline* hand — the desktop row or fan — because
+   * the arrows and the "more cards" hint are controls for a sideways strip.
+   * On a phone that strip is collapsed and the hand belongs to the sheet,
+   * which scrolls down and needs neither: measuring the hidden 1px box said
+   * "this overflows" and put arrows on screen for a strip nobody could see.
    */
   function updateOverflow() {
     if (!scroller) return;
-    if (narrowViewport && !session.handDrawerOpen) { overflow = false; return; }
+    if (narrowViewport) { overflow = false; return; }
     overflow = scroller.scrollWidth > scroller.clientWidth + 2;
   }
 
@@ -125,11 +127,33 @@
   let port = $state<HTMLElement | undefined>();
   let trigger = $state<HTMLButtonElement | undefined>();
   const open = $derived(session.handDrawerOpen);
+  let restoreFocus = $state(false);
 
+  /**
+   * Closing always returns focus to the summary button, including when the
+   * sheet closed itself (Escape inside the sheet, or a resize into the fan
+   * layout). Focus left on a removed element lands on `<body>`, which loses
+   * the trigger for a keyboard or switch-control player.
+   */
   function close() {
     session.setHandDrawer(false);
-    trigger?.focus();
   }
+
+  $effect(() => {
+    if (session.handDrawerOpen || !restoreFocus) return;
+    restoreFocus = false;
+    void tick().then(() => {
+      // A deliberate destination wins: when a card is played the sheet sends
+      // focus to the action it unlocked, and that focus must not be stolen.
+      const active = document.activeElement;
+      if (active && active !== document.body && active.isConnected) return;
+      trigger?.focus();
+    });
+  });
+
+  $effect(() => {
+    if (session.handDrawerOpen) restoreFocus = true;
+  });
 
   function onSheetKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
@@ -185,20 +209,38 @@
   <span class="hand-trigger-label">Mano</span>
   <span class="hand-trigger-count">{objects.length}</span>
   {#if objects.length}
-    <span class="hand-trigger-hint">Desliza para jugar</span>
+    <span class="hand-trigger-hint">Toca para abrir la mano</span>
   {/if}
 </button>
 
+<!--
+  The phone hand, as a full-screen sheet (UX-HAND).
+  Mounted next to the trigger and outside the board `main` (which the caller
+  marks `inert`), so it is the only interactive surface while open. The inline
+  fan keeps `.hand-zone` for tablets and desktop; the sheet only exists where
+  the trigger does.
+-->
+<HandSheet objects={objects} {metas} {title} />
+
+<!--
+  On a phone the hand is the sheet, so this inline region is pure bookkeeping:
+  it stays mounted (counts, the accessibility list and every test that reads the
+  hand keep working) but it is `inert`. Clipping it to 1px was not enough — its
+  cards and its tab stop were still reachable by Tab, which is a second,
+  invisible copy of the same hand. `inert` fixes that and keeps the region in
+  the accessibility tree, which is what the documented hand list relies on; an
+  `aria-hidden` on top of it emptied `role=region` and made seven cards vanish
+  from the accessible snapshot at 320px, where the sheet is the thing that
+  actually shows them.
+-->
 <section
   class="hand-zone"
-  class:sheet-open={open}
+  class:sheet-open={open && !narrowViewport}
   aria-label={title}
   id="mesa-hand-sheet"
+  inert={narrowViewport}
   bind:this={sheet}
 >
-  {#if open}
-    <button class="hand-close" type="button" aria-label="Cerrar la mano" onclick={close}>✕<span class="sr-only"> Cerrar la mano</span></button>
-  {/if}
   <header class="zone-head">
     <h2>{title} <span class="count">{objects.length}</span></h2>
     {#if overflow}
@@ -240,7 +282,12 @@
       <p class="empty">Sin cartas en esta zona.</p>
     {/each}
   </div>
-  {#if overflow}<p class="more-hint" aria-live="polite">Hay más cartas fuera de la vista. Usa las flechas o desplázate.</p>{/if}
+  <!-- Only the inline presentation has a sideways strip and arrows; on a phone
+       the sheet scrolls down, so the hint would describe a control that is not
+       there. -->
+  {#if overflow}
+    <p class="more-hint" aria-live="polite">Hay más cartas fuera de la vista. Usa las flechas o desplázate.</p>
+  {/if}
 </section>
 
 <style>
@@ -425,54 +472,16 @@
       margin: 0;
     }
 
-    .hand-zone.sheet-open {
-      position: fixed;
-      inset: auto 0 0 0;
-      z-index: 60;
-      max-height: 78dvh;
-      display: flex;
-      flex-direction: column;
-      border-radius: 18px 18px 0 0;
-      border-bottom: 0;
-      box-shadow: 0 -12px 34px rgb(0 0 0 / 38%);
-      padding: .5rem .6rem calc(.6rem + env(safe-area-inset-bottom, 0px));
-    }
-    .hand-zone.sheet-open .hand-scroll {
-      display: flex;
-      flex: 1 1 auto;
-      min-height: 0;
-      overflow-x: auto;
-      overflow-y: hidden;
-      overscroll-behavior-x: contain;
-      scroll-snap-type: x proximity;
-      -webkit-overflow-scrolling: touch;
-    }
-    /* A round close control in the sheet's top-left corner, where it cannot
-       collide with the title or the scroll arrows (measured overlap: the
-       button landed on top of "Tu mano · Jugador N"). */
-    .hand-close {
-      position: absolute;
-      top: .4rem;
-      left: .5rem;
-      width: 2.25rem;
-      height: 2.25rem;
-      display: grid;
-      place-items: center;
-      padding: 0;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: var(--surface-2);
-      color: var(--ink);
-      font-size: 1rem;
-      z-index: 3;
-    }
-    .hand-zone.sheet-open .zone-head { padding-left: 2.6rem; }
+    /*
+     * UX-HAND: the drawer no longer opens on a phone. The hand is the
+     * full-screen sheet (HandSheet.svelte); this inline row stays in the DOM
+     * only so counts and the accessibility tree keep working, and it stays
+     * collapsed even while the sheet is open. Hoisting it back over the sheet
+     * reintroduced two defects at once: the old 78dvh strip sat under the
+     * sheet (its arrows and "more cards" hint came back), and its cards were a
+     * second tabbable copy of the same hand.
+     */
   }
 
-  @media (max-width: 640px) and (prefers-reduced-motion: no-preference),
-    (max-width: 1099px) and (max-height: 899px) and (prefers-reduced-motion: no-preference),
-    (max-height: 520px) and (prefers-reduced-motion: no-preference) {
-    .hand-zone.sheet-open { animation: sheet-in .18s ease-out; }
-    @keyframes sheet-in { from { transform: translateY(14%); opacity: .6; } to { transform: none; opacity: 1; } }
-  }
+
 </style>
