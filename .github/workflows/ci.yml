@@ -78,23 +78,9 @@ jobs:
         run: |
           set -o pipefail
           bun run engine:build 2>&1 | tee /tmp/wasm-build.log
-      # Cargo's failure is an exit code plus a job log behind a blob download
-      # that is unreachable on some networks; the annotation is plain JSON.
-      - name: Build isolated GameScenario E2E bridge
-        env:
-          CARGO_TARGET_DIR: target-wasm
-          CARGO_LOCKED: "1"
-          ENGINE_FEATURES: e2e-scenarios
-          ENGINE_WASM_OUT: static/wasm/mtg_engine_wasm_e2e.wasm
-        run: |
-          set -o pipefail
-          bun run engine:build 2>&1 | tee /tmp/wasm-e2e-build.log
-      - name: Annotate Rust errors
-        if: failure()
-        run: |
-          bun scripts/rust-annotations.ts /tmp/wasm-build.log
-          bun scripts/rust-annotations.ts /tmp/wasm-e2e-build.log
-      - name: Record artifact identity
+      - name: Verify production WASM rejects scenario restore
+        run: bun run engine:verify-no-e2e-op
+      - name: Record production artifact identity
         run: |
           set -euo pipefail
           WASM=static/wasm/mtg_engine_wasm.wasm
@@ -102,10 +88,35 @@ jobs:
           sha256sum "$WASM" | tee static/wasm/mtg_engine_wasm.wasm.sha256
           sha256sum Cargo.lock | tee static/wasm/Cargo.lock.sha256
           rustc -Vv | tee static/wasm/rustc-version.txt
+      - name: Build isolated GameScenario E2E bridge
+        env:
+          CARGO_TARGET_DIR: target-wasm
+          CARGO_LOCKED: "1"
+          ENGINE_FEATURES: e2e-scenarios
+          ENGINE_WASM_OUT: static/wasm-e2e/mtg_engine_wasm_e2e.wasm
+        run: |
+          set -o pipefail
+          bun run engine:build 2>&1 | tee /tmp/wasm-e2e-build.log
+      - name: Verify separated WASM artifacts
+        run: |
+          test -s static/wasm/mtg_engine_wasm.wasm
+          test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
+      # Cargo's failure is an exit code plus a job log behind a blob download
+      # that is unreachable on some networks; annotate both builds when present.
+      - name: Annotate Rust errors
+        if: failure()
+        run: |
+          test ! -s /tmp/wasm-build.log || bun scripts/rust-annotations.ts /tmp/wasm-build.log
+          test ! -s /tmp/wasm-e2e-build.log || bun scripts/rust-annotations.ts /tmp/wasm-e2e-build.log
       - uses: actions/upload-artifact@v4
         with:
           name: mtg-engine-wasm
           path: static/wasm
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mtg-engine-wasm-e2e
+          path: static/wasm-e2e/mtg_engine_wasm_e2e.wasm
           retention-days: 7
   native-integration:
     name: Native parity and explicit mechanics scenarios
@@ -195,11 +206,15 @@ jobs:
           path: static/wasm
       - uses: actions/download-artifact@v4
         with:
+          name: mtg-engine-wasm-e2e
+          path: static/wasm-e2e
+      - uses: actions/download-artifact@v4
+        with:
           name: e2e-scenario-fixtures
           path: static/e2e-scenarios
       - name: Verify isolated GameScenario artifacts
         run: |
-          test -s static/wasm/mtg_engine_wasm_e2e.wasm
+          test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
           for fixture in target-cast manual-payment cancel-cast privacy-handoff; do
             test -s "static/e2e-scenarios/$fixture.json"
           done

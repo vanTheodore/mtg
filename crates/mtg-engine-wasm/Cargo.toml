@@ -11,6 +11,8 @@ crate-type = ["cdylib", "rlib"]
 default = []
 # Test-only transport operation for restoring a Phase GameScenario into a browser E2E.
 e2e-scenarios = []
+# Native fixture generator only; never enabled by either WASM build.
+e2e-scenario-generator = ["engine/test-support"]
 
 [dependencies]
 engine = { path = "../phase-engine", package = "phase-engine" }
@@ -36,3 +38,4 @@ path = "src/bin/scenarios.rs"
 [[bin]]
 name = "e2e_scenarios"
 path = "src/bin/e2e_scenarios.rs"
+required-features = ["e2e-scenario-generator"]

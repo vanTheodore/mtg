@@ -2,7 +2,7 @@
 /** Generate isolated E2E states from Phase GameScenario; never builds a game in the UI. */
 const cargo = process.env.CARGO ?? 'cargo';
 const targetDir = process.env.CARGO_TARGET_DIR;
-const args = [cargo, 'run', '-p', 'mtg-engine-wasm', '--bin', 'e2e_scenarios', '-j', '1'];
+const args = [cargo, 'run', '-p', 'mtg-engine-wasm', '--bin', 'e2e_scenarios', '--features', 'e2e-scenario-generator', '-j', '1'];
 if (process.env.CARGO_OFFLINE === '1') args.push('--offline', '--config', '.cargo/offline.toml');
 if (process.env.CARGO_LOCKED === '1') args.push('--locked');
 args.push('--', 'static/data/cards.json', process.env.MESA_E2E_SCENARIOS_DIR ?? 'static/e2e-scenarios');

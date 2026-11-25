@@ -11,6 +11,7 @@ test-results/
 !.env.example
 # Generated engine artifacts; rebuild with scripts/build-engine.ts.
 static/wasm/
+static/wasm-e2e/
 static/e2e-scenarios/
 # Local offline Cargo bootstrap, never commit toolchains or vendored crates.
 .cargo/vendor/

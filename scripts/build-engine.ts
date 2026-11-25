@@ -8,7 +8,7 @@
  * `-Z build-std` compiles it from source.
  */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 const cargo = process.env.CARGO ?? 'cargo';
 const profile = process.env.ENGINE_PROFILE ?? 'release';
@@ -87,6 +87,7 @@ if (result.exitCode !== 0) process.exit(result.exitCode ?? 1);
 
 const src = `${targetDir}/${target}/${profile}/mtg_engine_wasm.wasm`;
 const out = process.env.ENGINE_WASM_OUT ?? 'static/wasm/mtg_engine_wasm.wasm';
+mkdirSync(dirname(resolve(out)), { recursive: true });
 await Bun.write(out, Bun.file(src));
 const bytes = Bun.file(out).size;
 console.log(`Wrote ${out} (${(bytes / 1024 / 1024).toFixed(2)} MiB)`);

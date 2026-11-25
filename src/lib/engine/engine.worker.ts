@@ -24,7 +24,8 @@ async function boot() {
   const started = performance.now();
   const scenarioMode = import.meta.env.DEV && new URL(scope.location.href).searchParams.has('e2e-scenario');
   const filename = scenarioMode ? 'mtg_engine_wasm_e2e.wasm' : 'mtg_engine_wasm.wasm';
-  const url = new URL(`/wasm/${filename}`, scope.location.href);
+  const wasmBase = scenarioMode ? '/wasm-e2e' : '/wasm';
+  const url = new URL(`${wasmBase}/${filename}`, scope.location.href);
   const response = await fetch(url);
   if (!response.ok) throw new Error(`No se pudo descargar el motor WASM (${response.status}). Ejecuta bun run engine:build.`);
   const length = Number(response.headers.get('content-length') ?? 0);
