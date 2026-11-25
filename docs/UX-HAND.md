@@ -316,3 +316,18 @@ partida real** (importar mazo, descargar packs, compilar WASM) y la juega hasta 
 estado concreto. El trabajo pasa a 90 minutos, con el motivo escrito al lado. El
 límite de cada prueba sigue siendo suyo (420 s) y no cambia: es margen para el
 trabajo, no permiso para ir lento.
+
+### Quinta corrección: no competir con el auto-paso
+
+La corrida `45592511329` repitió los mismos fallos con una causa común: **la
+prueba competía con el auto-paso**. Mientras buscaba el control de una carta, el
+motor ya estaba pasando la ventana, y el control desaparecía antes de que
+llegara la pulsación — de ahí los dos tiempos agotados y los dos «el detalle no
+ofrece…».
+
+Los escenarios pasan a control determinista: el auto-paso se apaga **al
+arrancar el mazo y se verifica apagado**, y la partida avanza sólo cuando la
+prueba lo pide (`waitForMain`: lee `data-waiting`, pulsa «Conservar mano» o
+«Pasar», y exige llegar a `PreCombatMain`/`PostCombatMain`). Nada se mueve a
+espaldas de la prueba, y cada escenario sigue fallando con el nombre de las
+ventanas que recorrió si no llega a su estado.
