@@ -144,7 +144,7 @@ La hoja deducía éxito de que la revisión subiera. Tras `stale_action` el re-v
 | `hand-sheet-actions.test.ts` (nueva) | 9/9 | — |
 | `dispatch-outcome.test.ts` (nueva) | 6/6 | — |
 | `arena-hand-sheet` (fixture + teclado) | 16 pasan | — |
-| `arena-hand-sheet` (motor) | 7 fallan a propósito sin WASM | pendiente de este run |
+| `arena-hand-sheet` (motor) | 7 fallan a propósito sin WASM | **verdes** (corrida `45519898929`) |
 | `arena-quality-gate` | 7/7 | — |
 | `hand-overflow-evidence` | 6/6 | — |
 | `arena-card-tools-reachability` | 2/2 | — |
@@ -152,7 +152,12 @@ La hoja deducía éxito de que la revisión subiera. Tras `stale_action` el re-v
 | `visibility` | 10/10 | — |
 | `ux-themes`, `a11y`, `arena-zones` | verdes | — |
 | `arena-phone-footer` | 9 fallan **también en `main`**: exigen motor | — |
-| `arena-mobile-drawer`, `arena-touch-play`, `arena-viewport-matrix`, `arena-ui` | exigen motor | cubiertas en CI |
+| `arena-mobile-drawer`, `arena-touch-play`, `arena-viewport-matrix`, `arena-ui` | exigen motor | verdes en CI |
+
+**CI final: `45519898929`, 4/4 verdes** (Chromium 24m12s, Native 7m04s, WASM 16m04s,
+Typecheck 45s). Un job verde aquí *no* puede significar "nada corrió": `realGame`
+lanza cuando falta el motor y CI no define `MESA_ENGINE_REQUIRED`, que es la única
+palabra que permite omitir. Verde = las siete pruebas de motor se ejecutaron.
 
 `bun test src/lib` 805/805, `bun run check` 0 errores, `bun run build` correcto.
 
