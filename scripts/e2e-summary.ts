@@ -54,12 +54,12 @@ interface Row {
 const REQUIRED: { file: string; title: string; why: string }[] = [
   { file: 'arena-hand-sheet.spec.ts', title: 'contrato de despacho (motor real, mazo determinista) › lanzar desde la hoja ejecuta una acción legal del motor', why: 'una acción legal del motor se despacha de verdad' },
   { file: 'arena-hand-sheet.spec.ts', title: 'contrato de despacho (motor real, mazo determinista) › doble pulsación produce exactamente un despacho aceptado', why: 'un solo despacho por doble pulsación' },
-  { file: 'arena-hand-sheet.spec.ts', title: 'escenarios deterministas (mazo propio, motor real) › 1 · lanzamiento con objetivo', why: 'objetivo elegido y daño verificado' },
-  { file: 'arena-hand-sheet.spec.ts', title: 'escenarios deterministas (mazo propio, motor real) › 2 · pago manual', why: 'pago manual completado' },
-  { file: 'arena-hand-sheet.spec.ts', title: 'escenarios deterministas (mazo propio, motor real) › 3 · cancelación real', why: 'cancelación con estado restaurado' },
+  { file: 'arena-hand-sheet.spec.ts', title: 'escenarios deterministas (Phase GameScenario, motor real) › 1 · lanzamiento con objetivo', why: 'objetivo elegido y daño verificado' },
+  { file: 'arena-hand-sheet.spec.ts', title: 'escenarios deterministas (Phase GameScenario, motor real) › 2 · pago manual', why: 'pago manual completado' },
+  { file: 'arena-hand-sheet.spec.ts', title: 'escenarios deterministas (Phase GameScenario, motor real) › 3 · cancelación real', why: 'cancelación con estado restaurado' },
   { file: 'arena-hand-sheet.spec.ts', title: 'rechazo explícito (fixture, cliente guionizado) › 4 · rechazo explícito', why: 'rechazo con mensaje y reintento' },
   { file: 'arena-hand-sheet.spec.ts', title: 'legalidad explícita (fixture con acciones) › una habilidad activada sigue visible y accionable', why: 'una habilidad activada no desaparece' },
-  { file: 'arena-hand-sheet.spec.ts', title: 'escenarios deterministas (mazo propio, motor real) › 5 · cambio de asiento', why: 'cambio de asiento por identidad, no por cantidad' },
+  { file: 'arena-hand-sheet.spec.ts', title: 'escenarios deterministas (Phase GameScenario, motor real) › 5 · cambio de asiento', why: 'cambio de asiento por identidad, no por cantidad' },
   { file: 'arena-hand-sheet.spec.ts', title: 'legalidad explícita (fixture con acciones) › una carta con lanzamiento y activación no se ejecuta de un toque', why: 'ambigüedad: no se adivina' },
   { file: 'arena-hand-sheet.spec.ts', title: 'legalidad explícita (fixture con acciones) › las alternativas del mismo lanzamiento se identifican', why: 'alternativas distinguibles' },
   { file: 'arena-hand-sheet.spec.ts', title: 'navegación por teclado de la hoja › Tab y Shift+Tab', why: 'sin árbol accesible duplicado' }

@@ -7,6 +7,11 @@ license.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = []
+# Test-only transport operation for restoring a Phase GameScenario into a browser E2E.
+e2e-scenarios = []
+
 [dependencies]
 engine = { path = "../phase-engine", package = "phase-engine" }
 serde = { version = "1", features = ["derive"] }
@@ -27,3 +32,7 @@ path = "src/bin/parity.rs"
 [[bin]]
 name = "scenarios"
 path = "src/bin/scenarios.rs"
+
+[[bin]]
+name = "e2e_scenarios"
+path = "src/bin/e2e_scenarios.rs"

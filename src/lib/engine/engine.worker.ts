@@ -22,7 +22,9 @@ function hostRandom(dest: Uint8Array): number {
 
 async function boot() {
   const started = performance.now();
-  const url = new URL('/wasm/mtg_engine_wasm.wasm', scope.location.href);
+  const scenarioMode = import.meta.env.DEV && new URL(scope.location.href).searchParams.has('e2e-scenario');
+  const filename = scenarioMode ? 'mtg_engine_wasm_e2e.wasm' : 'mtg_engine_wasm.wasm';
+  const url = new URL(`/wasm/${filename}`, scope.location.href);
   const response = await fetch(url);
   if (!response.ok) throw new Error(`No se pudo descargar el motor WASM (${response.status}). Ejecuta bun run engine:build.`);
   const length = Number(response.headers.get('content-length') ?? 0);
@@ -67,6 +69,12 @@ scope.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => 
   const started = performance.now();
   try {
     if (!wasm) await boot();
+    const scenario = import.meta.env.DEV
+      ? new URL(scope.location.href).searchParams.get('e2e-scenario')
+      : null;
+    // Keep the privacy E2E's real pass request observable in-flight: it asserts
+    // the sheet and selected detail are both open before Phase changes viewers.
+    if (scenario === 'privacy-handoff' && op === OP.ACTION) await new Promise((resolve) => setTimeout(resolve, 100));
     const callResult = call(op, payload);
     const msg: WorkerResponse = { id, reply: callResult.reply, metrics: {
       worker_ms: performance.now() - started, wasm_compile_ms: compileMs, response_bytes: callResult.responseBytes,

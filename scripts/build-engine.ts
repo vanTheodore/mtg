@@ -36,6 +36,8 @@ const args = [
   '--profile', profile,
   '-j', '1'
 ];
+const features = (process.env.ENGINE_FEATURES ?? '').split(/[ ,]+/).filter(Boolean);
+if (features.length) args.push('--features', features.join(','));
 if (process.env.ENGINE_BUILD_STD === '1') args.push('-Z', 'build-std=core,alloc,std,panic_abort');
 if (process.env.CARGO_OFFLINE === '1') {
   // The offline bootstrap must not depend on a path left over from another
@@ -84,7 +86,7 @@ const result = Bun.spawnSync(args, { stdout: 'inherit', stderr: 'inherit', env }
 if (result.exitCode !== 0) process.exit(result.exitCode ?? 1);
 
 const src = `${targetDir}/${target}/${profile}/mtg_engine_wasm.wasm`;
-const out = 'static/wasm/mtg_engine_wasm.wasm';
+const out = process.env.ENGINE_WASM_OUT ?? 'static/wasm/mtg_engine_wasm.wasm';
 await Bun.write(out, Bun.file(src));
 const bytes = Bun.file(out).size;
 console.log(`Wrote ${out} (${(bytes / 1024 / 1024).toFixed(2)} MiB)`);

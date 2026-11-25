@@ -80,9 +80,20 @@ jobs:
           bun run engine:build 2>&1 | tee /tmp/wasm-build.log
       # Cargo's failure is an exit code plus a job log behind a blob download
       # that is unreachable on some networks; the annotation is plain JSON.
+      - name: Build isolated GameScenario E2E bridge
+        env:
+          CARGO_TARGET_DIR: target-wasm
+          CARGO_LOCKED: "1"
+          ENGINE_FEATURES: e2e-scenarios
+          ENGINE_WASM_OUT: static/wasm/mtg_engine_wasm_e2e.wasm
+        run: |
+          set -o pipefail
+          bun run engine:build 2>&1 | tee /tmp/wasm-e2e-build.log
       - name: Annotate Rust errors
         if: failure()
-        run: bun scripts/rust-annotations.ts /tmp/wasm-build.log
+        run: |
+          bun scripts/rust-annotations.ts /tmp/wasm-build.log
+          bun scripts/rust-annotations.ts /tmp/wasm-e2e-build.log
       - name: Record artifact identity
         run: |
           set -euo pipefail
@@ -127,6 +138,12 @@ jobs:
         run: |
           set -o pipefail
           bun run engine:scenarios 2>&1 | tee /tmp/scenarios.log
+      - name: Prepare isolated Phase GameScenario fixtures for browser E2E
+        env:
+          CARGO_TARGET_DIR: target-native
+          CARGO_LOCKED: "1"
+          MESA_E2E_SCENARIOS_DIR: static/e2e-scenarios
+        run: bun run e2e:scenarios
       - name: Annotate Rust errors
         if: failure()
         run: |
@@ -141,18 +158,22 @@ jobs:
             docs/scenarios-report.json
           if-no-files-found: warn
           retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-scenario-fixtures
+          path: static/e2e-scenarios
+          if-no-files-found: warn
+          retention-days: 7
 
   browser:
     name: Chromium integration and visual interaction
-    needs: [wasm]
+    needs: [wasm, native-integration]
     runs-on: ubuntu-latest
-    # 40 minutes was measured when the suite played a handful of random hands.
-    # UX-HAND 1.2 added deterministic scenarios that each start a real game
-    # (deck import + catalog packs + WASM) and then play it to a specific state,
-    # so the same suite now runs several full games. The limit is headroom for
-    # the work, not a licence to slow down: a single test is still bounded by
-    # its own `test.setTimeout`.
-    timeout-minutes: 90
+    # GameScenario fixtures place Phase directly in the state each E2E needs;
+    # the browser suite no longer plays through random draws to find a card.
+    # Keep the measured 40-minute ceiling, with each test independently bounded.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -172,6 +193,16 @@ jobs:
         with:
           name: mtg-engine-wasm
           path: static/wasm
+      - uses: actions/download-artifact@v4
+        with:
+          name: e2e-scenario-fixtures
+          path: static/e2e-scenarios
+      - name: Verify isolated GameScenario artifacts
+        run: |
+          test -s static/wasm/mtg_engine_wasm_e2e.wasm
+          for fixture in target-cast manual-payment cancel-cast privacy-handoff; do
+            test -s "static/e2e-scenarios/$fixture.json"
+          done
       # The JSON report feeds the annotation step below: the directory names
       # alone say which test broke, the message says why. `list` keeps the
       # readable console output.

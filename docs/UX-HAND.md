@@ -222,26 +222,45 @@ traducción. Lo que falta se nombra como falta.
 
 ### B. Escenarios deterministas
 
-La mano inicial aleatoria dejó de ser una precondición. Los escenarios montan el
-mazo por el constructor del producto (`12 Mountain / 14 Savannah Lions /
-12 Lightning Bolt`), de modo que «hay una tierra que jugar» y «hay un rayo que
-lanzar» son propiedades del mazo, no de la barajada. Cada aserción se lee del
-motor: `data-player-id` / `data-life`, `data-actions-applied`, los
-`data-card-id` de la mano.
+La UI E2E ya no importa mazos ni espera robos. El ejecutable aislado
+`e2e_scenarios` prepara estados específicos con Phase `GameScenario` y cartas
+reales de `CardDatabase`; serializa esos estados como fixtures fuera del producto.
+El build de navegador usa un WASM de E2E con la operación de restauración
+habilitada por feature. El WASM de producción no contiene esa operación. Cada
+aserción sigue observando el motor real: `data-player-id` / `data-life`,
+`data-actions-applied`, los `data-card-id` y decisiones publicadas.
 
 | # | Escenario | Capa | Qué se exige |
 |---|---|---|---|
 | 1 | lanzamiento con objetivo | motor real | el motor pide objetivo, se elige al Jugador 2 y su vida baja **exactamente 3** |
-| 2 | pago manual | motor real | el detalle abre `ManaPayment`, se produce con la Mountain y «Confirmar pago» saca la carta de la mano |
+| 2 | pago manual | motor real + `ManaPayment` | exige el control manual, abre `ManaPayment`, gira la Mountain, produce rojo, confirma y completa el lanzamiento; no hay rama automática |
 | 3 | cancelación real | motor real | «Cancelar lanzamiento» devuelve la carta a la mano, deja el mismo número de cartas y **no** aplica el lanzamiento |
 | 4 | rechazo explícito | fixture guionizado (`?reject=1`) | mensaje visible, hoja abierta, contador **sin** mover, reintento que sí se acepta |
-| 5 | cambio de asiento | motor real, handoff estricto | el asiento cambia de verdad y la mano nueva **no comparte ni un `data-card-id`** con la anterior |
+| 5 | cambio de asiento | motor real, handoff estricto | con hoja y detalle abiertos se envía un pase real; ambos siguen abiertos durante la respuesta en vuelo, el cambio al Jugador 2 activa el handoff y las manos no comparten ningún `data-card-id` |
 
 Por qué el 4 va en la fixture, declarado: un rechazo no se puede fabricar desde
 una partida real sin corromper el estado que la prueba dice respetar. La fixture
 responde en la forma exacta del puente (`ok:false, rejected:true, code`), así que
 el código de cliente que corre es el de producción; lo que se prueba es la
 *presentación* del rechazo, no una regla. Los otros cuatro usan el motor real.
+
+El harness reutiliza `GameScenario`/`GameScenarioDbExt` de Phase para montar
+`PreCombatMain`, manos privadas, la fuente de maná y la semilla de estado exacta;
+`e2e_scenarios` serializa los estados como artefactos de CI. El runner
+`scenarios` que ya existía en Mesa es un recorrido de mazos para comparar la API
+directa con el ABI, no un preparador de estados: por eso no puede sustituir los
+fixtures de interacción. El transporte de restauración existe sólo en el WASM
+compilado con `e2e-scenarios`; el WASM habitual de producción conserva su ABI
+sin esa operación. El servidor de desarrollo carga esos fixtures sólo con
+`?e2e-scenario=...`.
+
+La prueba de privacidad abre mano y detalle antes de enviar un `PassPriority`
+real por el test hook, comprueba que ambos siguen abiertos mientras la respuesta
+está en vuelo y verifica el cambio de viewer por el motor. El handoff estricto
+cubre entonces el contenido anterior; al confirmar, la hoja muestra la mano del
+nuevo asiento, el detalle obsoleto no reaparece y las identidades de carta no se
+solapan. La pausa de observación se limita al worker de desarrollo y no toca
+Phase ni su paso de asiento.
 
 Ninguno omite: si falta la precondición, fallan con el motivo. Un `test.skip`
 sólo aparece con `MESA_ENGINE_REQUIRED=0`, que es una decisión local explícita.
@@ -360,15 +379,3 @@ distingue `(ajeno)`.
 La guarda de «mano vacía no es un escenario» también estaba sobreespecificada:
 pedía un control jugable concreto. Pide cartas visibles, que es lo que de verdad
 significa tener mano, y deja que cada escenario exija **su** carta.
-
-### Octava corrección: los escenarios esperan el robo, no la mano inicial
-
-La corrida `45691183271` confirmó que la prioridad ya llegaba al asiento correcto,
-pero el Lightning Bolt no necesariamente estaba entre las siete cartas iniciales.
-El motor inicia con semilla fija `42`; el mazo también es fijo. La mano inicial
-es, por tanto, repetible, pero no contiene obligatoriamente cada carta requerida.
-Los escenarios 1–3 ahora avanzan por prioridad, limpieza y cambio de asiento reales
-hasta el siguiente turno propio, y esperan a que el robo natural publique el Bolt.
-Fallan explícitamente tras diez robos si la carta no llega; nunca pasan por una
-mano aleatoria ni por la ausencia del estado funcional. El contrato sigue exigiendo
-la carta y su acción publicada por Phase.

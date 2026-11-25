@@ -25,6 +25,7 @@
     "quality:engine": "bun run engine:parity && bun run engine:scenarios",
     "engine:parity": "bun scripts/parity.ts",
     "engine:scenarios": "bun scripts/scenarios.ts",
+    "e2e:scenarios": "bun scripts/e2e-scenarios.ts",
     "engine:packcheck": "cargo run --release -p mtg-engine-wasm --bin packcheck --",
     "wasm:packcheck": "bun scripts/wasm-packcheck.ts",
     "parity:trace": "bun scripts/parity-trace.ts",

@@ -188,6 +188,25 @@ class GameSession {
     this.choosing = []; this.autoPasses = 0; this.autoPassQueued = false; this.historyId = 0;
   }
 
+  /** Load a browser-only state emitted by Phase's GameScenario fixture runner. */
+  async startE2EScenario(fixture: unknown) {
+    if (!import.meta.env.DEV) throw new Error('GameScenario fixtures are available only in the E2E development build.');
+    await this.queue.catch(() => {});
+    this.prepareStart();
+    try {
+      const reply = await this.client.e2eScenario(fixture);
+      await this.apply(reply);
+      if (reply.ok) {
+        this.revealedViewer = reply.viewer;
+        this.revealedTurn = reply.state.turn_number;
+        this.status = 'ready';
+      } else this.status = 'error';
+    } catch (error) {
+      this.status = 'error';
+      this.error = error instanceof Error ? error.message : String(error);
+    }
+  }
+
   async start(catalog: unknown, decks: unknown, seed = 42) {
     await this.queue.catch(() => {});
     this.status = 'loading'; this.error = null; this.snapshot = null;

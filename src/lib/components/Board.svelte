@@ -153,6 +153,20 @@
       metas = meta as Record<string, CardMeta>;
       decks = deckData;
       const params = new URLSearchParams(location.search);
+      const e2eScenario = import.meta.env.DEV ? params.get('e2e-scenario') : null;
+      if (e2eScenario) {
+        if (!/^[a-z0-9-]+$/.test(e2eScenario)) throw new Error('Identificador de GameScenario inválido.');
+        const response = await fetch(`/e2e-scenarios/${e2eScenario}.json`);
+        if (!response.ok) throw new Error(`No se pudo cargar el estado GameScenario (${response.status}).`);
+        session.modeLabel = `E2E · ${e2eScenario}`;
+        await session.startE2EScenario(await response.json());
+        if (e2eScenario === 'privacy-handoff') {
+          window.addEventListener('mesa:e2e-pass-priority', () => {
+            void session.dispatch({ type: 'PassPriority' });
+          });
+        }
+        return;
+      }
       if (params.has('autostart')) await start();
     } catch (e) {
       loadError = e instanceof Error ? e.message : String(e);
