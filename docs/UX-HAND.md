@@ -194,3 +194,65 @@ Los dos fallos restantes eran ambos supuestos de la prueba, no del producto:
 El contrato de ambigüedad que había metido en la prueba de geometría (a 320 px
 el fixture no publica legalidad, así que no hay cartas ambiguas) se retiró de
 ahí: ya lo cubre `legalidad explícita`, donde la fixture sí publica acciones.
+
+## G. UX-HAND 1.2 — cierre definitivo
+
+### A. Alternativas distinguibles
+
+`sheetActions` ya no etiqueta con el verbo pelado. Cada control se construye con
+lo que Phase publica, y cuando algo no está publicado lo dice:
+
+| Fuente | Qué aporta | Dónde |
+|---|---|---|
+| `legal.by_object[card][].data.ability_index` | Qué habilidad impresa es | `GameAction::ActivateAbility` (`types/actions.rs`) |
+| `state.objects[card].abilities[index]` | `ability_tag` y `cost` de esa habilidad | `GameObject.abilities`, serializado y con redacción por visibilidad |
+| `data.face` + `back_face.name` | Qué cara se lanza | `choose_adventure_face` / variantes de lanzamiento |
+
+Resultado medido en la fixture:
+
+| Antes | Ahora |
+|---|---|
+| `Activar` ×2 | `Activar · Ciclar · {2} y Descartar 1 carta` / `Activar · Girar un permanente` |
+| `Lanzar` ×2 | `Lanzar` / `Lanzar · Adventure (Chop Down) · alternativa` |
+| (no existía) | `Activar · habilidad 2 (no publicado por Phase)` |
+
+Ninguna etiqueta inventa una regla: los costes salen de `namedAbilityCost`, que
+ya traduce el DTO del motor, y los nombres de palabra clave de una tabla de
+traducción. Lo que falta se nombra como falta.
+
+### B. Escenarios deterministas
+
+La mano inicial aleatoria dejó de ser una precondición. Los escenarios montan el
+mazo por el constructor del producto (`12 Mountain / 14 Savannah Lions /
+12 Lightning Bolt`), de modo que «hay una tierra que jugar» y «hay un rayo que
+lanzar» son propiedades del mazo, no de la barajada. Cada aserción se lee del
+motor: `data-player-id` / `data-life`, `data-actions-applied`, los
+`data-card-id` de la mano.
+
+| # | Escenario | Capa | Qué se exige |
+|---|---|---|---|
+| 1 | lanzamiento con objetivo | motor real | el motor pide objetivo, se elige al Jugador 2 y su vida baja **exactamente 3** |
+| 2 | pago manual | motor real | el detalle abre `ManaPayment`, se produce con la Mountain y «Confirmar pago» saca la carta de la mano |
+| 3 | cancelación real | motor real | «Cancelar lanzamiento» devuelve la carta a la mano, deja el mismo número de cartas y **no** aplica el lanzamiento |
+| 4 | rechazo explícito | fixture guionizado (`?reject=1`) | mensaje visible, hoja abierta, contador **sin** mover, reintento que sí se acepta |
+| 5 | cambio de asiento | motor real, handoff estricto | el asiento cambia de verdad y la mano nueva **no comparte ni un `data-card-id`** con la anterior |
+
+Por qué el 4 va en la fixture, declarado: un rechazo no se puede fabricar desde
+una partida real sin corromper el estado que la prueba dice respetar. La fixture
+responde en la forma exacta del puente (`ok:false, rejected:true, code`), así que
+el código de cliente que corre es el de producción; lo que se prueba es la
+*presentación* del rechazo, no una regla. Los otros cuatro usan el motor real.
+
+Ninguno omite: si falta la precondición, fallan con el motivo. Un `test.skip`
+sólo aparece con `MESA_ENGINE_REQUIRED=0`, que es una decisión local explícita.
+
+### C. Evidencia en el resumen del trabajo
+
+`scripts/e2e-summary.ts` publica el `GITHUB_STEP_SUMMARY` con aprobadas,
+fallidas, omitidas, reintentos, inestables y la tabla completa de
+`arena-hand-sheet.spec.ts`. Además **falla el trabajo** si una prueba de la lista
+obligatoria no se ejecutó, se omitió, agotó el tiempo o necesitó un reintento.
+
+Ese es el agujero que la guarda del WASM no ve: un `test.skip` dentro de un
+`spec` deja el runner en verde. Verificado con el informe de este entorno: 16
+aprobadas, 8 omitidas, y el script sale con **1** nombrando las siete que faltan.

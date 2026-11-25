@@ -172,6 +172,14 @@ jobs:
       - run: bun --bun playwright test --reporter=list,json
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/report.json
+      # The job summary is the evidence and the gate: it publishes passed /
+      # failed / skipped / retries plus the per-test rows of the hand sheet, and
+      # fails the job when a required UX-HAND test was skipped. A `test.skip`
+      # written inside a spec leaves the runner green, which is exactly the hole
+      # the WASM guard cannot see (`docs/UX-HAND.md`, section G).
+      - name: Publish Playwright summary and gate skipped UX-HAND tests
+        if: always()
+        run: bun scripts/e2e-summary.ts
       # The HTML report, the traces and the job log live behind an artifact
       # download that some networks cannot reach; annotations are plain JSON on
       # the API, so every failure is repeated there with its error message.

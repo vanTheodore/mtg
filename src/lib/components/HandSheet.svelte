@@ -280,14 +280,22 @@
             similar buttons are never a puzzle.
           -->
           {#each actionsOf(detail.id).choices as choice, i (i)}
+            <!--
+              The label already carries what the snapshot publishes about this
+              action (the ability's keyword and cost, the cast's face) and says
+              so when Phase published nothing. It is not decorated a second time
+              here: two activations must never read the same, and the button text
+              is exactly what assistive technology gets.
+            -->
             <button
               type="button"
               class:primary={!choice.alternative && choice.kind !== 'mana'}
               disabled={session.busy}
               onclick={() => play(choice.action)}
-              aria-label={choice.alternative ? `${choice.label} (alternativa)` : choice.label}
+              aria-label={choice.label}
+              data-action-kind={choice.kind}
             >
-              {choice.label}{choice.alternative ? ' · alternativa' : ''}
+              {choice.label}
               {#if choice.kind === 'other'}<span class="choice-note">{describeAction(choice.action, snapshot?.state.objects ?? {})}</span>{/if}
             </button>
             {#if choice.kind === 'cast'}

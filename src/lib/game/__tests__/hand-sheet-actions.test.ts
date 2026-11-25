@@ -58,7 +58,12 @@ describe('A — acciones ambiguas', () => {
   test('una sola acción sí es rápida, y su etiqueta dice lo que hace', () => {
     expect(sheetActions(snapshot({ '5': [cast(5)] }), 5).quick).toMatchObject({ label: 'Lanzar' });
     expect(sheetActions(snapshot({ '5': [playLand(5)] }), 5).quick).toMatchObject({ label: 'Jugar tierra' });
-    expect(sheetActions(snapshot({ '5': [activate(5, 0, 'Ciclar')] }), 5).quick).toMatchObject({ label: 'Activar' });
+    // An activation is never labelled with the bare verb: with no published
+    // ability to name, the label has to say exactly that.
+    const activation = sheetActions(snapshot({ '5': [activate(5, 0, 'Ciclar')] }), 5).quick!;
+    expect(activation.kind).toBe('activate');
+    expect(activation.label).toMatch(/^Activar · /);
+    expect(activation.label).toMatch(/no publicado|sin nombre publicado/i);
     expect(sheetActions(snapshot({ '5': [tapForMana(5)] }), 5).quick).toMatchObject({ label: 'Producir maná' });
   });
 
@@ -114,5 +119,64 @@ describe('B — habilidades invisibles', () => {
     expect(casts).toHaveLength(2);
     // The manual-payment control belongs to each cast, never to the list.
     expect(result.manualPayment).toBe(true);
+  });
+});
+
+/**
+ * UX-HAND 1.2 — A. Alternativas distinguibles.
+ *
+ * `sheetActions` already refuses to guess between several actions, but it
+ * labelled two different activations "Activar" and two cast faces "Lanzar",
+ * so the detail panel showed two identical controls. Phase publishes the
+ * information that separates them:
+ *
+ *  - `legal.by_object[card][].data.ability_index` — which printed ability the
+ *    activation refers to, matched against `state.objects[card].abilities`
+ *    (which carry `ability_tag` and `cost`, and are serialized by Phase);
+ *  - `data.face` / the alternative shape for a second way to cast the same card.
+ *
+ * When that information is missing the label must SAY it is missing. Inventing
+ * a rule is never an option, and neither is two buttons that read the same.
+ */
+const withObject = (byObject: Record<string, GameAction[]>, object: Record<string, unknown>) => {
+  const snap = snapshot(byObject) as unknown as { state: Record<string, unknown> };
+  snap.state = { ...snap.state, objects: { '50': object } };
+  return snap as unknown as EngineSnapshot;
+};
+
+const ABILITIES = [
+  { kind: 'Activated', ability_tag: { type: 'Cycling' }, cost: { type: 'Mana', cost: { type: 'Cost', shards: [], generic: 2 } } },
+  { kind: 'Activated', ability_tag: null, cost: { type: 'Tap' } }
+];
+
+describe('A2 — dos activaciones distintas no se leen igual', () => {
+  test('cada activación se etiqueta con la habilidad que Phase publicó', () => {
+    const s = withObject({ '50': [activate(50, 0, ''), activate(50, 1, '')] }, { id: 50, name: 'Reliquia', abilities: ABILITIES });
+    const choices = sheetActions(s, 50).choices;
+    expect(choices).toHaveLength(2);
+    const labels = choices.map((c) => c.label);
+    expect(labels[0]).toBe('Activar · Ciclar · {2}');
+    expect(labels[1]).toBe('Activar · Girar un permanente');
+    expect(new Set(labels).size, 'dos controles distintos con la misma etiqueta').toBe(2);
+  });
+
+  test('sin información publicada la etiqueta dice qué falta, no inventa un nombre', () => {
+    // An activation the object does not describe: no abilities at all.
+    const s = withObject({ '51': [activate(51, 0, '')] }, { id: 51, name: 'Carta sin datos' });
+    const choice = sheetActions(s, 51).choices[0]!;
+    expect(choice.kind).toBe('activate');
+    expect(choice.label).toMatch(/habilidad 1/);
+    expect(choice.label).toMatch(/sin descripción|no publicad/i);
+  });
+
+  test('dos alternativas de lanzamiento de la misma carta se distinguen', () => {
+    const s = withObject(
+      { '52': [cast(52), cast(52, 'Adventure')] },
+      { id: 52, name: 'Aventurero', abilities: [], back_face: { name: 'Otra cara' } }
+    );
+    const labels = sheetActions(s, 52).choices.map((c) => c.label);
+    expect(new Set(labels).size, 'las dos caras se leen igual').toBe(2);
+    expect(labels.join(' | ')).toMatch(/Adventure|Otra cara/);
+    expect(labels.some((l) => /alternativa/i.test(l))).toBe(true);
   });
 });

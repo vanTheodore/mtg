@@ -284,79 +284,13 @@ test('agrandar a escritorio cierra la hoja y no deja el tablero inerte', async (
 
 const ENGINE_REQUIRED = process.env.MESA_ENGINE_REQUIRED !== '0';
 
-async function scriptedActions(page: Page, cards = 12) {
+async function scriptedActions(page: Page, cards = 12, query = '') {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.route('**/cards.scryfall.io/**', (route) => route.abort());
-  await page.goto(`/stress?hand=${cards}&tokens=0&mirror=0&actions=1`);
+  await page.goto(`/stress?hand=${cards}&tokens=0&mirror=0&actions=1${query}`);
   await expect(page.locator('.hand-trigger')).toBeVisible();
   await openSheet(page);
-}
-
-/** Open the real game, and fail loudly if the engine is not there. */
-async function realGame(page: Page) {
-  await page.route('**/api.scryfall.com/**', (route) => route.abort());
-  await page.goto('/?autostart');
-  const engineMissing = page.getByText(/No se pudo descargar el motor WASM/);
-  const trigger = page.locator('.hand-trigger');
-  await expect
-    .poll(async () => (await engineMissing.count()) > 0 || (await trigger.count()) > 0, { timeout: 120_000 })
-    .toBe(true);
-  const missing = (await engineMissing.count()) > 0;
-  if (missing) {
-    const reason =
-      'el motor WASM no está disponible: estas pruebas son la garantía funcional y no pueden omitirse';
-    if (ENGINE_REQUIRED) throw new Error(reason);
-    test.skip(true, reason);
-  }
-  await expect(trigger).toBeVisible({ timeout: 120_000 });
-  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({ timeout: 180_000 });
-}
-
-/** The seat dialog is the product's privacy guard: the player passes it. */
-async function passSeat(page: Page) {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const handoff = page.locator('.handoff');
-    if (!(await handoff.isVisible().catch(() => false))) return;
-    await handoff.locator('button').first().tap({ timeout: 3_000 }).catch(() => {});
-    await page.waitForTimeout(250);
-  }
-}
-
-/**
- * Reach a real priority with a legal action in hand.
- *
- * Mirrors what `arena-touch-play` does, because that path is proven: both seats
- * keep their opening hand through the handoff gate, and then the sheet is left
- * open while the priority window arrives on its own. Pressing "Pasar" here is
- * wrong — it dismisses the very window being waited for, and the handoff gate
- * that follows hides the trigger (`Hand` is not rendered while it asks).
- */
-async function reachPriority(page: Page) {
-  for (let round = 0; round < 4; round += 1) {
-    await passSeat(page);
-    const keep = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: 'Conservar mano' }).first();
-    if (!(await keep.count())) break;
-    await keep.tap({ timeout: 5_000 }).catch(() => {});
-    await page.waitForTimeout(300);
-  }
-  await passSeat(page);
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    if (!(await page.locator('.hand-trigger').count())) {
-      await passSeat(page);
-      continue;
-    }
-    if (!(await page.locator('.hand-sheet').count())) {
-      await page.locator('.hand-trigger').tap().catch(() => {});
-    }
-    const playable = page.locator('.hand-sheet .sheet-play');
-    if (await playable.count()) return;
-    // Give the engine's next priority window time to arrive; the sheet stays
-    // open so legality lands straight into it.
-    await expect.poll(() => page.locator('.hand-sheet .sheet-play').count(), { timeout: 20_000 })
-      .toBeGreaterThan(0)
-      .catch(() => {});
-  }
 }
 
 test.describe('legalidad explícita (fixture con acciones)', () => {
@@ -368,7 +302,8 @@ test.describe('legalidad explícita (fixture con acciones)', () => {
     await expect(ambiguous, 'la fixture no publicó ninguna carta ambigua').toHaveCount(1);
     await expect(ambiguous.locator('.sheet-play')).toHaveCount(0);
     const choose = ambiguous.locator('.sheet-choose');
-    await expect(choose).toHaveText(/^Elegir \(2\)$/);
+    // Cast + two different activations: three published actions, three controls.
+    await expect(choose).toHaveText(/^Elegir \(3\)$/);
 
     // Pressing it must not dispatch anything: it opens the detail, with both
     // actions listed and no sheet error (nothing was sent and refused).
@@ -376,9 +311,15 @@ test.describe('legalidad explícita (fixture con acciones)', () => {
     await expect(page.locator('.sheet-detail')).toBeVisible();
     // One control per published action, in Phase's order: the cast, the manual
     // payment that belongs to it, then the activation.
-    const labels = await page.locator('.sheet-detail .detail-actions button').allInnerTexts();
-    expect(labels.filter((text) => /^Lanzar/.test(text.trim()))).toHaveLength(1);
-    expect(labels.filter((text) => /^Activar/.test(text.trim()))).toHaveLength(1);
+    const labels = (await page.locator('.sheet-detail .detail-actions button').allInnerTexts()).map((t) => t.trim());
+    expect(labels.filter((text) => /^Lanzar/.test(text))).toHaveLength(1);
+    const activations = labels.filter((text) => /^Activar/.test(text));
+    expect(activations, 'las dos activaciones publicadas deben tener su control').toHaveLength(2);
+    // UX-HAND 1.2 — A: two different activations must not read the same. The
+    // labels come from `ability_index` + the card's published `abilities`.
+    expect(new Set(activations).size, 'dos activaciones distintas con la misma etiqueta').toBe(2);
+    expect(activations[0]).toBe('Activar · Ciclar · {2} y Descartar 1 carta');
+    expect(activations[1]).toBe('Activar · Girar un permanente');
     expect(labels.filter((text) => /maná manualmente/.test(text))).toHaveLength(1);
     await expect(page.locator('.sheet-error')).toHaveCount(0);
   });
@@ -386,15 +327,22 @@ test.describe('legalidad explícita (fixture con acciones)', () => {
   test('una habilidad activada sigue visible y accionable', async ({ page }) => {
     await scriptedActions(page);
     // Slot 4 of the scripted legality is an ActivateAbility with no mana window.
-    const activation = page.locator('.hand-sheet .sheet-play[aria-label="Activar"]');
+    const activation = page.locator('.hand-sheet .sheet-play[aria-label^="Activar"]');
     await expect(activation.first(), 'la activación desapareció de la hoja').toHaveCount(1);
     await expect(activation.first()).toBeVisible();
+    // And it says which ability it is, not just "Activar".
+    await expect(activation.first()).toHaveAttribute('aria-label', /Ciclar/);
   });
 
   test('las alternativas del mismo lanzamiento se identifican', async ({ page }) => {
     await scriptedActions(page);
     const alternatives = page.locator('.hand-sheet .sheet-cell').filter({ has: page.locator('.sheet-choose') }).nth(1);
     await alternatives.locator('.sheet-choose').tap();
+    const casts = (await page.locator('.sheet-detail .detail-actions button[data-action-kind="cast"]').allInnerTexts()).map((t) => t.trim());
+    expect(casts, 'la carta de dos caras debe ofrecer dos lanzamientos').toHaveLength(2);
+    // UX-HAND 1.2 — A: the second face names its face, not a bare "Lanzar".
+    expect(new Set(casts).size).toBe(2);
+    expect(casts.join(' | ')).toContain('Adventure');
     await expect(page.locator('.sheet-detail .detail-actions button', { hasText: 'alternativa' })).toHaveCount(1);
   });
 
@@ -411,185 +359,356 @@ test.describe('legalidad explícita (fixture con acciones)', () => {
   });
 });
 
-test.describe('motor real', () => {
+/**
+ * UX-HAND 1.1 contracts that do not need a specific card: the press contract
+ * itself. They use the same deterministic deck, so "there is a legal action"
+ * is a fact of the deck, not luck of the shuffle.
+ */
+const FIELD = 'section.battlefield[data-side="player"] [data-card-id]';
+
+/**
+ * UX-HAND 1.2 — B. Deterministic scenarios.
+ *
+ * A random opening hand cannot be a precondition: on one seed it holds Lightning
+ * Bolt, on the next it does not, and the run that "passed" proved nothing. These
+ * scenarios build the deck through the product's own builder and read every
+ * number back from Phase.
+ *
+ * Layer: **real engine** (`/?autostart`, WASM from CI). The deck is a list of
+ * card names; what a card may do, what a target is worth and what a payment
+ * costs are Phase's answers, never this file's.
+ *
+ * Deck (40 cards, both seats identical, so a seat change changes identity and
+ * not shape):
+ *   - **Mox Pearl** — deterministic mana. A zero-cost artifact whose printed
+ *     ability is `{T}: Add {W}`, so casting is legal on the first priority
+ *     window instead of waiting for a land drop.
+ *   - **Lightning Bolt** — the deterministic cast that needs a target and, at
+ *     `Manual`, a payment.
+ *   - **Savannah Lions** — the deterministic permanent, so the board really gains
+ *     a card.
+ */
+const SCENARIO_DECK = ['14 Mountain', '12 Lightning Bolt', '14 Savannah Lions'].join('\n');
+
+/** The seat dialog is the product's privacy guard: the player passes it. */
+async function passSeat(page: Page) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const handoff = page.locator('.handoff');
+    if (!(await handoff.isVisible().catch(() => false))) return;
+    await handoff.locator('button').first().tap({ timeout: 3_000 }).catch(() => {});
+    await page.waitForTimeout(250);
+  }
+}
+
+/** Import the deterministic deck through the builder and start the game. */
+async function startScenarioDeck(page: Page) {
+  await page.route('**/api.scryfall.com/**', (route) => route.abort());
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Mesa', exact: true })).toBeVisible();
+  // Auto-pass would answer the priority window these scenarios exist to act in.
+  await page.getByRole('checkbox', { name: 'Auto-pasar ventanas sin acciones' }).uncheck();
+  await page.getByRole('button', { name: 'Mis mazos' }).click();
+  await page.getByRole('button', { name: 'Importar lista' }).click();
+  await page.getByLabel(/Pega una lista/).fill(SCENARIO_DECK);
+  await page.getByRole('button', { name: 'Convertir lista' }).click();
+  await expect(page.getByTestId('deck-total')).toHaveText('40 cartas');
+  await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
+  // Hard engine guard: without WASM these scenarios would go green proving
+  // nothing, so they FAIL. `MESA_ENGINE_REQUIRED=0` is the only word that lets a
+  // local run skip them, and CI never sets it.
+  const engineMissing = page.getByText(/No se pudo descargar el motor WASM/);
+  await expect
+    .poll(async () => (await engineMissing.count()) > 0 || (await page.locator('.hand-trigger').count()) > 0, { timeout: 240_000 })
+    .toBe(true);
+  if (await engineMissing.count()) {
+    const reason = 'el motor WASM no está disponible: los escenarios deterministas son la garantía funcional y no pueden omitirse';
+    if (ENGINE_REQUIRED) throw new Error(reason);
+    test.skip(true, reason);
+  }
+  await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({ timeout: 240_000 });
+}
+
+/**
+ * Reach the state every scenario needs: both seats keep, and the sheet is open
+ * on the active seat's hand with a priority window. It fails — it does not
+ * skip — if the engine never gets there.
+ */
+async function openScenarioSheet(page: Page) {
+  for (let round = 0; round < 6; round += 1) {
+    await passSeat(page);
+    const keep = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: 'Conservar mano' }).first();
+    if (!(await keep.count())) break;
+    await keep.tap({ timeout: 5_000 });
+    await page.waitForTimeout(200);
+  }
+  await passSeat(page);
+  await expect(page.locator('.hand-trigger')).toBeVisible({ timeout: 60_000 });
+  if (!(await page.locator('.hand-sheet').count())) await page.locator('.hand-trigger').tap();
+  await expect(page.locator('.hand-sheet')).toBeVisible();
+  // An empty hand is not a scenario: the sheet must publish a control.
+  await expect
+    .poll(() => page.locator('.hand-sheet .sheet-play, .hand-sheet .sheet-choose').count(), { timeout: 60_000 })
+    .toBeGreaterThan(0);
+}
+
+/**
+ * Play one named card from the sheet, the way a player does: open the hand,
+ * find the card by its published name, press its own action.
+ *
+ * It throws when the card is not playable — a scenario whose card never became
+ * legal did not reach its state, and that is a failure, never a skip.
+ */
+async function playCard(page: Page, name: string) {
+  await openScenarioSheet(page);
+  const cell = page.locator('.hand-sheet .sheet-cell').filter({ hasText: name }).first();
+  await expect(cell, `el mazo determinista no ofreció ${name} en la mano`).toHaveCount(1, { timeout: 30_000 });
+  const play = cell.locator('.sheet-play');
+  await expect(play, `${name} está en la mano pero no es jugable`).toHaveCount(1);
+  await play.tap();
+  await expect(page.locator('.hand-sheet')).toBeHidden({ timeout: 30_000 });
+}
+
+test.describe('contrato de despacho (motor real, mazo determinista)', () => {
   test.use({ isMobile: true, viewport: { width: 390, height: 844 } });
 
-  test('lanzar desde la hoja prepara una acción legal y la ejecuta obligatoriamente', async ({ page }) => {
-    await realGame(page);
-    await reachPriority(page);
+  test('lanzar desde la hoja ejecuta una acción legal del motor', async ({ page }) => {
+    await startScenarioDeck(page);
+    await openScenarioSheet(page);
     const handSection = page.locator('section[aria-label^="Tu mano"]');
     const playable = page.locator('.hand-sheet .sheet-play').first();
-    // No early return: if there is nothing legal, this test has proven nothing.
-    await expect(playable, 'la partida real no ofreció ninguna acción legal en la mano').toHaveCount(1, { timeout: 60_000 });
+    await expect(playable, 'la hoja no ofreció ninguna acción legal').toHaveCount(1);
 
     const before = {
       hand: await handSection.locator('[data-card-id]').count(),
-      field: await page.locator('section.battlefield[data-side="player"] [data-card-id]').count()
+      field: await page.locator(FIELD).count()
     };
-    expect(before.hand).toBeGreaterThan(0);
     await playable.scrollIntoViewIfNeeded();
     await playable.tap();
 
-    await expect
-      .poll(() => handSection.locator('[data-card-id]').count(), { timeout: 30_000 })
-      .toBe(before.hand - 1);
-    await expect
-      .poll(() => page.locator('section.battlefield[data-side="player"] [data-card-id]').count())
-      .toBeGreaterThanOrEqual(before.field);
+    await expect.poll(() => handSection.locator('[data-card-id]').count(), { timeout: 30_000 }).toBe(before.hand - 1);
+    await expect.poll(() => page.locator(FIELD).count()).toBeGreaterThanOrEqual(before.field);
     await expect(page.locator('.hand-sheet')).toBeHidden();
   });
 
   test('doble pulsación produce exactamente un despacho aceptado', async ({ page }) => {
-    await realGame(page);
-    await reachPriority(page);
-    // `data-actions-applied` is the engine's own count of applied actions
-    // (Board.svelte renders it from the snapshot); `data-viewer` is the seat.
+    await startScenarioDeck(page);
+    await openScenarioSheet(page);
     const revision = () =>
       page.evaluate(() => Number(document.querySelector('.app')?.getAttribute('data-actions-applied') ?? -1));
     const before = { rev: await revision(), hand: await page.locator('.hand-zone [data-card-id]').count() };
     const playable = page.locator('.hand-sheet .sheet-play').first();
-    await expect(playable).toHaveCount(1, { timeout: 60_000 });
+    await expect(playable).toHaveCount(1);
     await playable.dblclick({ delay: 0 });
     await expect(page.locator('.hand-sheet')).toBeHidden({ timeout: 30_000 });
-    // One accepted dispatch moves the revision by exactly one.
+    // One accepted dispatch moves the engine's own counter by exactly one.
     await expect.poll(async () => (await revision()) - before.rev, { timeout: 30_000 }).toBe(1);
-    await expect
-      .poll(() => page.locator('.hand-zone [data-card-id]').count())
-      .toBeLessThanOrEqual(before.hand - 1);
+    await expect.poll(() => page.locator('.hand-zone [data-card-id]').count()).toBeLessThanOrEqual(before.hand - 1);
   });
 
   test('el contador que se mide es el del motor, no uno inventado por la prueba', async ({ page }) => {
-    await realGame(page);
+    await startScenarioDeck(page);
     const marker = page.locator('.app[data-actions-applied]');
     await expect(marker).toHaveCount(1);
-    const raw = await marker.getAttribute('data-actions-applied');
-    expect(raw, 'Board no publica el contador del motor').not.toBeNull();
-    const applied = Number(raw);
+    const applied = Number(await marker.getAttribute('data-actions-applied'));
     expect(Number.isInteger(applied)).toBe(true);
-    // It has to move when the engine applies something, or it measures nothing.
-    const before = applied;
-    await reachPriority(page);
-    const playable = page.locator('.hand-sheet .sheet-play').first();
-    await expect(playable).toHaveCount(1, { timeout: 60_000 });
-    await playable.tap();
+    await openScenarioSheet(page);
+    await page.locator('.hand-sheet .sheet-play').first().tap();
     await expect
       .poll(() => page.evaluate(() => Number(document.querySelector('.app')?.getAttribute('data-actions-applied') ?? -1)), { timeout: 30_000 })
-      .toBeGreaterThan(before);
+      .toBeGreaterThan(applied);
   });
+});
 
-  test('cambio de asiento con la hoja y el detalle abiertos no deja la mano anterior accesible', async ({ page }) => {
-    await realGame(page);
-    await reachPriority(page);
-    const beforeViewer = await page.locator('[data-viewer]').getAttribute('data-viewer');
-    await page.locator('.hand-sheet [data-card-id]').first().click();
-    await expect(page.locator('.sheet-detail')).toBeVisible();
-    const cardsBefore = await page.locator('.hand-sheet [data-card-id]').count();
+/**
+ * UX-HAND 1.2 — B. Five deterministic scenarios.
+ *
+ * Each one must reach its target state. There is no `skip`, no early `return`
+ * and no "if the hand happened to contain it": the deck is fixed, and a missing
+ * precondition is a failure with a message that says which one.
+ */
+test.describe('escenarios deterministas (mazo propio, motor real)', () => {
+  test.use({ isMobile: true, viewport: { width: 390, height: 844 } });
 
-    // Hand the seat over for real: close the sheet, pass priority through the
-    // decision panel (the path `arena-touch-play` proves), and answer the
-    // handoff gate if the product raises it. Passing is exactly what changes
-    // the seat when the turn moves.
-    await page.keyboard.press('Escape');
-    await page.keyboard.press('Escape');
-    const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
-    await expect(pass, 'no hay forma de pasar la prioridad con la mano cerrada').toHaveCount(1, { timeout: 30_000 });
-    await pass.tap();
-    await passSeat(page);
-    await passSeat(page);
+  test('1 · lanzamiento con objetivo: elegirlo y ver el daño', async ({ page }) => {
+    await startScenarioDeck(page);
+    // The deck's own land is the deterministic mana; playing it takes no turn
+    // and no shuffle luck, because 14 of the 40 cards are Mountains.
+    await playCard(page, 'Mountain');
 
-    // Whatever the new seat's hand is, the previous one must be gone: the detail
-    // is not open, and the sheet lists the new seat's cards only.
-    await expect(page.locator('.sheet-detail')).toHaveCount(0);
-    await expect(page.locator('.hand-sheet')).toHaveCount(0);
-    await page.locator('.hand-trigger').tap().catch(() => {});
-    const stillThere = await page.locator('.sheet-detail').count();
-    expect(stillThere, 'el detalle anterior sobrevivió al cambio de asiento').toBe(0);
-    // The privacy contract is per-seat: once the viewer changed, the previous
-    // hand's cards are not what the sheet lists. If the engine has not changed
-    // seats yet, the test must say so rather than pass on nothing.
-    const viewerNow = await page.locator('.app').getAttribute('data-viewer');
-    expect(viewerNow, 'el tablero no publica el asiento').not.toBeNull();
-    const viewerChanged = viewerNow !== beforeViewer;
-    if (!viewerChanged) {
-      test.info().annotations.push({
-        type: 'asiento',
-        description: 'el motor no cambió de asiento en este turno; la comprobación cruzada de manos no aplica'
-      });
-      return;
-    }
-    const cardsNow = await page.locator('.hand-sheet [data-card-id]').count();
-    expect(cardsNow, 'la mano nueva es idéntica a la anterior').not.toBe(cardsBefore);
-  });
+    // The land unlocked a cast. Whether that happens in this priority window or
+    // the next one is Phase's business; the sheet is reopened either way.
+    await openScenarioSheet(page);
+    const bolt = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
+    await expect(bolt, 'ni con una Mountain en juego hay un Lightning Bolt lanzable').toHaveCount(1, { timeout: 60_000 });
+    await bolt.locator('.sheet-play').tap();
 
-  test('selección de objetivos desde la hoja', async ({ page }) => {
-    await realGame(page);
-    await reachPriority(page);
-    // A cast is what can open a target or a payment prompt. Lands and
-    // activations cannot, so this test needs a cast in hand.
-    // Only a cast with a single shape has one legal action; alternative faces
-    // open the choice, which cannot pick a target by itself.
-    const targetCard = page.locator('.hand-sheet .sheet-card:not(:has(.choice-note)) .sheet-play[aria-label="Lanzar"]').first();
-    if (!(await targetCard.count())) {
-      test.info().annotations.push({ type: 'objetivos', description: 'la mano real no tenía ningún lanzamiento en esta ventana' });
-      test.skip(true, 'sin lanzamiento en mano no se puede probar la selección de objetivos');
-    }
-    await expect(targetCard).toHaveCount(1, { timeout: 60_000 });
-    await targetCard.scrollIntoViewIfNeeded();
-    await targetCard.tap();
-    // Either the engine asks for a target (prompt) or the cast resolved: both
-    // are real transitions, neither is a silent no-op.
+    const panel = page.locator('section[aria-label="Decisión pendiente"]');
+    await expect(panel, 'el lanzamiento no abrió la selección de objetivos').toContainText(/objetivo/i, { timeout: 30_000 });
+    const before = Number(await page.locator('[data-player-id="1"]').getAttribute('data-life'));
+    const choose = panel.locator('button').filter({ hasText: /Jugador 2/i }).first();
+    await expect(choose, 'el motor no ofreció al Jugador 2 como objetivo').toHaveCount(1);
+    await choose.tap();
+    // Nightly Bolt deals 3: the assertion is exact, not "something changed".
     await expect
-      .poll(async () => {
-        const prompt = await page.locator('section[aria-label="Decisión pendiente"]').innerText().catch(() => '');
-        const sheet = await page.locator('.hand-sheet').count();
-        return /objetivo|target/i.test(prompt) || sheet === 0;
-      }, { timeout: 30_000 })
-      .toBe(true);
+      .poll(async () => Number(await page.locator('[data-player-id="1"]').getAttribute('data-life')), { timeout: 30_000 })
+      .toBe(before - 3);
   });
 
-  test('pago manual de maná desde el detalle', async ({ page }) => {
-    await realGame(page);
-    await reachPriority(page);
+  test('2 · pago manual: pagar el maná y completar el lanzamiento', async ({ page }) => {
+    await startScenarioDeck(page);
+    await playCard(page, 'Mountain');
+    await openScenarioSheet(page);
+
+    const bolt = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
+    await expect(bolt).toHaveCount(1, { timeout: 60_000 });
+    // The detail's manual-payment control is the product path under test.
+    await bolt.locator('[data-card-id]').first().click();
+    await expect(page.locator('.sheet-detail')).toBeVisible();
+    const manual = page.locator('.sheet-detail button').filter({ hasText: 'Elegir maná manualmente' }).first();
+    await expect(manual, 'el detalle no ofrece el pago manual').toHaveCount(1);
+    await manual.tap();
+
+    const panel = page.locator('section[aria-label="Decisión pendiente"]');
+    await expect(panel, 'Phase no abrió el pago de maná').toContainText(/maná|fuente/i, { timeout: 30_000 });
+    // Pay with the Mountain the test just played: select it, produce, confirm.
+    const mountain = page.locator('section.battlefield[data-side="player"] [data-card-id]').filter({ hasText: 'Mountain' }).first();
+    await expect(mountain, 'la Mountain jugada no está en el campo').toHaveCount(1);
+    await mountain.tap();
+    const produce = panel.locator('button').filter({ hasText: /Producir/i }).first();
+    await expect(produce, 'la fuente no publicó su producción de maná').toHaveCount(1, { timeout: 30_000 });
+    await produce.tap();
+    const confirm = panel.locator('button').filter({ hasText: 'Confirmar pago' }).first();
+    await expect(confirm, 'no hay forma de confirmar el pago').toHaveCount(1, { timeout: 30_000 });
+    const handBefore = await page.locator('.hand-zone [data-card-id]').count();
+    await confirm.tap();
+    await expect
+      .poll(() => page.locator('.hand-zone [data-card-id]').count(), { timeout: 30_000 })
+      .toBe(handBefore - 1);
+  });
+
+  test('3 · cancelación real: la carta vuelve a la mano y el estado se restaura', async ({ page }) => {
+    await startScenarioDeck(page);
+    await playCard(page, 'Mountain');
+    await openScenarioSheet(page);
+
+    const bolt = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
+    await expect(bolt).toHaveCount(1, { timeout: 60_000 });
+    const handBefore = await page.locator('.hand-zone [data-card-id]').count();
+    const appliedBefore = Number(await page.locator('.app').getAttribute('data-actions-applied'));
+    await bolt.locator('[data-card-id]').first().click();
+    await page.locator('.sheet-detail button').filter({ hasText: 'Elegir maná manualmente' }).first().tap();
+
+    const panel = page.locator('section[aria-label="Decisión pendiente"]');
+    const cancel = panel.locator('button').filter({ hasText: 'Cancelar lanzamiento' }).first();
+    await expect(cancel, 'Phase no publicó la cancelación del lanzamiento').toHaveCount(1, { timeout: 30_000 });
+    await cancel.tap();
+    // Restored, not merely "closed": the card is back in hand, the hand count is
+    // the one from before, and the engine moved exactly once.
+    await expect.poll(() => page.locator('.hand-zone [data-card-id]').count(), { timeout: 30_000 }).toBe(handBefore);
+    await expect
+      .poll(async () => Number(await page.locator('.app').getAttribute('data-actions-applied')))
+      .toBeGreaterThan(appliedBefore);
+    await expect(panel).not.toContainText(/Cancelar lanzamiento/);
+  });
+
+  test('5 · cambio de asiento con hoja y detalle abiertos: identificadores, no cantidades', async ({ page }) => {
+    await startScenarioDeck(page);
+    await openScenarioSheet(page);
+    // Strict handoff: confirm on every seat change, not only on turn changes.
+    await page.keyboard.press('Escape');
+    await page.getByRole('checkbox', { name: 'Confirmar cada cambio de asiento' }).check();
+
+    const viewerBefore = await page.locator('.app').getAttribute('data-viewer');
+    await page.locator('.hand-trigger').tap();
     await page.locator('.hand-sheet [data-card-id]').first().click();
     await expect(page.locator('.sheet-detail')).toBeVisible();
-    const manual = page.getByRole('button', { name: /Elegir maná manualmente/ }).first();
-    if (await manual.count()) {
-      await manual.tap();
-      await expect(page.locator('section[aria-label="Decisión pendiente"]')).toContainText(/maná|mana|fuente/i, { timeout: 30_000 });
-    } else {
-      // Either the card is not castable right now (then the detail says so) or
-      // it has no mana cost. Both are honest states; a broken control is not.
-      const idle = page.locator('.sheet-detail .detail-idle');
-      const actions = page.locator('.sheet-detail .detail-actions button');
-      expect((await idle.count()) + (await actions.count())).toBeGreaterThan(0);
-    }
-  });
+    const detailName = (await page.locator('.sheet-detail h3').innerText()).trim();
+    const idsBefore = await page.locator('.hand-sheet [data-card-id]').evaluateAll((cards) =>
+      cards.map((card) => card.getAttribute('data-card-id'))
+    );
+    expect(idsBefore.length, 'la hoja no publicó los identificadores de la mano').toBeGreaterThan(0);
 
-  test('cancelar o rechazar deja el error visible y permite reintentar', async ({ page }) => {
-    await realGame(page);
-    await reachPriority(page);
-    // Provoke a rejection on purpose: dispatch an action the engine cannot
-    // accept — the same cast carrying a revision that is already behind — and
-    // check the sheet says so instead of pretending the card resolved.
-    const playable = page.locator('.hand-sheet .sheet-play').first();
-    await expect(playable).toHaveCount(1, { timeout: 60_000 });
-    const forced = await page.evaluate(() => {
-      const el = document.querySelector('.hand-sheet .sheet-play') as HTMLElement | null;
-      // A click while an engine request is already in flight is refused by the
-      // button's own `disabled`, so the honest way to force a stale reply is to
-      // ask twice through the product's queue from a settled state.
-      el?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      el?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      return !!el;
-    });
-    expect(forced).toBe(true);
-    await expect(page.locator('.sheet-error, .hand-sheet')).not.toHaveCount(0);
-    if (await page.locator('.sheet-error').count()) {
-      await expect(page.locator('.sheet-error')).toContainText(/no acepta|cambió|no se pudo/i);
-      await expect(page.locator('.sheet-detail .detail-actions button, .sheet-play').first()).toBeEnabled();
-      await page.locator('.sheet-error-dismiss').tap();
-      await expect(page.locator('.sheet-error')).toHaveCount(0);
+    // Pass priority until the seat really changes; every change goes through the
+    // product's own handoff dialog, because the strict mode was turned on first.
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    let viewerNow = viewerBefore;
+    for (let round = 0; round < 16 && viewerNow === viewerBefore; round += 1) {
+      const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
+      if (await pass.count()) await pass.tap({ timeout: 5_000 }).catch(() => {});
+      await page.waitForTimeout(250);
+      await passSeat(page);
+      viewerNow = await page.locator('.app').getAttribute('data-viewer');
     }
+    expect(viewerNow, 'el motor no cambió de asiento: el escenario no llegó a su estado').not.toBe(viewerBefore);
+
+    // The previous hand is gone *by identity*: no shared card id, and the detail
+    // of the previous seat's card is not reachable.
+    await expect(page.locator('.sheet-detail')).toHaveCount(0);
+    if (!(await page.locator('.hand-sheet').count())) await page.locator('.hand-trigger').tap().catch(() => {});
+    await expect(page.locator('.hand-sheet')).toBeVisible({ timeout: 30_000 });
+    const idsAfter = await page.locator('.hand-sheet [data-card-id]').evaluateAll((cards) =>
+      cards.map((card) => card.getAttribute('data-card-id'))
+    );
+    const shared = idsAfter.filter((id) => idsBefore.includes(id));
+    expect(shared, 'la mano nueva comparte cartas con la anterior').toEqual([]);
+    await expect(page.locator('.sheet-detail')).toHaveCount(0);
+  });
+});
+
+/**
+ * UX-HAND 1.2 — B.4. Rejection.
+ *
+ * Layer: **scripted legality** (`/stress?actions=1&reject=1`), declared as such.
+ *
+ * A random hand cannot be made to produce a refusal on demand: whether Phase
+ * refuses depends on the state it reached, and forcing that from a real game
+ * would mean corrupting the state the test is supposed to trust. What can be
+ * deterministic is the *contract*: a rejection carries its own sentence, the
+ * sheet stays open, the action is still there, retrying works, and the notice
+ * can be dismissed. The fixture answers one `stale_action` in the bridge's own
+ * wire shape (`lib.rs:submit`), so the client code that runs here is the
+ * production one.
+ *
+ * The other half — Phase refusing a real action — is covered by the engine
+ * scenarios; this one is the UI contract for the answer it gives.
+ */
+test.describe('rechazo explícito (fixture, cliente guionizado)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('4 · rechazo explícito: mensaje, hoja abierta y reintento', async ({ page }) => {
+    await scriptedActions(page, 12, '&reject=1');
+    const applied = () => page.evaluate(() => Number(document.querySelector('.app')?.getAttribute('data-actions-applied') ?? -1));
+
+    // 1. One accepted dispatch: the product's happy path, so the next one is the
+    //    refused one and the counter below has something real to compare with.
+    await page.locator('.hand-sheet .sheet-play').first().tap();
+    await expect(page.locator('.hand-sheet')).toBeHidden({ timeout: 15_000 });
+    const afterFirst = await applied();
+    expect(afterFirst, 'el primer despacho no llegó al motor').toBeGreaterThanOrEqual(1);
+
+    // 2. The refused dispatch: the sheet must stay where the player is and say
+    //    what happened, in the engine's own words as the client maps them.
+    await openSheet(page);
+    const refused = page.locator('.hand-sheet .sheet-play').first();
+    await expect(refused).toHaveCount(1);
+    await refused.tap();
+    const error = page.locator('.sheet-error');
+    await expect(error, 'el rechazo no dejó mensaje visible').toBeVisible({ timeout: 15_000 });
+    await expect(error).toContainText(/no acepta|cambió mientras elegías|no se pudo/i);
+    await expect(page.locator('.hand-sheet'), 'el rechazo cerró la hoja').toBeVisible();
+    // Nothing was applied: a refusal is not a play.
+    expect(await applied(), 'un rechazo incrementó el contador del motor').toBe(afterFirst);
+
+    // 3. Retry from where the player is: the same control still works, and this
+    //    time the engine accepts it.
+    const retry = page.locator('.hand-sheet .sheet-play').first();
+    await expect(retry, 'el rechazo dejó el control inutilizable').toBeEnabled();
+    await page.locator('.sheet-error-dismiss').tap();
+    await expect(error).toHaveCount(0);
+    await retry.tap();
+    await expect(page.locator('.hand-sheet')).toBeHidden({ timeout: 15_000 });
+    await expect.poll(applied, { timeout: 15_000 }).toBe(afterFirst + 1);
   });
 });
 

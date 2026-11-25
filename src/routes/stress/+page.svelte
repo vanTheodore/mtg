@@ -31,6 +31,14 @@
    * Real gameplay guarantees stay in the WASM suites.
    */
   const actionsMode = $state(initialParams.get('actions') === '1');
+  /** `?reject=1`: answer one stale dispatch so the sheet's rejection path runs. */
+  const rejectMode = initialParams.get('reject') === '1';
+  /**
+   * How many actions the scripted client applied. `Board` publishes the same
+   * attribute from its snapshot; this route has no Board, so it publishes the
+   * counter itself — the test must never read a number it invented.
+   */
+  let scriptedApplied = $state(0);
 
   onMount(() => {
     const params = new URLSearchParams(location.search);
@@ -57,12 +65,23 @@
     };
   }
 
+  /**
+   * Ability definitions exactly as Phase serializes them on a hand card
+   * (`GameObject.abilities`). `sheetActions` reads `ability_tag` and `cost` from
+   * here to label each activation, so the fixture publishes them: two different
+   * activations must never render as two identical "Activar" buttons.
+   */
+  const CYCLING = { kind: 'Activated', ability_tag: { type: 'Cycling' }, cost: { type: 'Composite', costs: [{ type: 'Mana', cost: { type: 'Cost', shards: [], generic: 2 } }, { type: 'Discard', count: { type: 'Fixed', value: 1 }, filter: null, random: false, self_ref: true }] } };
+  const TAP_ABILITY = { kind: 'Activated', ability_tag: null, cost: { type: 'Tap' } };
+
   const hand = $derived(Array.from({ length: handCount }, (_, i) => {
     if (i === 0) return card(1000 + i, { name: 'Forest', zone: 'Hand', card_types: { core_types: ['Land'] }, printed_ref: { oracle_id: 'oracle-forest', face_name: 'Forest' } });
     if (i === 1) return card(1000 + i, { name: 'Grizzly Bears', card_types: { core_types: ['Creature'], subtypes: ['Bear'] }, power: 2, toughness: 2, printed_ref: { oracle_id: 'oracle-bears', face_name: 'Grizzly Bears' } });
-    if (i === 2) return card(1000 + i, { name: 'Insectile Aberration', transformed: true, back_face: { name: 'Delver of Secrets' }, printed_ref: { oracle_id: 'oracle-delver', face_name: 'Insectile Aberration' }, card_types: { core_types: ['Creature'], subtypes: ['Insect'] }, power: 3, toughness: 2 });
-    if (i === 3) return card(1000 + i, { name: 'Lightning Bolt', mana_cost: '{R}', card_types: { core_types: ['Instant'] }, oracle_text: 'Lightning Bolt deals 3 damage to any target.' });
-    if (i === 4) return card(1000 + i, { name: 'Insectile Aberration', transformed: true, back_face: { name: 'Delver of Secrets' }, card_types: { core_types: ['Creature'], subtypes: ['Insect'] }, power: 3, toughness: 2 });
+    // Slot 2 publishes a cast plus TWO different activations; the abilities are
+    // the ones Phase serializes, so the two labels can differ.
+    if (i === 2) return card(1000 + i, { name: 'Reliquia de pruebas', card_types: { core_types: ['Artifact'] }, abilities: [CYCLING, TAP_ABILITY] });
+    if (i === 3) return card(1000 + i, { name: 'Giant Killer // Chop Down', mana_cost: '{W}', card_types: { core_types: ['Creature'] }, back_face: { name: 'Chop Down' }, oracle_text: 'Giant Killer // Chop Down' });
+    if (i === 4) return card(1000 + i, { name: 'Carta con ciclado', card_types: { core_types: ['Artifact'] }, abilities: [CYCLING, TAP_ABILITY] });
     return card(1000 + i, { name: `Hechizo ${i}`, mana_cost: '{2}{U}', oracle_text: 'Texto de prueba para verificar que la carta sigue siendo identificable sin ilustración.' });
   }));
 
@@ -91,9 +110,9 @@
    *
    *   0 Forest        PlayLand
    *   1 Grizzly Bears CastSpell
-   *   2 Insectile Aberration  CastSpell + ActivateAbility  (ambiguous on purpose)
-   *   3 Lightning Bolt CastSpell, two faces               (alternatives)
-   *   4 Forest        ActivateAbility outside a mana window (must stay visible)
+   *   2 Reliquia      CastSpell + two ActivateAbility       (ambiguous on purpose)
+   *   3 Giant Killer  CastSpell, two faces                  (alternatives)
+   *   4 Reliquia      ActivateAbility outside a mana window (must stay visible)
    *   5 any           nothing                             (idle card)
    */
   const scriptedLegal = $derived.by(() => {
@@ -106,14 +125,18 @@
       else if (slot === 1) byObject[String(id)] = [{ type: 'CastSpell', data: { object_id: id, card_id: object.card_id, targets: [] } } as GameAction];
       else if (slot === 2) byObject[String(id)] = [
         { type: 'CastSpell', data: { object_id: id, card_id: object.card_id, targets: [] } } as GameAction,
-        { type: 'ActivateAbility', data: { object_id: id, ability_index: 0, label: 'Transformar' } } as GameAction
+        // Two activations of the *same* card: the pair this fixture exists for.
+        // Phase publishes `ability_index` and the object publishes `abilities`,
+        // and that is all the sheet may use to tell them apart.
+        { type: 'ActivateAbility', data: { source_id: id, ability_index: 0 } } as GameAction,
+        { type: 'ActivateAbility', data: { source_id: id, ability_index: 1 } } as GameAction
       ];
       else if (slot === 3) byObject[String(id)] = [
         { type: 'CastSpell', data: { object_id: id, card_id: object.card_id, targets: [] } } as GameAction,
         { type: 'CastSpell', data: { object_id: id, card_id: object.card_id, targets: [], face: 'Adventure' } } as GameAction
       ];
       else if (slot === 4) byObject[String(id)] = [
-        { type: 'ActivateAbility', data: { object_id: id, ability_index: 0, label: 'Ciclar {2}' } } as GameAction
+        { type: 'ActivateAbility', data: { source_id: id, ability_index: 0 } } as GameAction
       ];
     }
     return byObject;
@@ -152,8 +175,28 @@
     session.status = 'ready';
     const client = (session as unknown as { client: EngineClient }).client;
     client.view = async () => snapshot();
-    client.action = async (_viewer, _action, _revision) => {
+    let received = 0;
+    client.action = async (_viewer, _action, _expectedRevision) => {
+      received += 1;
+      // UX-HAND 1.2 — rejection. The bridge answers a refused action with
+      // `{ ok: false, rejected: true, code: 'invalid_action', error }`
+      // (`crates/mtgexec…/lib.rs:submit`), and the sheet has to show that
+      // sentence, stay open and let the player retry. The fixture is a stub, so
+      // it cannot earn a real refusal; with `?reject=1` it answers the second
+      // action of the session that way, on purpose and only there. That is
+      // declared in the test: this proves the *presentation* of a rejection with
+      // the production client code, not a rule.
+      if (rejectMode && received === 2) {
+        return {
+          ok: false,
+          rejected: true,
+          code: 'invalid_action',
+          error: 'La acción no es legal en este estado.',
+          revision: revision - 1
+        } as unknown as EngineSnapshot;
+      }
       revision += 1;
+      scriptedApplied = revision - 1;
       session.snapshot = snapshot();
       return snapshot();
     };
@@ -166,7 +209,7 @@
 
 <svelte:head><title>Mesa · pruebas de visibilidad</title></svelte:head>
 
-<div class="stress app" data-board-style={session.boardStyle} style="--stress-card-w: {cardWidth}px; --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-testid="stress-page">
+<div class="stress app" data-board-style={session.boardStyle} style="--stress-card-w: {cardWidth}px; --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-testid="stress-page" data-actions-applied={scriptedApplied}>
   <header>
     <h1>Pruebas de visibilidad</h1>
     <p>Fixture de interfaz determinista. No ejecuta reglas; la partida real está en <a href="/">/</a>.</p>
