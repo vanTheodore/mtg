@@ -225,9 +225,13 @@ traducción. Lo que falta se nombra como falta.
 La UI E2E ya no importa mazos ni espera robos. El ejecutable aislado
 `e2e_scenarios` prepara estados específicos con Phase `GameScenario` y cartas
 reales de `CardDatabase`; serializa esos estados como fixtures fuera del producto.
-El build de navegador usa un WASM de E2E con la operación de restauración
-habilitada por feature. El WASM de producción no contiene esa operación. Cada
-aserción sigue observando el motor real: `data-player-id` / `data-life`,
+Sólo ese ejecutable nativo requiere `e2e-scenario-generator`, que habilita
+`engine/test-support`; ninguno de los WASM activa esa feature. CI publica por
+separado `mtg-engine-wasm` (producción), `mtg-engine-wasm-e2e` (puente con
+`e2e-scenarios`) y `e2e-scenario-fixtures` (estados serializados). La operación
+de restauración se incluye únicamente en el WASM E2E; CI ejecuta además el WASM
+de producción y exige que op 5 responda `unknown operation`. Cada aserción
+sigue observando el motor real: `data-player-id` / `data-life`,
 `data-actions-applied`, los `data-card-id` y decisiones publicadas.
 
 | # | Escenario | Capa | Qué se exige |
