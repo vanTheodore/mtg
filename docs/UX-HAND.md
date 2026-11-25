@@ -347,3 +347,16 @@ lo delató, y por eso el mensaje lleva las ventanas recorridas.
 `DecisionPanel`), y el arnés lee **el paso** para decidir si está en una fase
 principal. Al descarte se le responde con su propio prompt (`[data-discard]`),
 marcando exactamente el número que Phase pide y confirmando: no se esquiva.
+
+### Séptima corrección: fase propia, no fase ajena
+
+La corrida `45681275366` bajó de siete fallos a tres, y los tres eran la misma
+aserción: la hoja no publicaba ninguna carta. El arnés aceptaba **cualquier** fase
+principal, incluida la del rival, donde este asiento no tiene prioridad ni una
+carta legal. Ahora exige que la fase principal sea **la propia**, leyendo en el
+panel «Turno N · fase · Jugador M» quién tiene la prioridad; el mensaje de fallo
+distingue `(ajeno)`.
+
+La guarda de «mano vacía no es un escenario» también estaba sobreespecificada:
+pedía un control jugable concreto. Pide cartas visibles, que es lo que de verdad
+significa tener mano, y deja que cada escenario exija **su** carta.

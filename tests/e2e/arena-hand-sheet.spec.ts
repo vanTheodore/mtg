@@ -456,15 +456,21 @@ async function waitForMain(page: Page, budget = 90_000) {
   const state = () =>
     page.evaluate(() => {
       const app = document.querySelector('.app');
+      const line = document.querySelector('section[aria-label="Decisión pendiente"] .phase')?.textContent ?? '';
+      // "Turno 3 · Fase principal · Jugador 2": the panel names who holds
+      // priority, so "a main phase" can mean *our* main phase.
       return {
         waiting: app?.getAttribute('data-waiting') ?? 'desconocida',
-        phase: app?.getAttribute('data-phase') ?? 'desconocida'
+        phase: app?.getAttribute('data-phase') ?? 'desconocida',
+        mine: /Jugador\s+(\d+)/.exec(line)?.[1] === String(Number(app?.getAttribute('data-viewer') ?? -1) + 1)
       };
     });
   while (Date.now() < deadline) {
     const now = await state();
-    if (MAIN_PHASES.includes(now.phase)) return now.phase;
-    const label = `${now.phase}/${now.waiting}`;
+    // Our own main phase: in the opponent's we hold no priority and no card of
+    // ours is legal, so returning there would only make the caller spin.
+    if (MAIN_PHASES.includes(now.phase) && now.mine) return now.phase;
+    const label = `${now.phase}/${now.waiting}${now.mine ? '' : ' (ajeno)'}`;
     if (!seen.includes(label)) seen.push(label);
     await passSeat(page);
     // Answer what the panel asks: keep the hand at mulligan, pitch one card if
@@ -506,9 +512,10 @@ async function openScenarioSheet(page: Page) {
   await expect(trigger).toBeVisible({ timeout: 60_000 });
   if (!(await page.locator('.hand-sheet').count())) await trigger.tap();
   await expect(page.locator('.hand-sheet')).toBeVisible();
-  // An empty hand is not a scenario: the sheet must publish a control.
+  // An empty hand is not a scenario: the sheet must publish cards. Which control
+  // each one gets is Phase's business — the scenario asserts its own card.
   await expect
-    .poll(() => page.locator('.hand-sheet .sheet-play, .hand-sheet .sheet-choose').count(), { timeout: 30_000 })
+    .poll(() => page.locator('.hand-sheet .sheet-cell').count(), { timeout: 30_000 })
     .toBeGreaterThan(0);
   // Settled: focus is inside the sheet, so a keyboard player is not stranded
   // outside every interactive region when the assertions start.
