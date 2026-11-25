@@ -146,7 +146,13 @@ jobs:
     name: Chromium integration and visual interaction
     needs: [wasm]
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # 40 minutes was measured when the suite played a handful of random hands.
+    # UX-HAND 1.2 added deterministic scenarios that each start a real game
+    # (deck import + catalog packs + WASM) and then play it to a specific state,
+    # so the same suite now runs several full games. The limit is headroom for
+    # the work, not a licence to slow down: a single test is still bounded by
+    # its own `test.setTimeout`.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

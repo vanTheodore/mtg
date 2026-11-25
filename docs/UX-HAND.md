@@ -305,3 +305,14 @@ iniciaba una segunda partida **sin limpiar el snapshot anterior**, así que hast
 que llegaba la respuesta el tablero mezclaba dos partidas. Ahora llama a
 `session.prepareStart()` primero. No se nota en una sola partida por página; sí
 en cuanto una suite juega dos.
+
+### Cuarta corrección: el trabajo, no la prueba
+
+La corrida `45583311665` no falló ninguna prueba: el trabajo de Chromium agotó su
+límite de **40 minutos** (`The job has exceeded the maximum execution time of
+40m0s`) mientras ejecutaba la suite. El límite se midió cuando la suite jugaba
+unas pocas manos aleatorias; 1.2 añade escenarios que **cada uno arranca una
+partida real** (importar mazo, descargar packs, compilar WASM) y la juega hasta un
+estado concreto. El trabajo pasa a 90 minutos, con el motivo escrito al lado. El
+límite de cada prueba sigue siendo suyo (420 s) y no cambia: es margen para el
+trabajo, no permiso para ir lento.
