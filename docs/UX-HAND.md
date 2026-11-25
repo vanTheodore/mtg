@@ -331,3 +331,19 @@ prueba lo pide (`waitForMain`: lee `data-waiting`, pulsa «Conservar mano» o
 «Pasar», y exige llegar a `PreCombatMain`/`PostCombatMain`). Nada se mueve a
 espaldas de la prueba, y cada escenario sigue fallando con el nombre de las
 ventanas que recorrió si no llega a su estado.
+
+### Sexta corrección: `data-waiting` no es la fase
+
+La corrida `473c598` dejó **siete** escenarios fallando en el mismo punto y con la
+misma pista: `MulliganDecision, Priority, DiscardToHandSize`. La causa era del
+arnés, no del motor: `data-waiting` publica el **tipo de decisión**, y en toda
+ventana de prioridad —mantenimiento y fase principal por igual— vale `Priority`.
+La prueba, que buscaba «fase principal» en ese atributo, no la reconocía nunca:
+pasaba prioridad durante todo el turno, llegaba al descarte de mano por exceso de
+cartas y volvía a empezar. El mensaje que escribí para diagnosticarlo fue el que
+lo delató, y por eso el mensaje lleva las ventanas recorridas.
+
+`Board.svelte` publica ahora también `data-phase` (el paso que ya renderizaba
+`DecisionPanel`), y el arnés lee **el paso** para decidir si está en una fase
+principal. Al descarte se le responde con su propio prompt (`[data-discard]`),
+marcando exactamente el número que Phase pide y confirmando: no se esquiva.

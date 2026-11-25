@@ -436,28 +436,61 @@ async function startScenarioDeck(page: Page) {
 /**
  * Advance to a main phase, deterministically.
  *
- * The suite used to leave auto-pass on and race it: while a test looked for a
- * card's control, the engine was already passing the window and the control it
- * had just seen disappeared. Auto-pass is off here and every window is answered
- * on purpose, so nothing moves behind the test's back.
+ * `data-waiting` is the *decision* the engine is asking for, not the step: it
+ * reads `Priority` in every priority window of the turn, upkeep and main phase
+ * alike. A CI run of 473c598 proved the consequence — the loop never recognised
+ * a main phase, passed priority through the whole turn, hit `DiscardToHandSize`
+ * and repeated. The step is published too (`data-phase`), and it is the step the
+ * assertion reads.
  *
- * Cheap on purpose: it reads `data-waiting` from the board and presses the
- * panel's own buttons. It does not open the hand sheet, so retrying costs
- * nothing. Fails — never skips — naming the windows it went through.
+ * Auto-pass is off for these scenarios, so every window waits for us; nothing
+ * moves behind the test's back. Fails — never skips — naming the windows it
+ * went through.
  */
+const MAIN_PHASES = ['PreCombatMain', 'PostCombatMain'];
+
 async function waitForMain(page: Page, budget = 90_000) {
   const deadline = Date.now() + budget;
   const seen: string[] = [];
   const panel = page.locator('section[aria-label="Decisión pendiente"]');
+  const state = () =>
+    page.evaluate(() => {
+      const app = document.querySelector('.app');
+      return {
+        waiting: app?.getAttribute('data-waiting') ?? 'desconocida',
+        phase: app?.getAttribute('data-phase') ?? 'desconocida'
+      };
+    });
   while (Date.now() < deadline) {
+    const now = await state();
+    if (MAIN_PHASES.includes(now.phase)) return now.phase;
+    const label = `${now.phase}/${now.waiting}`;
+    if (!seen.includes(label)) seen.push(label);
     await passSeat(page);
-    const waiting = (await page.locator('.app').getAttribute('data-waiting')) ?? 'desconocida';
-    if (waiting === 'PreCombatMain' || waiting === 'PostCombatMain') return waiting;
-    if (!seen.includes(waiting)) seen.push(waiting);
-    const keep = panel.locator('button').filter({ hasText: 'Conservar mano' }).first();
+    // Answer what the panel asks: keep the hand at mulligan, pitch one card if
+    // the cleanup asks for it, otherwise pass priority. Each is a real decision
+    // the engine published, not a shortcut past it.
+    const keep = panel.locator('button').filter({ hasText: /Conservar|^Mantener/ }).or(
+      page.locator('button[aria-label*="Conservar"]')
+    ).first();
     const pass = panel.locator('button').filter({ hasText: /^Pasar/ }).first();
-    if (await keep.count()) await keep.tap({ timeout: 5_000 }).catch(() => {});
-    else if (await pass.count()) await pass.tap({ timeout: 5_000 }).catch(() => {});
+    if (await keep.count()) {
+      await keep.tap({ timeout: 5_000 }).catch(() => {});
+    } else if (now.waiting === 'DiscardToHandSize') {
+      // CR 514.1 asks for an exact number of cards: mark that many, then confirm
+      // with the prompt's own button — the count is the engine's, not ours.
+      const prompt = page.locator('[data-discard="cleanup"]');
+      if (await prompt.count()) {
+        const cards = prompt.locator('li, button');
+        const needed = (await prompt.innerText()).match(/\((\d+)\/(\d+)\)/);
+        const count = needed ? Number(needed[2]) : 1;
+        for (let i = 0; i < count; i += 1) await cards.nth(i).tap({ timeout: 5_000 }).catch(() => {});
+        const confirm = prompt.locator('button.primary').first();
+        if (await confirm.count()) await confirm.tap({ timeout: 5_000 }).catch(() => {});
+      }
+    } else if (await pass.count()) {
+      await pass.tap({ timeout: 5_000 }).catch(() => {});
+    }
     await page.waitForTimeout(120);
   }
   throw new Error(`no se llegó a una fase principal (ventanas vistas: ${seen.join(', ') || 'ninguna'})`);
@@ -493,7 +526,7 @@ async function openScenarioSheet(page: Page) {
  * did not reach its state, and that is a failure, never a skip.
  */
 async function playCard(page: Page, name: string) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
     await openScenarioSheet(page);
     const cell = page.locator('.hand-sheet .sheet-cell').filter({ hasText: name }).first();
     await expect(cell, `el mazo determinista no ofreció ${name} en la mano`).toHaveCount(1, { timeout: 30_000 });
@@ -593,7 +626,7 @@ test.describe('escenarios deterministas (mazo propio, motor real)', () => {
     const bolt = boltCell.locator('.sheet-play');
     // Opening the sheet is not the same as casting: the control is only there in
     // a window where the bolt is legal, and that window is entered on purpose.
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
       await openScenarioSheet(page);
       if (await bolt.count()) break;
       await page.keyboard.press('Escape');
@@ -621,7 +654,7 @@ test.describe('escenarios deterministas (mazo propio, motor real)', () => {
     await playCard(page, 'Mountain');
     const panel = page.locator('section[aria-label="Decisión pendiente"]');
     const boltCell = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
       await openScenarioSheet(page);
       if (await boltCell.locator('.sheet-play').count()) break;
       await page.keyboard.press('Escape');
