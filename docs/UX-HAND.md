@@ -236,9 +236,9 @@ sigue observando el motor real: `data-player-id` / `data-life`,
 
 | # | Escenario | Capa | Qué se exige |
 |---|---|---|---|
-| 1 | lanzamiento con objetivo | motor real | el motor pide objetivo, se elige al Jugador 2 y su vida baja **exactamente 3** |
-| 2 | pago manual | motor real + `ManaPayment` | exige el control manual, abre `ManaPayment`, gira la Mountain, produce rojo, confirma y completa el lanzamiento; no hay rama automática |
-| 3 | cancelación real | motor real | «Cancelar lanzamiento» devuelve la carta a la mano, deja el mismo número de cartas y **no** aplica el lanzamiento |
+| 1 | lanzamiento con objetivo | motor real | el motor pide objetivo, se elige al Jugador 2; con auto-paso desactivado, ambos jugadores pasan la prioridad y la vida del objetivo baja **exactamente 3** al resolver la pila |
+| 2 | pago manual | motor real + `ManaPayment` | respeta CR 601.2c antes de CR 601.2h: elige primero objetivo, entra a `ManaPayment`, toca la Mountain real (que produce maná mediante `session.selectObject`), verifica fuente girada y reserva roja, confirma y comprueba que el coste se pagó y se lanzó el hechizo; no hay control redundante ni rama automática |
+| 3 | cancelación real | motor real | elige primero el objetivo, entra a `ManaPayment` y «Cancelar lanzamiento» devuelve la carta a la mano, deja el mismo número de cartas y **no** aplica el lanzamiento |
 | 4 | rechazo explícito | fixture guionizado (`?reject=1`) | mensaje visible, hoja abierta, contador **sin** mover, reintento que sí se acepta |
 | 5 | cambio de asiento | motor real, handoff estricto | con hoja y detalle abiertos se envía un pase real; ambos siguen abiertos durante la respuesta en vuelo, el cambio al Jugador 2 activa el handoff y las manos no comparten ningún `data-card-id` |
 

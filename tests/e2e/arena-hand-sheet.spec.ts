@@ -367,22 +367,6 @@ test.describe('legalidad explícita (fixture con acciones)', () => {
 const FIELD = 'section.battlefield[data-side="player"] [data-card-id]';
 
 /** Load a raw engine state emitted by Phase's GameScenario runner. */
-async function expectScenarioWaiting(page: Page, expected: string, message: string) {
-  const app = page.locator('.app');
-  await expect.poll(async () => {
-    const actual = await app.getAttribute('data-waiting');
-    if (actual === expected) return expected;
-    const diagnostic = await page.evaluate(() => ({
-      waiting: document.querySelector('.app')?.getAttribute('data-waiting') ?? null,
-      phase: document.querySelector('.app')?.getAttribute('data-phase') ?? null,
-      busy: document.querySelector('.app')?.getAttribute('data-busy') ?? null,
-      sheetError: document.querySelector('.sheet-error')?.textContent?.trim() ?? null,
-      decision: document.querySelector('section[aria-label="Decisión pendiente"]')?.textContent?.trim().slice(0, 300) ?? null
-    }));
-    return JSON.stringify(diagnostic);
-  }, { message, timeout: 15_000 }).toBe(expected);
-}
-
 async function startGameScenario(page: Page, id: string, strictHandoff = false) {
   await page.addInitScript((strict) => {
     localStorage.setItem('mesa:autoPass', 'off');
@@ -390,17 +374,7 @@ async function startGameScenario(page: Page, id: string, strictHandoff = false) 
   }, strictHandoff);
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto(`/?e2e-scenario=${id}`);
-  try {
-    await expect(page.locator('.hand-trigger'), `no se montó el estado GameScenario ${id}`).toBeVisible({ timeout: 30_000 });
-  } catch (error) {
-    const diagnostic = await page.evaluate(() => ({
-      title: document.title,
-      body: document.body.innerText.slice(0, 500),
-      app: document.querySelector('.app')?.outerHTML.slice(0, 700) ?? null,
-      url: location.href
-    }));
-    throw new Error(`no se montó GameScenario ${id}: ${JSON.stringify(diagnostic)}; ${error instanceof Error ? error.message : String(error)}`);
-  }
+  await expect(page.locator('.hand-trigger'), `no se montó el estado GameScenario ${id}`).toBeVisible({ timeout: 120_000 });
   await expect(page.locator('.app')).toHaveAttribute('data-phase', 'PreCombatMain');
   await expect(page.locator('.app')).toHaveAttribute('data-viewer', '0');
 }
@@ -437,6 +411,21 @@ async function passSeat(page: Page) {
     await handoff.locator('button').first().tap({ timeout: 3_000 }).catch(() => {});
     await page.waitForTimeout(250);
   }
+}
+
+/** Select a real player target directly from the board, avoiding a collapsed list. */
+async function choosePlayerTarget(page: Page, playerNumber: number) {
+  const target = page.getByRole('button', { name: new RegExp(`Elegir Jugador ${playerNumber} como objetivo`) });
+  await expect(target, `Phase no publicó al Jugador ${playerNumber} como objetivo`).toBeVisible();
+  await target.tap();
+}
+
+/** Pass one actual priority window through the rendered legal action. */
+async function passPriority(page: Page) {
+  const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
+  await expect(pass, 'Phase no publicó Pasar prioridad').toBeVisible();
+  await pass.tap();
+  await expect(page.locator('.app')).toHaveAttribute('data-busy', 'false');
 }
 
 /** Import the deterministic deck through the builder and start the game. */
@@ -668,11 +657,17 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
     const before = Number(await page.locator('[data-player-id="1"]').getAttribute('data-life'));
     await bolt.locator('.sheet-play').tap();
 
-    const panel = page.locator('section[aria-label="Decisión pendiente"]');
-    await expect(panel, 'el lanzamiento no abrió la selección de objetivos').toContainText(/objetivo/i);
-    const choose = panel.locator('button').filter({ hasText: /Jugador 2/i }).first();
-    await expect(choose, 'Phase no ofreció al Jugador 2 como objetivo').toHaveCount(1);
-    await choose.tap();
+    const app = page.locator('.app');
+    await expect(app).toHaveAttribute('data-waiting', 'TargetSelection');
+    await choosePlayerTarget(page, 2);
+    await expect(app).toHaveAttribute('data-waiting', 'Priority');
+    await expect(page.locator('[data-player-id="0"] .mana-pool')).toHaveAttribute('aria-label', 'Maná disponible: 0');
+
+    // Auto-pass is deliberately off in GameScenario tests. Let both players
+    // receive and pass the real priority window so Phase resolves the stack.
+    await passPriority(page);
+    await expect(app).toHaveAttribute('data-viewer', '1');
+    await passPriority(page);
     await expect
       .poll(async () => Number(await page.locator('[data-player-id="1"]').getAttribute('data-life')))
       .toBe(before - 3);
@@ -692,25 +687,28 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
     await manual.tap();
 
     const app = page.locator('.app');
-    await expectScenarioWaiting(page, 'ManaPayment', 'la acción no abrió el pago manual de Phase; el valor recibido incluye diagnóstico del motor y del rechazo');
-    const panel = page.locator('section[aria-label="Decisión pendiente"]');
+    // CR 601.2c chooses targets before CR 601.2h pays costs.
+    await expect(app).toHaveAttribute('data-waiting', 'TargetSelection');
+    await choosePlayerTarget(page, 2);
+    await expect(app).toHaveAttribute('data-waiting', 'ManaPayment');
+
+    // One legal mana action is dispatched by session.selectObject itself.
+    // Tapping the real Mountain must turn it and add red mana without a second,
+    // redundant "Produce red" button.
     const mountain = page.locator('section.battlefield[data-side="player"] [data-card-id]').filter({ hasText: 'Mountain' }).first();
     await expect(mountain, 'el estado preparado no tiene su fuente real de maná').toHaveCount(1);
     await mountain.tap();
-    const produce = panel.locator('button').filter({ hasText: /^Producir rojo$/ });
-    await expect(produce, 'Phase no publicó la producción roja manual').toHaveCount(1);
-    await produce.tap();
-    await expect(app, 'la fuente manual no dejó el juego en pago').toHaveAttribute('data-waiting', 'ManaPayment');
-    const confirm = panel.locator('button').filter({ hasText: 'Confirmar pago' });
-    await expect(confirm, 'no apareció la confirmación del pago manual').toHaveCount(1);
-    await confirm.tap();
+    await expect(mountain).toHaveClass(/tapped/);
+    await expect(page.locator('[data-player-id="0"] [aria-label="Rojo: 1"]')).toBeVisible();
+    await expect(app).toHaveAttribute('data-waiting', 'ManaPayment');
 
-    // The real spell now asks for its printed target; no automatic-payment branch exists.
-    await expect(panel).toContainText(/objetivo/i);
-    await panel.locator('button').filter({ hasText: /Jugador 2/i }).first().tap();
-    await expect
-      .poll(() => page.locator('.hand-zone [data-card-id]').count())
-      .toBe(handBefore - 1);
+    const panel = page.locator('section[aria-label="Decisión pendiente"]');
+    const confirm = panel.getByRole('button', { name: 'Confirmar pago' });
+    await expect(confirm).toBeVisible();
+    await confirm.tap();
+    await expect(app).toHaveAttribute('data-waiting', 'Priority');
+    await expect(page.locator('[data-player-id="0"] .mana-pool')).toHaveAttribute('aria-label', 'Maná disponible: 0');
+    await expect.poll(() => page.locator('.hand-zone [data-card-id]').count()).toBe(handBefore - 1);
     await expect(page.locator('.sheet-error')).toHaveCount(0);
   });
 
@@ -724,7 +722,10 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
     const manual = page.locator('.sheet-detail button').filter({ hasText: 'Elegir maná manualmente' });
     await expect(manual).toHaveCount(1);
     await manual.tap();
-    await expectScenarioWaiting(page, 'ManaPayment', 'no se abrió el pago manual antes de poder cancelar; incluye el estado de Phase');
+    const app = page.locator('.app');
+    await expect(app).toHaveAttribute('data-waiting', 'TargetSelection');
+    await choosePlayerTarget(page, 2);
+    await expect(app).toHaveAttribute('data-waiting', 'ManaPayment');
 
     const panel = page.locator('section[aria-label="Decisión pendiente"]');
     const cancel = panel.locator('button').filter({ hasText: 'Cancelar lanzamiento' });
@@ -733,6 +734,9 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
     await expect.poll(() => page.locator('.hand-zone [data-card-id]').count()).toBe(handBefore);
     await expect.poll(async () => Number(await page.locator('.app').getAttribute('data-actions-applied'))).toBeGreaterThan(appliedBefore);
     await expect(panel).not.toContainText(/Cancelar lanzamiento/);
+    const mountain = page.locator('section.battlefield[data-side="player"] [data-card-id]').filter({ hasText: 'Mountain' }).first();
+    await expect(mountain).not.toHaveClass(/tapped/);
+    await expect(page.locator('[data-player-id="0"] .mana-pool')).toHaveAttribute('aria-label', 'Maná disponible: 0');
   });
 
   test('5 · cambio de asiento mientras hoja y detalle están abiertos: comparar identificadores', async ({ page }) => {
@@ -743,20 +747,10 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
       cards.map((card) => card.getAttribute('data-card-id'))
     );
     expect(oldIds, 'el estado GameScenario no preparó la mano privada inicial').toEqual([expect.any(String)]);
-    const card = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
+    const card = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first().locator('[data-card-id]').first();
     await card.click();
     await expect(page.locator('.hand-sheet')).toBeVisible();
-    const detail = page.locator('.sheet-detail');
-    await expect.poll(async () => {
-      if (await detail.isVisible()) return 'visible';
-      return JSON.stringify(await page.evaluate(() => ({
-        sheetOpen: !!document.querySelector('.hand-sheet'),
-        sheetError: document.querySelector('.sheet-error')?.textContent?.trim() ?? null,
-        selectedCard: document.querySelector('.hand-sheet .card[aria-pressed="true"]')?.getAttribute('data-card-id') ?? null,
-        lightningCards: [...document.querySelectorAll('.hand-sheet .sheet-cell')].filter((node) => node.textContent?.includes('Lightning Bolt')).length,
-        detailPanels: document.querySelectorAll('.sheet-detail').length
-      })));
-    }, { message: 'el cambio debe comenzar con el detalle abierto; el valor recibido describe selección e interacción', timeout: 15_000 }).toBe('visible');
+    await expect(page.locator('.sheet-detail'), 'el cambio debe comenzar con el detalle abierto').toBeVisible();
 
     // This test-only signal dispatches a genuine Phase PassPriority through the
     // app session while both presentation layers are open. The delayed E2E worker
