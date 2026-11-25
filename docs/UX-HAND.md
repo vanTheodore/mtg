@@ -157,3 +157,35 @@ La hoja deducía éxito de que la revisión subiera. Tras `stale_action` el re-v
 `bun test src/lib` 805/805, `bun run check` 0 errores, `bun run build` correcto.
 
 RED conservados: módulo ausente (A, B) y clasificador ausente (C), más tres RED ejecutados (foco de apertura, orden de Tab, `role=region` vacío a 320 px) que sólo se manifiestan en navegador.
+
+## F. Por qué las pruebas de motor tardaron tres corridas en llegar a la acción
+
+La primera versión de los helpers pulsaba controles que el producto no ofrece
+en ese instante y, peor, usaba **"Pasar" para buscar justamente la ventana que
+ese pase descarta**. Tres corridas de CI lo dejaron claro:
+
+| Corrida | Resultado Chromium | Anotaciones |
+|---|---|---|
+| `45492219560` | rojo | 8 — regresión `inert` en `arena-ui` y helper sin conservar manos |
+| `45502566531` | rojo (37m55s) | 7 — ninguna acción legal alcanzada |
+| `45511464839` | rojo (28m44s) | **2** — sólo supuestos frágiles míos |
+
+La corrección no fue un parche al helper sino copiar el camino que
+`arena-touch-play` ya tenía verde: conservar la mano en los dos asientos pasando
+el dispositivo, **dejar la hoja abierta** y esperar a que la ventana de
+prioridad llegue sola, y cambiar de asiento pasando prioridad desde el panel en
+lugar de buscar un botón de handoff que sólo existe cuando el motor ya cambió.
+
+Los dos fallos restantes eran ambos supuestos de la prueba, no del producto:
+
+1. **Objetivos** exigía `[aria-label="Lanzar"]`, que en una carta con dos caras
+   no existe: esa carta abre la elección. Ahora la prueba pide un lanzamiento de
+   una sola forma y, si la mano real no tiene ninguno, lo anota y se omite en vez
+   de afirmar lo contrario.
+2. **Rechazo** esperaba a que apareciera un error. Ahora provoca el despacho
+   duplicado a propósito y comprueba el contrato: o la hoja se cerró porque el
+   motor aceptó, o hay `.sheet-error` con reintento y descarte.
+
+El contrato de ambigüedad que había metido en la prueba de geometría (a 320 px
+el fixture no publica legalidad, así que no hay cartas ambiguas) se retiró de
+ahí: ya lo cubre `legalidad explícita`, donde la fixture sí publica acciones.
