@@ -278,3 +278,13 @@ La corrida `45558201575` falló por dos motivos, y los dos son míos:
 Ese segundo punto es exactamente la clase de defecto que la sección C existe para
 no dejar pasar en silencio: sin el resumen del trabajo, el job habría quedado en
 rojo con siete anotaciones idénticas y sin decir en qué ventana se atascó.
+
+### Segunda corrección: el auto-paso no se toca
+
+La corrida `45566458516` dejó tres fallos con el mismo mensaje y una pista que
+vale más que el fallo: *«ventanas vistas: Priority ×14»*. Desactivar el
+auto-paso no congela el motor, pero sí impide que avance solo por las ventanas
+en las que un jugador no tiene nada que hacer, y el juego se quedaba en
+`Priority` para siempre. El camino que sí funciona en CI (`arena-touch-play`) no
+lo desactiva. Los escenarios ahora usan la misma rutina que ese camino —responder
+lo que el panel pida— y sólo retiran la hoja para pasar prioridad.

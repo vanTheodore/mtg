@@ -405,8 +405,6 @@ async function startScenarioDeck(page: Page) {
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Mesa', exact: true })).toBeVisible();
-  // Auto-pass would answer the priority window these scenarios exist to act in.
-  await page.getByRole('checkbox', { name: 'Auto-pasar ventanas sin acciones' }).uncheck();
   await page.getByRole('button', { name: 'Mis mazos' }).click();
   await page.getByRole('button', { name: 'Importar lista' }).click();
   await page.getByLabel(/Pega una lista/).fill(SCENARIO_DECK);
@@ -429,26 +427,39 @@ async function startScenarioDeck(page: Page) {
 }
 
 /**
- * Reach the state every scenario needs: a priority window in which the hand
- * has something legal, with the sheet open on it.
+ * Answer whatever the panel is asking, the way a person would, and report
+ * whether the engine moved. Auto-pass stays on: the engine advances through the
+ * windows where a person has nothing to do, which is the path `arena-touch-play`
+ * proves in CI. Turning it off pinned the game in `Priority` forever, which is
+ * what a previous run measured (fourteen "Priority" windows, nothing playable).
+ */
+async function advance(page: Page): Promise<boolean> {
+  await passSeat(page);
+  const panel = page.locator('section[aria-label="Decisión pendiente"]');
+  const applied = () => page.evaluate(() => Number(document.querySelector('.app')?.getAttribute('data-actions-applied') ?? -1));
+  for (const pattern of [/Conservar mano/, /Confirmar pago/, /^No atacar/, /^No bloquear/, /^Pasar/]) {
+    const button = panel.locator('button').filter({ hasText: pattern }).first();
+    if (!(await button.count())) continue;
+    const before = await applied();
+    await button.tap({ timeout: 5_000 }).catch(() => {});
+    await expect.poll(applied, { timeout: 15_000 }).toBeGreaterThan(before).catch(() => {});
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Reach the state every scenario needs: a window in which the hand has something
+ * legal, with the sheet open on it.
  *
- * It is not enough to open the sheet: during the upkeep a deck with no mana in
- * play legitimately has *nothing* castable, and demanding a control there would
- * make the test depend on which step the engine happened to stop in. So the
- * helper advances the game — closing the sheet, passing priority, answering the
- * seat dialog and reopening — until a control appears. If it never does, it
- * fails with the window it was stuck in: that is a real failure, never a skip.
+ * Opening the sheet is not reaching the state: during the upkeep a deck with no
+ * mana in play legitimately has nothing castable. The helper advances the game
+ * and reopens until a control appears; if it never does, it fails naming the
+ * windows it saw — a real failure, never a skip.
  */
 async function openScenarioSheet(page: Page) {
-  for (let round = 0; round < 6; round += 1) {
-    await passSeat(page);
-    const keep = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: 'Conservar mano' }).first();
-    if (!(await keep.count())) break;
-    await keep.tap({ timeout: 5_000 });
-    await page.waitForTimeout(200);
-  }
   const windows: string[] = [];
-  for (let attempt = 0; attempt < 14; attempt += 1) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     await passSeat(page);
     const trigger = page.locator('.hand-trigger');
     await expect(trigger).toBeVisible({ timeout: 60_000 });
@@ -463,31 +474,44 @@ async function openScenarioSheet(page: Page) {
         .toBe(true);
       return;
     }
-    // Nothing legal in this window: record it, leave the sheet, pass priority.
-    windows.push(await page.locator('.app').getAttribute('data-waiting').catch(() => 'desconocida') ?? 'desconocida');
+    // Nothing legal here: record the window, leave the sheet and move the game.
+    const waiting = (await page.locator('.app').getAttribute('data-waiting').catch(() => null)) ?? 'desconocida';
+    windows.push(waiting);
     await page.keyboard.press('Escape');
-    const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
-    if (await pass.count()) await pass.tap({ timeout: 5_000 }).catch(() => {});
-    await page.waitForTimeout(200);
+    const moved = await advance(page);
+    if (!moved) await page.waitForTimeout(400);
   }
-  throw new Error(`ninguna ventana de prioridad ofreció una acción legal en la mano (ventanas vistas: ${windows.join(', ') || 'ninguna'})`);
+  throw new Error(`ninguna ventana ofreció una acción legal en la mano (ventanas vistas: ${windows.join(', ') || 'ninguna'})`);
 }
 
 /**
  * Play one named card from the sheet, the way a player does: open the hand,
  * find the card by its published name, press its own action.
  *
- * It throws when the card is not playable — a scenario whose card never became
- * legal did not reach its state, and that is a failure, never a skip.
+ * It advances the game until *that card* is playable, because a land is only
+ * legal in a main phase with an empty stack. It throws when the card never
+ * becomes playable: a scenario whose precondition never arrived did not reach
+ * its state, and that is a failure, never a skip.
  */
 async function playCard(page: Page, name: string) {
-  await openScenarioSheet(page);
-  const cell = page.locator('.hand-sheet .sheet-cell').filter({ hasText: name }).first();
-  await expect(cell, `el mazo determinista no ofreció ${name} en la mano`).toHaveCount(1, { timeout: 30_000 });
-  const play = cell.locator('.sheet-play');
-  await expect(play, `${name} está en la mano pero no es jugable`).toHaveCount(1);
-  await play.tap();
-  await expect(page.locator('.hand-sheet')).toBeHidden({ timeout: 30_000 });
+  const windows: string[] = [];
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await openScenarioSheet(page);
+    const cell = page.locator('.hand-sheet .sheet-cell').filter({ hasText: name }).first();
+    await expect(cell, `el mazo determinista no ofreció ${name} en la mano`).toHaveCount(1, { timeout: 30_000 });
+    const play = cell.locator('.sheet-play');
+    if (await play.count()) {
+      await play.tap();
+      await expect(page.locator('.hand-sheet')).toBeHidden({ timeout: 30_000 });
+      return;
+    }
+    // In hand but not legal yet (wrong step, or no mana): record and move on.
+    windows.push((await page.locator('.app').getAttribute('data-waiting').catch(() => null)) ?? 'desconocida');
+    await page.keyboard.press('Escape');
+    const moved = await advance(page);
+    if (!moved) await page.waitForTimeout(400);
+  }
+  throw new Error(`${name} nunca llegó a ser jugable (ventanas vistas: ${windows.join(', ') || 'ninguna'})`);
 }
 
 test.describe('contrato de despacho (motor real, mazo determinista)', () => {
