@@ -256,3 +256,25 @@ obligatoria no se ejecutó, se omitió, agotó el tiempo o necesitó un reintent
 Ese es el agujero que la guarda del WASM no ve: un `test.skip` dentro de un
 `spec` deja el runner en verde. Verificado con el informe de este entorno: 16
 aprobadas, 8 omitidas, y el script sale con **1** nombrando las siete que faltan.
+
+### Corrección tras la primera corrida de 1.2
+
+La corrida `45558201575` falló por dos motivos, y los dos son míos:
+
+1. **Rompí el fixture compartido.** Cambié el nombre y las habilidades de las
+   cartas `1002`/`1003`/`1004` de `/stress`, que `visibility.spec.ts` e
+   `images.spec.ts` fijan por identidad (`Transformada`, imagen de la cara
+   trasera). La fixture ahora conserva esas identidades y sólo añade
+   `abilities` a la `1002`, que es lo único que la etiqueta necesita leer.
+2. **El helper exigía una acción legal en la ventana equivocada.** Tras
+   conservar la mano, el motor se detiene en el *upkeep*, donde un mazo sin maná
+   en juego no puede lanzar nada, y la hoja no tenía controles. Abrir la hoja no
+   es llegar al estado: el helper ahora cierra, pasa prioridad, cruza el handoff
+   y reintenta hasta que la ventana ofrece algo — 14 intentos, y si nunca
+   aparece, falla nombrando las ventanas vistas. Para jugar una carta concreta
+   (`Mountain`) espera a que *esa* carta sea jugable, que es lo correcto: una
+   tierra sólo es legal en la fase principal con la pila vacía.
+
+Ese segundo punto es exactamente la clase de defecto que la sección C existe para
+no dejar pasar en silencio: sin el resumen del trabajo, el job habría quedado en
+rojo con siete anotaciones idénticas y sin decir en qué ventana se atascó.

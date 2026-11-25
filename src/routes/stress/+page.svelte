@@ -77,11 +77,13 @@
   const hand = $derived(Array.from({ length: handCount }, (_, i) => {
     if (i === 0) return card(1000 + i, { name: 'Forest', zone: 'Hand', card_types: { core_types: ['Land'] }, printed_ref: { oracle_id: 'oracle-forest', face_name: 'Forest' } });
     if (i === 1) return card(1000 + i, { name: 'Grizzly Bears', card_types: { core_types: ['Creature'], subtypes: ['Bear'] }, power: 2, toughness: 2, printed_ref: { oracle_id: 'oracle-bears', face_name: 'Grizzly Bears' } });
-    // Slot 2 publishes a cast plus TWO different activations; the abilities are
-    // the ones Phase serializes, so the two labels can differ.
-    if (i === 2) return card(1000 + i, { name: 'Reliquia de pruebas', card_types: { core_types: ['Artifact'] }, abilities: [CYCLING, TAP_ABILITY] });
-    if (i === 3) return card(1000 + i, { name: 'Giant Killer // Chop Down', mana_cost: '{W}', card_types: { core_types: ['Creature'] }, back_face: { name: 'Chop Down' }, oracle_text: 'Giant Killer // Chop Down' });
-    if (i === 4) return card(1000 + i, { name: 'Carta con ciclado', card_types: { core_types: ['Artifact'] }, abilities: [CYCLING, TAP_ABILITY] });
+    // Slot 2 publishes a cast plus TWO different activations. The card keeps
+    // its identity (other suites pin `[data-card-id="1002"]`, its transform
+    // state and its image); only the published `abilities` are added, which is
+    // what `sheetActions` reads to label each activation.
+    if (i === 2) return card(1000 + i, { name: 'Insectile Aberration', transformed: true, back_face: { name: 'Delver of Secrets' }, printed_ref: { oracle_id: 'oracle-delver', face_name: 'Insectile Aberration' }, card_types: { core_types: ['Creature'], subtypes: ['Insect'] }, power: 3, toughness: 2, abilities: [CYCLING, TAP_ABILITY] });
+    if (i === 3) return card(1000 + i, { name: 'Lightning Bolt', mana_cost: '{R}', card_types: { core_types: ['Instant'] }, oracle_text: 'Lightning Bolt deals 3 damage to any target.' });
+    if (i === 4) return card(1000 + i, { name: 'Insectile Aberration', transformed: true, back_face: { name: 'Delver of Secrets' }, card_types: { core_types: ['Creature'], subtypes: ['Insect'] }, power: 3, toughness: 2, abilities: [CYCLING, TAP_ABILITY] });
     return card(1000 + i, { name: `Hechizo ${i}`, mana_cost: '{2}{U}', oracle_text: 'Texto de prueba para verificar que la carta sigue siendo identificable sin ilustración.' });
   }));
 
@@ -110,9 +112,9 @@
    *
    *   0 Forest        PlayLand
    *   1 Grizzly Bears CastSpell
-   *   2 Reliquia      CastSpell + two ActivateAbility       (ambiguous on purpose)
-   *   3 Giant Killer  CastSpell, two faces                  (alternatives)
-   *   4 Reliquia      ActivateAbility outside a mana window (must stay visible)
+   *   2 Insectile Aberration  CastSpell + two ActivateAbility (ambiguous on purpose)
+   *   3 Lightning Bolt        CastSpell, two faces             (alternatives)
+   *   4 Insectile Aberration  ActivateAbility outside a mana window (must stay visible)
    *   5 any           nothing                             (idle card)
    */
   const scriptedLegal = $derived.by(() => {

@@ -380,9 +380,9 @@ const FIELD = 'section.battlefield[data-side="player"] [data-card-id]';
  *
  * Deck (40 cards, both seats identical, so a seat change changes identity and
  * not shape):
- *   - **Mox Pearl** — deterministic mana. A zero-cost artifact whose printed
- *     ability is `{T}: Add {W}`, so casting is legal on the first priority
- *     window instead of waiting for a land drop.
+ *   - **Mountain** — the deterministic mana. Playing the deck's own land is a
+ *     special action: it needs a main phase but no mana, so 14 copies make one
+ *     available without depending on the shuffle.
  *   - **Lightning Bolt** — the deterministic cast that needs a target and, at
  *     `Manual`, a payment.
  *   - **Savannah Lions** — the deterministic permanent, so the board really gains
@@ -429,9 +429,15 @@ async function startScenarioDeck(page: Page) {
 }
 
 /**
- * Reach the state every scenario needs: both seats keep, and the sheet is open
- * on the active seat's hand with a priority window. It fails — it does not
- * skip — if the engine never gets there.
+ * Reach the state every scenario needs: a priority window in which the hand
+ * has something legal, with the sheet open on it.
+ *
+ * It is not enough to open the sheet: during the upkeep a deck with no mana in
+ * play legitimately has *nothing* castable, and demanding a control there would
+ * make the test depend on which step the engine happened to stop in. So the
+ * helper advances the game — closing the sheet, passing priority, answering the
+ * seat dialog and reopening — until a control appears. If it never does, it
+ * fails with the window it was stuck in: that is a real failure, never a skip.
  */
 async function openScenarioSheet(page: Page) {
   for (let round = 0; round < 6; round += 1) {
@@ -441,14 +447,30 @@ async function openScenarioSheet(page: Page) {
     await keep.tap({ timeout: 5_000 });
     await page.waitForTimeout(200);
   }
-  await passSeat(page);
-  await expect(page.locator('.hand-trigger')).toBeVisible({ timeout: 60_000 });
-  if (!(await page.locator('.hand-sheet').count())) await page.locator('.hand-trigger').tap();
-  await expect(page.locator('.hand-sheet')).toBeVisible();
-  // An empty hand is not a scenario: the sheet must publish a control.
-  await expect
-    .poll(() => page.locator('.hand-sheet .sheet-play, .hand-sheet .sheet-choose').count(), { timeout: 60_000 })
-    .toBeGreaterThan(0);
+  const windows: string[] = [];
+  for (let attempt = 0; attempt < 14; attempt += 1) {
+    await passSeat(page);
+    const trigger = page.locator('.hand-trigger');
+    await expect(trigger).toBeVisible({ timeout: 60_000 });
+    if (!(await page.locator('.hand-sheet').count())) await trigger.tap();
+    await expect(page.locator('.hand-sheet')).toBeVisible();
+    const controls = page.locator('.hand-sheet .sheet-play, .hand-sheet .sheet-choose');
+    if (await controls.count()) {
+      // Settled: focus is inside the sheet, so a keyboard player is not stranded
+      // outside every interactive region when the assertions start.
+      await expect
+        .poll(() => page.evaluate(() => !!document.activeElement?.closest('.hand-sheet')), { timeout: 5_000 })
+        .toBe(true);
+      return;
+    }
+    // Nothing legal in this window: record it, leave the sheet, pass priority.
+    windows.push(await page.locator('.app').getAttribute('data-waiting').catch(() => 'desconocida') ?? 'desconocida');
+    await page.keyboard.press('Escape');
+    const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
+    if (await pass.count()) await pass.tap({ timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(200);
+  }
+  throw new Error(`ninguna ventana de prioridad ofreció una acción legal en la mano (ventanas vistas: ${windows.join(', ') || 'ninguna'})`);
 }
 
 /**
