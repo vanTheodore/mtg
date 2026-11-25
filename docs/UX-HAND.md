@@ -288,3 +288,20 @@ en las que un jugador no tiene nada que hacer, y el juego se quedaba en
 `Priority` para siempre. El camino que sí funciona en CI (`arena-touch-play`) no
 lo desactiva. Los escenarios ahora usan la misma rutina que ese camino —responder
 lo que el panel pida— y sólo retiran la hoja para pasar prioridad.
+
+### Tercera corrección: tiempo, pago manual y estado heredado
+
+La corrida `45574260718` ejecutó por fin los escenarios con motor, y dejó cuatro
+fallos concretos:
+
+| Fallo | Causa | Corrección |
+|---|---|---|
+| presión de 120 s (×2) | arrancar el mazo descarga packs y compila WASM, y luego hay que llegar a una ventana real | 420 s por escenario, declarado en el `describe` |
+| «el detalle no ofrece el pago manual» | el escenario suponía que Phase **siempre** publica `Manual`; solo lo publica cuando el pago automático no puede completar el lanzamiento | se lee la modalidad publicada: con `Manual` se paga en `ManaPayment`; sin ella se paga por el control publicado y **se anota** cuál se usó |
+| tiempo agotado en el escenario 5 | 16 vueltas de pase con esperas | 8 vueltas, y la mano nueva se exige no vacía antes de comparar identificadores |
+
+Y un defecto de producto que salió al mirarlo: `start()` en `Board.svelte`
+iniciaba una segunda partida **sin limpiar el snapshot anterior**, así que hasta
+que llegaba la respuesta el tablero mezclaba dos partidas. Ahora llama a
+`session.prepareStart()` primero. No se nota en una sola partida por página; sí
+en cuanto una suite juega dos.

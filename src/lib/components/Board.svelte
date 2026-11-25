@@ -254,10 +254,19 @@
     return true;
   }
 
+  /**
+   * Start a game from the start screen, or replace the one on the board.
+   *
+   * Called twice on the same page it used to keep the previous game's snapshot,
+   * prompts and seat flags until the new reply arrived, and the board rendered a
+   * mix of the two. `session.prepareStart()` clears that first, exactly as
+   * `session.start` does.
+   */
   async function start() {
     if (!decks) return;
     if (mode === 'custom' && !customLines.length) return;
     try {
+      if (session.snapshot) session.prepareStart();
       const deck = mode === 'custom' ? toEngineDeck(customLines) : deckFor(mode);
       const label = mode === 'custom' ? (customName || 'Mazo propio')
         : mode === 'practice' ? 'Duelo de práctica'

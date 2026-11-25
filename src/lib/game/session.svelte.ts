@@ -173,6 +173,21 @@ class GameSession {
     });
   }
 
+  /**
+   * The same reset {@link start} performs, without starting anything.
+   *
+   * `Board` calls it when it is about to start a *second* game on the same
+   * page: every snapshot, prompt and seat flag from the previous game must be
+   * gone before the new reply arrives. Duplicating that list here instead of
+   * exporting it is how two resets drift apart.
+   */
+  prepareStart() {
+    this.status = 'loading'; this.error = null; this.snapshot = null;
+    this.revealedViewer = null; this.revealedTurn = null; this.selected = null; this.inspect = null;
+    this.attacks = {}; this.blocks = {}; this.attackPicker = null; this.history = []; this.lifeChanges = {}; this.lastMetrics = null;
+    this.choosing = []; this.autoPasses = 0; this.autoPassQueued = false; this.historyId = 0;
+  }
+
   async start(catalog: unknown, decks: unknown, seed = 42) {
     await this.queue.catch(() => {});
     this.status = 'loading'; this.error = null; this.snapshot = null;

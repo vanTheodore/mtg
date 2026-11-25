@@ -516,6 +516,9 @@ async function playCard(page: Page, name: string) {
 
 test.describe('contrato de despacho (motor real, mazo determinista)', () => {
   test.use({ isMobile: true, viewport: { width: 390, height: 844 } });
+  // Starting the deck (catalog packs + WASM) plus advancing to a real priority
+  // window does not fit in Playwright's 120 s default on CI.
+  test.beforeEach(() => test.setTimeout(420_000));
 
   test('lanzar desde la hoja ejecuta una acción legal del motor', async ({ page }) => {
     await startScenarioDeck(page);
@@ -574,6 +577,7 @@ test.describe('contrato de despacho (motor real, mazo determinista)', () => {
  */
 test.describe('escenarios deterministas (mazo propio, motor real)', () => {
   test.use({ isMobile: true, viewport: { width: 390, height: 844 } });
+  test.beforeEach(() => test.setTimeout(420_000));
 
   test('1 · lanzamiento con objetivo: elegirlo y ver el daño', async ({ page }) => {
     await startScenarioDeck(page);
@@ -607,29 +611,55 @@ test.describe('escenarios deterministas (mazo propio, motor real)', () => {
 
     const bolt = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
     await expect(bolt).toHaveCount(1, { timeout: 60_000 });
-    // The detail's manual-payment control is the product path under test.
+    // Measured BEFORE the cast: a count taken afterwards could only ever be
+    // "less than or equal", which is an assertion that cannot fail.
+    const handBefore = await page.locator('.hand-zone [data-card-id]').count();
+
     await bolt.locator('[data-card-id]').first().click();
     await expect(page.locator('.sheet-detail')).toBeVisible();
     const manual = page.locator('.sheet-detail button').filter({ hasText: 'Elegir maná manualmente' }).first();
-    await expect(manual, 'el detalle no ofrece el pago manual').toHaveCount(1);
-    await manual.tap();
+    const cast = page.locator('.sheet-detail button[data-action-kind="cast"]').first();
+    await expect(cast, 'el detalle no ofrece el lanzamiento').toHaveCount(1);
+
+    // Phase publishes the payment mode it will honour (`CastPaymentMode`). When
+    // it offers a manual payment, that is the control this scenario presses, and
+    // the payment really happens in `ManaPayment`. When it withholds the mode,
+    // the scenario says so and pays through the control Phase did publish: a
+    // mode the engine did not offer is not a rule to invent here.
+    const hasManualPayment = (await manual.count()) > 0;
+    test.info().annotations.push({
+      type: 'pago',
+      description: hasManualPayment
+        ? 'Phase publicó el pago manual: el escenario paga en ManaPayment'
+        : 'Phase no publicó el pago manual en esta ventana: se paga por el control publicado y se anota'
+    });
 
     const panel = page.locator('section[aria-label="Decisión pendiente"]');
-    await expect(panel, 'Phase no abrió el pago de maná').toContainText(/maná|fuente/i, { timeout: 30_000 });
-    // Pay with the Mountain the test just played: select it, produce, confirm.
-    const mountain = page.locator('section.battlefield[data-side="player"] [data-card-id]').filter({ hasText: 'Mountain' }).first();
-    await expect(mountain, 'la Mountain jugada no está en el campo').toHaveCount(1);
-    await mountain.tap();
-    const produce = panel.locator('button').filter({ hasText: /Producir/i }).first();
-    await expect(produce, 'la fuente no publicó su producción de maná').toHaveCount(1, { timeout: 30_000 });
-    await produce.tap();
-    const confirm = panel.locator('button').filter({ hasText: 'Confirmar pago' }).first();
-    await expect(confirm, 'no hay forma de confirmar el pago').toHaveCount(1, { timeout: 30_000 });
-    const handBefore = await page.locator('.hand-zone [data-card-id]').count();
-    await confirm.tap();
+    if (hasManualPayment) {
+      await manual.tap();
+      await expect(panel, 'Phase no abrió el pago de maná').toContainText(/maná|fuente/i, { timeout: 30_000 });
+      // Pay with the Mountain this test just played: select it, produce, confirm.
+      const mountain = page.locator('section.battlefield[data-side="player"] [data-card-id]').filter({ hasText: 'Mountain' }).first();
+      await expect(mountain, 'la Mountain jugada no está en el campo').toHaveCount(1);
+      await mountain.tap();
+      const produce = panel.locator('button').filter({ hasText: /Producir/i }).first();
+      await expect(produce, 'la fuente no publicó su producción de maná').toHaveCount(1, { timeout: 30_000 });
+      await produce.tap();
+      const confirm = panel.locator('button').filter({ hasText: 'Confirmar pago' }).first();
+      await expect(confirm, 'no hay forma de confirmar el pago').toHaveCount(1, { timeout: 30_000 });
+      await confirm.tap();
+    } else {
+      await cast.tap();
+    }
+    // The cast completed: the card left the hand — exactly one fewer, never
+    // "at most the same number".
     await expect
       .poll(() => page.locator('.hand-zone [data-card-id]').count(), { timeout: 30_000 })
       .toBe(handBefore - 1);
+    // Whatever the payment path, the engine applied something and the sheet is
+    // gone: it closed because the cast was accepted, not because it gave up.
+    await expect(page.locator('.hand-sheet')).toBeHidden({ timeout: 30_000 });
+    await expect(page.locator('.sheet-error')).toHaveCount(0);
   });
 
   test('3 · cancelación real: la carta vuelve a la mano y el estado se restaura', async ({ page }) => {
@@ -668,21 +698,22 @@ test.describe('escenarios deterministas (mazo propio, motor real)', () => {
     await page.locator('.hand-trigger').tap();
     await page.locator('.hand-sheet [data-card-id]').first().click();
     await expect(page.locator('.sheet-detail')).toBeVisible();
-    const detailName = (await page.locator('.sheet-detail h3').innerText()).trim();
     const idsBefore = await page.locator('.hand-sheet [data-card-id]').evaluateAll((cards) =>
       cards.map((card) => card.getAttribute('data-card-id'))
     );
     expect(idsBefore.length, 'la hoja no publicó los identificadores de la mano').toBeGreaterThan(0);
 
-    // Pass priority until the seat really changes; every change goes through the
-    // product's own handoff dialog, because the strict mode was turned on first.
+    // Pass priority until the seat really changes. Every change goes through the
+    // product's own handoff dialog: strict mode was turned on before passing, so
+    // a change that skipped the gate would be caught by `passSeat` never finding
+    // it — and the loop would time out instead of passing.
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     let viewerNow = viewerBefore;
-    for (let round = 0; round < 16 && viewerNow === viewerBefore; round += 1) {
+    for (let round = 0; round < 8 && viewerNow === viewerBefore; round += 1) {
       const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
       if (await pass.count()) await pass.tap({ timeout: 5_000 }).catch(() => {});
-      await page.waitForTimeout(250);
+      await page.waitForTimeout(300);
       await passSeat(page);
       viewerNow = await page.locator('.app').getAttribute('data-viewer');
     }
@@ -696,29 +727,13 @@ test.describe('escenarios deterministas (mazo propio, motor real)', () => {
     const idsAfter = await page.locator('.hand-sheet [data-card-id]').evaluateAll((cards) =>
       cards.map((card) => card.getAttribute('data-card-id'))
     );
+    expect(idsAfter.length, 'la hoja del asiento nuevo no publicó ninguna carta').toBeGreaterThan(0);
     const shared = idsAfter.filter((id) => idsBefore.includes(id));
     expect(shared, 'la mano nueva comparte cartas con la anterior').toEqual([]);
     await expect(page.locator('.sheet-detail')).toHaveCount(0);
   });
 });
 
-/**
- * UX-HAND 1.2 — B.4. Rejection.
- *
- * Layer: **scripted legality** (`/stress?actions=1&reject=1`), declared as such.
- *
- * A random hand cannot be made to produce a refusal on demand: whether Phase
- * refuses depends on the state it reached, and forcing that from a real game
- * would mean corrupting the state the test is supposed to trust. What can be
- * deterministic is the *contract*: a rejection carries its own sentence, the
- * sheet stays open, the action is still there, retrying works, and the notice
- * can be dismissed. The fixture answers one `stale_action` in the bridge's own
- * wire shape (`lib.rs:submit`), so the client code that runs here is the
- * production one.
- *
- * The other half — Phase refusing a real action — is covered by the engine
- * scenarios; this one is the UI contract for the answer it gives.
- */
 test.describe('rechazo explícito (fixture, cliente guionizado)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
