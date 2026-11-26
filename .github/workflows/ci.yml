@@ -161,7 +161,16 @@ jobs:
         if: failure()
         run: |
           test ! -s /tmp/e2e-scenarios.log || bun scripts/rust-annotations.ts /tmp/e2e-scenarios.log
-          test ! -s /tmp/e2e-scenarios.log || tail -45 /tmp/e2e-scenarios.log | sed 's/^/::error::/'
+          if test -s /tmp/e2e-scenarios.log; then
+            grep -E 'panicked|Phase rejected|assertion failed|error\[|error:|generating fixture' /tmp/e2e-scenarios.log \
+              | tail -25 | while IFS= read -r line; do echo "::error::$line"; done
+          fi
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-scenarios-generator-log
+          path: /tmp/e2e-scenarios.log
+          if-no-files-found: warn
       - name: Annotate Rust errors
         if: failure()
         run: |

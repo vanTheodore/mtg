@@ -31,6 +31,7 @@ fn write_fixture(dir: &Path, id: &str, scenario: GameScenario) {
 }
 
 fn write_runner_fixture(dir: &Path, id: &str, runner: GameRunner) {
+    eprintln!("generating fixture {id}");
     let fixture = json!({
         "id": id,
         "seed": SEED,
@@ -56,6 +57,7 @@ fn with_window(
     window: Value,
     patch: impl FnOnce(&mut Value),
 ) {
+    eprintln!("generating fixture {id} (window)");
     let runner = scenario.build();
     let mut value = serde_json::to_value(runner.state()).expect("serialize GameState");
     patch(&mut value);
@@ -161,7 +163,18 @@ fn main() {
         attackers,
         json!({
             "type": "DeclareAttackers",
-            "data": { "player": 0, "valid_attacker_ids": [a1.0, a2.0] }
+            "data": {
+                "player": 0,
+                "valid_attacker_ids": [a1.0, a2.0],
+                // The UI's direct-selection path reads the engine's per-attacker
+                // target table; it must be present for a real card click to form
+                // a declaration instead of merely highlighting an id.
+                "valid_attack_targets": [{ "type": "Player", "data": 1 }],
+                "valid_attack_targets_by_attacker": {
+                    (a1.0.to_string()): [{ "type": "Player", "data": 1 }],
+                    (a2.0.to_string()): [{ "type": "Player", "data": 1 }]
+                }
+            }
         }),
         |value| { value["phase"] = json!("DeclareAttackers"); },
     );
@@ -173,6 +186,27 @@ fn main() {
     let attacker = blockers.add_vanilla(P0, 2, 2);
     let blocker = blockers.add_vanilla(P1, 2, 3);
     let mut runner = blockers.build();
+    // `GameRunner::act` only accepts a declaration during the real
+    // `DeclareAttackers` window. Move the runner there with the engine's own
+    // enum (parsed from the same wire shape we validate below) instead of
+    // hand-building a combat map.
+    let attack_window: WaitingFor = serde_json::from_value(json!({
+        "type": "DeclareAttackers",
+        "data": {
+            "player": 0,
+            "valid_attacker_ids": [attacker.0],
+            "valid_attack_targets": [{ "type": "Player", "data": 1 }],
+            "valid_attack_targets_by_attacker": {
+                (attacker.0.to_string()): [{ "type": "Player", "data": 1 }]
+            }
+        }
+    }))
+    .expect("fixture declare-blockers: Phase rejected the DeclareAttackers window");
+    {
+        let state = runner.state_mut();
+        state.phase = Phase::DeclareAttackers;
+        state.waiting_for = attack_window;
+    }
     let declared = runner.declare_attackers(&[(attacker, engine::game::combat::AttackTarget::Player(P1))]);
     assert!(declared.is_ok(), "fixture declare-blockers: Phase rejected the real attack declaration");
     with_runner_window(
@@ -181,7 +215,11 @@ fn main() {
         runner,
         json!({
             "type": "DeclareBlockers",
-            "data": { "player": 1, "valid_blocker_ids": [blocker.0] }
+            "data": {
+                "player": 1,
+                "valid_blocker_ids": [blocker.0],
+                "valid_block_targets": { (blocker.0.to_string()): [attacker.0] }
+            }
         }),
         |value| {
             value["phase"] = json!("DeclareBlockers");
@@ -240,6 +278,7 @@ fn with_runner_window(
     window: Value,
     patch: impl FnOnce(&mut Value),
 ) {
+    eprintln!("generating fixture {id} (runner window)");
     let mut value = serde_json::to_value(runner.state()).expect("serialize GameState");
     patch(&mut value);
     let waiting: WaitingFor = serde_json::from_value(window.clone())
