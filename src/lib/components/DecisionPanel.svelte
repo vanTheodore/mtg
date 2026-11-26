@@ -133,6 +133,7 @@
     'DeclareAttackers', 'DeclareBlockers'
   ]);
   const specialistActive = $derived(!GENERIC_KINDS.has(kind ?? ''));
+  const stackCount = $derived(s?.state.stack?.length ?? 0);
   /** Sólo una carta con acciones legales propias compite con «Pasar». Una
    * selección abierta por privacidad hotseat (sin acciones en esta ventana)
    * no debe quitarle al jugador el botón principal. */
@@ -149,7 +150,10 @@
     // Sólo una carta seleccionada durante la prioridad compite con la acción
     // principal. En ventanas de pago o de combate el botón de confirmación
     // debe seguir dominando aunque el jugador haya tocado una fuente/criatura.
-    suppressPrimary: kind === 'Priority' && hasSelectedActions
+    // Con un hechizo en la pila la cesión/respuesta es dominante aunque
+    // quede una carta seleccionada: la superficie de esa carta no debe
+    // esconder «Pasar · permitir respuestas».
+    suppressPrimary: kind === 'Priority' && stackCount === 0 && hasSelectedActions
   }));
 
   const objects = $derived(s?.state.objects ?? {});

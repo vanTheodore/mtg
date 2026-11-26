@@ -26,7 +26,11 @@ async function openScenario(page: Page, id: string) {
   // `.hand-trigger` is mobile-only. The engine's own `data-waiting` attribute is
   // the viewport-independent proof that GameScenario actually restored state.
   const app = page.locator('.app');
-  await expect(app).toHaveAttribute('data-viewer', '0');
+  // The engine picks the acting seat: most fixtures show P0, but the real
+  // DeclareBlockers window belongs to P1. Readiness is a published viewer
+  // and a real waiting window, not a hardcoded seat.
+  const viewer = await app.getAttribute('data-viewer');
+  expect(viewer === '0' || viewer === '1').toBe(true);
   await expect
     .poll(
       async () => {

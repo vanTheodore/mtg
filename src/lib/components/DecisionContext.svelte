@@ -22,6 +22,8 @@
   data-intent={context.intent}
   data-waiting={context.waitingKind}
   data-viewer-priority={context.viewerHasPriority}
+  data-active-player={context.activePlayer}
+  data-priority-player={context.priorityPlayer}
   title={extra ? `${guide} · ${extra}` : guide}
 >
   <div class="heading">

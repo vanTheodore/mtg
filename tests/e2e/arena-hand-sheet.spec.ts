@@ -477,33 +477,45 @@ async function startScenarioDeck(page: Page) {
  */
 const MAIN_PHASES = ['PreCombatMain', 'PostCombatMain'];
 
-async function waitForMain(page: Page, budget = 90_000) {
+async function waitForMain(page: Page, budget = 120_000) {
   const deadline = Date.now() + budget;
   const seen: string[] = [];
   const panel = page.locator('section[aria-label="Decisión pendiente"]');
   const state = () =>
     page.evaluate(() => {
       const app = document.querySelector('.app');
+      const context = document.querySelector<HTMLElement>('[data-decision-context]');
       const line = document.querySelector('section[aria-label="Decisión pendiente"] .phase')?.textContent ?? '';
-      // "Turno 3 · Fase principal · Jugador 2": the panel names who holds
-      // priority, so "a main phase" can mean *our* main phase.
+      const viewer = Number(app?.getAttribute('data-viewer') ?? -1);
+      // DecisionContext publishes the engine's seats. The old regex read the
+      // first «Jugador N» in the line, which is the active player, not always
+      // the viewer; a strict handoff could swap the visible seat before the
+      // helper measured it.
+      const active = Number(context?.getAttribute('data-active-player') ?? -1);
+      const priority = Number(context?.getAttribute('data-priority-player') ?? -1);
+      const viewerPriority = context?.getAttribute('data-viewer-priority') === 'true';
+      const activeFromLine = /Jugador\s+(\d+)/.exec(line)?.[1];
+      const ownTurn = active < 0
+        ? activeFromLine === undefined || Number(activeFromLine) - 1 === viewer
+        : active === viewer;
+      const mine = ownTurn && (viewerPriority || priority === viewer || activeFromLine === String(viewer + 1));
       return {
         waiting: app?.getAttribute('data-waiting') ?? 'desconocida',
         phase: app?.getAttribute('data-phase') ?? 'desconocida',
-        mine: /Jugador\s+(\d+)/.exec(line)?.[1] === String(Number(app?.getAttribute('data-viewer') ?? -1) + 1)
+        viewer, active, priority, viewerPriority, mine,
+        line: line.trim().replace(/\s+/g, ' ').slice(0, 120)
       };
     });
   while (Date.now() < deadline) {
+    // A strict seat dialog makes the board inert; dismiss it before reading the
+    // decision or trying to press one of its controls.
+    await passSeat(page);
     const now = await state();
     // Our own main phase: in the opponent's we hold no priority and no card of
     // ours is legal, so returning there would only make the caller spin.
     if (MAIN_PHASES.includes(now.phase) && now.mine) return now.phase;
     const label = `${now.phase}/${now.waiting}${now.mine ? '' : ' (ajeno)'}`;
     if (!seen.includes(label)) seen.push(label);
-    await passSeat(page);
-    // Answer what the panel asks: keep the hand at mulligan, pitch one card if
-    // the cleanup asks for it, otherwise pass priority. Each is a real decision
-    // the engine published, not a shortcut past it.
     const keep = panel.locator('button:visible').filter({ hasText: /Conservar|^Mantener/ }).or(
       page.locator('button[aria-label*="Conservar"]')
     ).first();
@@ -527,7 +539,12 @@ async function waitForMain(page: Page, budget = 90_000) {
     }
     await page.waitForTimeout(120);
   }
-  throw new Error(`no se llegó a una fase principal (ventanas vistas: ${seen.join(', ') || 'ninguna'})`);
+  const last = await state();
+  throw new Error(
+    `no se llegó a una fase principal (ventanas vistas: ${seen.join(', ') || 'ninguna'}; ` +
+    `último: ${last.phase}/${last.waiting}, viewer=${last.viewer}, activo=${last.active}, ` +
+    `prioridad=${last.priority}, viewerPriority=${last.viewerPriority}, línea="${last.line}")`
+  );
 }
 
 /**

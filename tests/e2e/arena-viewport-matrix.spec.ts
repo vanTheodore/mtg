@@ -145,9 +145,9 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
       // visible puede ser el último que responda al puntero.
       const buttons = [...panel.querySelectorAll('button')].filter(
         (button) => {
-        const element = button as HTMLElement & { checkVisibility?: () => boolean };
+        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean };
         return typeof element.checkVisibility === 'function'
-          ? element.checkVisibility()
+          ? element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
           : element.offsetParent !== null;
       }
       );
@@ -399,9 +399,9 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
       const box = panel.getBoundingClientRect();
       const buttons = [...panel.querySelectorAll('button')].filter((button) => {
-        const element = button as HTMLElement & { checkVisibility?: () => boolean };
+        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean };
         return typeof element.checkVisibility === 'function'
-          ? element.checkVisibility()
+          ? element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
           : element.offsetParent !== null;
       });
       const last = buttons.at(-1);
@@ -524,9 +524,9 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
       const hand = handEl?.getBoundingClientRect() ?? { top: 0, bottom: 0 };
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
       const buttons = [...panel.querySelectorAll('button')].filter((button) => {
-        const element = button as HTMLElement & { checkVisibility?: () => boolean };
+        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean };
         return typeof element.checkVisibility === 'function'
-          ? element.checkVisibility()
+          ? element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
           : element.offsetParent !== null;
       });
       const last = buttons.at(-1);
@@ -599,9 +599,9 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
       const box = panel.getBoundingClientRect();
       const buttons = [...panel.querySelectorAll('button')].filter((button) => {
-        const element = button as HTMLElement & { checkVisibility?: () => boolean };
+        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean };
         return typeof element.checkVisibility === 'function'
-          ? element.checkVisibility()
+          ? element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
           : element.offsetParent !== null;
       });
       const last = buttons.at(-1);

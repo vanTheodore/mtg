@@ -136,8 +136,9 @@ Invariantes:
   `blockDeclaration`, ya existentes) y las preferencias de pago (`manualCast` y
   `AutoExceptSacrificialMana`) derivadas de un `CastSpell` legal.
 - `specialistActive` impide que una ventana compleja reciba un botón principal
-  engañoso. Con una carta seleccionada, `suppressPrimary` deja que la superficie
-  de la carta siga siendo dominante.
+  engañoso. Con una carta seleccionada y la pila vacía, `suppressPrimary` deja
+  que la superficie de la carta siga siendo dominante; con hechizos pendientes
+  conserva «Pasar · permitir respuestas» como acción principal.
 - `integrity.unclassified` debe ser `[]`. Un test recorre los más de cien tipos
   de `SPECIALIST_DECISIONS` y otro comprueba que `DecisionPanel.svelte` sigue
   declarando la lista `REPRESENTED` completa: **no se reduce cobertura de

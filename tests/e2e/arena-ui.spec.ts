@@ -261,9 +261,9 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
     // UX-DECISION: las opciones bajo demanda están en el DOM pero plegadas;
     // el último botón *que responde al puntero* es el último botón visible.
     const buttons = [...decision.querySelectorAll('button')].filter((button) => {
-      const element = button as HTMLElement & { checkVisibility?: () => boolean };
+      const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean };
       return typeof element.checkVisibility === 'function'
-        ? element.checkVisibility()
+        ? element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
         : element.offsetParent !== null;
     });
     const last = buttons.at(-1);
