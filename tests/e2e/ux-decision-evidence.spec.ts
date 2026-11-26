@@ -75,8 +75,21 @@ async function openScenario(page: Page, id: string, theme?: string, chrome = 'ar
   );
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto(`${URL_BASE}/?e2e-scenario=${id}`);
-  await expect(page.locator('.hand-trigger'), `no se montó el estado GameScenario ${id}`).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.app')).toHaveAttribute('data-viewer', '0');
+  // `.hand-trigger` is a *mobile* control: it is intentionally hidden on the
+  // desktop viewports this matrix measures. Readiness must come from the engine
+  // state itself, which is present at every size.
+  const app = page.locator('.app');
+  await expect(app).toHaveAttribute('data-viewer', '0');
+  await expect
+    .poll(
+      async () => {
+        const waiting = await app.getAttribute('data-waiting');
+        return waiting && waiting !== 'none' ? waiting : null;
+      },
+      { timeout: 30_000 }
+    )
+    .not.toBeNull();
+  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible();
 }
 
 async function measure(page: Page, scenario: string, viewport: string, theme: string): Promise<Metrics> {

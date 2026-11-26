@@ -23,8 +23,20 @@ async function openScenario(page: Page, id: string) {
   });
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto(`/?e2e-scenario=${id}`);
-  await expect(page.locator('.hand-trigger'), `no se montó el estado GameScenario ${id}`).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.app')).toHaveAttribute('data-viewer', '0');
+  // `.hand-trigger` is mobile-only. The engine's own `data-waiting` attribute is
+  // the viewport-independent proof that GameScenario actually restored state.
+  const app = page.locator('.app');
+  await expect(app).toHaveAttribute('data-viewer', '0');
+  await expect
+    .poll(
+      async () => {
+        const waiting = await app.getAttribute('data-waiting');
+        return waiting && waiting !== 'none' ? waiting : null;
+      },
+      { timeout: 30_000 }
+    )
+    .not.toBeNull();
+  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible();
   return createBoardDriver(page);
 }
 
