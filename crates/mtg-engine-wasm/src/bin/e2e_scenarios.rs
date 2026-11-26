@@ -59,10 +59,11 @@ fn with_window(
     let runner = scenario.build();
     let mut value = serde_json::to_value(runner.state()).expect("serialize GameState");
     patch(&mut value);
-    value["waiting_for"] = window;
-    let waiting: WaitingFor = serde_json::from_value(window)
+    let waiting: WaitingFor = serde_json::from_value(window.clone())
         .unwrap_or_else(|error| panic!("fixture {id}: Phase rejected the window: {error}"));
-    value["waiting_for"] = serde_json::to_value(&waiting).expect("serialize WaitingFor");
+    value["waiting_for"] = window;
+    // `waiting` was parsed from `window` itself; keep the original wire shape.
+    let _ = waiting;
     let fixture = json!({ "id": id, "seed": SEED, "state": value });
     let path = dir.join(format!("{id}.json"));
     fs::write(&path, serde_json::to_vec_pretty(&fixture).unwrap())
@@ -241,10 +242,11 @@ fn with_runner_window(
 ) {
     let mut value = serde_json::to_value(runner.state()).expect("serialize GameState");
     patch(&mut value);
-    value["waiting_for"] = window;
-    let waiting: WaitingFor = serde_json::from_value(window)
+    let waiting: WaitingFor = serde_json::from_value(window.clone())
         .unwrap_or_else(|error| panic!("fixture {id}: Phase rejected the window: {error}"));
-    value["waiting_for"] = serde_json::to_value(&waiting).expect("serialize WaitingFor");
+    value["waiting_for"] = window;
+    // `waiting` was parsed from `window` itself; keep the original wire shape.
+    let _ = waiting;
     let fixture = json!({ "id": id, "seed": SEED, "state": value });
     let path = dir.join(format!("{id}.json"));
     fs::write(&path, serde_json::to_vec_pretty(&fixture).unwrap())
