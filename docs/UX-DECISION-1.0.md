@@ -77,7 +77,10 @@ Variables medidas por par (viewport × escenario × tema):
 `visibleControls`, `primaryControls`, `secondaryControls`, `totalControls`,
 `advancedStopsVisible`, `effectiveTouchTargets` (≥44 px), `smallestTouchTarget`,
 `panelHeight`, `panelArea`, `boardArea`, `boardSharePercent`,
-`interactionsNeeded` y `legalActionsAccessible`.
+`interactionsNeeded` y `legalActionsAccessible`. «Visible» se decide con
+`Element.checkVisibility()`: un `<details>` plegado conserva cajas de layout en
+Chromium (`content-visibility`), así que medir sólo `getBoundingClientRect()`
+contaría como expuestos los controles que el jugador no puede ver.
 
 Escenarios: `priority-empty` y `target-cast`. Viewports: 320×844, 375×844,
 390×844, 768×900, 1440×900 y 844×390. Temas claro/oscuro en `classic` (donde el

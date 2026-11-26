@@ -101,8 +101,17 @@ async function measure(page: Page, scenario: string, viewport: string, theme: st
     const controls = [...panel.querySelectorAll('button, summary, input, select')] as HTMLElement[];
     const isVisible = (el: HTMLElement) => {
       const rect = el.getBoundingClientRect();
+      if (!rect.width || !rect.height) return false;
+      // Chromium hides the contents of a collapsed `<details>` with
+      // `content-visibility`, which still reports a layout box. `checkVisibility`
+      // is the browser's own verdict and is what «control visible» must mean;
+      // without it the closed advanced surface would be counted as exposed.
+      const probe = el as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean };
+      if (typeof probe.checkVisibility === 'function') {
+        return probe.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true });
+      }
       const style = getComputedStyle(el);
-      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+      return style.visibility !== 'hidden' && style.display !== 'none';
     };
     const visible = controls.filter(isVisible);
     const touch = (el: HTMLElement) => Math.min(el.getBoundingClientRect().width, el.getBoundingClientRect().height);

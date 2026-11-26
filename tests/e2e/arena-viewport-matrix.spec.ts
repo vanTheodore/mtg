@@ -144,7 +144,12 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
       // UX-DECISION: las opciones avanzadas están plegadas. Sólo un botón
       // visible puede ser el último que responda al puntero.
       const buttons = [...panel.querySelectorAll('button')].filter(
-        (button) => (button as HTMLElement).offsetParent !== null
+        (button) => {
+        const element = button as HTMLElement & { checkVisibility?: () => boolean };
+        return typeof element.checkVisibility === 'function'
+          ? element.checkVisibility()
+          : element.offsetParent !== null;
+      }
       );
       const last = buttons.at(-1);
       const box = last?.getBoundingClientRect();
@@ -393,7 +398,12 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
       const regionMax = Math.round(region.scrollHeight - region.clientHeight);
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
       const box = panel.getBoundingClientRect();
-      const buttons = [...panel.querySelectorAll('button')].filter((button) => button.offsetParent !== null);
+      const buttons = [...panel.querySelectorAll('button')].filter((button) => {
+        const element = button as HTMLElement & { checkVisibility?: () => boolean };
+        return typeof element.checkVisibility === 'function'
+          ? element.checkVisibility()
+          : element.offsetParent !== null;
+      });
       const last = buttons.at(-1);
       const lb = last?.getBoundingClientRect();
       const hit = lb ? document.elementFromPoint(lb.x + lb.width / 2, Math.min(lb.y + lb.height / 2, innerHeight - 1)) : null;
@@ -513,7 +523,12 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
       if (region) region.scrollTop = 0;
       const hand = handEl?.getBoundingClientRect() ?? { top: 0, bottom: 0 };
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
-      const buttons = [...panel.querySelectorAll('button')].filter((button) => button.offsetParent !== null);
+      const buttons = [...panel.querySelectorAll('button')].filter((button) => {
+        const element = button as HTMLElement & { checkVisibility?: () => boolean };
+        return typeof element.checkVisibility === 'function'
+          ? element.checkVisibility()
+          : element.offsetParent !== null;
+      });
       const last = buttons.at(-1);
       const lb = last?.getBoundingClientRect();
       const hit = lb ? document.elementFromPoint(lb.x + lb.width / 2, Math.min(lb.y + lb.height / 2, innerHeight - 1)) : null;
@@ -583,7 +598,12 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
       const regionMax = Math.round(region.scrollHeight - region.clientHeight);
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
       const box = panel.getBoundingClientRect();
-      const buttons = [...panel.querySelectorAll('button')].filter((button) => button.offsetParent !== null);
+      const buttons = [...panel.querySelectorAll('button')].filter((button) => {
+        const element = button as HTMLElement & { checkVisibility?: () => boolean };
+        return typeof element.checkVisibility === 'function'
+          ? element.checkVisibility()
+          : element.offsetParent !== null;
+      });
       const last = buttons.at(-1);
       const lb = last?.getBoundingClientRect();
       const hit = lb ? document.elementFromPoint(lb.x + lb.width / 2, Math.min(lb.y + lb.height / 2, innerHeight - 1)) : null;

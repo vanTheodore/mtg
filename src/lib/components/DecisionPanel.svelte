@@ -133,6 +133,13 @@
     'DeclareAttackers', 'DeclareBlockers'
   ]);
   const specialistActive = $derived(!GENERIC_KINDS.has(kind ?? ''));
+  /** Sólo una carta con acciones legales propias compite con «Pasar». Una
+   * selección abierta por privacidad hotseat (sin acciones en esta ventana)
+   * no debe quitarle al jugador el botón principal. */
+  const hasSelectedActions = $derived(
+    session.selected !== null &&
+    (s?.legal.by_object?.[String(session.selected)]?.length ?? 0) > 0
+  );
   const projection = $derived(projectDecision({
     snapshot: s ?? null,
     selectedId: session.selected,
@@ -142,7 +149,7 @@
     // Sólo una carta seleccionada durante la prioridad compite con la acción
     // principal. En ventanas de pago o de combate el botón de confirmación
     // debe seguir dominando aunque el jugador haya tocado una fuente/criatura.
-    suppressPrimary: session.selected !== null && kind === 'Priority'
+    suppressPrimary: kind === 'Priority' && hasSelectedActions
   }));
 
   const objects = $derived(s?.state.objects ?? {});
@@ -565,7 +572,13 @@
 </section>
 
 <style>
-  .decision { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: .8rem; min-width: 0; }
+  /* El rail de Arena tiene `max-height` y scroll propio: la decisión nunca
+     debe exceder la ventana, o su último botón queda fuera del hit-test. */
+  .decision {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: .8rem; min-width: 0;
+    max-height: calc(100dvh - 1.2rem); overflow-y: auto;
+  }
   h2 { margin: 0 0 .4rem; font-size: .95rem; }
   .prompt { display: grid; gap: .45rem; border: 1px solid var(--line); border-radius: 10px; padding: .65rem; background: var(--surface-2); }
   .prompt strong { font-size: .9rem; }

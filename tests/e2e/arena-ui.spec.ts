@@ -68,6 +68,7 @@ test('la banda de fases refleja el snapshot de Phase durante una partida', async
   // El `main` puede estar `inert` por un traspaso de asiento: abrir con un
   // clic sería interceptado. Se fija `open` directamente, que es exactamente
   // lo que haría el jugador al desplegar el control avanzado.
+  await page.locator('details[data-advanced-controls]').waitFor({ state: 'attached', timeout: 30_000 });
   await page.evaluate(() => {
     const details = document.querySelector<HTMLDetailsElement>('details[data-advanced-controls]');
     if (details) details.open = true;
@@ -259,9 +260,12 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
     const hand = trigger?.getBoundingClientRect() ?? null;
     // UX-DECISION: las opciones bajo demanda están en el DOM pero plegadas;
     // el último botón *que responde al puntero* es el último botón visible.
-    const buttons = [...decision.querySelectorAll('button')].filter(
-      (button) => (button as HTMLElement).offsetParent !== null
-    );
+    const buttons = [...decision.querySelectorAll('button')].filter((button) => {
+      const element = button as HTMLElement & { checkVisibility?: () => boolean };
+      return typeof element.checkVisibility === 'function'
+        ? element.checkVisibility()
+        : element.offsetParent !== null;
+    });
     const last = buttons.at(-1);
     return {
       position: getComputedStyle(decision).position,

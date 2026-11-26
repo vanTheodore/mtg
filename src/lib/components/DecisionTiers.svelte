@@ -66,9 +66,8 @@
 {/if}
 
 <details class="tiers" data-decision-tiers open={openByDefault} data-open-by-default={openByDefault}>
-  <summary aria-controls="decision-tier-body">
+  <summary aria-controls="decision-tier-body" aria-label={`Más opciones: ${deferredCount} acciones legales bajo demanda`}>
     Más opciones <span class="count">{deferredCount}</span>
-    <span class="hint">{openByDefault ? 'todas las opciones legales están aquí' : 'bajo demanda, sin quitar ninguna'}</span>
   </summary>
   <div class="body" id="decision-tier-body">
     {#each ORDER as tier (tier)}
@@ -110,12 +109,11 @@
 <style>
   .tiers { margin-top: .5rem; font-size: .8rem; }
   summary {
-    cursor: pointer; min-height: 32px; display: flex; align-items: center; gap: .35rem;
-    padding: .25rem .45rem; border: 1px solid var(--line); border-radius: 9px;
+    cursor: pointer; min-height: 28px; display: flex; align-items: center; gap: .3rem;
+    padding: .2rem .4rem; border: 1px solid var(--line); border-radius: 9px;
     background: var(--surface-2); color: var(--ink); list-style-position: inside;
   }
   summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  summary .hint { color: var(--ink-muted); font-size: .7rem; margin-left: auto; }
   .count {
     font-size: .68rem; font-weight: 700; background: var(--surface); border: 1px solid var(--line);
     border-radius: 999px; padding: .05rem .4rem;

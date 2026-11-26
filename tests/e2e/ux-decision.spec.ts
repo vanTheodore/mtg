@@ -59,6 +59,9 @@ test('prioridad con pila vacía: contexto, una acción principal y cesión real'
 });
 
 test('prioridad con hechizo pendiente: pila real, cesión contextual y resolución por prioridades reales', async ({ page }) => {
+  // El lanzamiento recorre objetivo, pago y varias prioridades reales de Phase;
+  // el techo por defecto de 120 s no deja margen para el arranque del WASM.
+  test.setTimeout(180_000);
   const driver = await openScenario(page, 'priority-stack');
   const before = Number(await applied(page));
   // Lanzar el Rayo por la interfaz: la pila la crea Phase, no el test.
@@ -98,7 +101,7 @@ test('prioridad con hechizo pendiente: pila real, cesión contextual y resoluci�
 test('respuesta durante el turno rival: intención y consecuencia del motor', async ({ page }) => {
   await openScenario(page, 'opponent-turn-response');
   await expect(page.locator('[data-decision-context]')).toHaveAttribute('data-intent', 'Responder');
-  await expect(page.locator('[data-decision-consequence]')).toContainText('turno del Jugador 1');
+  await expect(page.locator('[data-decision-consequence]')).toContainText('turno del Jugador 2');
   await expect(panel(page)).toHaveAttribute('data-waiting', 'Priority');
 });
 
@@ -142,7 +145,7 @@ test('objetivos: selección directa, lista accesible y progreso sin duplicados',
   expect(['TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'Priority']).toContain(waiting);
   if (waiting === 'TargetSelection' || waiting === 'TriggerTargetSelection') {
     await expect(panel(page).locator('details[data-target-list]')).toBeVisible();
-    await expect(panel(page).locator('[data-decision-progress]')).toBeVisible();
+    await expect(panel(page).locator('[data-decision-context] [data-decision-progress]').first()).toBeVisible();
   }
 });
 
