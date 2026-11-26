@@ -132,6 +132,7 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
     lastButtonHit: boolean;
     debt: number;
     horizontalOverflow: number;
+    debug: string;
   }> = [];
   for (const [width, height] of [[1440, 900], [1024, 768], [844, 390], [740, 360], [390, 844]] as const) {
     await page.setViewportSize({ width, height });
@@ -143,18 +144,23 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
       // it does — so a legal button can't be parked outside the scrollport.
       // UX-DECISION: las opciones avanzadas están plegadas. Sólo un botón
       // visible puede ser el último que responda al puntero.
-      const buttons = [...panel.querySelectorAll('button')].filter(
-        (button) => {
-        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean };
-        return typeof element.checkVisibility === 'function'
-          ? element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
-          : element.offsetParent !== null;
-      }
-      );
+      const visible = (button: Element) => {
+        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
+        if (element.closest('details:not([open])')) return false;
+        if (typeof element.checkVisibility === 'function') {
+          return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
+        }
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden' && element.offsetParent !== null;
+      };
+      const buttons = [...panel.querySelectorAll('button')].filter(visible);
       const last = buttons.at(-1);
       const box = last?.getBoundingClientRect();
       const hit = box
-        ? document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+        ? document.elementFromPoint(
+          Math.min(Math.max(box.x + box.width / 2, 0), innerWidth - 1),
+          Math.min(Math.max(box.y + box.height / 2, 0), innerHeight - 1)
+        )
         : null;
       return {
         size: `${innerWidth}x${innerHeight}`,
@@ -163,7 +169,13 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
         buttons: buttons.length,
         lastButtonHit: last ? hit === last || last.contains(hit) : false,
         debt: Math.max(0, document.documentElement.scrollHeight - innerHeight),
-        horizontalOverflow: document.documentElement.scrollWidth - innerWidth
+        horizontalOverflow: document.documentElement.scrollWidth - innerWidth,
+        debug: JSON.stringify({
+          hitTag: hit?.tagName ?? null,
+          hitClass: hit instanceof HTMLElement ? hit.className : null,
+          buttonLabel: last?.textContent?.trim().slice(0, 80) ?? null,
+          buttonBox: box ? { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) } : null
+        })
       };
     });
     samples.push(sample);
@@ -184,7 +196,7 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
     }
     expect(sample.panelScroll, `el panel oculta su propio contenido a ${where}`).toBe(0);
     expect(sample.buttons, `la decisión no ofrece ningún botón a ${where}`).toBeGreaterThan(0);
-    expect(sample.lastButtonHit, `el último botón de la decisión no responde al puntero a ${where}`).toBe(true);
+    expect(sample.lastButtonHit, `el último botón de la decisión no responde al puntero a ${where} · ${sample.debug}`).toBe(true);
   }
   console.log('MESA_VIEWPORT_MATRIX_REAL ' + JSON.stringify(samples));
   await persist(testInfo, 'real-game-matrix', samples);
@@ -214,7 +226,16 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
       const sample = await page.evaluate(() => {
         const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
         const box = panel.getBoundingClientRect();
-        const buttons = [...panel.querySelectorAll('button')];
+        const visible = (button: Element) => {
+          const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
+          if (element.closest('details:not([open])')) return false;
+          if (typeof element.checkVisibility === 'function') {
+            return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
+          }
+          const style = getComputedStyle(element);
+          return style.display !== 'none' && style.visibility !== 'hidden' && element.offsetParent !== null;
+        };
+        const buttons = [...panel.querySelectorAll('button')].filter(visible);
         const last = buttons.at(-1);
         const lb = last?.getBoundingClientRect();
         const hit = lb
@@ -398,12 +419,16 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
       const regionMax = Math.round(region.scrollHeight - region.clientHeight);
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
       const box = panel.getBoundingClientRect();
-      const buttons = [...panel.querySelectorAll('button')].filter((button) => {
-        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean };
-        return typeof element.checkVisibility === 'function'
-          ? element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
-          : element.offsetParent !== null;
-      });
+      const visible = (button: Element) => {
+        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
+        if (element.closest('details:not([open])')) return false;
+        if (typeof element.checkVisibility === 'function') {
+          return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
+        }
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden' && element.offsetParent !== null;
+      };
+      const buttons = [...panel.querySelectorAll('button')].filter(visible);
       const last = buttons.at(-1);
       const lb = last?.getBoundingClientRect();
       const hit = lb ? document.elementFromPoint(lb.x + lb.width / 2, Math.min(lb.y + lb.height / 2, innerHeight - 1)) : null;
@@ -523,12 +548,16 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
       if (region) region.scrollTop = 0;
       const hand = handEl?.getBoundingClientRect() ?? { top: 0, bottom: 0 };
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
-      const buttons = [...panel.querySelectorAll('button')].filter((button) => {
-        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean };
-        return typeof element.checkVisibility === 'function'
-          ? element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
-          : element.offsetParent !== null;
-      });
+      const visible = (button: Element) => {
+        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
+        if (element.closest('details:not([open])')) return false;
+        if (typeof element.checkVisibility === 'function') {
+          return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
+        }
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden' && element.offsetParent !== null;
+      };
+      const buttons = [...panel.querySelectorAll('button')].filter(visible);
       const last = buttons.at(-1);
       const lb = last?.getBoundingClientRect();
       const hit = lb ? document.elementFromPoint(lb.x + lb.width / 2, Math.min(lb.y + lb.height / 2, innerHeight - 1)) : null;
@@ -558,7 +587,13 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
         minCardWidth: widths.length ? Math.min(...widths) : null,
         panelTop: Math.round(panel.getBoundingClientRect().top),
         panelBottom: Math.round(panel.getBoundingClientRect().bottom),
-        lastHit: lb ? hit === last || !!last?.contains(hit) : false
+        lastHit: lb ? hit === last || !!last?.contains(hit) : false,
+        debug: JSON.stringify({
+          hitTag: hit?.tagName ?? null,
+          hitClass: hit instanceof HTMLElement ? hit.className : null,
+          buttonLabel: last?.textContent?.trim().slice(0, 80) ?? null,
+          buttonBox: lb ? { x: Math.round(lb.x), y: Math.round(lb.y), width: Math.round(lb.width), height: Math.round(lb.height) } : null
+        })
       };
     });
     let atStart = await measureStart();
@@ -587,7 +622,7 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
     ).toBeGreaterThanOrEqual(atStart.fields[0].bottom);
     expect(atStart.panelTop, `la decisión empieza fuera de la vista a ${where}`).toBeGreaterThanOrEqual(0);
     expect(atStart.panelBottom, `la decisión no cabe a ${where}`).toBeLessThanOrEqual(height);
-    expect(atStart.lastHit, `el último botón de la decisión no responde a ${where}`).toBe(true);
+    expect(atStart.lastHit, `el último botón de la decisión no responde a ${where} · ${atStart.debug}`).toBe(true);
 
     const atEnd = await page.evaluate(() => {
       const region = document.querySelector<HTMLElement>('main.layout')!;
@@ -598,12 +633,16 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
       const regionMax = Math.round(region.scrollHeight - region.clientHeight);
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
       const box = panel.getBoundingClientRect();
-      const buttons = [...panel.querySelectorAll('button')].filter((button) => {
-        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean }) => boolean };
-        return typeof element.checkVisibility === 'function'
-          ? element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true })
-          : element.offsetParent !== null;
-      });
+      const visible = (button: Element) => {
+        const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
+        if (element.closest('details:not([open])')) return false;
+        if (typeof element.checkVisibility === 'function') {
+          return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
+        }
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden' && element.offsetParent !== null;
+      };
+      const buttons = [...panel.querySelectorAll('button')].filter(visible);
       const last = buttons.at(-1);
       const lb = last?.getBoundingClientRect();
       const hit = lb ? document.elementFromPoint(lb.x + lb.width / 2, Math.min(lb.y + lb.height / 2, innerHeight - 1)) : null;
@@ -627,7 +666,13 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
         firstButtonTop: firstButton ? Math.round(firstButton.top) : null,
         lastButtonBottom: lastButton ? Math.round(lastButton.bottom) : null,
         lastHit: lb ? hit === last || !!last?.contains(hit) : false,
-        cardHit
+        cardHit,
+        debug: JSON.stringify({
+          hitTag: hit?.tagName ?? null,
+          hitClass: hit instanceof HTMLElement ? hit.className : null,
+          buttonLabel: last?.textContent?.trim().slice(0, 80) ?? null,
+          buttonBox: lb ? { x: Math.round(lb.x), y: Math.round(lb.y), width: Math.round(lb.width), height: Math.round(lb.height) } : null
+        })
       };
     });
     await settle(page);
@@ -639,7 +684,7 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
     expect(atEnd.firstButtonTop, `la primera acción se escapa por arriba a ${where}`).toBeGreaterThanOrEqual(0);
     expect(atEnd.lastButtonBottom, `la última acción se escapa por abajo a ${where}`).toBeLessThanOrEqual(height);
     expect(atEnd.panelBottom, `la decisión se escapa por abajo a ${where}`).toBeLessThanOrEqual(height);
-    expect(atEnd.lastHit, `el último botón de la decisión no responde al final a ${where}`).toBe(true);
+    expect(atEnd.lastHit, `el último botón de la decisión no responde al final a ${where} · ${atEnd.debug}`).toBe(true);
     expect(atEnd.cardHit, `la última carta del campo propio no se puede tocar a ${where}`).toBe(true);
 
     evidence.push({ where, atStart, atEnd });

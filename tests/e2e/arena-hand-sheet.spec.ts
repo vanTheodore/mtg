@@ -759,6 +759,10 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
   });
 
   test('5 · cambio de asiento mientras hoja y detalle están abiertos: comparar identificadores', async ({ page }) => {
+    // `waitForMain` publica su propio diagnóstico tras 120 s; el techo global
+    // de 120 s lo mataría antes. La prueba no se salta: se le da margen para
+    // decir qué asiento, fase y prioridad publicó el motor.
+    test.setTimeout(180_000);
     await startGameScenario(page, 'privacy-handoff', true);
     const viewerBefore = await page.locator('.app').getAttribute('data-viewer');
     await openScenarioSheet(page);

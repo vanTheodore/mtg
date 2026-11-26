@@ -68,36 +68,50 @@ test('prioridad con hechizo pendiente: pila real, cesión contextual y resoluci�
   test.setTimeout(180_000);
   const driver = await openScenario(page, 'priority-stack');
   const before = Number(await applied(page));
+  const appliedNumber = async () => Number(await applied(page));
   // Lanzar el Rayo por la interfaz: la pila la crea Phase, no el test.
   const card = driver.hand.locator('[data-card-id]').first();
   await driver.clickCard(card);
   const cast = panel(page).locator('button').filter({ hasText: 'Lanzar' }).first();
   await expect(cast).toBeVisible();
   await cast.click();
-  await expect.poll(() => applied(page), { timeout: 10_000 }).not.toBe(String(before));
+  await expect.poll(appliedNumber, { timeout: 10_000 }).toBeGreaterThan(before);
   await expect(page.locator('section[aria-label="Pila"]')).toHaveAttribute('data-empty', 'false');
 
   const rivalLife = page.locator('.player-bar[data-player-id="1"]');
   const lifeBefore = Number(await rivalLife.getAttribute('data-life'));
   let sawResponseLabel = false;
-  for (let step = 0; step < 14; step += 1) {
+  const trace: string[] = [];
+  // Cada ventana la responde su control publicado, no el driver genérico:
+  // así un bucle lento de «prueba todos los botones» no puede agotar el
+  // timeout ni despachar una acción que Phase no pidió.
+  for (let step = 0; step < 20; step += 1) {
     if (Number(await rivalLife.getAttribute('data-life')) < lifeBefore) break;
+    await driver.settleSeat().catch(() => {});
     const waiting = await panel(page).getAttribute('data-waiting');
+    trace.push(waiting ?? 'sin ventana');
     if (waiting === 'TargetSelection' || waiting === 'TriggerTargetSelection') {
-      const list = panel(page).locator('details[data-target-list] summary');
-      if (await list.count()) await list.click();
-      const choice = panel(page).locator('details[data-target-list] button').filter({ hasText: /^Elegir / }).first();
-      if (await choice.count()) await choice.click();
-      else break;
+      const details = panel(page).locator('details[data-target-list]');
+      if (!(await details.count())) break;
+      if (await details.getAttribute('open') === null) await details.locator('summary').click();
+      const choice = details.locator('button').filter({ hasText: /^Elegir / }).first();
+      if (!(await choice.count())) break;
+      const stepBefore = Number(await applied(page));
+      await choice.click();
+      await expect.poll(appliedNumber, { timeout: 10_000 }).toBeGreaterThan(stepBefore);
       continue;
     }
+    if (!['Priority', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection'].includes(waiting ?? '')) break;
     const primary = page.locator('[data-decision-primary]');
-    const label = (await primary.textContent().catch(() => '')) ?? '';
+    await expect(primary, `sin acción principal en ${waiting}`).toBeVisible({ timeout: 10_000 });
+    const label = (await primary.textContent()) ?? '';
     if (label.includes('permitir respuestas')) sawResponseLabel = true;
-    const advanced = await driver.answerAnyPrompt();
-    if (!advanced) break;
+    trace[trace.length - 1] += ` · ${label.trim()}`;
+    const stepBefore = Number(await applied(page));
+    await primary.click();
+    await expect.poll(appliedNumber, { timeout: 10_000 }).toBeGreaterThan(stepBefore);
   }
-  expect(sawResponseLabel).toBe(true);
+  expect(sawResponseLabel, `no apareció «permitir respuestas» (${trace.join(' | ')})`).toBe(true);
   expect(Number(await rivalLife.getAttribute('data-life'))).toBeLessThan(lifeBefore);
   await expect(page.locator('section[aria-label="Pila"]')).toHaveAttribute('data-empty', 'true');
 });
