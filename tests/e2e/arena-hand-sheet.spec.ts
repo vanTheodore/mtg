@@ -490,15 +490,17 @@ async function waitForMain(page: Page, budget = 120_000) {
       // DecisionContext publishes the engine's seats. The old regex read the
       // first «Jugador N» in the line, which is the active player, not always
       // the viewer; a strict handoff could swap the visible seat before the
-      // helper measured it.
+      // helper measured it. «Main» means our own main phase, not that we also
+      // hold priority in it: a response window belongs to the other seat.
       const active = Number(context?.getAttribute('data-active-player') ?? -1);
       const priority = Number(context?.getAttribute('data-priority-player') ?? -1);
       const viewerPriority = context?.getAttribute('data-viewer-priority') === 'true';
       const activeFromLine = /Jugador\s+(\d+)/.exec(line)?.[1];
-      const ownTurn = active < 0
-        ? activeFromLine === undefined || Number(activeFromLine) - 1 === viewer
-        : active === viewer;
-      const mine = ownTurn && (viewerPriority || priority === viewer || activeFromLine === String(viewer + 1));
+      const mine = active >= 0
+        ? active === viewer
+        : activeFromLine === undefined
+          ? viewerPriority
+          : Number(activeFromLine) - 1 === viewer;
       return {
         waiting: app?.getAttribute('data-waiting') ?? 'desconocida',
         phase: app?.getAttribute('data-phase') ?? 'desconocida',
