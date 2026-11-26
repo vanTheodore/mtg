@@ -246,7 +246,11 @@ flujos con pipeline completo (prioridad, lanzamiento, objetivos, pago, combate).
   `rustc` ni Chromium aquí: la compilación Rust/WASM, la paridad, los escenarios
   y el navegador los emite GitHub CI.
 - **GitHub CI:** `Mesa CI` (static, paridad nativa, WASM, Chromium con gate de
-  Playwright), `Phase source regressions` y el job nuevo **`ux-evidence`**.
+  Playwright y 60 min de techo tras añadir diez pruebas de transición real),
+  `Phase source regressions` y el job nuevo **`ux-evidence`**. El marcador de
+  las pruebas de evidencia es `MESA_EVIDENCE_UX_DECISION`: un `EVIDENCIA` simple
+  también habría excluido los siete tests de `arena-quality-gate` cuyo título
+  termina en «y evidencia».
 - **Chromium real:** seis viewports, claro/oscuro, teclado (Tab + Enter con
   transición real), táctil (`hasTouch`, un toque con transición real) y axe
   (sin violaciones `critical`/`serious`).

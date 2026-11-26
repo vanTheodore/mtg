@@ -75,7 +75,7 @@ async function openScenario(page: Page, id: string, theme?: string, chrome = 'ar
   );
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto(`${URL_BASE}/?e2e-scenario=${id}`);
-  await expect(page.locator('.hand-trigger'), `no se montó el estado GameScenario ${id}`).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator('.hand-trigger'), `no se montó el estado GameScenario ${id}`).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.app')).toHaveAttribute('data-viewer', '0');
 }
 
@@ -165,7 +165,7 @@ test.afterAll(async () => {
   );
 });
 
-test.describe('EVIDENCIA UX-DECISION · matriz de viewports con motor real', () => {
+test.describe('MESA_EVIDENCE_UX_DECISION · matriz de viewports con motor real', () => {
   test('mide y captura los dos escenarios en seis tamaños', async ({ page }) => {
     for (const viewport of VIEWPORTS) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -180,7 +180,7 @@ test.describe('EVIDENCIA UX-DECISION · matriz de viewports con motor real', () 
   });
 });
 
-test.describe('EVIDENCIA UX-DECISION · temas claro y oscuro', () => {
+test.describe('MESA_EVIDENCE_UX_DECISION · temas claro y oscuro', () => {
   for (const { theme, slug } of THEMES) {
     test(`tema ${slug}: captura, contraste auditado y transición real`, async ({ page }) => {
       await page.setViewportSize({ width: 390, height: 844 });
@@ -196,7 +196,7 @@ test.describe('EVIDENCIA UX-DECISION · temas claro y oscuro', () => {
   }
 });
 
-test.describe('EVIDENCIA UX-DECISION · teclado', () => {
+test.describe('MESA_EVIDENCE_UX_DECISION · teclado', () => {
   test('el botón principal se alcanza con Tab y aplica la acción con Enter', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openScenario(page, 'priority-empty');
@@ -214,7 +214,7 @@ test.describe('EVIDENCIA UX-DECISION · teclado', () => {
   });
 });
 
-test.describe('EVIDENCIA UX-DECISION · táctil', () => {
+test.describe('MESA_EVIDENCE_UX_DECISION · táctil', () => {
   test.use({ hasTouch: true, isMobile: true });
 
   test('un toque en el control principal mueve el motor', async ({ page }) => {

@@ -23,7 +23,7 @@ async function openScenario(page: Page, id: string) {
   });
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto(`/?e2e-scenario=${id}`);
-  await expect(page.locator('.hand-trigger'), `no se montó el estado GameScenario ${id}`).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator('.hand-trigger'), `no se montó el estado GameScenario ${id}`).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.app')).toHaveAttribute('data-viewer', '0');
   return createBoardDriver(page);
 }
@@ -43,7 +43,7 @@ test('prioridad con pila vacía: contexto, una acción principal y cesión real'
 
   const before = Number(await applied(page));
   await primary.click();
-  await expect.poll(() => applied(page), { timeout: 15_000 }).not.toBe(String(before));
+  await expect.poll(() => applied(page), { timeout: 10_000 }).not.toBe(String(before));
 });
 
 test('prioridad con hechizo pendiente: pila real, cesión contextual y resolución por prioridades reales', async ({ page }) => {
@@ -55,7 +55,7 @@ test('prioridad con hechizo pendiente: pila real, cesión contextual y resoluci�
   const cast = panel(page).locator('button').filter({ hasText: 'Lanzar' }).first();
   await expect(cast).toBeVisible();
   await cast.click();
-  await expect.poll(() => applied(page), { timeout: 20_000 }).not.toBe(String(before));
+  await expect.poll(() => applied(page), { timeout: 10_000 }).not.toBe(String(before));
   await expect(page.locator('section[aria-label="Pila"]')).toHaveAttribute('data-empty', 'false');
 
   const rivalLife = page.locator('.player-bar[data-player-id="1"]');
@@ -101,7 +101,7 @@ test('declaración de atacantes: no atacar y confirmar borrador son decisiones d
   await expect(primary).toContainText('Confirmar ataque');
   const before = Number(await applied(page));
   await primary.click();
-  await expect.poll(() => applied(page), { timeout: 15_000 }).not.toBe(String(before));
+  await expect.poll(() => applied(page), { timeout: 10_000 }).not.toBe(String(before));
 });
 
 test('declaración de bloqueadores: no bloquear es explícito y el motor responde', async ({ page }) => {
@@ -111,7 +111,7 @@ test('declaración de bloqueadores: no bloquear es explícito y el motor respond
   await expect(primary).toContainText('No bloquear');
   const before = Number(await applied(page));
   await primary.click();
-  await expect.poll(() => applied(page), { timeout: 15_000 }).not.toBe(String(before));
+  await expect.poll(() => applied(page), { timeout: 10_000 }).not.toBe(String(before));
 });
 
 test('objetivos: selección directa, lista accesible y progreso sin duplicados', async ({ page }) => {
@@ -125,7 +125,7 @@ test('objetivos: selección directa, lista accesible y progreso sin duplicados',
   await expect(panel(page).locator('[data-tier="primary"]')).toHaveCount(0);
   const before = Number(await applied(page));
   await panel(page).locator('button').filter({ hasText: 'Lanzar' }).first().click();
-  await expect.poll(() => applied(page), { timeout: 20_000 }).not.toBe(String(before));
+  await expect.poll(() => applied(page), { timeout: 10_000 }).not.toBe(String(before));
   const waiting = await panel(page).getAttribute('data-waiting');
   expect(['TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'Priority']).toContain(waiting);
   if (waiting === 'TargetSelection' || waiting === 'TriggerTargetSelection') {
@@ -137,12 +137,19 @@ test('objetivos: selección directa, lista accesible y progreso sin duplicados',
 test('pago manual: accesible bajo demanda, nunca dominante', async ({ page }) => {
   const driver = await openScenario(page, 'manual-payment');
   await expect(page.locator('.app')).toHaveAttribute('data-waiting', 'Priority');
+  // Sin carta seleccionada, la preferencia vive en `DecisionTiers`; al
+  // inspeccionar el Rayo aparece también el control secundario de su ficha.
+  // Ambas superficies deben existir y ninguna puede ser la acción principal.
+  const tiersManual = panel(page).locator('[data-decision-tiers] button').filter({ hasText: 'Elegir maná manualmente' }).first();
+  await expect(tiersManual).toHaveCount(1);
+  await expect(page.locator('[data-decision-primary]')).not.toContainText('maná manualmente');
+  const card = driver.hand.locator('[data-card-id]').first();
+  await driver.clickCard(card);
   const manual = panel(page).locator('button.manual[data-tier="secondary"]');
   await expect(manual).toBeVisible();
-  await expect(page.locator('[data-decision-primary]')).not.toContainText('maná manualmente');
   const before = Number(await applied(page));
   await manual.click();
-  await expect.poll(() => applied(page), { timeout: 20_000 }).not.toBe(String(before));
+  await expect.poll(() => applied(page), { timeout: 10_000 }).not.toBe(String(before));
   await expect(page.locator('[data-decision-integrity="true"]')).toBeVisible();
   expect(await driver.waiting()).not.toBe('Priority');
 });
@@ -168,7 +175,7 @@ test('cancelación y busy: un doble pulso no despacha dos acciones', async ({ pa
   const primary = page.locator('[data-decision-primary]');
   const before = Number(await applied(page));
   await Promise.all([primary.click({ force: true }), primary.click({ force: true }).catch(() => {})]);
-  await expect.poll(() => applied(page), { timeout: 15_000 }).toBe(String(before + 1));
+  await expect.poll(() => applied(page), { timeout: 10_000 }).toBe(String(before + 1));
   await expect(page.locator('[data-decision-integrity="true"]')).toBeVisible();
 });
 
@@ -178,8 +185,8 @@ test('cancelación del lanzamiento: la acción de seguridad está fuera del desp
   await driver.clickCard(card);
   await panel(page).locator('button.manual[data-tier="secondary"]').click();
   const cancel = page.locator('[data-decision-cancel]');
-  await expect(cancel).toBeVisible({ timeout: 20_000 });
+  await expect(cancel).toBeVisible({ timeout: 10_000 });
   const before = Number(await applied(page));
   await cancel.first().click();
-  await expect.poll(() => applied(page), { timeout: 15_000 }).not.toBe(String(before));
+  await expect.poll(() => applied(page), { timeout: 10_000 }).not.toBe(String(before));
 });

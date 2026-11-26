@@ -199,8 +199,9 @@ jobs:
     runs-on: ubuntu-latest
     # GameScenario fixtures place Phase directly in the state each E2E needs;
     # the browser suite no longer plays through random draws to find a card.
-    # Keep the measured 40-minute ceiling, with each test independently bounded.
-    timeout-minutes: 40
+    # UX-DECISION adds ten motor-real transition tests on top of the measured
+    # 26-minute baseline; keep headroom without weakening the Playwright gate.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -240,10 +241,11 @@ jobs:
       # The JSON report feeds the annotation step below: the directory names
       # alone say which test broke, the message says why. `list` keeps the
       # readable console output.
-      # The evidence matrix runs in the parallel `ux-evidence` job against
-      # BOTH the base UI and this UI; it is excluded here so the Chromium gate
-      # keeps its measured 40-minute budget.
-      - run: bun --bun playwright test --reporter=list,json --grep-invert EVIDENCIA
+      # The UX-DECISION evidence matrix runs in the parallel `ux-evidence` job
+      # against BOTH the base UI and this UI. The marker is deliberately unique:
+      # a plain `EVIDENCIA` also matches the seven `arena-quality-gate` titles
+      # (which end in «y evidencia») and would silently drop them from this gate.
+      - run: bun --bun playwright test --reporter=list,json --grep-invert MESA_EVIDENCE_UX_DECISION
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/report.json
       # The job summary is the evidence and the gate: it publishes passed /
@@ -258,7 +260,7 @@ jobs:
       # download that some networks cannot reach; annotations are plain JSON on
       # the API, so every failure is repeated there with its error message.
       - name: Annotate failing Playwright tests
-        if: failure()
+        if: always()
         run: bun scripts/e2e-annotations.ts
       - if: always()
         uses: actions/upload-artifact@v4
@@ -319,6 +321,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/evidence/after" "$GITHUB_WORKSPACE/evidence/baseline"
           cd /tmp/mesa-baseline
           nohup bun run dev --port 5174 > /tmp/mesa-baseline-vite.log 2>&1 &
           cd "$GITHUB_WORKSPACE"
@@ -326,17 +329,36 @@ jobs:
             if curl -fsS http://127.0.0.1:5174/ >/dev/null; then break; fi
             sleep 1
           done
+          curl -fsS http://127.0.0.1:5174/ >/dev/null || { echo "::error::baseline dev server did not start"; tail -30 /tmp/mesa-baseline-vite.log; exit 1; }
           for variant in after baseline; do
             url=http://127.0.0.1:5173
             if [ "$variant" = baseline ]; then url=http://127.0.0.1:5174; fi
+            echo "::group::evidence $variant ($url)"
             MESA_UI_VARIANT="$variant" \
             MESA_EVIDENCE_URL="$url" \
             MESA_EVIDENCE_SHA="$HEAD_SHA" \
             MESA_BASELINE_SHA="$BASE_SHA" \
             MESA_EVIDENCE_OUT="$GITHUB_WORKSPACE/evidence/$variant" \
-              bun --bun playwright test tests/e2e/ux-decision-evidence.spec.ts --reporter=list --grep EVIDENCIA
+              bun --bun playwright test tests/e2e/ux-decision-evidence.spec.ts --reporter=list --grep MESA_EVIDENCE_UX_DECISION 2>&1 | tee "/tmp/ux-evidence-$variant.log"
+            echo "::endgroup::"
           done
-          MESA_EVIDENCE_ROOT="$GITHUB_WORKSPACE/evidence" bun scripts/ux-decision-compare.ts
+          MESA_EVIDENCE_ROOT="$GITHUB_WORKSPACE/evidence" bun scripts/ux-decision-compare.ts 2>&1 | tee /tmp/ux-evidence-compare.log
+      - name: Annotate UX evidence failures
+        if: failure()
+        run: |
+          for f in /tmp/ux-evidence-after.log /tmp/ux-evidence-baseline.log /tmp/ux-evidence-compare.log /tmp/mesa-baseline-vite.log; do
+            test ! -s "$f" && continue
+            grep -E 'Error|error|failed|Failed|✘|✖|expect|Timeout|panic|no se montó|comparison gate' "$f" \
+              | tail -20 | while IFS= read -r line; do echo "::error::$line"; done
+          done
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-evidence-logs
+          path: |
+            /tmp/ux-evidence-*.log
+            /tmp/mesa-baseline-vite.log
+          if-no-files-found: warn
       - if: always()
         uses: actions/upload-artifact@v4
         with:
