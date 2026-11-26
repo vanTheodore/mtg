@@ -2456,7 +2456,7 @@ fn scan_effect(x: &Effect, mode: ScanMode) -> Axes<'_> {
             if let Some(x) = total_power_cap {
                 acc = acc.or(scan_quantity_expr(x, mode));
             }
-            if let Some(KeeperConstraint::ExactCount { count }) = keeper_constraint {
+            if let Some(KeeperConstraint::Count { count }) = keeper_constraint {
                 acc = acc.or(scan_quantity_expr(count, mode));
             }
             // CR 608.2c + CR 122.1: the printed keeper mark's count.
@@ -4844,7 +4844,7 @@ fn scan_parsed_condition(x: &ParsedCondition, mode: ScanMode) -> Axes<'_> {
         ParsedCondition::PlayerCountAtLeast { filter, minimum: _ } => {
             scan_player_filter(filter, mode)
         }
-        ParsedCondition::IsOpponentsTurn => Axes::NONE,
+        ParsedCondition::IsOpponentsTurn | ParsedCondition::IsMonarch => Axes::NONE,
         // CR 601.2c: the targets the spell being cast has chosen.
         ParsedCondition::SourceMatchesFilter { filter }
         | ParsedCondition::SpellTargetsFilter { filter } => {
@@ -5343,6 +5343,7 @@ fn scan_trigger_definition(
         counter_filter: _,
         saga_chapter: _,
         batched: _,
+        damage_received_grouping: _,
         die_sides: _,
         gotcha_condition: _,
         expend_threshold: _,
@@ -5630,6 +5631,14 @@ fn scan_trigger_condition(x: &TriggerCondition, mode: ScanMode) -> Axes<'_> {
         }
         TriggerCondition::CastVariantPaidPersistent { variant: _ } => Axes::NONE,
         TriggerCondition::ActivatedAbilityIsNonMana => Axes::NONE,
+        TriggerCondition::LoyaltyCountersRemovedAtLeast { minimum: _ } => Axes {
+            event: true,
+            sibling: SiblingReads::None,
+            projected: false,
+            source_counters: false,
+            history: HistoryReads::NONE,
+            that_player: false,
+        },
         TriggerCondition::DealtDamageBySourceThisTurn => Axes {
             event: false,
             sibling: SiblingReads::None,
@@ -6498,6 +6507,7 @@ fn scan_filter_prop(x: &FilterProp, mode: ScanMode) -> Axes<'_> {
         | FilterProp::HasColor { .. }
         | FilterProp::PowerGTSource
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -8790,6 +8800,7 @@ fn scan_resolved_continuous_static(
         protection_does_not_remove: _,
         room_door: _,
         granting_object: _,
+        origin: _,
     } = sd;
     let attack_restriction = matches!(
         static_mode,
@@ -10333,6 +10344,27 @@ mod tests {
     use crate::types::statics::StaticMode;
     use crate::types::triggers::TriggerMode;
     use crate::types::zones::Zone;
+
+    #[test]
+    fn loyalty_event_count_is_event_read_not_projected_live_resource() {
+        let event_count = TriggerCondition::LoyaltyCountersRemovedAtLeast { minimum: 2 };
+        let event_axes = scan_trigger_condition(&event_count, ScanMode::LoopFirewall);
+        assert!(event_axes.event);
+        assert!(!event_axes.projected);
+
+        let live_life = TriggerCondition::QuantityComparison {
+            lhs: QuantityExpr::Ref {
+                qty: QuantityRef::LifeTotal {
+                    player: PlayerScope::Controller,
+                },
+            },
+            comparator: Comparator::GT,
+            rhs: QuantityExpr::Fixed { value: 20 },
+        };
+        let live_axes = scan_trigger_condition(&live_life, ScanMode::LoopFirewall);
+        assert!(!live_axes.event);
+        assert!(live_axes.projected);
+    }
 
     /// CR 508.6: an attack restriction reads the attack history only when its defended filter
     /// names "a player it has already attacked this turn".

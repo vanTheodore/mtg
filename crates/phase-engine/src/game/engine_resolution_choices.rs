@@ -5933,8 +5933,14 @@ pub(super) fn handle_resolution_choice(
             // continuation counts ("for each card revealed this way").
             if cardinality == crate::types::ability::ObjectSelectionCardinality::AnyNumber {
                 effects::reveal_hand::validate_reveal_selection(&cards, cardinality, &chosen)?;
-                effects::reveal_hand::reveal_selected_hand_cards(state, player, &chosen, events);
-                effects::publish_tracked_set(state, chosen);
+                if effects::record_player_scope_reveal(state, player, chosen.clone(), events)
+                    .is_none()
+                {
+                    effects::reveal_hand::reveal_selected_hand_cards(
+                        state, player, &chosen, events,
+                    );
+                    effects::publish_scoped_reveal(state, player, chosen);
+                }
                 set_priority(state, player);
                 super::engine::resume_pending_continuation_if_priority(state, events)
                     .expect("a settled reveal choice must resume its continuation");
@@ -6862,6 +6868,28 @@ pub(super) fn handle_resolution_choice(
             },
             GameAction::ChooseBranch { index },
         ) => {
+            // CR 614.6 + CR 616.1: a branch answer to a parked token substitute
+            // applies the substitute to its decider's part of the event; any
+            // other branch choice resolves as before.
+            if super::replacement::parked_token_substitute(
+                state,
+                source_id,
+                crate::types::game_state::TokenSubstituteChoice::Branch,
+            ) {
+                if index >= branches.len() {
+                    return Err(EngineError::InvalidAction(format!(
+                        "branch index {index} is outside 0..{}",
+                        branches.len()
+                    )));
+                }
+                return Ok(ResolutionChoiceOutcome::WaitingFor(
+                    super::engine_replacement::resume_token_substitute(
+                        state,
+                        super::replacement::TokenSubstituteAnswer::Branch(index),
+                        events,
+                    )?,
+                ));
+            }
             set_priority(state, player);
             // Computed before `branches` moves into the selection: the exact
             // predicate the enters-counter capture keys on.
@@ -9072,9 +9100,11 @@ pub(super) fn handle_resolution_choice(
                 }
             }
 
-            if let Some(snapshot) =
-                effects::parent_referent_context_from_events(state, &events[events_before_effect..])
-            {
+            if let Some(snapshot) = effects::parent_referent_context_from_events(
+                state,
+                &events[events_before_effect..],
+                true,
+            ) {
                 if let Some(frame) = state.active_ability_continuation_frame_mut() {
                     frame
                         .pending
@@ -9608,7 +9638,13 @@ pub(super) fn handle_resolution_choice(
                 events,
             )
             .map_err(|e| EngineError::InvalidAction(format!("spellbook draft: {e:?}")))?;
-            ResolutionChoiceOutcome::WaitingFor(finish_with_continuation(state, player, events))
+            ResolutionChoiceOutcome::WaitingFor(
+                if matches!(state.waiting_for, WaitingFor::Priority { .. }) {
+                    finish_with_continuation(state, player, events)
+                } else {
+                    state.waiting_for.clone()
+                },
+            )
         }
         (
             WaitingFor::DamageSourceChoice {
@@ -10332,7 +10368,7 @@ pub(super) fn handle_resolution_choice(
                 ResolutionChoiceOutcome::WaitingFor(state.waiting_for.clone())
             }
         }
-        // CR 101.4 + CR 701.21a: An exact-cardinality keeper choice. The
+        // CR 101.4 + CR 701.21a: An exact or up-to keeper choice. The
         // collected protected sets are handed to the shared scope-sacrifice
         // queue only once every scoped player has chosen, so replacement
         // choices cannot bypass later sacrifices or the parked continuation.
@@ -10342,6 +10378,7 @@ pub(super) fn handle_resolution_choice(
                 target_player: _,
                 eligible,
                 required_count,
+                minimum_count,
                 keeper_counter,
                 choose_filter,
                 sacrifice_filter,
@@ -10354,9 +10391,11 @@ pub(super) fn handle_resolution_choice(
             },
             GameAction::ChooseKeptPermanents { kept },
         ) => {
-            if kept.len() != required_count {
+            // CR 101.4 + CR 701.21a: keep between the published bounds; `None` is exact.
+            let minimum = minimum_count.unwrap_or(required_count);
+            if !(minimum..=required_count).contains(&kept.len()) {
                 return Err(EngineError::InvalidAction(format!(
-                    "Must keep exactly {required_count} permanent(s), got {}",
+                    "Must keep between {minimum} and {required_count} permanent(s), got {}",
                     kept.len()
                 )));
             }
@@ -10378,7 +10417,7 @@ pub(super) fn handle_resolution_choice(
 
             let events_before_sacrifice = events.len();
             set_priority(state, player);
-            effects::choose_and_sacrifice_rest::step_exact_count(
+            effects::choose_and_sacrifice_rest::step_keeper_count(
                 state,
                 source_id,
                 source_controller,
@@ -10388,6 +10427,7 @@ pub(super) fn handle_resolution_choice(
                 &choose_filter,
                 &sacrifice_filter,
                 required_count,
+                minimum_count,
                 keeper_counter.as_ref(),
                 &scoped_players,
                 events,
@@ -12157,7 +12197,7 @@ pub(crate) fn run_batch_completion(
                 });
             }
             if let Some(snapshot) = settled_kept_snapshot
-                .or_else(|| effects::parent_referent_context_from_events(state, events))
+                .or_else(|| effects::parent_referent_context_from_events(state, events, true))
             {
                 if let Some(frame) = state.active_ability_continuation_frame_mut() {
                     frame
@@ -12413,6 +12453,7 @@ pub(crate) fn run_batch_completion(
         BatchCompletion::DestroyPopulationSettled {
             ability,
             settled_destroyed,
+            ..
         } => {
             let destroyed =
                 settled_destroyed.expect("destroy population completion must be settled");

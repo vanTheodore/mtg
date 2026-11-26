@@ -574,15 +574,17 @@ export function stationPrompt(snapshot: EngineSnapshot | null): StationPrompt | 
   };
 }
 /**
- * CR 101.4 + CR 701.21a: the **exact** keeper — "each player chooses three
- * permanents they control, then sacrifices the rest" (Razia's Purification), and
- * the one-creature vow-counter form (Promise of Loyalty, CR 122.1).
+ * CR 101.4 + CR 701.21a: the keeper prompt — "each player chooses three
+ * permanents they control, then sacrifices the rest" (Razia's Purification),
+ * the one-creature vow-counter form (Promise of Loyalty, CR 122.1) and the
+ * "up to" form Phase v0.133.0 added (Covetous Elegy, Archfiend of Depravity).
  *
- * `required_count` is the number the engine already resolved **and capped to this
- * prompt's eligible pool** under CR 609.3 ("do as much as possible"); the prompt's
- * own contract says display clients must render it and not derive a second legality
- * rule from `eligible.len()`. So the screen shows that number, asks for exactly
- * that many distinct permanents, and never silently lowers it.
+ * v0.133.0 redefines the two numbers: `required_count` is the printed **ceiling**,
+ * deliberately NOT capped to this prompt's eligible pool (CR 609.3 is resolved by
+ * the engine, not by a display client), and `minimum_count` is the **floor**.
+ * Absent or `null` means exactly `required_count`; `0` means "up to N", where
+ * keeping nothing is legal. Both are rendered exactly as they arrive; the screen
+ * derives no third legality rule from `eligible.len()`.
  *
  * `keeper_counter` is the mark the instruction owes its keepers (CR 122.1), placed
  * before the sacrifice; it rides here because the resolved ability is gone by the
@@ -592,8 +594,10 @@ export type KeepExactPrompt = {
   player: PlayerId;
   targetPlayer: PlayerId;
   eligible: ObjectId[];
-  /** CR 609.3: already capped by the engine — rendered, never recomputed. */
+  /** CR 609.3: the engine's ceiling — rendered, never recomputed. */
   requiredCount: number;
+  /** v0.133.0: floor. Equal to requiredCount for an exact keeper, 0 for "up to". */
+  minimumCount: number;
   /** CR 122.1: the keeper mark, with its own count already resolved (CR 608.2h). */
   keeperCounter: { type: string; count: number } | null;
   chooserScope: 'self' | 'forAll';
@@ -619,17 +623,24 @@ export function keepExactPrompt(snapshot: EngineSnapshot | null): KeepExactPromp
   const rawCounter = Array.isArray(data.keeper_counter) ? (data.keeper_counter as unknown[]) : null;
   const counterType = rawCounter ? counterTypeName(rawCounter[0]) : null;
   const counterCount = rawCounter && typeof rawCounter[1] === 'number' ? (rawCounter[1] as number) : 1;
+  // `count` is the older alias of the ceiling. The floor is v0.133.0's
+  // `Option<usize>`: absent/null is an exact keeper, never a guess from the pool.
+  const requiredCount =
+    typeof data.required_count === 'number' && Number.isFinite(data.required_count)
+      ? Math.max(0, Math.trunc(data.required_count))
+      : typeof data.count === 'number' && Number.isFinite(data.count)
+        ? Math.max(0, Math.trunc(data.count))
+        : 0;
+  const minimumCount =
+    typeof data.minimum_count === 'number' && Number.isFinite(data.minimum_count)
+      ? Math.min(requiredCount, Math.max(0, Math.trunc(data.minimum_count)))
+      : requiredCount;
   return {
     player: typeof data.player === 'number' ? data.player : snapshot!.viewer,
     targetPlayer: typeof data.target_player === 'number' ? data.target_player : snapshot!.viewer,
     eligible: ids(data.eligible),
-    // `count` is the older alias the payload may still use.
-    requiredCount:
-      typeof data.required_count === 'number'
-        ? Math.max(0, data.required_count)
-        : typeof data.count === 'number'
-          ? Math.max(0, data.count)
-          : 0,
+    requiredCount,
+    minimumCount,
     keeperCounter: counterType ? { type: counterType, count: counterCount } : null,
     chooserScope: data.chooser_scope === 'ControllerForAll' ? 'forAll' : 'self',
     sourceId: typeof data.source_id === 'number' ? (data.source_id as ObjectId) : null,
@@ -637,7 +648,7 @@ export function keepExactPrompt(snapshot: EngineSnapshot | null): KeepExactPromp
     keptBefore: ids(data.all_kept)
   };
 }
-/** CR 101.4: exactly `required_count` permanents to keep; the rest are sacrificed. */
+/** CR 101.4: the kept set, inside the engine's [minimumCount, requiredCount] window. */
 export function keepExactAction(ids: ObjectId[]): GameAction {
   return { type: 'ChooseKeptPermanents', data: { kept: [...ids] } };
 }

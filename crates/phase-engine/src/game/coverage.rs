@@ -1159,6 +1159,11 @@ fn fmt_typed_filter(tf: &TypedFilter) -> String {
                 };
                 parts.push(label);
             }
+            // CR 205.2a: no single-word quality names a card-type count, so the
+            // generic fallback (mirroring ColorCount's) is the whole label.
+            FilterProp::CardTypeCount { comparator, count } => {
+                parts.push(format!("card types {comparator:?} {count}").to_lowercase());
+            }
             FilterProp::ManaSymbolCount {
                 color,
                 comparator,
@@ -4950,6 +4955,18 @@ fn trigger_details(trig: &TriggerDefinition) -> Vec<(String, String)> {
             d.push(("damage kind".into(), "noncombat only".into()));
         }
     }
+    match trig.damage_received_grouping {
+        crate::types::ability::DamageReceivedGrouping::PerEvent => {}
+        crate::types::ability::DamageReceivedGrouping::PerPlayerRecipient => {
+            d.push((
+                "damage received grouping".into(),
+                "per player recipient".into(),
+            ));
+        }
+        crate::types::ability::DamageReceivedGrouping::WholeBatch => {
+            d.push(("damage received grouping".into(), "whole batch".into()));
+        }
+    }
     if let Some(vt) = &trig.valid_target {
         d.push(("valid target".into(), fmt_target(vt)));
     }
@@ -5277,6 +5294,9 @@ fn fmt_trigger_condition(
         TC::CastVariantPaid { .. } => "cast variant was paid".into(),
         TC::CastVariantPaidPersistent { .. } => "cast variant was paid (persistent)".into(),
         TC::ActivatedAbilityIsNonMana => "activated ability is not a mana ability".into(),
+        TC::LoyaltyCountersRemovedAtLeast { minimum } => {
+            format!("loyalty counters removed ≥ {minimum}")
+        }
         TC::DealtDamageBySourceThisTurn => "dealt damage by source this turn".into(),
         TC::DealtDamageThisTurnBySource { source } => {
             format!("dealt damage this turn by {}", fmt_target(source))
@@ -11699,6 +11719,7 @@ fn extract_trigger_condition_features(
         | TriggerCondition::CastVariantPaid { .. }
         | TriggerCondition::CastVariantPaidPersistent { .. }
         | TriggerCondition::ActivatedAbilityIsNonMana
+        | TriggerCondition::LoyaltyCountersRemovedAtLeast { .. }
         | TriggerCondition::DealtDamageBySourceThisTurn
         | TriggerCondition::DealtDamageThisTurnBySource { .. }
         | TriggerCondition::FirstTimeObjectTappedThisTurn
@@ -17737,6 +17758,7 @@ mod tests {
             trigger.execute = Some(Box::new(tracked_return_mid(uses_tracked_set, None)));
             CardFace {
                 static_abilities: vec![StaticDefinition {
+                    origin: Default::default(),
                     mode: StaticMode::Continuous,
                     affected: None,
                     modifications: vec![ContinuousModification::GrantTrigger {
@@ -18496,6 +18518,33 @@ mod tests {
             when_followed.iter().any(|(k, _)| k == "duration"),
             "reach guard: the default def still renders its duration: {when_followed:?}"
         );
+    }
+
+    #[test]
+    fn damage_received_grouping_reaches_parse_details() {
+        use crate::types::ability::DamageReceivedGrouping::{
+            PerEvent, PerPlayerRecipient, WholeBatch,
+        };
+
+        let mut trig = TriggerDefinition::new(TriggerMode::DamageReceived);
+        for (grouping, expected) in [
+            (PerEvent, None),
+            (PerPlayerRecipient, Some("per player recipient")),
+            (WholeBatch, Some("whole batch")),
+        ] {
+            trig.damage_received_grouping = grouping;
+            let details = trigger_details(&trig);
+            let projected: Vec<_> = details
+                .iter()
+                .filter(|(key, _)| key == "damage received grouping")
+                .map(|(_, value)| value.as_str())
+                .collect();
+            assert_eq!(
+                projected,
+                expected.into_iter().collect::<Vec<_>>(),
+                "{grouping:?}"
+            );
+        }
     }
 
     /// #7406 — a trigger's `attack_target_filter` must reach the parse-diff
@@ -24290,6 +24339,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
             AbilityKind::Spell,
             Effect::GenericEffect {
                 static_abilities: vec![StaticDefinition {
+                    origin: Default::default(),
                     mode: StaticMode::MustBeBlocked { by: None },
                     affected: None,
                     modifications: vec![ContinuousModification::AddStaticMode {
@@ -24337,6 +24387,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
             AbilityKind::Spell,
             Effect::GenericEffect {
                 static_abilities: vec![StaticDefinition {
+                    origin: Default::default(),
                     mode: StaticMode::Continuous,
                     affected: None,
                     modifications: vec![
@@ -27308,6 +27359,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
         let oracle = "As an additional cost to cast blue permanent spells, you may pay 2 life. Those spells cost {U} less to cast if you paid life this way. This effect reduces only the amount of blue mana you pay.";
         face.oracle_text = Some(oracle.to_string());
         face.static_abilities.push(StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::DefilerCostReduction {
                 color: ManaColor::Blue,
                 life_cost: 2,
@@ -27354,6 +27406,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
         let oracle = "As an additional cost to cast blue permanent spells, you may pay 2 life. Those spells cost {U} less to cast if you paid life this way. This effect reduces only the amount of blue mana you pay.";
         face.oracle_text = Some(oracle.to_string());
         face.static_abilities.push(StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::DefilerCostReduction {
                 color: ManaColor::Blue,
                 life_cost: 2,
@@ -27397,6 +27450,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
         let oracle = "As an additional cost to cast blue permanent spells, you may pay 2 life.\nThose spells cost {U} less to cast if you paid life this way.";
         face.oracle_text = Some(oracle.to_string());
         face.static_abilities.push(StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::DefilerCostReduction {
                 color: ManaColor::Blue,
                 life_cost: 2,
@@ -27436,6 +27490,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
         let oracle = "As an additional cost to cast artifact spells, you may pay 2 life. Those spells cost {1} less to cast.";
         face.oracle_text = Some(oracle.to_string());
         face.static_abilities.push(StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::DefilerCostReduction {
                 color: ManaColor::Blue,
                 life_cost: 2,
@@ -28169,6 +28224,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
         let oracle = "Skip your draw step.";
         face.oracle_text = Some(oracle.to_string());
         face.static_abilities.push(StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::SkipStep { step: Phase::Draw },
             affected: Some(TargetFilter::Controller),
             modifications: vec![],
@@ -28203,6 +28259,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
         let oracle = "Players skip their upkeep steps.";
         face.oracle_text = Some(oracle.to_string());
         face.static_abilities.push(StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::SkipStep {
                 step: Phase::Upkeep,
             },
@@ -28249,6 +28306,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
         let oracle = "Players can't draw cards.";
         face.oracle_text = Some(oracle.to_string());
         face.static_abilities.push(StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::CantDraw {
                 who: ProhibitionScope::AllPlayers,
             },
@@ -28286,6 +28344,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
         let oracle = "You can't draw cards.";
         face.oracle_text = Some(oracle.to_string());
         face.static_abilities.push(StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::CantDraw {
                 who: ProhibitionScope::Controller,
             },
@@ -28325,6 +28384,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
         let oracle = "Your opponents play with their hands revealed.";
         face.oracle_text = Some(oracle.to_string());
         face.static_abilities.push(StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::RevealHand {
                 who: ProhibitionScope::Opponents,
             },
@@ -28372,6 +28432,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
             ),
         ] {
             face.static_abilities.push(StaticDefinition {
+                origin: Default::default(),
                 mode: StaticMode::CantBeBlockedExceptBy { kind },
                 affected: Some(TargetFilter::SelfRef),
                 modifications: vec![],
@@ -28659,6 +28720,7 @@ have been revealed, Aggressive Detective deals 2 damage to each opponent.";
         let oracle = "Creatures your opponents control lose flying and can't have or gain flying.";
         face.oracle_text = Some(oracle.to_string());
         face.static_abilities.push(StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::CantHaveKeyword {
                 keyword: Keyword::Flying,
             },
@@ -29783,6 +29845,22 @@ mod swallow_provenance_tests {
         assert_eq!(
             swallow_clause_text(&warning, CUT_SHORT).as_deref(),
             Some(DESTROY)
+        );
+    }
+
+    #[test]
+    fn card_type_count_label_uses_generic_fallback() {
+        let label = super::fmt_typed_filter(&crate::types::ability::TypedFilter {
+            type_filters: vec![crate::types::ability::TypeFilter::Card],
+            controller: None,
+            properties: vec![crate::types::ability::FilterProp::CardTypeCount {
+                comparator: crate::types::ability::Comparator::GE,
+                count: 2,
+            }],
+        });
+        assert!(
+            label.contains("card types ge 2"),
+            "unexpected filter label: {label}"
         );
     }
 }

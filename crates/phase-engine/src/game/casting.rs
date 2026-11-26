@@ -1416,6 +1416,7 @@ pub(crate) fn is_blocked_by_cant_play_lands(
                         triggering_object: None,
                         declared_slot_view: None,
                         granting_object: None,
+                        stack_trigger_context: None,
                         pre_entry_battlefield: None,
                     };
                     // CR 712.12 + CR 101.2: a spell//land modal card is played
@@ -2082,8 +2083,12 @@ pub(crate) fn foretell_cost(state: &GameState, object_id: ObjectId) -> Option<Ma
 /// CR 702.143a-b: A player may foretell a card from hand any time they have
 /// priority during their turn by paying {2}. This is a special action and does
 /// not use the stack.
+/// CR 805.5a: "their turn" is the team's turn — any living teammate of the
+/// active player may foretell when the team has priority.
 pub fn can_foretell_card(state: &GameState, player: PlayerId, object_id: ObjectId) -> bool {
-    if state.active_player != player {
+    // CR 702.143a + CR 805.5a: the acting seat may be any living teammate of
+    // the active player, through the shared membership authority.
+    if !super::restrictions::acts_on_active_turn(state, player) {
         return false;
     }
 
@@ -2455,7 +2460,9 @@ pub fn handle_foretell(
     card_id: CardId,
     events: &mut Vec<GameEvent>,
 ) -> Result<WaitingFor, EngineError> {
-    if state.active_player != player {
+    // CR 702.143a + CR 805.5a: as in `can_foretell_card` — the acting seat may
+    // be any living teammate of the active player, not only the representative.
+    if !super::restrictions::acts_on_active_turn(state, player) {
         return Err(EngineError::ActionNotAllowed(
             "Foretell is legal only during your turn".to_string(),
         ));
@@ -5921,7 +5928,9 @@ fn grant_digest(definition: &StaticDefinition) -> Option<crate::types::game_stat
 /// grant a cast-from-exile permission to `player`?" scan so the caller can
 /// (a) walk the per-turn rolling exile pool keyed on `source_id`, and (b)
 /// stamp the per-source frequency slot at cast finalization.
-#[derive(Clone, Copy)]
+/// Clone-only (not `Copy`): the `pool` field's `CounterLinked` payload is
+/// Clone-only, so the struct cannot be `Copy`.
+#[derive(Clone)]
 struct ExilePermissionSource<'a> {
     source_id: ObjectId,
     filter: &'a TargetFilter,
@@ -5937,8 +5946,8 @@ struct ExilePermissionSource<'a> {
     /// `Cast` sources and the land-play path can admit lands for `Play` sources.
     play_mode: CardPlayMode,
     /// CR 113.6b + CR 406.6: Which exile-link pool the source draws from —
-    /// `ThisTurn` (per-turn rolling list) or `Persistent` (lifetime
-    /// `exile_links`).
+    /// `ThisTurn` (per-turn rolling list), `Persistent` (lifetime
+    /// `exile_links`), or `CounterLinked` (counter-keyed, source-agnostic).
     pool: ExileCardPool,
     /// CR 117.1c: When the permission functions — `AnyTime` or `YourTurnOnly`.
     timing: ExileCastTiming,
@@ -5952,7 +5961,7 @@ struct ExilePermissionSource<'a> {
     /// CR 118.9 + CR 601.2f: Optional non-mana cost rider on the exile-cast
     /// static (Valgavoth alternative pay-life; Dawnhand additional
     /// remove-counters). Borrowed from the static definition so the source struct
-    /// stays `Copy`.
+    /// stays cheap to clone.
     extra_cost: &'a Option<crate::types::statics::CastExtraCost>,
     /// CR 406.6 + CR 607.2b: The player whose exiles are the only eligible pool
     /// cards (matched against `GameObject::exiled_by`) — `Some` for an "each
@@ -5961,12 +5970,76 @@ struct ExilePermissionSource<'a> {
     own_exiles_of: Option<PlayerId>,
 }
 
+/// CR 113.6b + CR 406.6 + CR 406.2: Hot-path fast-exit predicate for
+/// `ExileCastPermission` cast discovery (the per-card admission gates use the
+/// card-scoped `exile_permission_pools_cannot_offer` instead). True only when
+/// NO pool scope can offer a card: both tracked
+/// pools (`ThisTurn`, `Persistent`) are empty AND no exiled card carries any
+/// counters. The counter clause is sound for every `CounterLinked` matcher
+/// (`OfType` and `Any` alike): `count_in` sums the card's counter map, so zero
+/// counters anywhere means every counter-keyed pool is empty. The tracked-pool
+/// emptiness is checked first so the common nothing-exiled board exits on two
+/// `is_empty` reads without scanning exile.
+fn exile_permission_pools_empty(state: &GameState) -> bool {
+    state.cards_exiled_with_source_this_turn.is_empty()
+        && state.exile_links.is_empty()
+        && !state.exile.iter().any(|id| {
+            state
+                .objects
+                .get(id)
+                .is_some_and(|obj| !obj.counters.is_empty())
+        })
+}
+
+/// CR 406.2 + CR 122.1 + CR 607.2a + CR 400.7: Card-scoped fast-exit predicate
+/// for the three per-card `ExileCastPermission` admission gates (cast admission
+/// ×2, land authorization). True only when NO pool scope can offer `candidate`:
+/// every `ThisTurn` pool is empty (the per-turn map is empty), every live-link
+/// `Persistent` pile is empty (`exile_links` is empty), AND the candidate
+/// itself carries no counters (a `CounterLinked` pool can only contain a
+/// countered card — `CounterMatch::count_in` of an empty map is 0). O(1): two
+/// `is_empty` reads plus one `objects.get` and a `counters.is_empty`.
+///
+/// Soundness: when this fires, the scan the gates would otherwise run could
+/// additionally see only (a) the trigger route of
+/// `linked_exile_cards_for_source` — unreachable from these gates, because a
+/// static is collected only from battlefield objects and command-zone emblems
+/// (`exile_permission_sources`), and a Battlefield-exit event for `source_id`
+/// means the source just left the battlefield, so its static is dead and
+/// uncollected (emblems never leave the battlefield) — and (b) a successor-LKI
+/// bare read, which CR 400.7 (a moved object "becomes a new object with no
+/// memory of, or relation to, its previous existence"; no 400.7 exception
+/// covers a successor static reading a departed pile) and CR 607.2a (the
+/// second ability "refers only to cards … put there as a result of an
+/// instruction … in the first ability" — of this object, which exiled nothing)
+/// exclude. So `None` is correct whether the scan would find nothing (the
+/// common case) or only that pile.
+///
+/// There is deliberately NO linked-exile-LKI conjunct: a successor-LKI pile is
+/// not an offer to its successor (see the `LinkedExileLki::admits` doc — "a
+/// bare read made for it is over-admitted"), so consulting LKI here would only
+/// reopen the scan onto a pile the gates must refuse. A card-scoped O(1)
+/// predicate provably cannot do better: the C1-elsewhere corner (counters on a
+/// non-candidate exiled card) differs from the empty corner only in counters
+/// elsewhere, which no predicate reading only tracked-set emptiness plus the
+/// candidate's own counters can see — so tip-exactness is impossible and this
+/// pre-PR-parity exit is the optimal card-scoped verdict.
+fn exile_permission_pools_cannot_offer(state: &GameState, candidate: ObjectId) -> bool {
+    state.cards_exiled_with_source_this_turn.is_empty()
+        && state.exile_links.is_empty()
+        && state
+            .objects
+            .get(&candidate)
+            .is_none_or(|obj| obj.counters.is_empty())
+}
+
 /// CR 113.6b + CR 406.6: The set of exiled object ids this source's permission
 /// may currently draw from, per its pool scope. `ThisTurn` reads the per-turn
 /// rolling list; `Persistent` reads the lifetime `exile_links` set (the same
-/// source-keyed set that backs `TargetFilter::ExiledBySource`).
+/// source-keyed set that backs `TargetFilter::ExiledBySource`); `CounterLinked`
+/// scans live `state.exile` for cards the matcher counts (no link record).
 fn exile_permission_pool(state: &GameState, source: &ExilePermissionSource<'_>) -> Vec<ObjectId> {
-    let mut pool = match source.pool {
+    let mut pool = match &source.pool {
         ExileCardPool::ThisTurn => state
             .cards_exiled_with_source_this_turn
             .get(&source.source_id)
@@ -5979,6 +6052,22 @@ fn exile_permission_pool(state: &GameState, source: &ExilePermissionSource<'_>) 
                 .map(|entry| entry.exiled_id)
                 .collect()
         }
+        // CR 406.2 + CR 122.1 + CR 611.3a: counter-keyed, source-agnostic pool
+        // — every exiled card carrying a counter the matcher counts (Tinybones,
+        // Bauble Burglar: stash counters). The pool reads live `state.exile`,
+        // so zone exit prunes by construction: a card that left exile is not
+        // scanned, and a removed counter exits on the next read (CR 611.3a).
+        ExileCardPool::CounterLinked { matcher } => state
+            .exile
+            .iter()
+            .filter(|id| {
+                state
+                    .objects
+                    .get(*id)
+                    .is_some_and(|obj| matcher.count_in(&obj.counters) > 0)
+            })
+            .copied()
+            .collect(),
     };
     // CR 406.6 + CR 607.2b: An "each player … cards they exiled with ~" grant
     // admits only the source-linked cards this player exiled — the recorded
@@ -5992,6 +6081,54 @@ fn exile_permission_pool(state: &GameState, source: &ExilePermissionSource<'_>) 
         });
     }
     pool
+}
+
+/// CR 406.6 + CR 607.2a + CR 122.1 + CR 400.1: Point-membership sibling of
+/// `exile_permission_pool` — whether `candidate` is in `source`'s pool,
+/// without building it. Each arm transcribes its enumeration arm's filter to a
+/// point predicate, so this agrees with
+/// `exile_permission_pool(state, source).contains(&candidate)` on every
+/// consistent state: `ThisTurn` is the per-turn map lookup for `source_id`;
+/// `Persistent` is the same `linked_exile_cards_for_source` call with `.any()`
+/// instead of collect-then-`contains` (LKI/trigger fallbacks identical by
+/// construction); `CounterLinked` is the same `count_in > 0` filter with the
+/// `obj.zone == Zone::Exile` conjunct from the exile-membership authority
+/// (`exiled_card_snapshot`; zone/container sync is maintained by the single
+/// zone-change pipeline). The shared `own_exiles_of` gate applies exactly as
+/// in the pool builder, including its conditional shape (no obj read when the
+/// grantee is `None`).
+fn exile_permission_pool_contains(
+    state: &GameState,
+    source: &ExilePermissionSource<'_>,
+    candidate: ObjectId,
+) -> bool {
+    let in_pool = match &source.pool {
+        ExileCardPool::ThisTurn => state
+            .cards_exiled_with_source_this_turn
+            .get(&source.source_id)
+            .is_some_and(|pile| pile.contains(&candidate)),
+        ExileCardPool::Persistent => {
+            crate::game::players::linked_exile_cards_for_source(state, source.source_id)
+                .iter()
+                .any(|entry| entry.exiled_id == candidate)
+        }
+        ExileCardPool::CounterLinked { matcher } => state
+            .objects
+            .get(&candidate)
+            .is_some_and(|obj| obj.zone == Zone::Exile && matcher.count_in(&obj.counters) > 0),
+    };
+    if !in_pool {
+        return false;
+    }
+    match source.own_exiles_of {
+        None => true,
+        // CR 406.6 + CR 607.2b: an "each player … cards they exiled with ~"
+        // grant admits only the cards this player exiled.
+        Some(player) => state
+            .objects
+            .get(&candidate)
+            .is_some_and(|obj| obj.exiled_by == Some(player)),
+    }
 }
 
 /// CR 117.1c: Whether a source's timing gate is currently satisfied.
@@ -6046,7 +6183,11 @@ fn exile_permission_sources(state: &GameState, player: PlayerId) -> Vec<ExilePer
                     frequency,
                     play_mode,
                     cost,
-                    pool,
+                    // CR 406.2: the pool is Clone-only (`CounterLinked`
+                    // carries a `CounterMatch`), so bind by ref and clone into
+                    // the source struct — the pool cannot move out of the
+                    // borrowed definition.
+                    ref pool,
                     timing,
                     mana_spend_permission,
                     grants_flash,
@@ -6078,7 +6219,7 @@ fn exile_permission_sources(state: &GameState, player: PlayerId) -> Vec<ExilePer
                             frequency,
                             cost,
                             play_mode,
-                            pool,
+                            pool: pool.clone(),
                             timing,
                             mana_spend_permission,
                             grants_flash,
@@ -6107,14 +6248,13 @@ fn exile_objects_castable_by_permission(
     player: PlayerId,
 ) -> Vec<(ObjectId, ObjectId, CastFrequency)> {
     // Hot-path fast exit: this runs once per legal-actions computation (and so
-    // once per AI-search node). When no card is tracked in either exile pool, no
-    // `ExileCastPermission` static can offer a card — short-circuit before
-    // `exile_permission_sources` scans the whole battlefield. The `ThisTurn`
-    // (Maralen) shape reads `cards_exiled_with_source_this_turn`; the
-    // `Persistent` (The Matrix of Time) shape reads `exile_links`. With both
-    // empty there is nothing to offer, matching the ~100% of board states with
-    // no exile-cast permanent in play.
-    if state.cards_exiled_with_source_this_turn.is_empty() && state.exile_links.is_empty() {
+    // once per AI-search node). When no pool scope can offer a card — the
+    // `ThisTurn` (Maralen) tracked list and the `Persistent` (The Matrix of
+    // Time) `exile_links` both empty, and no exiled card carrying a counter
+    // for a `CounterLinked` (Tinybones) scope — short-circuit before
+    // `exile_permission_sources` scans the whole battlefield. Matches the ~100%
+    // of board states with no exile-cast permanent in play.
+    if exile_permission_pools_empty(state) {
         return Vec::new();
     }
     let mut results = Vec::new();
@@ -6224,10 +6364,10 @@ fn exile_cast_permission_source_matching(
     if !exile_object_can_enter_cast_path(obj) {
         return None;
     }
-    // Same empty-pool fast exit as `exile_objects_castable_by_permission`: with
-    // both exile pools empty no static can authorize the cast, so skip the
-    // battlefield scan in `exile_permission_sources`.
-    if state.cards_exiled_with_source_this_turn.is_empty() && state.exile_links.is_empty() {
+    // Card-scoped fast exit (O(1)): with no pool scope able to offer this
+    // candidate no static can authorize the cast, so skip the battlefield scan
+    // in `exile_permission_sources`.
+    if exile_permission_pools_cannot_offer(state, exiled_id) {
         return None;
     }
     let sources = exile_permission_sources(state, player);
@@ -6240,8 +6380,7 @@ fn exile_cast_permission_source_matching(
         if !exile_permission_timing_active(state, &source, player) {
             return None;
         }
-        let pool = exile_permission_pool(state, &source);
-        if !pool.contains(&exiled_id) {
+        if !exile_permission_pool_contains(state, &source, exiled_id) {
             return None;
         }
         let ctx =
@@ -6284,7 +6423,8 @@ fn exile_cast_permission_source_full(
     if !exile_object_can_enter_cast_path(obj) {
         return None;
     }
-    if state.cards_exiled_with_source_this_turn.is_empty() && state.exile_links.is_empty() {
+    // Card-scoped fast exit (O(1)), as in the sibling admission scans.
+    if exile_permission_pools_cannot_offer(state, exiled_id) {
         return None;
     }
     let sources = exile_permission_sources(state, player);
@@ -6300,8 +6440,7 @@ fn exile_cast_permission_source_full(
         if !exile_permission_timing_active(state, source, player) {
             return false;
         }
-        let pool = exile_permission_pool(state, source);
-        if !pool.contains(&exiled_id) {
+        if !exile_permission_pool_contains(state, source, exiled_id) {
             return false;
         }
         let ctx =
@@ -7879,7 +8018,8 @@ fn exile_land_playable_by_static_permission(
     player: PlayerId,
     land_id: ObjectId,
 ) -> Option<(ObjectId, CastFrequency)> {
-    if state.cards_exiled_with_source_this_turn.is_empty() && state.exile_links.is_empty() {
+    // Card-scoped fast exit (O(1)), as in the cast-side admission scans.
+    if exile_permission_pools_cannot_offer(state, land_id) {
         return None;
     }
     let sources = exile_permission_sources(state, player);
@@ -7896,8 +8036,7 @@ fn exile_land_playable_by_static_permission(
         if !exile_permission_timing_active(state, &source, player) {
             return None;
         }
-        let pool = exile_permission_pool(state, &source);
-        if !pool.contains(&land_id) {
+        if !exile_permission_pool_contains(state, &source, land_id) {
             return None;
         }
         let ctx =
@@ -13411,6 +13550,54 @@ pub(super) fn reserved_payment_state(
     Some(scratch)
 }
 
+/// CR 118.3 + CR 601.2g-h: one scratch state for a whole search over the hand
+/// and graveyard cards a cost's other legs hold. Each assignment is held on it
+/// and released again.
+///
+/// CR 118.3 + CR 118.10: a held card is committed to another part of the total
+/// cost, so no other cost can use it up ([`is_held_by_payment_probe`]). CR
+/// 601.2g: mana abilities are activated before costs are paid, so the card is
+/// still in its zone for everything that only reads it (Metalworker's reveal,
+/// Crypt of Agadeem's count). The scratch never reaches a real payment.
+pub(super) struct CardHoldScratch {
+    state: GameState,
+}
+
+impl CardHoldScratch {
+    pub(super) fn new(mut state: GameState) -> Self {
+        super::layers::flush_layers(&mut state);
+        Self { state }
+    }
+
+    /// `probe`'s answer with `held`'s hand and graveyard cards held. Objects in
+    /// other zones are left alone.
+    pub(super) fn probe_holding<T>(
+        &mut self,
+        held: &[(ObjectId, ReservedUse)],
+        probe: impl FnOnce(&GameState) -> T,
+    ) -> T {
+        let scratch = &mut self.state;
+        for &(id, _) in held {
+            let Some(owner) = scratch
+                .objects
+                .get(&id)
+                .filter(|obj| matches!(obj.zone, Zone::Hand | Zone::Graveyard))
+                .map(|obj| obj.owner)
+            else {
+                continue;
+            };
+            if let Some(holder) = scratch.players.iter_mut().find(|p| p.id == owner) {
+                holder.probe_held_cards.push(id);
+            }
+        }
+        let answer = probe(scratch);
+        for holder in scratch.players.iter_mut() {
+            holder.probe_held_cards.clear();
+        }
+        answer
+    }
+}
+
 /// CR 601.2g-h: whether the Auto payer can pay `cost` with `reserved` spoken for.
 pub(super) fn reserved_mana_payable(
     state: &GameState,
@@ -15277,6 +15464,7 @@ impl<'a> SpellCostView<'a> {
                 | FilterProp::HasColor { .. }
                 | FilterProp::PowerGTSource
                 | FilterProp::ColorCount { .. }
+                | FilterProp::CardTypeCount { .. }
                 | FilterProp::ManaSymbolCount { .. }
                 | FilterProp::HasSupertype { .. }
                 | FilterProp::IsChosenCreatureType
@@ -23077,6 +23265,43 @@ fn prepared_payment_terms_state(
         .and_then(|resolution| resolution.authority().payment_terms_state(state))
 }
 
+/// CR 601.2b: the pending cast a prepared spell's additional-cost declaration
+/// is previewed with, before the cast is announced.
+fn prepared_declaration_pending(prepared: &PreparedSpellCast, player: PlayerId) -> PendingCast {
+    let resolved = prepared.ability_def.as_ref().map_or_else(
+        || ResolvedAbility::new(Effect::NoOp, Vec::new(), prepared.object_id, player),
+        |def| build_resolved_from_def(def, prepared.object_id, player),
+    );
+    pending_cast_from_prepared(prepared, resolved)
+}
+
+/// CR 118.9a + CR 601.2b: the granted alternative cost `player` can pay for
+/// `prepared`, a cast that hasn't already elected an alternative cost by its
+/// method or its permission.
+fn granted_alternative_cost(
+    state: &GameState,
+    player: PlayerId,
+    prepared: &PreparedSpellCast,
+) -> Option<casting_costs::PayableSpellAlternativeCost> {
+    if cast_has_elected_alternative_cost(
+        state,
+        player,
+        prepared.object_id,
+        prepared.casting_permission_index,
+        prepared.casting_variant,
+    )
+    .unwrap_or(true)
+    {
+        return None;
+    }
+    casting_costs::payable_spell_alternative_cost_details_at_index(
+        state,
+        player,
+        prepared.object_id,
+        prepared.casting_permission_index,
+    )
+}
+
 fn can_cast_prepared_now_with_probe(
     state: &GameState,
     player: PlayerId,
@@ -23359,6 +23584,34 @@ fn can_cast_prepared_now_with_probe(
         {
             return false;
         }
+        // CR 601.2f-h + CR 118.3 + CR 118.10: when a mana ability's cost could
+        // use up a hand or graveyard card this cost is paid with (Rubble
+        // Rouser's graveyard exile beside Abhorrent Oculus, Skirge Familiar's
+        // discard beside Thrill of Possibility), the two are judged together
+        // by the declaration-time authority. The contention gate keeps every
+        // other spell, and every battlefield leg, on the checks above.
+        if casting_costs::cost_contends_with_mana_abilities(state, player, prepared.object_id, cost)
+        {
+            let pending = prepared_declaration_pending(prepared, player);
+            // CR 118.9d: additional costs apply to an alternative cost, which
+            // replaces the mana cost judged first. A payable granted one keeps
+            // the cast on offer when the cost can be paid beside it.
+            if !casting_costs::required_declaration_offerable(state, player, &pending, cost, None)
+                .unwrap_or(false)
+                && !granted_alternative_cost(state, player, prepared).is_some_and(|alternative| {
+                    casting_costs::required_declaration_offerable_under_alternative(
+                        state,
+                        player,
+                        &pending,
+                        &alternative.cost,
+                        cost,
+                    )
+                    .unwrap_or(false)
+                })
+            {
+                return false;
+            }
+        }
     }
 
     // CR 118.3 + CR 601.2f-h: A mandatory choice of additional costs is
@@ -23373,27 +23626,27 @@ fn can_cast_prepared_now_with_probe(
         .get(&prepared.object_id)
         .and_then(|o| o.additional_cost.as_ref())
     {
-        let resolved = prepared.ability_def.as_ref().map_or_else(
-            || ResolvedAbility::new(Effect::NoOp, Vec::new(), prepared.object_id, player),
-            |def| build_resolved_from_def(def, prepared.object_id, player),
-        );
-        let mut pending = PendingCast::new(
-            prepared.object_id,
-            prepared.card_id,
-            resolved,
-            prepared.mana_cost.clone(),
-        );
-        pending.base_cost = Some(prepared.base_mana_cost.clone());
-        pending.casting_variant = prepared.casting_variant;
-        pending.alternative_cost_keyword = prepared.alternative_cost_keyword.clone();
-        pending.cast_timing_permission = prepared.cast_timing_permission;
-        pending.origin_zone = prepared.origin_zone;
-        pending.payment_mode = prepared.payment_mode;
+        let pending = prepared_declaration_pending(prepared, player);
         let branch_is_offerable = |cost: &AbilityCost| {
             casting_costs::required_declaration_offerable(state, player, &pending, cost, None)
                 .unwrap_or(false)
         };
-        if !costs.iter().any(branch_is_offerable) {
+        // CR 118.9d: additional costs apply to an alternative cost, which
+        // replaces the mana cost the branches are judged with above. A payable
+        // granted one keeps the cast on offer when some branch can be paid
+        // beside it.
+        if !costs.iter().any(branch_is_offerable)
+            && !granted_alternative_cost(state, player, prepared).is_some_and(|alternative| {
+                casting_costs::choice_branch_offerable_under_alternative(
+                    state,
+                    player,
+                    &pending,
+                    &alternative.cost,
+                    costs,
+                )
+                .unwrap_or(false)
+            })
+        {
             return false;
         }
     }
@@ -23509,23 +23762,7 @@ fn can_cast_prepared_now_with_probe(
 
     // CR 118.9a + CR 601.2b: a cast that already elected an alternative cost, by its method or its
     // permission, can't also take a granted one.
-    if !cast_has_elected_alternative_cost(
-        state,
-        player,
-        prepared.object_id,
-        prepared.casting_permission_index,
-        prepared.casting_variant,
-    )
-    .unwrap_or(true)
-        && targets_ok
-        && super::casting_costs::payable_spell_alternative_cost_details_at_index(
-            state,
-            player,
-            prepared.object_id,
-            prepared.casting_permission_index,
-        )
-        .is_some()
-    {
+    if targets_ok && granted_alternative_cost(state, player, prepared).is_some() {
         return true;
     }
 
@@ -27705,6 +27942,7 @@ fn apply_mana_spell_grants(
                 triggering_object: None,
                 declared_slot_view: None,
                 granting_object: None,
+                stack_trigger_context: None,
                 pre_entry_battlefield: None,
             };
             if !crate::game::filter::matches_target_filter(
@@ -28436,6 +28674,20 @@ pub(crate) fn is_spell_being_cast(state: &GameState, object_id: ObjectId) -> boo
         })
 }
 
+/// CR 118.3 + CR 118.10 + CR 601.2g-h: Whether a payment probe holds
+/// `object_id` for another leg of the cost it is judging
+/// ([`CardHoldScratch`]). The card is committed to that leg, so it can't be
+/// chosen to pay any other cost; it hasn't been paid yet (mana abilities are
+/// activated before costs are paid), so it is still in its zone for everything
+/// that only reads it. Consulted beside [`is_spell_being_cast`] by the hand and
+/// graveyard cost-fodder enumerations. False on every live state.
+pub(crate) fn is_held_by_payment_probe(state: &GameState, object_id: ObjectId) -> bool {
+    state
+        .players
+        .iter()
+        .any(|player| player.probe_held_cards.contains(&object_id))
+}
+
 /// Shared eligibility helper for hand-card cost payments — returns every card
 /// in `player`'s hand matching `filter` (if any), excluding the cast source
 /// and any spell being cast ([`is_spell_being_cast`]).
@@ -28475,6 +28727,23 @@ fn find_eligible_hand_cost_targets(
         .unwrap_or_default()
 }
 
+/// CR 118.3: the hand cards a cost that uses them up (a discard, an exile) can
+/// take: [`find_eligible_hand_cost_targets`] without the cards a payment probe
+/// holds for another cost ([`is_held_by_payment_probe`]). A reveal uses nothing
+/// up and reads held cards too.
+fn find_consumable_hand_cost_targets(
+    state: &GameState,
+    player: PlayerId,
+    source: ObjectId,
+    granting_object: Option<ObjectIncarnationRef>,
+    filter: Option<&TargetFilter>,
+) -> Vec<ObjectId> {
+    let mut targets =
+        find_eligible_hand_cost_targets(state, player, source, granting_object, filter);
+    targets.retain(|&id| !is_held_by_payment_probe(state, id));
+    targets
+}
+
 pub(crate) fn find_eligible_discard_targets(
     state: &GameState,
     player: PlayerId,
@@ -28482,7 +28751,7 @@ pub(crate) fn find_eligible_discard_targets(
     granting_object: Option<ObjectIncarnationRef>,
     filter: Option<&TargetFilter>,
 ) -> Vec<ObjectId> {
-    find_eligible_hand_cost_targets(state, player, source, granting_object, filter)
+    find_consumable_hand_cost_targets(state, player, source, granting_object, filter)
 }
 
 /// CR 118.3 + CR 602.2b: Select the hand cards that can pay an activated
@@ -28507,6 +28776,7 @@ pub(crate) fn find_eligible_discard_targets_for_ability(
                 .filter(|&id| {
                     id != source
                         && !is_spell_being_cast(state, id)
+                        && !is_held_by_payment_probe(state, id)
                         && filter.is_none_or(|filter| {
                             super::filter::matches_target_filter(state, id, filter, &ctx)
                         })
@@ -28546,7 +28816,7 @@ pub(crate) fn find_eligible_exile_for_cost_targets(
     let filter_ref = effective_filter.as_ref();
     match zone {
         ExileCostSourceZone::Hand => {
-            find_eligible_hand_cost_targets(state, player, source, granting_object, filter_ref)
+            find_consumable_hand_cost_targets(state, player, source, granting_object, filter_ref)
         }
         ExileCostSourceZone::Graveyard => {
             // "You" in a cost is the cost's payer (CR 109.5 when paying for a spell or an
@@ -33660,15 +33930,18 @@ fn activate_with_cost_carrier(
             stamp_top_library_exile_cost_paid_object(state, player, &mut resolved, cost);
         // CR 602.2b: this activation's own payment writes its removed-counter
         // count onto `resolved`, which the pause clones and the push consumes.
-        if let PaymentOutcome::Paused { remaining_cost } = pay_ability_cost_for_activation(
-            state,
-            player,
-            source_id,
-            cost,
-            Some(ability_index),
-            &mut resolved.context.cost_removed_counter_amount,
-            events,
-        )? {
+        if let PaymentOutcome::Paused { remaining_cost } =
+            super::costs::pay_ability_cost_for_activation_with_loyalty_tally(
+                state,
+                player,
+                source_id,
+                cost,
+                Some(ability_index),
+                &mut resolved.context.cost_removed_counter_amount,
+                &mut resolved.context.loyalty_counters_removed,
+                events,
+            )?
+        {
             let mut pending = pending_activation_after_cost_pause(
                 source_id,
                 resolved.clone(),
@@ -33960,6 +34233,17 @@ pub(crate) fn record_activation_announcement(
     ability.start_target_record_recursive();
     ability.activation_record =
         capture_activation_record(state, player, source_id, ability_index, ability).map(Box::new);
+    // CR 606.4: a newly announced loyalty activation has a known tally even
+    // when its cost removes no loyalty counters. Legacy in-flight contexts
+    // remain unknown and are never inferred during resume.
+    if ability
+        .activation_record
+        .as_ref()
+        .is_some_and(|record| record.is_loyalty_ability)
+        && ability.context.loyalty_counters_removed.is_none()
+    {
+        ability.context.loyalty_counters_removed = Some(0);
+    }
     let provenance = state
         .objects
         .get(&source_id)
@@ -34917,6 +35201,7 @@ fn parsed_condition_reads_targets(condition: &ParsedCondition, read: TargetRead)
         | ParsedCondition::CardsLeftYourGraveyardThisTurnAtLeast { .. }
         | ParsedCondition::HasCityBlessing
         | ParsedCondition::HasEnduringStory
+        | ParsedCondition::IsMonarch
         | ParsedCondition::CompletedDungeon { .. }
         | ParsedCondition::HasMaxSpeed
         | ParsedCondition::IsYourTurn
@@ -35417,6 +35702,7 @@ fn filter_prop_reads_chosen_target(prop: &FilterProp, read: TargetRead) -> bool 
         | FilterProp::HasColor { .. }
         | FilterProp::PowerGTSource
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -40921,5 +41207,116 @@ mod alternative_keyword_cost_journal_tests {
             cost_observable_activation_journal(runner.state()).is_empty(),
             "with no first-activation modifier on the board the rows are stripped"
         );
+    }
+}
+
+#[cfg(test)]
+mod card_hold_scratch_tests {
+    use super::{is_held_by_payment_probe, CardHoldScratch, ReservedUse};
+    use crate::game::cost_payability::eligible_exile_cost_objects;
+    use crate::game::quantity::resolve_quantity;
+    use crate::game::scenario::{GameScenario, P0};
+    use crate::types::ability::{Effect, ManaProduction};
+    use crate::types::identifiers::ObjectId;
+    use crate::types::mana::ManaColor;
+    use crate::types::zones::Zone;
+
+    /// CR 601.2g + CR 605.3a: mana abilities are activated before costs are
+    /// paid, so Crypt of Agadeem counts a creature card held for another cost.
+    #[test]
+    fn a_held_card_is_still_counted() {
+        let mut sc = GameScenario::new();
+        let crypt = sc
+            .add_land_from_oracle(
+                P0,
+                "Crypt of Agadeem",
+                "This land enters tapped.\n{T}: Add {B}.\n{2}, {T}: Add {B} for each black creature card in your graveyard.",
+            )
+            .id();
+        let creatures: Vec<ObjectId> = (0..5)
+            .map(|i| {
+                sc.add_creature_to_graveyard(P0, &format!("Black Creature {i}"), 1, 1)
+                    .with_color(vec![ManaColor::Black])
+                    .id()
+            })
+            .collect();
+        let runner = sc.build();
+        let state = runner.state();
+        let count = state.objects[&crypt]
+            .abilities
+            .iter()
+            .find_map(|ability| match &*ability.effect {
+                Effect::Mana {
+                    produced: ManaProduction::AnyOneColor { count, .. },
+                    ..
+                } => Some(count.clone()),
+                _ => None,
+            })
+            .expect("Crypt's counted mana ability");
+
+        let mut scratch = CardHoldScratch::new(state.clone());
+        let held = [(creatures[0], ReservedUse::Present)];
+        let (counted, exilable) = scratch.probe_holding(&held, |probe| {
+            (
+                resolve_quantity(probe, &count, P0, crypt),
+                eligible_exile_cost_objects(probe, P0, crypt, None, Zone::Graveyard, None, 1),
+            )
+        });
+        assert_eq!(counted, 5, "the held card is still a card in the graveyard");
+        assert_eq!(exilable.len(), 4, "and no other cost can exile it");
+        assert!(!exilable.contains(&creatures[0]));
+    }
+
+    /// CR 118.3 + CR 601.2g-h: a held card stays in its zone, is reported held
+    /// for the probe only, and every hold is released.
+    #[test]
+    fn a_hold_marks_its_cards_and_is_released() {
+        let mut sc = GameScenario::new();
+        let hand: Vec<ObjectId> = (0..3)
+            .map(|i| sc.add_card_to_hand(P0, &format!("Hand Card {i}")))
+            .collect();
+        let graveyard: Vec<ObjectId> = (0..3)
+            .map(|i| {
+                sc.add_spell_to_graveyard(P0, &format!("Graveyard Card {i}"), true)
+                    .id()
+            })
+            .collect();
+        let runner = sc.build();
+        let state = runner.state();
+
+        let mut scratch = CardHoldScratch::new(state.clone());
+        let unheld = scratch.probe_holding(&[], Clone::clone);
+        for (&in_hand, &in_graveyard) in hand.iter().zip(&graveyard) {
+            let held = [
+                (in_hand, ReservedUse::Present),
+                (in_graveyard, ReservedUse::Present),
+            ];
+            scratch.probe_holding(&held, |probe| {
+                // CR 601.2g: the held cards are where they were, so a count of
+                // the zone still reads them (Crypt of Agadeem).
+                assert!(probe.players[0].hand.contains(&in_hand));
+                assert!(probe.graveyard_of(P0).contains(&in_graveyard));
+                assert_eq!(probe.objects[&in_graveyard].zone, Zone::Graveyard);
+                // CR 118.3: no other cost can take them.
+                let exilable =
+                    eligible_exile_cost_objects(probe, P0, in_hand, None, Zone::Graveyard, None, 1);
+                for &id in &graveyard {
+                    assert_eq!(exilable.contains(&id), id != in_graveyard);
+                }
+                for &id in hand.iter().chain(&graveyard) {
+                    assert_eq!(
+                        is_held_by_payment_probe(probe, id),
+                        id == in_hand || id == in_graveyard
+                    );
+                }
+            });
+            scratch.probe_holding(&[], |probe| {
+                assert_eq!(probe, &unheld);
+                assert!(hand
+                    .iter()
+                    .chain(&graveyard)
+                    .all(|&id| !is_held_by_payment_probe(probe, id)));
+            });
+        }
     }
 }

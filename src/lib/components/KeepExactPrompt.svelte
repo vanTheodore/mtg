@@ -1,14 +1,14 @@
 <script lang="ts">
   /**
-   * `WaitingFor::KeepExactPermanentsChoice` — CR 101.4 + CR 701.21a: keep exactly N
-   * permanents, sacrifice the rest.
+   * `WaitingFor::KeepExactPermanentsChoice` — CR 101.4 + CR 701.21a.
    *
-   * The number is the engine's: `required_count` arrives **already capped to what
-   * is eligible** under CR 609.3 ("do as much as possible"), and the prompt's own
-   * contract says clients render it instead of deriving a second legality rule from
-   * the pool. So the block shows that number, counts down to it, and never quietly
-   * lowers it when the pool is short — a short pool means the engine already
-   * decided, and the screen would only be second-guessing it.
+   * Phase v0.133.0 gives this prompt a floor (`minimum_count`) as well as the
+   * ceiling (`required_count`). The ceiling is deliberately NOT capped to the
+   * eligible pool any more: CR 609.3 ("do as much as possible") is resolved by the
+   * engine, and a display client must not derive a second legality rule from
+   * `eligible.length`. An absent/null floor means an exact keeper; a floor of 0
+   * means "up to N" (Covetous Elegy, Archfiend of Depravity), where keeping
+   * nothing is a legal answer. Both figures are rendered exactly as they arrive.
    *
    * When the instruction owes its keepers a mark (CR 122.1 — Promise of Loyalty's
    * vow counter), it is placed **before** the sacrifice, so it is announced with
@@ -26,6 +26,17 @@
     return (index >= 0 ? labels[index] : undefined) ?? objects[String(id)]?.name ?? `Permanente ${id}`;
   };
   const picked = $derived(session.keepExactPick.length);
+  // An exact keeper has floor === ceiling. Any smaller floor is the v0.133.0
+  // window: `0` is "up to N", a positive floor is "between X and N".
+  const upTo = $derived(prompt !== null && prompt.minimumCount < prompt.requiredCount);
+
+  const heading = $derived.by(() => {
+    if (!prompt) return '';
+    if (!upTo) return `Conservar exactamente ${prompt.requiredCount}`;
+    return prompt.minimumCount === 0
+      ? `Conservar hasta ${prompt.requiredCount}`
+      : `Conservar entre ${prompt.minimumCount} y ${prompt.requiredCount}`;
+  });
 
   const counterLine = $derived.by(() => {
     if (!prompt?.keeperCounter) return '';
@@ -44,11 +55,18 @@
     return `Eliges de entre los candidatos del Jugador ${prompt.targetPlayer + 1}.`;
   });
 
-  // CR 609.3: the engine capped the number to the pool before publishing it, so the
-  // screen states both figures as they arrive and derives no rule of its own.
+  // v0.133.0: the pool is published as information, never as a cap. The engine
+  // owns both numbers; a short pool is its decision, not a reason to lower one.
   const poolLine = $derived.by(() => {
     if (!prompt) return '';
-    return `Hay ${prompt.eligible.length} candidatos y el número ya viene recortado a lo que se puede hacer (CR 609.3).`;
+    return `Hay ${prompt.eligible.length} candidatos; el motor publica el máximo y aquí no se recalcula (CR 609.3).`;
+  });
+
+  const countLine = $derived.by(() => {
+    if (!prompt) return '';
+    return upTo
+      ? `Elegidos ${picked} de hasta ${prompt.requiredCount}`
+      : `Elegidos ${picked} de ${prompt.requiredCount}`;
   });
 
   const confirmLabel = $derived.by(() => {
@@ -56,21 +74,33 @@
     const left = session.keepExactRemaining;
     if (left > 0) return left === 1 ? 'Elige uno más' : `Elige ${left} más`;
     const after = prompt.remainingPlayers.length ? ` · después elige el Jugador ${prompt.remainingPlayers[0] + 1}` : '';
-    return `Conservar ${prompt.requiredCount} y sacrificar el resto${after}`;
+    return `Conservar ${picked} y sacrificar el resto${after}`;
   });
 </script>
 
 {#if prompt && mine}
-  <div class="prompt" aria-label="Conservar permanentes" data-keep-exact data-keep-exact-required={prompt.requiredCount}>
-    <strong>Conservar exactamente {prompt.requiredCount}</strong>
+  <div
+    class="prompt"
+    aria-label="Conservar permanentes"
+    data-keep-exact
+    data-keep-exact-required={prompt.requiredCount}
+    data-keep-exact-minimum={prompt.minimumCount}
+    data-keep-exact-up-to={upTo ? 'true' : 'false'}
+  >
+    <strong>{heading}</strong>
     <p class="hint">
-      Ni uno más ni uno menos: el resto se sacrifica (CR 701.21a). Cuántos se conservan lo resuelve el
-      motor; aquí sólo se elige cuáles.
+      {#if upTo}
+        Puedes conservar desde {prompt.minimumCount} hasta {prompt.requiredCount}; el resto se sacrifica
+        (CR 701.21a). Cuántos se conservan lo resuelve el motor; aquí sólo se elige cuáles.
+      {:else}
+        Ni uno más ni uno menos: el resto se sacrifica (CR 701.21a). Cuántos se conservan lo resuelve el
+        motor; aquí sólo se elige cuáles.
+      {/if}
     </p>
     <p class="hint">{scopeLine}</p>
     <p class="hint" data-keep-exact-pool>{poolLine}</p>
     {#if counterLine}<p class="hint" data-keep-exact-counter>{counterLine}</p>{/if}
-    <p class="hint count" data-keep-exact-count>Elegidos {picked} de {prompt.requiredCount}</p>
+    <p class="hint count" data-keep-exact-count>{countLine}</p>
     {#if prompt.eligible.length}
       <ul class="rows">
         {#each prompt.eligible as id (id)}

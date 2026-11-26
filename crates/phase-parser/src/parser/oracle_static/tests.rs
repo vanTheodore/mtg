@@ -14621,16 +14621,18 @@ fn quoted_ability_preserves_activation_restrictions() {
 }
 
 #[test]
-fn quoted_self_rule_static_grants_static_mode() {
+fn quoted_self_rule_static_grants_full_static_definition() {
     let modifications = parse_quoted_ability_modifications(
-        "It gains \"This creature attacks each combat if able.\"",
+        r#"It perpetually gains "This creature attacks each combat if able.""#,
     );
-    assert_eq!(
-        modifications,
-        vec![ContinuousModification::AddStaticMode {
-            mode: StaticMode::MustAttack,
-        }]
-    );
+    assert!(matches!(
+        modifications.as_slice(),
+        [ContinuousModification::GrantStaticAbility { definition }]
+            if definition.mode == StaticMode::MustAttack
+                && definition.affected == Some(TargetFilter::SelfRef)
+                && definition.condition.is_none()
+                && definition.modifications.is_empty()
+    ));
 }
 
 /// CR 113.3d + CR 604.1: A quoted continuous static whose inner scope is
@@ -17410,8 +17412,36 @@ fn neighbouring_cast_permissions_keep_their_parse() {
         "Tinybones, Bauble Burglar",
         &[],
     );
-    assert!(tinybones.statics.is_empty());
-    assert_eq!(unimplemented_names(&tinybones), ["unknown"]);
+    // CR 406.2 + CR 122.1 (V-parse-full): full Oracle dispatch routes the
+    // counter-linked static to the new arm — exactly one static carrying the
+    // stash pool + any-TYPE concession, zero gaps, and the discard trigger
+    // still present.
+    assert_eq!(tinybones.statics.len(), 1);
+    assert_eq!(
+        tinybones.statics[0].mode,
+        StaticMode::ExileCastPermission {
+            frequency: CastFrequency::Unlimited,
+            play_mode: CardPlayMode::Play,
+            cost: ExileCastCost::PayNormalCost,
+            pool: ExileCardPool::CounterLinked {
+                matcher: CounterMatch::OfType(CounterType::Generic("stash".to_string())),
+            },
+            timing: ExileCastTiming::YourTurnOnly,
+            mana_spend_permission: Some(crate::types::ability::ManaSpendPermission::AnyTypeOrColor),
+            grants_flash: false,
+            extra_cost: None,
+            enters_with_counter: None,
+            grantee: crate::types::statics::ExileCastGrantee::SourceController,
+        },
+        "Tinybones's static must be the counter-linked permission, got {:?}",
+        tinybones.statics[0].mode
+    );
+    assert!(unimplemented_names(&tinybones).is_empty());
+    assert_eq!(
+        tinybones.triggers.len(),
+        1,
+        "the discard trigger must still be present"
+    );
 
     let serra = parse_creature_card(
         "Flying\nOnce during each of your turns, you may play a land from your graveyard or cast a permanent spell with mana value 3 or less from your graveyard. If you do, it gains \"When this permanent is put into a graveyard from the battlefield, exile it and you gain 2 life.\"",
@@ -18569,6 +18599,200 @@ fn persistent_exile_cast_permission_azula_flash_and_any_mana() {
             .any(|parsed_def| parsed_def.mode == def.mode),
         "full Oracle dispatch must route Azula's line to the flash+any-mana static, got {:?}",
         parsed.statics
+    );
+}
+
+/// CR 406.2 + CR 122.1 + CR 611.3a + CR 108.3 + CR 109.5 (V-parse-clause):
+/// Tinybones, Bauble Burglar's counter-linked static lowers to an unlimited
+/// your-turn-only Play permission over the stash-counter pool with the
+/// any-TYPE spend concession, and the affected filter carries both the
+/// don't-own ownership prop and the stash counter prop.
+#[test]
+fn counter_linked_exile_play_permission_tinybones_clause() {
+    let text = "During your turn, you may play cards you don't own with stash counters on them from exile, and mana of any type can be spent to cast those spells.";
+    let def = parse_static_line(text).expect("Tinybones static must parse");
+    assert_eq!(
+        def.mode,
+        StaticMode::ExileCastPermission {
+            frequency: CastFrequency::Unlimited,
+            // CR 305.1: "play cards" covers lands (played) and spells (cast).
+            play_mode: CardPlayMode::Play,
+            cost: ExileCastCost::PayNormalCost,
+            pool: ExileCardPool::CounterLinked {
+                matcher: CounterMatch::OfType(CounterType::Generic("stash".to_string())),
+            },
+            timing: ExileCastTiming::YourTurnOnly,
+            // CR 118.14 + CR 106.1b: "mana of any type can be spent".
+            mana_spend_permission: Some(crate::types::ability::ManaSpendPermission::AnyTypeOrColor),
+            grants_flash: false,
+            extra_cost: None,
+            enters_with_counter: None,
+            grantee: crate::types::statics::ExileCastGrantee::SourceController,
+        },
+        "expected counter-linked your-turn Play permission, got {:?}",
+        def.mode
+    );
+    // Affected: `Typed{Card, [Owned{Opponent}, Counters{stash GE 1}]}` — the
+    // ownership prop (CR 108.3 + CR 109.5) and the counter prop (CR 122.1)
+    // that doubles as the pool key.
+    let TargetFilter::Typed(typed) = def.affected.as_ref().expect("affected filter present") else {
+        panic!("expected a Typed affected filter, got {:?}", def.affected);
+    };
+    assert_eq!(typed.type_filters, vec![TypeFilter::Card]);
+    assert_eq!(typed.controller, None);
+    assert_eq!(typed.properties.len(), 2);
+    assert!(
+        typed.properties.contains(&FilterProp::Owned {
+            controller: ControllerRef::Opponent,
+        }),
+        "affected must carry the don't-own prop, got {:?}",
+        typed.properties
+    );
+    assert!(
+        typed.properties.contains(&FilterProp::Counters {
+            counters: CounterMatch::OfType(CounterType::Generic("stash".to_string())),
+            comparator: Comparator::GE,
+            count: QuantityExpr::Fixed { value: 1 },
+        }),
+        "affected must carry the stash counter prop, got {:?}",
+        typed.properties
+    );
+
+    // Cast-verb sibling: "you may cast …" lowers to Cast mode (no mana rider
+    // here, so no concession).
+    let cast_text =
+        "During your turn, you may cast cards you don't own with stash counters on them from exile.";
+    let cast_def = parse_static_line(cast_text).expect("cast-verb sibling must parse");
+    assert!(
+        matches!(
+            cast_def.mode,
+            StaticMode::ExileCastPermission {
+                play_mode: CardPlayMode::Cast,
+                pool: ExileCardPool::CounterLinked { .. },
+                timing: ExileCastTiming::YourTurnOnly,
+                mana_spend_permission: None,
+                ..
+            }
+        ),
+        "expected a concession-free counter-linked Cast permission, got {:?}",
+        cast_def.mode
+    );
+
+    // Missing counter: no `Counters` prop means no pool key, so the line
+    // declines instead of widening to an unkeyed pool.
+    assert!(
+        parse_static_line("During your turn, you may play cards you don't own from exile.")
+            .is_none(),
+        "a counterless exile-play line must not take the counter-linked arm"
+    );
+
+    // Missing ownership (class shape): parses with an ownership-free filter —
+    // the pool key is the counter prop alone.
+    let ownership_free = parse_static_line(
+        "During your turn, you may play cards with stash counters on them from exile.",
+    )
+    .expect("the ownership-free counter shape must parse");
+    assert!(
+        matches!(
+            ownership_free.mode,
+            StaticMode::ExileCastPermission {
+                pool: ExileCardPool::CounterLinked { .. },
+                ..
+            }
+        ),
+        "expected a counter-linked pool, got {:?}",
+        ownership_free.mode
+    );
+    let TargetFilter::Typed(ownership_free_typed) = ownership_free
+        .affected
+        .as_ref()
+        .expect("affected filter present")
+    else {
+        panic!(
+            "expected a Typed affected filter, got {:?}",
+            ownership_free.affected
+        );
+    };
+    assert!(
+        !ownership_free_typed
+            .properties
+            .iter()
+            .any(|prop| matches!(prop, FilterProp::Owned { .. })),
+        "the ownership-free shape must not gain an ownership prop, got {:?}",
+        ownership_free_typed.properties
+    );
+
+    // Constructor strictness (B3a): Evelyn's once-per-turn provenance-gated
+    // line declines — the mandatory "you may " head fails on the "Once each
+    // turn, " prefix.
+    let evelyn = "Once each turn, you may play a card from exile with a collection counter on it if it was exiled by an ability you controlled, and you may spend mana as though it were mana of any color to cast it.";
+    let evelyn_lower = evelyn.to_lowercase();
+    assert!(
+        try_parse_counter_linked_exile_play_permission(evelyn, &evelyn_lower).is_none(),
+        "Evelyn's provenance-gated line must never take the source-agnostic arm"
+    );
+
+    // Constructor strictness (B3a): the "each player" subject has no
+    // counter-class evidence and declines.
+    let each_player =
+        "During your turn, each player may play cards with stash counters on them from exile.";
+    let each_player_lower = each_player.to_lowercase();
+    assert!(
+        try_parse_counter_linked_exile_play_permission(each_player, &each_player_lower).is_none(),
+        "the EachPlayer subject must decline the counter-linked arm"
+    );
+}
+
+/// CR 122.1 (F5-two-Counters hostile): a filter carrying two `Counters`
+/// props declines the counter-linked arm — the pool key must be exactly one
+/// matcher. The fold leg pins expressibility (stash + time props, empty
+/// remainder) so the decline legs cannot pass vacuously through a parse
+/// failure.
+#[test]
+fn counter_linked_exile_play_permission_rejects_two_counter_props() {
+    use crate::parser::oracle_target::parse_type_phrase_folding;
+    // Expressibility: the grammar yields both counter props with no remainder.
+    let (filter, rest) = parse_type_phrase_folding(
+        "cards you don't own with stash counters on them with time counters on them",
+    );
+    assert!(rest.trim().is_empty(), "unexpected remainder: {rest:?}");
+    let TargetFilter::Typed(typed) = filter else {
+        panic!("expected a Typed filter, got {filter:?}");
+    };
+    let counter_props: Vec<_> = typed
+        .properties
+        .iter()
+        .filter_map(|prop| match prop {
+            FilterProp::Counters { counters, .. } => Some(counters),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        counter_props,
+        vec![
+            &CounterMatch::OfType(CounterType::Generic("stash".to_string())),
+            &CounterMatch::OfType(CounterType::Time),
+        ],
+        "expected stash + time counter props, got {:?}",
+        typed.properties
+    );
+    // The counter-linked arm declines: two pool keys is no pool key — neither
+    // the constructor nor full dispatch takes it.
+    let text = "During your turn, you may play cards you don't own with stash counters on them with time counters on them from exile.";
+    let lower = text.to_lowercase();
+    assert!(
+        try_parse_counter_linked_exile_play_permission(text, &lower).is_none(),
+        "the counter-linked constructor must decline a two-counter filter"
+    );
+    assert!(
+        parse_static_line(text).is_none_or(|def| !matches!(
+            def.mode,
+            StaticMode::ExileCastPermission {
+                pool: ExileCardPool::CounterLinked { .. },
+                ..
+            }
+        )),
+        "a two-counter filter must not take the counter-linked arm"
     );
 }
 
@@ -32043,6 +32267,42 @@ fn planeswalker_only_defended_scope_reaches_every_static_consumer() {
     }));
 }
 
+/// CR 508.1b + CR 310.5: the singular "you or a permanent you control"
+/// (Immortal Obligation) names the same defended set as the plural
+/// "you or permanents you control" (Willie Lumpkin, Postman), and the nested
+/// " you or " prefix keeps the planeswalker-only, planeswalker and bare-player
+/// scopes distinct.
+#[test]
+fn defended_scope_reads_singular_permanent() {
+    use crate::parser::oracle_static::parse_cant_attack_defended_scope_nom;
+    use crate::types::triggers::AttackTargetFilter;
+    for (input, expected) in [
+        (
+            " you or a permanent you control",
+            AttackTargetFilter::PlayerOrPermanents,
+        ),
+        (
+            " you or permanents you control",
+            AttackTargetFilter::PlayerOrPermanents,
+        ),
+        (
+            " you or planeswalkers you control",
+            AttackTargetFilter::PlayerOrPlaneswalker,
+        ),
+        (
+            " planeswalkers you control",
+            AttackTargetFilter::Planeswalker { subtype: None },
+        ),
+        (" you", AttackTargetFilter::Player),
+    ] {
+        assert_eq!(
+            parse_cant_attack_defended_scope_nom(input).map_err(|e| format!("{e:?}")),
+            Ok(("", Some(expected))),
+            "{input:?}"
+        );
+    }
+}
+
 /// CR 508.1h + CR 118.12a: mixed casing must follow the same nom grammar and
 /// retain both the planeswalker-only defender and relative per-attacker tax.
 #[test]
@@ -40610,7 +40870,7 @@ fn marker_in_another_clause_keeps_its_owning_production() {
     use crate::types::statics::StaticMode;
 
     // ROW 1 — a quoted granted ability: the OUTER line is a subject grant, and the
-    // inner static is correctly decomposed into BOTH directions as `AddStaticMode`
+    // inner static is correctly decomposed into BOTH directions as full static grant
     // modifications by `anthem::parse_subject_continuous_static` (`dispatch.rs:1818`),
     // which runs well before the combat-rule family (`dispatch.rs:2261`). Only a
     // line-wide gate hoisted to the TOP of `parse_static_line_inner` could
@@ -40622,9 +40882,11 @@ fn marker_in_another_clause_keeps_its_owning_production() {
     let granted_modes: Vec<&StaticMode> = granted
         .modifications
         .iter()
-        .filter_map(|m| match m {
-            ContinuousModification::AddStaticMode { mode } => Some(mode),
-            _ => None,
+        .filter_map(|m| {
+            let ContinuousModification::GrantStaticAbility { definition } = m else {
+                return None;
+            };
+            Some(&definition.mode)
         })
         .collect();
     assert_eq!(
@@ -45137,4 +45399,114 @@ fn burden_of_proof_otherwise_branch_cannot_block_detectives() {
         "no clause may be swallowed; warnings = {:?}",
         parsed.parse_warnings
     );
+}
+
+/// SHAPE: the quoted static keeps the entire definition on the resolving effect.
+#[test]
+fn resolving_quote_keeps_full_static_definition() {
+    use crate::types::ability_visit::{visit_ability_def, visit_trigger};
+    use crate::types::statics::StaticMode;
+    use crate::types::triggers::AttackTargetFilter;
+    use std::ops::ControlFlow;
+
+    for (name, oracle, card_type, mode, defended) in [
+        (
+            "Incite Hysteria",
+            r#"Radiance — Until end of turn, target creature and each other creature that shares a color with it gain "This creature can't block.""#,
+            "Sorcery",
+            StaticMode::CantBlock,
+            None,
+        ),
+        (
+            "Carnage, Crimson Chaos",
+            r#"Trample
+When Carnage enters, return target creature card with mana value 3 or less from your graveyard to the battlefield. It gains "This creature attacks each combat if able" and "When this creature deals combat damage to a player, sacrifice it."
+Mayhem {B}{R}"#,
+            "Creature",
+            StaticMode::MustAttack,
+            None,
+        ),
+        (
+            "Elrond of the White Council",
+            r#"Secret council — When Elrond enters, each player secretly votes for fellowship or aid, then those votes are revealed. For each fellowship vote, the voter chooses a creature they control. You gain control of each creature chosen this way, and they gain "This creature can't attack its owner." Then for each aid vote, put a +1/+1 counter on each creature you control."#,
+            "Creature",
+            StaticMode::CantAttack,
+            Some(AttackTargetFilter::Owner),
+        ),
+    ] {
+        let parsed =
+            crate::parser::oracle::parse_oracle_text(oracle, name, &[], &[card_type.into()], &[]);
+        let mut found = false;
+        let mut visitor = |effect: &Effect| {
+            if let Effect::GenericEffect {
+                static_abilities, ..
+            } = effect
+            {
+                for outer in static_abilities {
+                    for (index, modification) in outer.modifications.iter().enumerate() {
+                        if let ContinuousModification::GrantStaticAbility { definition } =
+                            modification
+                        {
+                            if definition.mode != mode {
+                                continue;
+                            }
+                            assert_eq!(definition.affected, Some(TargetFilter::SelfRef), "{name}");
+                            assert_eq!(definition.attack_defended, defended, "{name}");
+                            if mode == StaticMode::MustAttack {
+                                assert!(matches!(
+                                    outer.modifications.get(index + 1),
+                                    Some(ContinuousModification::GrantTrigger { .. })
+                                ));
+                            }
+                            found = true;
+                        }
+                    }
+                }
+            }
+            ControlFlow::<()>::Continue(())
+        };
+        for ability in &parsed.abilities {
+            let _ = visit_ability_def(ability, &mut visitor);
+        }
+        for trigger in &parsed.triggers {
+            let _ = visit_trigger(trigger, &mut visitor);
+        }
+        assert!(found, "{name}: missing resolving {mode:?} grant");
+    }
+}
+
+#[test]
+fn printed_quote_controls_keep_nested_static_and_activated_shapes_distinct() {
+    let parsed = crate::parser::oracle::parse_oracle_text(
+        r#"Job select (When this Equipment enters, create a 1/1 colorless Hero creature token, then attach this to it.)
+Equipped creature gets +2/+2, has lifelink and "Other commanders you control get +2/+2 and have lifelink," and is a Performer in addition to its other types.
+Krishna — Equip {3}"#,
+        "Dancer's Chakrams",
+        &[],
+        &["Artifact".into()],
+        &["Equipment".into()],
+    );
+    assert!(parsed
+        .statics
+        .iter()
+        .flat_map(|outer| &outer.modifications)
+        .any(|modification| matches!(modification,
+            ContinuousModification::GrantStaticAbility { definition }
+            if matches!(&definition.affected, Some(TargetFilter::Typed(filter))
+                if filter.controller == Some(ControllerRef::You)
+                    && filter.properties.contains(&FilterProp::Another)
+                    && filter.properties.contains(&FilterProp::IsCommander))
+                && definition.modifications == [
+                    ContinuousModification::AddPower { value: 2 },
+                    ContinuousModification::AddToughness { value: 2 },
+                    ContinuousModification::AddKeyword { keyword: Keyword::Lifelink },
+                ]
+        )));
+    // The activated quote from Ethereal Grasp contains its own cost separator.
+    assert!(matches!(
+        super::classify_quoted_inner("{8}: Untap this creature.").as_slice(),
+        [ContinuousModification::GrantAbility { definition }]
+            if matches!(&definition.cost, Some(crate::types::ability::AbilityCost::Mana { cost })
+                if *cost == crate::types::mana::ManaCost::generic(8))
+    ));
 }

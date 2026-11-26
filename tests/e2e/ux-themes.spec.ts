@@ -70,6 +70,7 @@ const SCENES = [
   { scene: 'keepPowerForAll', slug: 'conservar-fuerza-todos', block: '[data-keep-power]' },
   { scene: 'keepExact', slug: 'conservar-exactos', block: '[data-keep-exact]' },
   { scene: 'keepExactVow', slug: 'conservar-exactos-voto', block: '[data-keep-exact]' },
+  { scene: 'keepExactUpTo', slug: 'conservar-hasta-n', block: '[data-keep-exact]' },
   { scene: 'removeCounters', slug: 'quitar-contadores', block: '[data-remove-counters]' },
   { scene: 'removeCountersCapped', slug: 'quitar-contadores-tope', block: '[data-remove-counters]' },
   { scene: 'copyRetarget', slug: 'objetivos-copia', block: '[data-copy-retarget]' },

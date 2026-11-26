@@ -1422,6 +1422,7 @@ fn prop_zone_truth(prop: &FilterProp, zone: Zone) -> SourceZoneTruth {
         | FilterProp::PtComparison { .. }
         | FilterProp::PowerGTSource
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -7184,14 +7185,25 @@ pub(crate) fn parse_cant_attack_defended_scope_nom(
     // CR 508.1c + CR 310.5: " you or permanents you control" defends battles too,
     // so it is a distinct filter from " you or planeswalkers you control". Both
     // longer phrases precede the bare " you" (nom `alt` is leftmost-match).
+    // CR 508.1b + CR 310.5: the singular " you or a permanent you control"
+    // (Immortal Obligation) names the same defended set as " you or permanents
+    // you control".
     opt(alt((
-        value(
-            AttackTargetFilter::PlayerOrPermanents,
-            tag(" you or permanents you control"),
-        ),
-        value(
-            AttackTargetFilter::PlayerOrPlaneswalker,
-            tag(" you or planeswalkers you control"),
+        preceded(
+            tag(" you or "),
+            alt((
+                value(
+                    AttackTargetFilter::PlayerOrPermanents,
+                    (
+                        alt((tag("permanents"), tag("a permanent"))),
+                        tag(" you control"),
+                    ),
+                ),
+                value(
+                    AttackTargetFilter::PlayerOrPlaneswalker,
+                    tag("planeswalkers you control"),
+                ),
+            )),
         ),
         value(
             AttackTargetFilter::Planeswalker { subtype: None },

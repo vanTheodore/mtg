@@ -1718,7 +1718,7 @@ class GameSession {
     void this.dispatch(keepPowerAction(kept));
   }
 
-  /** CR 101.4 + CR 609.3: exactly the number the engine resolved, all distinct. */
+  /** CR 101.4 + CR 609.3: the engine's [minimum, maximum] keeper window. */
   get keepExactPrompt() {
     return readKeepExact(this.snapshot);
   }
@@ -1726,9 +1726,10 @@ class GameSession {
   keepExactIsPicked(id: ObjectId): boolean {
     return this.keepExactPick.includes(id);
   }
+  /** v0.133.0: how many are still owed to reach the FLOOR ("up to" owes none). */
   get keepExactRemaining(): number {
     const prompt = this.keepExactPrompt;
-    return prompt ? Math.max(0, prompt.requiredCount - this.keepExactPick.length) : 0;
+    return prompt ? Math.max(0, prompt.minimumCount - this.keepExactPick.length) : 0;
   }
   toggleKeepExact(id: ObjectId) {
     const prompt = this.keepExactPrompt;
@@ -1745,7 +1746,10 @@ class GameSession {
   get keepExactReady(): boolean {
     const prompt = this.keepExactPrompt;
     if (!prompt) return false;
-    return this.keepExactPick.length === prompt.requiredCount;
+    const picked = this.keepExactPick.length;
+    // An absent floor collapses to the exact keeper; `Some(0)` makes an empty
+    // selection legal. The engine still owns the final legality decision.
+    return picked >= prompt.minimumCount && picked <= prompt.requiredCount;
   }
   confirmKeepExact() {
     if (!this.keepExactReady) return;

@@ -20,9 +20,9 @@ use super::counter::{
     try_parse_remove_counter,
 };
 use super::lower::{
-    parse_multi_target_count_expr, parse_where_x_quantity_expression,
-    parse_where_x_quantity_expression_with_owner, rebind_pt_scope_to_target,
-    strip_leading_quantifier, strip_terminal_where_x, strip_trailing_where_x, WhereXBinding,
+    parse_multi_target_count_expr, parse_where_x_quantity_expression_with_owner,
+    rebind_pt_scope_to_target, strip_leading_quantifier, strip_terminal_where_x,
+    strip_trailing_where_x, WhereXBinding,
 };
 use super::mana::{try_parse_activate_only_condition, try_parse_add_mana_effect_with_context};
 use super::token::try_parse_token;
@@ -787,6 +787,7 @@ pub(super) fn parse_earthbend_params(text: &str, lower_rest: &str) -> (TargetFil
 pub(super) fn parse_earthbend_count_expr(
     text: &str,
     lower_rest: &str,
+    ctx: &ParseContext,
 ) -> Option<(TargetFilter, QuantityExpr)> {
     if let Ok((rem, n)) = nom_primitives::parse_number.parse(lower_rest) {
         let target_text = rem.trim_start();
@@ -826,8 +827,13 @@ pub(super) fn parse_earthbend_count_expr(
         // `Effect::unimplemented` gap so coverage counts the card as unsupported.
         // (matthewevans review, PR #5881.)
         if let Ok((where_body, _)) = tag::<_, _, OracleError<'_>>(", where x is ").parse(rem) {
-            let count = crate::parser::oracle_quantity::parse_quantity_ref(where_body)
-                .map(|qty| QuantityExpr::Ref { qty })
+            let antecedents = ctx.player_antecedents();
+            let count = WhereXBinding::new(Some(where_body), &antecedents)
+                .resolve_trigger_event_stat()
+                .or_else(|| {
+                    crate::parser::oracle_quantity::parse_quantity_ref(where_body)
+                        .map(|qty| QuantityExpr::Ref { qty })
+                })
                 .or_else(|| {
                     crate::parser::oracle_quantity::parse_event_context_quantity(where_body)
                 })?;
@@ -1044,7 +1050,7 @@ fn parse_numeric_imperative_ast_with_bare_card_source(
         }
         // CR 119.3: the life amount is the shared count position.
         let slot =
-            super::parse_verb_count_slot(after_lose, ctx).filter(|slot| is_life_noun(slot.noun))?;
+            super::parse_count_slot(after_lose, ctx).filter(|slot| is_life_noun(slot.noun))?;
         return Some(NumericImperativeAst::LoseLife { amount: slot.count });
     }
 
@@ -1402,6 +1408,77 @@ fn parse_discard_unless_filter<'a>(
     }
     (before, Some(filter))
 }
+
+/// CR 701.9a + CR 608.2c + CR 201.2a: the card filter of a discard
+/// instruction's noun phrase ("cards", "a creature card", "cards with that
+/// name", "nonland cards with that name"). The outer `None` means the noun is
+/// not recognized, so the instruction fails closed; the inner `None` means a
+/// plain "card(s)", which any card in the hand satisfies.
+fn parse_discard_noun_filter(noun: &str) -> Option<Option<TargetFilter>> {
+    // CR 201.2a + CR 608.2c: a trailing "with that name" binds the discard to the
+    // card name chosen earlier in this resolution (Brain Pry). It composes onto
+    // whatever type qualifier precedes it.
+    let (noun, has_chosen_name) = match terminated(
+        take_until::<_, _, OracleError<'_>>(" with that name"),
+        all_consuming(tag(" with that name")),
+    )
+    .parse(noun)
+    {
+        Ok((_, base)) => (base, true),
+        Err(_) => (noun, false),
+    };
+    let plain_noun = noun.to_lowercase();
+    let type_filter = if all_consuming((
+        opt(tag::<_, _, OracleError<'_>>("additional ")),
+        alt((tag("cards"), tag("card"))),
+    ))
+    .parse(plain_noun.as_str())
+    .is_ok()
+    {
+        None
+    } else {
+        Some(parse_discard_card_filter(noun)?)
+    };
+    Some(match (type_filter, has_chosen_name) {
+        (filter, false) => filter,
+        (None, true) => Some(TargetFilter::HasChosenName),
+        (Some(filter), true) => Some(TargetFilter::And {
+            filters: vec![filter, TargetFilter::HasChosenName],
+        }),
+    })
+}
+
+/// CR 701.9a + CR 608.2c: whether an "all <noun>" discard can carry this parsed
+/// noun filter. Two parsed shapes are refused (fail closed):
+/// - a noun that names a zone ("all cards from their hand", Khorvath's Fury): a
+///   discard's pool is always the discarding player's hand (CR 701.9a), so the
+///   zone restates the whole-hand instruction rather than filtering the hand.
+///   Accepting it here would be wrong, not merely misplaced: the printed
+///   instruction sits under a per-player friend-or-foe fan-out, and this arm
+///   establishes neither which player discards under that fan-out nor how the
+///   following "draws that many cards" reads the discarded count, so a lowered
+///   discard would claim semantics nothing here backs;
+/// - a mana-value comparison over an `Anaphoric` / `Demonstrative` object
+///   referent ("cards with that spell's mana value"): after a reveal of a
+///   one-card hand the earlier-instruction referent (CR 608.2c) is the revealed
+///   card, so the read would not name the spell (CR 202.3).
+fn discard_all_filter_is_representable(filter: &TargetFilter) -> bool {
+    !crate::types::ability::filter_contains_filter_prop(filter, &|prop| {
+        matches!(prop, FilterProp::InZone { .. })
+            || matches!(prop, FilterProp::Cmc { value, .. }
+            if crate::types::ability::quantity_expr_contains_scope(value, ObjectScope::Anaphoric)
+                || crate::types::ability::quantity_expr_contains_scope(
+                    value,
+                    ObjectScope::Demonstrative,
+                ))
+    })
+}
+
+/// CR 201.4a: the gap an "all … with that name" discard lowers to when the
+/// preceding card-name choice prints a characteristic `ChoiceType::CardName`
+/// cannot carry ("choose a nonland card name").
+pub(crate) const DISCARD_CHOSEN_NAME_CHARACTERISTIC_GAP: &str =
+    "discard_chosen_name_characteristic";
 
 /// CR 701.9a + CR 608.2c: Parse the card-type filter portion of a discard phrase.
 ///
@@ -2165,6 +2242,61 @@ pub(super) fn parse_targeted_action_ast(
                 filter: None,
             });
         }
+        // CR 701.9a + CR 608.2c: "discards all <filter> cards" discards every card in the
+        // discarding player's hand that matches the filter. The count is the census of
+        // those cards in that player's hand (`ZoneCardCount`, scoped to the discarding
+        // player by the resolver and read once when the discard is applied, CR 608.2h),
+        // so the forced branch moves exactly the matching cards
+        // and a hand with none requires zero. "all other …" is relative to cards chosen
+        // earlier in the resolution, not to the source, so it fails closed.
+        if let Ok((rest, _)) =
+            (tag::<_, _, OracleError<'_>>("all "), not(tag("other "))).parse(after_discard)
+        {
+            if random || up_to {
+                return None;
+            }
+            let original_rest = &text[text.len() - rest.len()..];
+            let filter = parse_discard_noun_filter(
+                crate::parser::oracle_util::normalize_count_slot_text(original_rest),
+            )??;
+            if !discard_all_filter_is_representable(&filter) {
+                return None;
+            }
+            // CR 201.4a + CR 608.2c: "with that name" reads the name an earlier "choose a
+            // <characteristic> card name" instruction chose, and `ChoiceType::CardName`
+            // cannot carry that characteristic, so an out-of-characteristic name (a land,
+            // for "nonland") would discard every copy. Fail closed with an explicit gap
+            // until the choice enforces it.
+            if ctx.pending_card_name_characteristic.is_some()
+                && crate::types::ability::filter_grammar_any(&filter, &|node| {
+                    matches!(
+                        node,
+                        crate::types::ability::FilterGrammarNode::Filter(
+                            TargetFilter::HasChosenName
+                        )
+                    )
+                })
+            {
+                return Some(TargetedImperativeAst::Unimplemented {
+                    gap: DISCARD_CHOSEN_NAME_CHARACTERISTIC_GAP,
+                    fragment: text.to_string(),
+                });
+            }
+            return Some(TargetedImperativeAst::Discard {
+                count: QuantityExpr::Ref {
+                    qty: QuantityRef::ZoneCardCount {
+                        zone: ZoneRef::Hand,
+                        card_types: vec![],
+                        filter: Some(filter.clone()),
+                        scope: CountScope::ScopedPlayer,
+                    },
+                },
+                random: false,
+                up_to: false,
+                unless_filter: None,
+                filter: Some(filter),
+            });
+        }
         // CR 701.9a: "discard any number of [filter] cards" — opt-choice
         // discard where the player picks any 0..hand-size. Encoded as
         // count = HandSize with up_to = true so the controller chooses how
@@ -2221,37 +2353,7 @@ pub(super) fn parse_targeted_action_ast(
         ))
         .parse(noun_lower.as_str())
         .map_or(slot.noun, |(_, body)| &slot.noun[..body.len()]);
-        // CR 201.2a + CR 608.2c: a trailing "with that name" binds the discard to the
-        // card name chosen earlier in this resolution (Brain Pry). It composes onto
-        // whatever type qualifier precedes it.
-        let (noun, has_chosen_name) = match terminated(
-            take_until::<_, _, OracleError<'_>>(" with that name"),
-            all_consuming(tag(" with that name")),
-        )
-        .parse(noun)
-        {
-            Ok((_, base)) => (base, true),
-            Err(_) => (noun, false),
-        };
-        let plain_noun = noun.to_lowercase();
-        let type_filter = if all_consuming((
-            opt(tag::<_, _, OracleError<'_>>("additional ")),
-            alt((tag("cards"), tag("card"))),
-        ))
-        .parse(plain_noun.as_str())
-        .is_ok()
-        {
-            None
-        } else {
-            Some(parse_discard_card_filter(noun)?)
-        };
-        let filter = match (type_filter, has_chosen_name) {
-            (filter, false) => filter,
-            (None, true) => Some(TargetFilter::HasChosenName),
-            (Some(filter), true) => Some(TargetFilter::And {
-                filters: vec![filter, TargetFilter::HasChosenName],
-            }),
-        };
+        let filter = parse_discard_noun_filter(noun)?;
         return Some(TargetedImperativeAst::Discard {
             count,
             random,
@@ -2527,9 +2629,15 @@ pub(super) fn parse_targeted_action_ast(
         // the single authority in `mod.rs` (`target_span_dropped_this_way_anaphor`)
         // owns the bound-anaphor exemptions (payment amounts, reveal choices),
         // so this call site never duplicates the predicate.
-        if super::target_span_dropped_this_way_anaphor(target_text, &target) {
-            return None;
-        }
+        let (target, origin) = if let Ok((_, reader)) = super::graveyard_arrival_return_spec(lower)
+        {
+            (reader.noun, Some(reader.destination))
+        } else {
+            if super::target_span_dropped_this_way_anaphor(target_text, &target) {
+                return None;
+            }
+            (target, origin)
+        };
         // CR 607.2a: "the exiled card(s)" bound to the bare chain sentinel. Whether
         // it names only the cards the linked exile instruction exiled depends on the
         // return's own resolution chain (CR 608.2c), and that chain is fixed only on
@@ -3255,6 +3363,9 @@ pub(super) fn lower_targeted_action_ast(ast: TargetedImperativeAst) -> Effect {
             grantee: crate::types::ability::PermissionGrantee::ObjectOwner,
         },
         TargetedImperativeAst::ZoneCounterProxy(ast) => lower_zone_counter_ast(*ast),
+        TargetedImperativeAst::Unimplemented { gap, fragment } => {
+            Effect::unimplemented(gap, fragment)
+        }
     }
 }
 
@@ -4981,7 +5092,7 @@ fn parse_hand_reveal_target_and_card_filter(
             return (TargetFilter::Any, TargetFilter::None, cardinality);
         };
         let target = parse_hand_possessive_target(hand_phrase)
-            .map(|(_, target)| target)
+            .map(|(_, target)| resolve_scoped_hand_owner(target, ctx))
             .unwrap_or(TargetFilter::Any);
         if descriptor.trim().is_empty() {
             return (target, TargetFilter::Any, cardinality);
@@ -5009,7 +5120,7 @@ fn parse_hand_reveal_target_and_card_filter(
     };
     if let Ok((hand_phrase, _)) = tag::<_, _, OracleError<'_>>("card from ").parse(after_article) {
         let target = parse_hand_possessive_target(hand_phrase)
-            .map(|(_, target)| target)
+            .map(|(_, target)| resolve_scoped_hand_owner(target, ctx))
             .unwrap_or(TargetFilter::Any);
         return (
             target,
@@ -5029,7 +5140,7 @@ fn parse_hand_reveal_target_and_card_filter(
         );
     };
     let target = parse_hand_possessive_target(hand_phrase)
-        .map(|(_, target)| target)
+        .map(|(_, target)| resolve_scoped_hand_owner(target, ctx))
         .unwrap_or(TargetFilter::Any);
     let singular = format!("{} card", descriptor.trim());
     let (filter, rem) =
@@ -5129,6 +5240,25 @@ fn parse_hand_possessive_target(input: &str) -> nom::IResult<&str, TargetFilter,
         ),
     ))
     .parse(input)
+}
+
+/// CR 608.2c + CR 109.5: inside a player-scope iteration, the relative
+/// possessive "their hand" names the iterating player's hand. The generic
+/// hand-owner parser uses `TriggeringPlayer` for that anaphor because it also
+/// serves event-triggered clauses; a scoped clause has a nearer, explicit
+/// player binding and must resolve it as the scoped controller instead.
+fn resolve_scoped_hand_owner(target: TargetFilter, ctx: &ParseContext) -> TargetFilter {
+    if matches!(
+        (&target, &ctx.relative_player_scope),
+        (
+            TargetFilter::TriggeringPlayer,
+            Some(ControllerRef::ScopedPlayer)
+        )
+    ) {
+        TargetFilter::Controller
+    } else {
+        target
+    }
 }
 
 /// CR 122.1 + CR 115.1: "[a|one|any] counter on <target>" — designate the object
@@ -5493,6 +5623,12 @@ pub(super) fn parse_choose_ast(
     // zone choice nor targeting; decline before those parsers so the clause
     // stays unsupported instead of lowering to a five-color choice, a card pick,
     // or `TargetOnly { Any }`.
+    // The mana form ("Choose a color of a permanent you control. Add one mana
+    // of that color.") is recognized on the whole body by
+    // `mana::try_parse_color_of_objects_mana`, which lowers it to
+    // `ManaProduction::AnyOneColorAmongPermanents` because that choice is made
+    // while the production resolves (CR 608.2d); this decline covers every form
+    // that recognizer declines.
     if preceded(tag::<_, _, OracleError<'_>>("choose a color"), tag(" of "))
         .parse(lower)
         .is_ok()
@@ -5728,6 +5864,12 @@ pub(super) fn parse_choose_ast(
         // it in `GuessSubject::CommittedChoice` (in-order instructions within one
         // ability — not a CR 607.2d link between two distinct printed abilities).
         ctx.pending_choice_type = Some(choice_type.clone());
+        // CR 201.4a: record the characteristic the CardName choice drops, for the
+        // "with that name" discard fence in `parse_targeted_action_ast`.
+        if matches!(choice_type, ChoiceType::CardName { .. }) {
+            ctx.pending_card_name_characteristic =
+                super::parse_card_name_choice_characteristic(lower);
+        }
         return Some(ChooseImperativeAst::NamedChoice {
             choice_type,
             selection,
@@ -10532,61 +10674,6 @@ pub(super) fn lower_put_ast(ast: PutImperativeAst) -> Effect {
     }
 }
 
-/// Parse "put that many {type} counter(s) on {target}" — dynamic counter count from event context.
-/// CR 120.1: "that many" references the amount from the triggering event (e.g., damage dealt).
-/// Produces PutCounter with count=0 as a sentinel for event-context resolution.
-fn try_parse_that_many_counters(lower: &str, ctx: &mut ParseContext) -> Option<Effect> {
-    let (rest, _) = tag::<_, _, OracleError<'_>>("put that many ")
-        .parse(lower)
-        .ok()?;
-    // Counter type (e.g. "+1/+1", "charge", "loyalty", "double strike").
-    // CR 122.1 + CR 122.1b: route through the shared `parse_counter_type_typed`
-    // combinator so multi-word keyword counter names ("first strike", "double
-    // strike") canonicalize to `CounterType::Keyword(...)` instead of being
-    // truncated at the first whitespace.
-    let (after_type, counter_type) = nom_primitives::parse_counter_type_typed(rest).ok()?;
-
-    // Skip "counter" or "counters" keyword
-    let after_type = after_type.trim_start();
-    let after_counter = alt((tag::<_, _, OracleError<'_>>("counters"), tag("counter")))
-        .parse(after_type)
-        .map(|(r, _)| r)
-        .unwrap_or(after_type)
-        .trim_start();
-
-    // Parse target after "on"
-    let target = if let Ok((on_rest, _)) = tag::<_, _, OracleError<'_>>("on ").parse(after_counter)
-    {
-        if alt((tag::<_, _, OracleError<'_>>("~"), tag("this ")))
-            .parse(on_rest)
-            .is_ok()
-        {
-            TargetFilter::SelfRef
-        } else if alt((tag::<_, _, OracleError<'_>>("it"), tag("itself")))
-            .parse(on_rest)
-            .is_ok()
-        {
-            // CR 608.2k: Bare pronoun — context-dependent
-            resolve_it_pronoun(ctx)
-        } else {
-            let (t, _) =
-                ctx.with_player_antecedents(|scoped| parse_target_with_ctx(on_rest, scoped));
-            t
-        }
-    } else {
-        TargetFilter::SelfRef
-    };
-
-    // "That many" resolves from trigger event context at runtime.
-    Some(Effect::PutCounter {
-        counter_type,
-        count: QuantityExpr::Ref {
-            qty: QuantityRef::EventContextAmount,
-        },
-        target,
-    })
-}
-
 /// CR 701.60a: Parse the "no longer suspected" un-designation transition into an
 /// `Effect::Unsuspect { target }`. The subject precedes the copula + phrase and
 /// varies by card:
@@ -13665,6 +13752,28 @@ fn parse_pay_life_amount(rest: &str) -> Option<QuantityExpr> {
         });
     }
 
+    // CR 608.2c + CR 119.4: "pay that much life" — the payment amount is the
+    // triggering event's amount ("that much" names the life just gained for a
+    // LifeGained trigger), read at resolution through the shared
+    // `EventContextAmount` cascade. FULL-CONSUMPTION (an optional trailing
+    // period only): a rider the cost grammar cannot read makes the whole cost
+    // decline, so Verrak, Warped Sengir's "pay that much life again" stays
+    // honestly `Unimplemented` — its repeat-payment adverb plus the "if life
+    // was paid to activate it" condition need their own feature (issue
+    // #11295) — instead of silently dropping "again" and flipping green with
+    // a mis-bound amount.
+    if let Ok((tail, _)) = tag::<_, _, OracleError<'_>>("that much life").parse(rest) {
+        if terminated(opt(tag::<_, _, OracleError<'_>>(".")), eof)
+            .parse(tail.trim())
+            .is_ok()
+        {
+            return Some(QuantityExpr::Ref {
+                qty: QuantityRef::EventContextAmount,
+            });
+        }
+        return None;
+    }
+
     // CR 118.8: "pay half your life[, rounded up]" — delegate the life-fraction
     // phrase to the shared quantity expression parser (`DivideRounded` over the
     // controller's `LifeTotal`), so the rounding mode and life-total wording
@@ -15624,26 +15733,12 @@ pub(super) fn parse_imperative_family_ast(
     }
 
     if nom_on_lower(first_word, first_word, |i| value((), tag("put")).parse(i)).is_some() {
-        return if nom_primitives::scan_contains(lower, "that many")
-            && nom_primitives::scan_contains(lower, "counter")
-        {
-            try_parse_that_many_counters(lower, ctx)
-                .map(ImperativeFamilyAst::GainKeyword)
-                .or_else(|| {
-                    try_parse_put_sticker_effect(lower, ctx).map(ImperativeFamilyAst::GainKeyword)
-                })
-                .or_else(|| {
-                    parse_zone_counter_family_ast(text, lower, ctx)
-                        .or_else(|| parse_put_ast(text, lower, ctx).map(ImperativeFamilyAst::Put))
-                })
-        } else {
-            try_parse_put_sticker_effect(lower, ctx)
-                .map(ImperativeFamilyAst::GainKeyword)
-                .or_else(|| {
-                    parse_zone_counter_family_ast(text, lower, ctx)
-                        .or_else(|| parse_put_ast(text, lower, ctx).map(ImperativeFamilyAst::Put))
-                })
-        };
+        return try_parse_put_sticker_effect(lower, ctx)
+            .map(ImperativeFamilyAst::GainKeyword)
+            .or_else(|| {
+                parse_zone_counter_family_ast(text, lower, ctx)
+                    .or_else(|| parse_put_ast(text, lower, ctx).map(ImperativeFamilyAst::Put))
+            });
     }
 
     // CR 614.11 + CR 614.6: One-shot "the next time you would draw a card this
@@ -16278,7 +16373,8 @@ pub(super) fn parse_imperative_family_ast(
                 .map(|(r, _)| r)
                 .unwrap_or("");
             let amount = if let Some(expr) = where_x {
-                parse_where_x_quantity_expression(&expr)
+                let antecedents = ctx.player_antecedents();
+                WhereXBinding::new(Some(&expr), &antecedents).resolve_quantity(&expr)
                     .unwrap_or(QuantityExpr::Fixed { value: 0 })
             } else {
                 // CR 107.3a + CR 701.63a: Endure X uses the activation's
@@ -24030,8 +24126,8 @@ mod tests {
     /// CR 122.1: literal-N earthbend keeps the `Fixed` count path intact.
     #[test]
     fn earthbend_count_expr_literal_n() {
-        let (target, count) =
-            parse_earthbend_count_expr("2", "2").expect("literal-N earthbend parses");
+        let (target, count) = parse_earthbend_count_expr("2", "2", &ParseContext::default())
+            .expect("literal-N earthbend parses");
         assert_eq!(count, QuantityExpr::Fixed { value: 2 });
         assert_eq!(target, default_earthbend_target());
     }
@@ -24041,8 +24137,8 @@ mod tests {
     #[test]
     fn earthbend_count_expr_x_with_player_counter_tail() {
         let tail = "x, where x is the number of experience counters you have";
-        let (_, count) =
-            parse_earthbend_count_expr(tail, tail).expect("player-counter where-clause parses");
+        let (_, count) = parse_earthbend_count_expr(tail, tail, &ParseContext::default())
+            .expect("player-counter where-clause parses");
         assert_eq!(
             count,
             QuantityExpr::Ref {
@@ -24058,7 +24154,8 @@ mod tests {
     /// to the spell-cost X resolution path (Variable("X")), not Fixed 0.
     #[test]
     fn earthbend_count_expr_bare_x_falls_through_to_variable() {
-        let (_, count) = parse_earthbend_count_expr("x", "x").expect("bare earthbend X parses");
+        let (_, count) = parse_earthbend_count_expr("x", "x", &ParseContext::default())
+            .expect("bare earthbend X parses");
         assert_eq!(
             count,
             QuantityExpr::Ref {
@@ -24082,8 +24179,8 @@ mod tests {
             Comparator, ControllerRef, FilterProp, PtStat, TargetFilter, TypeFilter,
         };
         let tail = "x, where x is the number of creatures you control with power 4 or greater";
-        let (target, count) =
-            parse_earthbend_count_expr(tail, tail).expect("object-count where-clause parses");
+        let (target, count) = parse_earthbend_count_expr(tail, tail, &ParseContext::default())
+            .expect("object-count where-clause parses");
         assert_eq!(
             target,
             default_earthbend_target(),
@@ -24122,8 +24219,8 @@ mod tests {
     fn earthbend_count_expr_object_count_subtype() {
         use crate::types::ability::{ControllerRef, TargetFilter, TypeFilter};
         let tail = "x, where x is the number of forests you control";
-        let (target, count) =
-            parse_earthbend_count_expr(tail, tail).expect("subtype-count where-clause parses");
+        let (target, count) = parse_earthbend_count_expr(tail, tail, &ParseContext::default())
+            .expect("subtype-count where-clause parses");
         assert_eq!(target, default_earthbend_target());
         let QuantityExpr::Ref {
             qty: QuantityRef::ObjectCount { filter },
@@ -24150,8 +24247,8 @@ mod tests {
     #[test]
     fn earthbend_count_expr_mana_spent_to_cast() {
         let tail = "x, where x is the amount of mana spent to cast her";
-        let (target, count) =
-            parse_earthbend_count_expr(tail, tail).expect("mana-spent where-clause parses");
+        let (target, count) = parse_earthbend_count_expr(tail, tail, &ParseContext::default())
+            .expect("mana-spent where-clause parses");
         assert_eq!(target, default_earthbend_target());
         assert!(
             matches!(
@@ -24176,7 +24273,7 @@ mod tests {
     fn earthbend_count_expr_unrecognized_where_clause_is_strict_failure() {
         let tail = "x, where x is the number of glorbs you frobnicate";
         assert_eq!(
-            parse_earthbend_count_expr(tail, tail),
+            parse_earthbend_count_expr(tail, tail, &ParseContext::default()),
             None,
             "an unrecognized where-clause quantity must fail strictly, not bind a fake Variable{{X}}"
         );
@@ -29897,10 +29994,7 @@ mod tests {
     fn that_many_counters_multi_word_keyword() {
         use crate::types::counter::CounterType;
         use crate::types::keywords::KeywordKind;
-        let mut ctx = ParseContext::default();
-        let effect =
-            try_parse_that_many_counters("put that many double strike counters on it", &mut ctx)
-                .expect("clause should parse");
+        let effect = super::super::parse_effect("put that many double strike counters on it");
         match effect {
             Effect::PutCounter {
                 counter_type,

@@ -1088,10 +1088,14 @@ pub enum CategoryChooserScope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum KeeperConstraint {
-    /// The chooser must protect exactly this many eligible permanents. If fewer
-    /// are eligible, the instruction does as much as possible and protects all
-    /// of them (CR 609.3).
-    ExactCount { count: QuantityExpr },
+    /// CR 101.4 + CR 701.21a: the chooser protects `count` eligible permanents.
+    /// A bare count is exact; if fewer are eligible, the chooser protects all of
+    /// them (CR 609.3). A `QuantityExpr::UpTo` count lets the chooser protect any
+    /// number from zero to its bound (Covetous Elegy: "Players may choose fewer
+    /// than two creatures even if they control two or more creatures.").
+    /// `exact_count` is the legacy serialized tag.
+    #[serde(alias = "exact_count")]
+    Count { count: QuantityExpr },
 }
 
 /// CR 122.1 + CR 608.2c: the counter a keeper-and-dispose instruction places to
@@ -3889,6 +3893,10 @@ pub enum ManaProduction {
     /// Per CR 106.7 the union ignores cost-payability of the surveyed lands'
     /// mana abilities — only the resulting *type set* matters. CR 106.5 applies
     /// when the union is empty (e.g. no matching lands → no mana).
+    /// `land_filter` may also be the cost referent `TargetFilter::CostPaidObject`
+    /// ("the sacrificed land could produce" — Squandered Resources, CR 608.2k),
+    /// read from the referent's LKI (`LKISnapshot::produceable_mana_types`,
+    /// CR 608.2h) rather than a battlefield census.
     AnyTypeProduceableBy {
         #[serde(default = "default_quantity_one")]
         count: QuantityExpr,
@@ -3940,10 +3948,16 @@ pub enum ManaProduction {
     /// variant is deliberately NOT parameterized: no mana ability reads either.
     DistinctColorsAmongPermanents { filter: TargetFilter },
     /// CR 106.1 + CR 109.1: Produce N mana of one chosen color from the distinct
-    /// colors present among permanents matching `filter`. Mox Amber class:
-    /// "{T}: Add one mana of any color among legendary creatures and
-    /// planeswalkers you control." Colors resolve dynamically at activation
-    /// time; CR 106.5 applies when no matching permanent is colored.
+    /// colors present among the objects matching `filter`: permanents, unless
+    /// `filter` names another zone through `FilterProp::InZone`, as
+    /// `effects::mana::distinct_colors_among_permanents` reads it. Mox Amber
+    /// class: "{T}: Add one mana of any color among legendary creatures and
+    /// planeswalkers you control." CR 105.4 + CR 608.2d: "Choose a color of
+    /// <objects>. Add one mana of that color." lowers here too, because that
+    /// choice is made while this production resolves, from the colors of the
+    /// objects it names (Meteor Crater: "a permanent you control"; Corrupted
+    /// Grafstone: "a card in your graveyard"). Colors resolve dynamically at
+    /// activation time; CR 106.5 applies when no matching object is colored.
     AnyOneColorAmongPermanents {
         #[serde(default = "default_quantity_one")]
         count: QuantityExpr,
@@ -7590,6 +7604,19 @@ pub enum FilterProp {
         comparator: Comparator,
         count: u8,
     },
+    /// CR 205.2a: Matches objects by distinct card-type count ("a card with two
+    /// or more card types" — Rendmaw, Creaking Nest; Visitor from Planet Q).
+    /// Counts distinct [`CoreType`] values of the object's `core_types`, the same
+    /// source type matching reads: supertypes (CR 205.4a) and subtypes (CR 205.3)
+    /// never count, and a Tribal single counts 1 under any wording. The
+    /// Tribal+Kindred pair vector is empty and Boss/Event never appear on a
+    /// playable card, so the stored-value count equals the CR 205.2a count on
+    /// every reachable object. Parameterized over [`Comparator`] like
+    /// `ColorCount`, so other thresholds need no new variant.
+    CardTypeCount {
+        comparator: Comparator,
+        count: u8,
+    },
     /// CR 107.4 + CR 202.1: Matches objects whose count of colored mana symbols
     /// in the printed mana cost satisfies `comparator` against `value`.
     /// `color: Some(c)` counts symbols contributing to color `c` (hybrid /
@@ -8102,6 +8129,7 @@ impl FilterProp {
             | FilterProp::HasColor { .. }
             | FilterProp::PowerGTSource
             | FilterProp::ColorCount { .. }
+            | FilterProp::CardTypeCount { .. }
             | FilterProp::ManaSymbolCount { .. }
             | FilterProp::HasSupertype { .. }
             | FilterProp::IsChosenCreatureType
@@ -9349,6 +9377,7 @@ fn filter_prop_binds_prior_target(prop: &FilterProp) -> bool {
         | FilterProp::HasColor { .. }
         | FilterProp::PowerGTSource
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -9612,6 +9641,7 @@ pub fn filter_prop_contains(prop: &FilterProp, leaf: &dyn Fn(&TargetFilter) -> b
         | FilterProp::PtComparison { .. }
         | FilterProp::PowerGTSource
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -9911,6 +9941,7 @@ pub fn filter_prop_grammar_any(
             | FilterProp::HasColor { .. }
             | FilterProp::PowerGTSource
             | FilterProp::ColorCount { .. }
+            | FilterProp::CardTypeCount { .. }
             | FilterProp::ManaSymbolCount { .. }
             | FilterProp::HasSupertype { .. }
             | FilterProp::IsChosenCreatureType
@@ -10576,6 +10607,7 @@ pub fn rewrite_filter_prop<C>(
         | FilterProp::HasColor { .. }
         | FilterProp::PowerGTSource
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -12520,10 +12552,9 @@ pub enum ObjectScope {
     EventSource,
     /// CR 608.2k: The specific untargeted object previously referred to by
     /// this ability's cost OR trigger condition. Resolved (first match wins)
-    /// via `ResolvedAbility.cost_paid_object` → trigger-event source →
-    /// `effect_context_object`. Subsumes the former `EventContextSource*`
-    /// trio (CR 117.1 + CR 400.7j cost referent and CR 603.2 trigger
-    /// referent are the two enumerated members of CR 608.2k's single clause).
+    /// via `ResolvedAbility.cost_paid_object`, then the same-resolution effect
+    /// object, then the trigger-event source. Where-X references to a trigger's
+    /// object use `EventSource` directly.
     CostPaidObject,
     /// CR 608.2k: A deferred anaphoric **pronoun** ("it" / "its") whose object
     /// referent is bound at parse time. The parser rebinds this to a concrete
@@ -13073,6 +13104,7 @@ fn filter_prop_has_unsupported_selected_ref(prop: &FilterProp, nested: bool) -> 
         | FilterProp::HasColor { .. }
         | FilterProp::PowerGTSource
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -19340,6 +19372,19 @@ pub enum ParsedCondition {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         specific: Option<crate::types::dungeon::DungeonId>,
     },
+    /// CR 725.1 + CR 109.5: True when the activating player holds the monarch
+    /// designation. Crown of Gondor's equip discount uses this condition in an
+    /// activation instruction (CR 602.1b) applied during total cost determination
+    /// (CR 602.2b + CR 601.2f). Like the city's blessing, the enduring story and
+    /// dungeon completion, it reads a status off the scoped player, so
+    /// `static_condition_to_restriction_condition` converts it exactly.
+    ///
+    /// Activator-relative like `HasCityBlessing`, because the printed clause is
+    /// addressed to whoever is activating ("if you're"). CR 602.2 lets an
+    /// `activator_filter` of `PlayerFilter::All` make the activator someone
+    /// other than the source's controller, and the designation read must follow
+    /// that player. The leaf is false when no player is the monarch.
+    IsMonarch,
     /// CR 702.178a: True when the SOURCE's player has max speed — its
     /// controller on the battlefield, its owner anywhere else, per the "Max
     /// Speed" glossary entry (sense 2). Unlike its designation siblings above,
@@ -22821,6 +22866,13 @@ impl TryFrom<ContinuousModification> for PerpetualGrantModification {
         match modification {
             ContinuousModification::AddKeyword { keyword } => Ok(Self::AddKeyword { keyword }),
             ContinuousModification::AddStaticMode { mode } => Ok(Self::AddStaticMode { mode }),
+            ContinuousModification::GrantStaticAbility { definition }
+                if definition.has_legacy_static_mode_shape() =>
+            {
+                Ok(Self::AddStaticMode {
+                    mode: definition.mode,
+                })
+            }
             // Fail-closed: a `GrantAbility` whose nested tree contains
             // `Effect::Unimplemented` did not actually parse -- the quoted body
             // fell through to the parser's honest "couldn't classify this" stub
@@ -26520,7 +26572,7 @@ pub enum Effect {
         /// unchosen permanents are sacrificed — the printed order. CR 614.1: replacement
         /// effects "apply continuously as events happen", so a would-be multiplier that
         /// is itself about to be sacrificed must still be on the battlefield when the
-        /// mark is placed. Only valid together with `KeeperConstraint::ExactCount`;
+        /// mark is placed. Only valid together with `KeeperConstraint::Count`;
         /// `choose_and_sacrifice_rest::resolve` refuses any other mode.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         keeper_counter: Option<KeeperCounterMark>,
@@ -29768,6 +29820,7 @@ fn filter_prop_recipient_read(prop: &FilterProp) -> RecipientRead {
         | FilterProp::HasColor { .. }
         | FilterProp::PowerGTSource
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -31845,6 +31898,23 @@ impl Effect {
                     ..
                 }
         )
+    }
+
+    /// CR 608.2c + CR 115.6: whether this is a counter (CR 122.1) or
+    /// life-total (CR 119.3) instruction that names no target. The shared
+    /// shape authority for the instructions an activated mana ability performs
+    /// in written order before its production (`inline_mana_preamble`: Empowered
+    /// Autogenerator's "Put a charge counter on this artifact.") and for the
+    /// earlier instructions the CR 106.7 reader performs on a scratch state
+    /// before a later mana amount.
+    pub fn is_decision_free_state_instruction(&self) -> bool {
+        matches!(
+            self,
+            Effect::PutCounter { .. }
+                | Effect::RemoveCounter { .. }
+                | Effect::GainLife { .. }
+                | Effect::LoseLife { .. }
+        ) && extract_target_filter_from_effect(self).is_none()
     }
 
     /// CR 608.2c: true for the structural "repeat this process" directive
@@ -34615,7 +34685,9 @@ impl Effect {
     pub fn publishes_created_referent(&self) -> bool {
         crate::types::ability_visit::visit_effect_scoped(
             self,
-            crate::types::ability_visit::ResolutionScope::OwnResolutionOnly,
+            crate::types::ability_visit::WalkScope::descending(
+                crate::types::ability_visit::ResolutionScope::OwnResolutionOnly,
+            ),
             &mut |effect| {
                 if effect.created_referent_publication().is_some() {
                     ControlFlow::Break(())
@@ -34652,7 +34724,7 @@ macro_rules! define_effect_quantity_walk {
     /// (`ChangeZoneAll`/`PutAtLibraryPosition`/`Conjure`/`Counter`'s
     /// countered-spell destination), `UntilCondition::CumulativeThreshold`
     /// (`ExileFromTopUntil`), `GuessSubject::Proposition` (`OpponentGuess`),
-    /// `KeeperConstraint::ExactCount` and `KeeperCounterMark::count`
+    /// `KeeperConstraint::Count` and `KeeperCounterMark::count`
     /// (`ChooseAndSacrificeRest`), and each `ConjureCard::count`.
     ///
     /// Deliberately NOT walked: quantities inside deferred definition
@@ -35021,7 +35093,7 @@ macro_rules! define_effect_quantity_walk {
                 // live when the chooser prompt is built.
                 if let Some(constraint) = keeper_constraint {
                     match constraint {
-                        KeeperConstraint::ExactCount { count } => f(count),
+                        KeeperConstraint::Count { count } => f(count),
                     }
                 }
                 // CR 608.2c + CR 122.1: the printed keeper mark's count.
@@ -37805,18 +37877,10 @@ pub fn inline_mana_preamble(ability_def: &AbilityDefinition) -> Option<&AbilityD
         if matches!(node.effect.as_ref(), Effect::Mana { .. }) {
             return preceding.then_some(node);
         }
-        let choice_free = matches!(
-            node.effect.as_ref(),
-            Effect::PutCounter { .. }
-                | Effect::RemoveCounter { .. }
-                | Effect::GainLife { .. }
-                | Effect::LoseLife { .. }
-        );
-        if !choice_free
+        if !node.effect.is_decision_free_state_instruction()
             || node.condition.is_some()
             || node.optional
             || node.multi_target.is_some()
-            || extract_target_filter_from_effect(&node.effect).is_some()
         {
             return None;
         }
@@ -39123,6 +39187,31 @@ impl AbilityDefinition {
                 .as_ref()
                 .is_some_and(AbilityCondition::is_optional_effect_performed)
     }
+
+    /// CR 602.2a + CR 608.2c: whether any node of this printed ability reads
+    /// its per-turn `tally` ([`AbilityCondition::reads_ability_use_count`]).
+    ///
+    /// The whole definition tree is walked, not just `condition`: the gated
+    /// clause sits on whichever chain node carries it (Dragon Whelp's
+    /// `SequentialSibling` holding `CreateDelayedTrigger`, Soulbright Seeker's
+    /// mana sub), and a modal ability's modes are ways it resolves.
+    pub fn reads_ability_use_count(&self, tally: AbilityUseTally) -> bool {
+        self.condition
+            .as_ref()
+            .is_some_and(|condition| condition.reads_ability_use_count(tally))
+            || self
+                .sub_ability
+                .as_deref()
+                .is_some_and(|sub| sub.reads_ability_use_count(tally))
+            || self
+                .else_ability
+                .as_deref()
+                .is_some_and(|other| other.reads_ability_use_count(tally))
+            || self
+                .mode_abilities
+                .iter()
+                .any(|mode| mode.reads_ability_use_count(tally))
+    }
 }
 
 /// The result of an `Effect::OpponentGuess` round-trip.
@@ -39579,19 +39668,11 @@ pub enum AbilityCondition {
         )]
         subject: ObjectScope,
     },
-    /// CR 601.2c + CR 608.2c + CR 115.1: True iff the parent ability actually has
-    /// at least one *object* target. Guards reflexive-target riders ("If that
-    /// creature …, …") against the optional-declined-target case: when a
-    /// variable-number-of-targets antecedent ("destroy up to one target
-    /// creature") is announced with zero targets (CR 601.2c), the anaphor "that
-    /// creature" has no antecedent (CR 608.2c — read the whole text), so the
-    /// rider must not fire. `evaluate_condition` checks the resolved ability's
-    /// declared targets (CR 115.1) for a `TargetRef::Object`, with NO
-    /// `TriggeringSource` fallback (unlike `TargetMatchesFilter`), so a declined
-    /// optional target reads false. The lowering pass conjoins this with the
-    /// reflexive sub-condition (`And{[HasObjectTarget, …]}`) only when the
-    /// antecedent's `multi_target.min_is_fixed_zero()` — a no-op for
-    /// mandatory-single-target cards (`multi_target == None`).
+    /// CR 608.2c + CR 601.2c + CR 115.6: Guard reflexive object riders
+    /// against an absent antecedent, including a declined optional target.
+    /// Referent selection follows the resolver's chain and event-context rules.
+    /// This guard alone does not establish that an object received damage;
+    /// damage riders must also check the preceding instruction's actual result.
     HasObjectTarget,
     /// CR 608.2c + CR 603.2: "if it targets a [filter]" on a triggered ability —
     /// gates the sub_ability on whether the triggering spell's chosen targets
@@ -40490,6 +40571,33 @@ impl AbilityCondition {
         )
     }
 
+    /// CR 602.2a + CR 608.2c: whether this condition reads its own ability's
+    /// per-turn `tally` (`AbilityUseCountThisTurn`), through `And` / `Or` /
+    /// `Not` / `ConditionInstead`.
+    ///
+    /// Two readers rely on it. The loop firewall (`analysis::resource`) retains
+    /// a count any condition reads. The CR 106.7 walker (`game::could_produce`)
+    /// projects the use ledgers through one hypothetical resolution only for an
+    /// ability that reads one. Every other condition answers `false`, the
+    /// fail-closed direction for both: a missed reader keeps the firewall's
+    /// count and leaves the walker reading the gate both ways (the live
+    /// ledger), never deciding it against a ledger that was not projected.
+    pub fn reads_ability_use_count(&self, tally: AbilityUseTally) -> bool {
+        match self {
+            AbilityCondition::AbilityUseCountThisTurn { tally: read, .. } => *read == tally,
+            AbilityCondition::And { conditions } | AbilityCondition::Or { conditions } => {
+                conditions
+                    .iter()
+                    .any(|condition| condition.reads_ability_use_count(tally))
+            }
+            AbilityCondition::Not { condition }
+            | AbilityCondition::ConditionInstead { inner: condition } => {
+                condition.reads_ability_use_count(tally)
+            }
+            _ => false,
+        }
+    }
+
     /// Default `min_count` for `AdditionalCostPaid` is 1 (any single payment).
     /// Used by serde `#[serde(default = ...)]`.
     pub(crate) fn default_min_count() -> u32 {
@@ -40898,6 +41006,9 @@ pub enum TriggerCondition {
     /// CR 605.1a + CR 603.4: Event qualifier for "that isn't a mana ability"
     /// on activated-ability trigger events.
     ActivatedAbilityIsNonMana,
+    /// CR 606.4 + CR 603.4: "if you removed N or more loyalty counters to activate it".
+    /// Reads the actual loyalty-only removal from that activation's event snapshot.
+    LoyaltyCountersRemovedAtLeast { minimum: u32 },
 
     /// CR 700.4 + CR 120.1: "a creature dealt damage by ~ this turn dies" — death trigger
     /// gated on the dying creature having been dealt damage by the trigger source this turn.
@@ -41316,21 +41427,15 @@ pub enum TriggerConditionAnchor<'a> {
     Player(&'a PlayerScope),
     /// CR 607.1c + CR 113.2c: the exact trigger occurrence the leaf is linked to.
     OwnTriggerDefinition,
+    /// CR 603.4: the exact loyalty activation event and its completed payment result.
+    LoyaltyActivationEvent,
 }
 
 impl TriggerCondition {
     /// CR 603.4: the anchor this leaf needs resolved before it is answerable,
     /// when it needs one at all.
     ///
-    /// Two anchor kinds exist. A designation leaf (CR 109.4) tests a player's
-    /// designation, so it needs its [`PlayerScope`] resolved. A self-linked leaf
-    /// (CR 607.1c) reads this triggered ability's own history, so it needs the
-    /// identity of the trigger occurrence it gates.
-    ///
-    /// Exhaustive by design — there is deliberately no wildcard arm. This is
-    /// the guard that makes the polarity boundary gate in `game::triggers`
-    /// total: adding a future anchored leaf of either kind is a COMPILE ERROR
-    /// here, not a latent fail-open under [`TriggerCondition::Not`].
+    /// Three anchor kinds exist: designation leaves (CR 109.4) require a resolved `PlayerScope`; self-linked leaves (CR 607.1c) require the trigger occurrence identity; loyalty-removal threshold leaves (CR 603.4) require the exact loyalty activation event and its completed payment result.
     ///
     /// Boolean combinators return `None`; the gate recurses them itself.
     /// `QuantityComparison` returns `None` BY DEFINITION — it tests a quantity,
@@ -41345,6 +41450,9 @@ impl TriggerCondition {
             TriggerCondition::IsPoisoned { player } => Some(TriggerConditionAnchor::Player(player)),
             TriggerCondition::AddedManaWithThisAbilityThisTurn => {
                 Some(TriggerConditionAnchor::OwnTriggerDefinition)
+            }
+            TriggerCondition::LoyaltyCountersRemovedAtLeast { .. } => {
+                Some(TriggerConditionAnchor::LoyaltyActivationEvent)
             }
             TriggerCondition::GainedLife { .. }
             | TriggerCondition::LostLife
@@ -42064,8 +42172,29 @@ pub enum DieResultFilter {
     AtLeast(u8),
 }
 
+/// CR 603.2c: How a received-damage trigger counts occurrences.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum DamageReceivedGrouping {
+    /// CR 603.2c: Each matching damage record is a separate occurrence.
+    #[default]
+    PerEvent,
+    /// CR 603.2c: A collective recipient ("one or more opponents") fires once
+    /// for the simultaneous batch.
+    WholeBatch,
+    /// CR 603.2c: A singular player recipient with a quantified source fires
+    /// once for each matching damaged player.
+    PerPlayerRecipient,
+}
+
+impl DamageReceivedGrouping {
+    fn is_per_event(&self) -> bool {
+        *self == Self::PerEvent
+    }
+}
+
 /// Trigger definition with typed fields. Zero params HashMap.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(remote = "Self")]
 pub struct TriggerDefinition {
     pub mode: TriggerMode,
     #[serde(default)]
@@ -42177,8 +42306,16 @@ pub struct TriggerDefinition {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unless_pay: Option<UnlessPayModifier>,
     /// CR 603.2c: "One or more" triggers fire once per batch of simultaneous events.
+    /// `DamageReceived` uses `damage_received_grouping` instead.
     #[serde(default)]
     pub batched: bool,
+    /// CR 603.2c: Occurrence grouping for `DamageReceived`. Omission defaults to
+    /// `PerEvent`; deserialization first migrates any legacy `batched: true`.
+    #[serde(
+        skip_deserializing,
+        skip_serializing_if = "DamageReceivedGrouping::is_per_event"
+    )]
+    pub damage_received_grouping: DamageReceivedGrouping,
     /// CR 706.2: Optional sides filter for die-roll triggers such as
     /// "Whenever you roll a d20". `None` accepts any die.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -43081,6 +43218,38 @@ impl Default for TriggerOccurrenceState {
     }
 }
 
+impl Serialize for TriggerDefinition {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        Self::serialize(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for TriggerDefinition {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Wire {
+            #[serde(default)]
+            damage_received_grouping: Option<DamageReceivedGrouping>,
+            #[serde(flatten, with = "TriggerDefinition")]
+            definition: TriggerDefinition,
+        }
+
+        let Wire {
+            damage_received_grouping,
+            mut definition,
+        } = Wire::deserialize(deserializer)?;
+        let legacy_batched = definition.mode == TriggerMode::DamageReceived
+            && std::mem::take(&mut definition.batched);
+        definition.damage_received_grouping =
+            damage_received_grouping.unwrap_or(if legacy_batched {
+                DamageReceivedGrouping::WholeBatch
+            } else {
+                DamageReceivedGrouping::PerEvent
+            });
+        Ok(definition)
+    }
+}
+
 impl TriggerDefinition {
     /// CR 701.43d: The self-referential exert component grants an optional
     /// attack cost; an actor-filtered exert observer grants no such permission.
@@ -43124,6 +43293,7 @@ impl TriggerDefinition {
             saga_chapter: None,
             unless_pay: None,
             batched: false,
+            damage_received_grouping: DamageReceivedGrouping::default(),
             die_sides: None,
             gotcha_condition: None,
             expend_threshold: None,
@@ -43432,6 +43602,19 @@ pub struct StaticDefinition {
     /// actor. Serde-defaulted: historical defs are all object-wide.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bound_actor: Option<ControllerRef>,
+    /// CR 611.2 + CR 611.2c + CR 613.1f: provenance of this definition — one of
+    /// the object's abilities, or a rule effect stored on it. See
+    /// [`DefinitionOrigin`].
+    ///
+    /// A transient `AddStaticMode` stamps `Resolution` in layer 6.
+    /// `GrantStaticAbility` keeps the inner definition's origin for transient
+    /// grants and forces `Characteristic` otherwise. Printed and quoted
+    /// definitions keep the default. Parsed rule effects carried by
+    /// `GrantStaticAbility` declare their origin with
+    /// [`Self::resolution_installed`]. Origin participates in equality
+    /// so graft deduplication preserves resolution-installed definitions.
+    #[serde(default, skip_serializing_if = "DefinitionOrigin::is_characteristic")]
+    pub origin: DefinitionOrigin,
 }
 
 /// CR 702.16n / CR 702.16p: Which attachments a protection-granting continuous
@@ -43508,6 +43691,15 @@ pub struct BoardWideCostModifier<'a> {
 }
 
 impl StaticDefinition {
+    /// Whether the historical quoted-static lowering could carry this definition
+    /// as a standalone mode. Perpetual conversion uses this exact shape. Other
+    /// consumers must check their own mode and scope eligibility.
+    pub fn has_legacy_static_mode_shape(&self) -> bool {
+        self.affected == Some(TargetFilter::SelfRef)
+            && self.condition.is_none()
+            && self.modifications.is_empty()
+    }
+
     /// CR 601.2f: view this static as a board-wide cost modifier, or `None` when
     /// it is not one.
     ///
@@ -43619,7 +43811,15 @@ impl StaticDefinition {
             room_door: None,
             granting_object: None,
             bound_actor: None,
+            origin: DefinitionOrigin::Characteristic,
         }
+    }
+
+    /// CR 611.2 + CR 613.1f: is this a rule effect stored on the object rather
+    /// than one of its abilities? Kept by ability removal (`RemoveAllAbilities`
+    /// in `layers.rs`) and ignored by `object_has_no_abilities`.
+    pub fn is_resolution_installed(&self) -> bool {
+        self.origin == DefinitionOrigin::Resolution
     }
 
     pub fn continuous() -> Self {
@@ -43630,6 +43830,14 @@ impl StaticDefinition {
     /// (see the `room_door` field doc). Mirrors `TriggerDefinition::room_door`.
     pub fn room_door(mut self, door: crate::types::object_data::RoomDoor) -> Self {
         self.room_door = Some(door);
+        self
+    }
+
+    /// CR 611.2 + CR 611.2c: Mark a rule effect hosted by a resolving effect
+    /// through `GrantStaticAbility`. Quoted abilities use the characteristic
+    /// origin (CR 113.10).
+    pub fn resolution_installed(mut self) -> Self {
+        self.origin = DefinitionOrigin::Resolution;
         self
     }
 
@@ -44097,36 +44305,41 @@ impl ReplacementChoiceAuthority {
     }
 }
 
-/// CR 611.2c vs CR 613.1: where a `ReplacementDefinition` on an object came from.
+/// CR 611.2c vs CR 613.1: where an object-hosted static or replacement definition
+/// came from.
 ///
 /// CR 613.1 determines the values of an object's CHARACTERISTICS, starting from
-/// the printed card — so the layer engine reseeds `replacement_definitions` from
-/// `base_replacement_definitions` every pass. CR 611.2c settles that a prevention
-/// shield is not one of those characteristics; its example says so outright:
-/// "An effect that reads 'Prevent all damage creatures would deal this turn'
-/// doesn't modify any object's characteristics, so it's modifying the rules of
-/// the game."
+/// the printed card, so the layer engine rebuilds `static_definitions` and
+/// `replacement_definitions` from their base lists every pass. CR 611.2c settles
+/// that a rule effect is not one of those characteristics; its example says so
+/// outright: "An effect that reads 'Prevent all damage creatures would deal this
+/// turn' doesn't modify any object's characteristics, so it's modifying the rules
+/// of the game."
 ///
-/// A continuous effect created by the RESOLUTION of a spell or ability (CR 611.2a)
-/// is merely STORED on a host object so the replacement pipeline can find it. It
-/// lasts as long as the ability stated (CR 611.2a) and ends when it is used up or
-/// its duration expires (CR 615.3) — not at the next layer pass.
+/// An object-hosted rule effect — a prevention shield or restriction created by
+/// the RESOLUTION of a spell or ability (CR 611.2a), or an untap prohibition
+/// created by exert (CR 701.43a) — is merely STORED on its host so the
+/// replacement pipeline or the relevant rules check can find it. It is not one of
+/// the object's abilities, so an ability-removing effect (CR 613.1f) leaves it in
+/// place. A quoted ability granted by resolution (CR 113.10) is an ability, not
+/// one of these.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum ReplacementOrigin {
-    /// A printed/copiable characteristic (CR 613.1), or a per-pass static
-    /// derivation. Reset away and re-derived by every layer pass.
+pub enum DefinitionOrigin {
+    /// A printed or copiable characteristic (CR 613.1), or an ability derived
+    /// during the layer pass. Reset away and re-derived by every layer pass.
     #[default]
     Characteristic,
-    /// A continuous effect created by resolution (CR 611.2a). Survives the
-    /// CR 613.1 reset; removed only by an expiry prune or a zone change.
+    /// A rule effect created by resolution (CR 611.2) or a game action such as
+    /// exert (CR 701.43a). It is stored on an object without becoming one of
+    /// that object's abilities (CR 611.2c + CR 613.1f).
     Resolution,
 }
 
-impl ReplacementOrigin {
+impl DefinitionOrigin {
     /// `skip_serializing_if` predicate: the default origin emits no key, so every
-    /// pre-existing serialized `ReplacementDefinition` is byte-identical.
+    /// pre-existing serialized definition keeps its original shape.
     pub fn is_characteristic(&self) -> bool {
-        matches!(self, ReplacementOrigin::Characteristic)
+        matches!(self, DefinitionOrigin::Characteristic)
     }
 }
 
@@ -44444,13 +44657,14 @@ pub struct ReplacementDefinition {
     pub source_object: Option<ObjectId>,
     /// CR 611.2a + CR 611.2c + CR 613.1: provenance of this definition — a printed
     /// characteristic (or per-pass derived grant) versus a continuous effect
-    /// created by the resolution of a spell or ability. See [`ReplacementOrigin`].
+    /// created by the resolution of a spell or ability. See [`DefinitionOrigin`].
     ///
     /// Stamped ONLY by `GameObject::install_resolution_replacement`, which is the
     /// single authority for resolution-time object installs; every parser/printed
     /// construction leaves the `Characteristic` default. Read by
     /// `game_object::reseed_replacements_carrying_resolution_effects` (the CR 613.1
     /// carry-over) and `layers::settle_resolution_replacements_to_tail`.
+    /// A carried prevention shield lasts until it is used up or expires (CR 615.3).
     ///
     /// `origin` participates in the derived `PartialEq`, and that is LOAD-BEARING.
     /// `layers.rs` dedups both per-pass derivation sites by whole-definition
@@ -44467,8 +44681,8 @@ pub struct ReplacementDefinition {
     /// `carried_resolution_def_does_not_suppress_an_identical_derived_grant`
     /// (`layers.rs`) pins it anyway. `source_object` (directly above) joins
     /// `PartialEq` on exactly the same terms.
-    #[serde(default, skip_serializing_if = "ReplacementOrigin::is_characteristic")]
-    pub origin: ReplacementOrigin,
+    #[serde(default, skip_serializing_if = "DefinitionOrigin::is_characteristic")]
+    pub origin: DefinitionOrigin,
     /// CR 614.1a: For `AddCounter` replacements, whether `valid_player` scopes by
     /// the counter *recipient* (default — prevention/affected-controller doublers)
     /// or by the *actor* putting the counters (Vorinclex/Halving Season, per the
@@ -44597,7 +44811,7 @@ impl ReplacementDefinition {
             enters_under: None,
             source_controller: None,
             source_object: None,
-            origin: ReplacementOrigin::Characteristic,
+            origin: DefinitionOrigin::Characteristic,
             counter_replacement_subject: CounterReplacementSubject::Recipient,
             granting_object: None,
             entry_payment_max: None,
@@ -44721,7 +44935,7 @@ impl ReplacementDefinition {
     /// derived grant)? Such a definition is carried across the CR 613.1 layer
     /// reset by `game_object::reseed_replacements_carrying_resolution_effects`.
     pub fn is_resolution_installed(&self) -> bool {
-        self.origin == ReplacementOrigin::Resolution
+        self.origin == DefinitionOrigin::Resolution
     }
 
     pub fn combat_scope(mut self, scope: CombatDamageScope) -> Self {
@@ -46266,6 +46480,35 @@ mod tests {
         assert_eq!(reparsed, current);
     }
 
+    #[test]
+    fn characteristic_static_omits_origin_from_json() {
+        let plain = StaticDefinition::new(StaticMode::CantBlock);
+        let mut stamped = plain.clone();
+        stamped.origin = DefinitionOrigin::Resolution;
+
+        let plain_json = serde_json::to_value(&plain).expect("serializes");
+        let stamped_json = serde_json::to_value(&stamped).expect("serializes");
+        assert!(plain_json.get("origin").is_none());
+        assert_eq!(stamped_json["origin"], "Resolution");
+    }
+
+    #[test]
+    fn static_origin_defaults_and_round_trips() {
+        let mut stamped = StaticDefinition::new(StaticMode::CantBlock);
+        stamped.origin = DefinitionOrigin::Resolution;
+        let mut json = serde_json::to_value(&stamped).expect("serializes");
+        let round_tripped: StaticDefinition =
+            serde_json::from_value(json.clone()).expect("deserializes");
+        assert_eq!(round_tripped, stamped);
+        assert!(round_tripped.is_resolution_installed());
+
+        json.as_object_mut()
+            .expect("static definition object")
+            .remove("origin");
+        let legacy: StaticDefinition = serde_json::from_value(json).expect("deserializes");
+        assert_eq!(legacy.origin, DefinitionOrigin::Characteristic);
+    }
+
     /// Issue #8485: `origin` and `source_object` are additive and wire-compatible.
     ///
     /// Both carry `#[serde(default, skip_serializing_if = ..)]`, so a plain printed
@@ -46288,13 +46531,13 @@ mod tests {
 
         // An old payload with neither key loads as Characteristic / None.
         let loaded: ReplacementDefinition = serde_json::from_str(&json).expect("deserializes");
-        assert_eq!(loaded.origin, ReplacementOrigin::Characteristic);
+        assert_eq!(loaded.origin, DefinitionOrigin::Characteristic);
         assert_eq!(loaded.source_object, None);
         assert!(!loaded.is_resolution_installed());
 
         // A Resolution def with an anchor round-trips faithfully.
         let mut stamped = plain.clone();
-        stamped.origin = ReplacementOrigin::Resolution;
+        stamped.origin = DefinitionOrigin::Resolution;
         stamped.source_object = Some(ObjectId(42));
         let round_tripped: ReplacementDefinition =
             serde_json::from_str(&serde_json::to_string(&stamped).expect("serializes"))
@@ -48405,7 +48648,7 @@ mod tests {
     }
 
     /// V-QE: `ChooseAndSacrificeRest`'s TWO secondary quantity slots —
-    /// `keeper_constraint`'s `ExactCount { count }` and `keeper_counter`'s
+    /// `keeper_constraint`'s `Count { count }` and `keeper_counter`'s
     /// `KeeperCounterMark::count` — are both visited, and in that order. No
     /// pre-existing completeness test enumerated the CSR arm's slots (grepped
     /// this module for a `for_each_quantity_expr` walk keyed to
@@ -48421,7 +48664,7 @@ mod tests {
             choose_filter: TargetFilter::Typed(TypedFilter::creature()),
             sacrifice_filter: TargetFilter::Typed(TypedFilter::creature()),
             total_power_cap: None,
-            keeper_constraint: Some(KeeperConstraint::ExactCount {
+            keeper_constraint: Some(KeeperConstraint::Count {
                 count: keeper_count.clone(),
             }),
             keeper_counter: Some(KeeperCounterMark {
@@ -48433,7 +48676,7 @@ mod tests {
         effect.for_each_quantity_expr(&mut |quantity| visited.push(quantity.clone()));
         assert_eq!(visited, vec![keeper_count, mark_count]);
 
-        // A `keeper_counter: None` construction yields only the `ExactCount` expr.
+        // A `keeper_counter: None` construction yields only the `Count` expr.
         let Effect::ChooseAndSacrificeRest {
             keeper_counter: mark_slot,
             ..
@@ -48450,6 +48693,33 @@ mod tests {
         let mut visited_none = Vec::new();
         none_effect.for_each_quantity_expr(&mut |quantity| visited_none.push(quantity.clone()));
         assert_eq!(visited_none, vec![QuantityExpr::Fixed { value: 1 }]);
+    }
+
+    /// CR 101.4 + CR 701.21a: `KeeperConstraint::Count` still reads the legacy
+    /// `exact_count` tag (saved games, older card data), serializes the new
+    /// `count` tag, and round-trips an "up to" count (Covetous Elegy).
+    #[test]
+    fn keeper_constraint_count_reads_the_legacy_exact_count_tag() {
+        let legacy: KeeperConstraint =
+            serde_json::from_str(r#"{"type":"exact_count","count":{"type":"Fixed","value":5}}"#)
+                .expect("legacy exact_count tag must deserialize");
+        assert_eq!(
+            legacy,
+            KeeperConstraint::Count {
+                count: QuantityExpr::Fixed { value: 5 }
+            }
+        );
+        let written = serde_json::to_value(&legacy).unwrap();
+        assert_eq!(written["type"], "count");
+
+        let up_to = KeeperConstraint::Count {
+            count: QuantityExpr::up_to(QuantityExpr::Fixed { value: 2 }),
+        };
+        let json = serde_json::to_string(&up_to).unwrap();
+        let back: KeeperConstraint = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, up_to);
+        let KeeperConstraint::Count { count } = &back;
+        assert!(count.is_up_to());
     }
 
     /// CR 109.1: `with_own_cast_exclusion` injects the `Another` marker and
@@ -50008,6 +50278,7 @@ mod tests {
             saga_chapter: None,
             unless_pay: None,
             batched: false,
+            damage_received_grouping: DamageReceivedGrouping::default(),
             die_sides: None,
             gotcha_condition: None,
             expend_threshold: None,
@@ -50164,6 +50435,7 @@ mod tests {
     #[test]
     fn static_definition_roundtrip() {
         let static_def = StaticDefinition {
+            origin: Default::default(),
             mode: StaticMode::Continuous,
             affected: Some(
                 TypedFilter::creature()
@@ -50747,6 +51019,7 @@ mod tests {
     fn effect_generic_effect_typed_roundtrip() {
         let effect = Effect::GenericEffect {
             static_abilities: vec![StaticDefinition {
+                origin: Default::default(),
                 mode: StaticMode::Continuous,
                 affected: Some(TargetFilter::SelfRef),
                 modifications: vec![ContinuousModification::AddPower { value: 3 }],
@@ -52572,6 +52845,56 @@ mod modal_ability_tests {
 
         assert!(def.modal.is_some());
         assert_eq!(def.mode_abilities.len(), 2);
+    }
+
+    #[test]
+    fn damage_received_grouping_migrates_legacy_batching() {
+        use serde_json::json;
+
+        use DamageReceivedGrouping::{PerEvent, PerPlayerRecipient, WholeBatch};
+
+        let omitted: TriggerDefinition =
+            serde_json::from_value(json!({ "mode": "DamageReceived" })).unwrap();
+        let canonical_default = serde_json::to_value(&omitted).unwrap();
+
+        for (legacy_batched, explicit_grouping, expected) in [
+            (Some(true), None, WholeBatch),
+            (Some(false), None, PerEvent),
+            (None, None, PerEvent),
+            (None, Some(PerEvent), PerEvent),
+            (Some(true), Some(PerEvent), PerEvent),
+            (Some(true), Some(PerPlayerRecipient), PerPlayerRecipient),
+        ] {
+            let mut input = json!({ "mode": "DamageReceived" });
+            if let Some(batched) = legacy_batched {
+                input["batched"] = json!(batched);
+            }
+            if let Some(grouping) = explicit_grouping {
+                input["damage_received_grouping"] = json!(grouping);
+            }
+            let definition: TriggerDefinition = serde_json::from_value(input).unwrap();
+            assert_eq!(definition.damage_received_grouping, expected);
+            assert!(!definition.batched);
+
+            let serialized = serde_json::to_value(&definition).unwrap();
+            assert_eq!(serialized["batched"], false);
+            if expected == PerEvent {
+                assert_eq!(definition, omitted);
+                assert_eq!(serialized, canonical_default);
+                assert!(serialized.get("damage_received_grouping").is_none());
+            } else {
+                assert_eq!(serialized["damage_received_grouping"], json!(expected));
+            }
+            assert_eq!(
+                serde_json::from_value::<TriggerDefinition>(serialized).unwrap(),
+                definition
+            );
+        }
+
+        let other: TriggerDefinition =
+            serde_json::from_value(json!({ "mode": "ChangesZone", "batched": true })).unwrap();
+        assert!(other.batched);
+        assert_eq!(other.damage_received_grouping, PerEvent);
     }
 
     /// V13 / H8 — CR 603.2 + CR 120.4b: `damage_amount` gained a scope axis, so
@@ -54560,6 +54883,46 @@ mod spellbook_selection_serde_tests {
             err.to_string().contains("duplicate field"),
             "expected a duplicate-field error, got {err}"
         );
+    }
+}
+
+#[cfg(test)]
+mod quoted_static_perpetual_conversion_tests {
+    use super::*;
+
+    #[test]
+    fn perpetual_static_conversion_preserves_the_historical_guard() {
+        let base = StaticDefinition::new(StaticMode::CantBlock)
+            .affected(TargetFilter::SelfRef)
+            .active_zones(vec![Zone::Graveyard]);
+        let grant = |definition| ContinuousModification::GrantStaticAbility {
+            definition: Box::new(definition),
+        };
+        let bare = ContinuousModification::AddStaticMode {
+            mode: StaticMode::CantBlock,
+        };
+        let expected = PerpetualGrantModification::AddStaticMode {
+            mode: StaticMode::CantBlock,
+        };
+        assert_eq!(
+            PerpetualGrantModification::try_from(grant(base.clone())),
+            Ok(expected.clone())
+        );
+        assert_eq!(PerpetualGrantModification::try_from(bare), Ok(expected));
+        for definition in [
+            base.clone().affected(TargetFilter::ParentTarget),
+            StaticDefinition {
+                condition: Some(StaticCondition::DuringYourTurn),
+                ..base.clone()
+            },
+            base.modifications(vec![ContinuousModification::AddPower { value: 1 }]),
+        ] {
+            let input = grant(definition);
+            assert_eq!(
+                PerpetualGrantModification::try_from(input.clone()),
+                Err(input)
+            );
+        }
     }
 }
 
