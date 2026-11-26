@@ -553,8 +553,9 @@ async function waitForMain(page: Page, budget = 120_000) {
  * Reach the state every scenario needs: a main phase, the sheet open on the
  * active seat's hand, and at least one published control.
  */
-async function openScenarioSheet(page: Page) {
-  await waitForMain(page);
+async function openScenarioSheet(page: Page, reachMain = true) {
+  if (reachMain) await waitForMain(page);
+  await passSeat(page);
   const trigger = page.locator('.hand-trigger');
   await expect(trigger).toBeVisible({ timeout: 60_000 });
   if (!(await page.locator('.hand-sheet').count())) await trigger.tap();
@@ -759,13 +760,15 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
   });
 
   test('5 · cambio de asiento mientras hoja y detalle están abiertos: comparar identificadores', async ({ page }) => {
-    // `waitForMain` publica su propio diagnóstico tras 120 s; el techo global
-    // de 120 s lo mataría antes. La prueba no se salta: se le da margen para
-    // decir qué asiento, fase y prioridad publicó el motor.
+    // El fixture arranca en la fase principal de P0 y, tras ceder prioridad,
+    // P1 recibe una ventana de respuesta en esa misma fase con prioridad
+    // propia. Ninguno de los dos estados es «fase principal del asiento que
+    // mira», así que `waitForMain` aquí sólo giraría hasta agotar el margen:
+    // la comparación de identidades no depende de esa condición.
     test.setTimeout(180_000);
     await startGameScenario(page, 'privacy-handoff', true);
     const viewerBefore = await page.locator('.app').getAttribute('data-viewer');
-    await openScenarioSheet(page);
+    await openScenarioSheet(page, false);
     const oldIds = await page.locator('.hand-sheet [data-card-id]').evaluateAll((cards) =>
       cards.map((card) => card.getAttribute('data-card-id'))
     );
@@ -790,7 +793,7 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
     await expect(page.locator('.hand-sheet'), 'la mano anterior debe quedar cubierta en el handoff').toHaveCount(0);
     await expect(page.locator('.sheet-detail'), 'el detalle anterior no debe sobrevivir al cambio').toHaveCount(0);
     await passSeat(page);
-    await openScenarioSheet(page);
+    await openScenarioSheet(page, false);
     const newIds = await page.locator('.hand-sheet [data-card-id]').evaluateAll((cards) =>
       cards.map((item) => item.getAttribute('data-card-id'))
     );

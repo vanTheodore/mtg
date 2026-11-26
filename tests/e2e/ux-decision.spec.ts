@@ -85,7 +85,7 @@ test('prioridad con hechizo pendiente: pila real, cesión contextual y resoluci�
   // Cada ventana la responde su control publicado, no el driver genérico:
   // así un bucle lento de «prueba todos los botones» no puede agotar el
   // timeout ni despachar una acción que Phase no pidió.
-  for (let step = 0; step < 20; step += 1) {
+  for (let step = 0; step < 30; step += 1) {
     if (Number(await rivalLife.getAttribute('data-life')) < lifeBefore) break;
     await driver.settleSeat().catch(() => {});
     const waiting = await panel(page).getAttribute('data-waiting');
@@ -94,8 +94,13 @@ test('prioridad con hechizo pendiente: pila real, cesión contextual y resoluci�
       const details = panel(page).locator('details[data-target-list]');
       if (!(await details.count())) break;
       if (await details.getAttribute('open') === null) await details.locator('summary').click();
-      const choice = details.locator('button').filter({ hasText: /^Elegir / }).first();
-      if (!(await choice.count())) break;
+      // Lightning Bolt debe apuntar al rival: la lista accesible publica los
+      // dos jugadores y elegir el primero dispararía el hechizo contra P0.
+      const choice = details.locator('button').filter({ hasText: /^Elegir Jugador 2$/ }).first();
+      if (!(await choice.count())) {
+        const labels = await details.locator('button').allInnerTexts();
+        throw new Error(`la lista accesible no publicó «Elegir Jugador 2» (${labels.join(' | ')})`);
+      }
       const stepBefore = Number(await applied(page));
       await choice.click();
       await expect.poll(appliedNumber, { timeout: 10_000 }).toBeGreaterThan(stepBefore);
@@ -112,7 +117,7 @@ test('prioridad con hechizo pendiente: pila real, cesión contextual y resoluci�
     await expect.poll(appliedNumber, { timeout: 10_000 }).toBeGreaterThan(stepBefore);
   }
   expect(sawResponseLabel, `no apareció «permitir respuestas» (${trace.join(' | ')})`).toBe(true);
-  expect(Number(await rivalLife.getAttribute('data-life'))).toBeLessThan(lifeBefore);
+  expect(Number(await rivalLife.getAttribute('data-life')), `el Rayo no resolvió contra el rival (${trace.join(' | ')})`).toBeLessThan(lifeBefore);
   await expect(page.locator('section[aria-label="Pila"]')).toHaveAttribute('data-empty', 'true');
 });
 

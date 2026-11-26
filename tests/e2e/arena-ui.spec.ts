@@ -262,7 +262,8 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
     // el último botón *que responde al puntero* es el último botón visible.
     const visible = (button: Element) => {
       const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
-      if (element.closest('details:not([open])')) return false;
+      const disclosure = element.closest('details');
+      if (disclosure && !disclosure.open) return false;
       if (typeof element.checkVisibility === 'function') {
         return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
       }

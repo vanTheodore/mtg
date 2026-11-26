@@ -1234,6 +1234,23 @@
     padding: .35rem .5rem;
     font-size: .8rem;
   }
+  /* UX-DECISION: en girado el alto es el recurso escaso. El reparto anterior
+     dejaba que `.prompt` encogiera con `overflow-y:auto`, así el último botón
+     legal de Mulligan quedaba recortado y el puntero tocaba `.tiers-slot`
+     (740×360, y=202). Se mantiene el prompt a su alto natural y es la
+     superficie secundaria —que publica integridad y «Más opciones»— la que
+     absorbe el exceso con scroll propio. Ningún control desaparece y el
+     contrato `panelScroll === 0` del panel sigue midiendo cero. */
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .prompt {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .confirmations {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 /*
