@@ -8,9 +8,9 @@ import { join } from 'node:path';
  * The job summary is a gate, not decoration.
  *
  * `scripts/e2e-summary.ts` must (a) publish passed / failed / skipped / retries
- * and the per-test rows of `arena-hand-sheet`, and (b) exit non-zero when a
- * required UX-HAND test was skipped — that is the hole the WASM guard cannot
- * see, because a `test.skip` inside a spec leaves the Chromium job green.
+ * and the per-test rows of UX-HAND and UX-DECISION, and (b) exit non-zero when a
+ * required test of either feature was skipped — that is the hole the WASM guard
+ * cannot see, because a `test.skip` inside a spec leaves the Chromium job green.
  *
  * These tests run the real script over synthetic Playwright JSON, so the gate
  * is exercised without a browser.
@@ -18,7 +18,59 @@ import { join } from 'node:path';
 const SCRIPT = 'scripts/e2e-summary.ts';
 const tmp = mkdtempSync(join(tmpdir(), 'mesa-e2e-summary-'));
 
-function report(specs: { suite: string; title: string; status: string; results?: string[] }[]) {
+type ReportSpec = { suite: string; title: string; status: string; results?: string[] };
+
+const UX_HAND_TITLES: [string, string][] = [
+  ['contrato de despacho (motor real, mazo determinista)', 'lanzar desde la hoja ejecuta una acción legal del motor'],
+  ['contrato de despacho (motor real, mazo determinista)', 'doble pulsación produce exactamente un despacho aceptado'],
+  ['escenarios deterministas (Phase GameScenario, motor real)', '1 · lanzamiento con objetivo: elegirlo y ver el daño'],
+  ['escenarios deterministas (Phase GameScenario, motor real)', '2 · pago manual: pagar el maná y completar el lanzamiento'],
+  ['escenarios deterministas (Phase GameScenario, motor real)', '3 · cancelación real: la carta vuelve a la mano y el estado se restaura'],
+  ['rechazo explícito (fixture, cliente guionizado)', '4 · rechazo explícito: mensaje, hoja abierta y reintento'],
+  ['escenarios deterministas (Phase GameScenario, motor real)', '5 · cambio de asiento con hoja y detalle abiertos: identificadores, no cantidades'],
+  ['legalidad explícita (fixture con acciones)', 'una carta con lanzamiento y activación no se ejecuta de un toque'],
+  ['legalidad explícita (fixture con acciones)', 'las alternativas del mismo lanzamiento se identifican'],
+  ['legalidad explícita (fixture con acciones)', 'una habilidad activada sigue visible y accionable'],
+  ['navegación por teclado de la hoja', 'Tab y Shift+Tab recorren sólo controles visibles de la hoja, sin duplicar la mano']
+];
+
+const UX_DECISION_TITLES = [
+  'prioridad con pila vacía: contexto, una acción principal y cesión real',
+  'prioridad con hechizo pendiente: pila real, cesión contextual y resolución por prioridades reales',
+  'respuesta durante el turno rival: intención y consecuencia del motor',
+  'declaración de atacantes: no atacar y confirmar borrador son decisiones distintas',
+  'declaración de bloqueadores: no bloquear es explícito y el motor responde',
+  'objetivos: selección directa, lista accesible y progreso sin duplicados',
+  'pago manual: accesible bajo demanda, nunca dominante',
+  'decisión obligatoria: KeepExact conserva la ventana exacta sin auto-selección',
+  'decisión opcional: ambas ramas legales siguen en el especialista',
+  'cancelación y busy: un doble pulso no despacha dos acciones',
+  'cancelación del lanzamiento: la acción de seguridad está fuera del desplegable'
+];
+
+function uxHandSpecs(): ReportSpec[] {
+  return UX_HAND_TITLES.map(([suite, title]) => ({ suite, title, status: 'expected' }));
+}
+
+function uxDecisionSuite(skippedTitle?: string) {
+  return {
+    file: 'ux-decision.spec.ts',
+    title: '',
+    specs: UX_DECISION_TITLES.map((title) => {
+      const status = title === skippedTitle ? 'skipped' : 'expected';
+      return {
+        title,
+        file: 'ux-decision.spec.ts',
+        line: 1,
+        ok: status === 'expected',
+        tests: [{ status, results: [{ status }] }]
+      };
+    }),
+    suites: []
+  };
+}
+
+function report(specs: ReportSpec[], extraSuites: Record<string, unknown>[] = []) {
   const groups = new Map<string, typeof specs>();
   for (const spec of specs) {
     const list = groups.get(spec.suite) ?? [];
@@ -26,21 +78,24 @@ function report(specs: { suite: string; title: string; status: string; results?:
     groups.set(spec.suite, list);
   }
   return {
-    suites: [{
-      file: 'arena-hand-sheet.spec.ts',
-      specs: [],
-      suites: [...groups.entries()].map(([title, list]) => ({
-        title,
+    suites: [
+      {
         file: 'arena-hand-sheet.spec.ts',
-        specs: list.map((spec) => ({
-          title: spec.title,
+        specs: [],
+        suites: [...groups.entries()].map(([title, list]) => ({
+          title,
           file: 'arena-hand-sheet.spec.ts',
-          line: 1,
-          ok: spec.status === 'expected',
-          tests: [{ status: spec.status, results: (spec.results ?? [spec.status]).map((status) => ({ status })) }]
+          specs: list.map((spec) => ({
+            title: spec.title,
+            file: 'arena-hand-sheet.spec.ts',
+            line: 1,
+            ok: spec.status === 'expected',
+            tests: [{ status: spec.status, results: (spec.results ?? [spec.status]).map((status) => ({ status })) }]
+          }))
         }))
-      }))
-    }]
+      },
+      ...extraSuites
+    ]
   };
 }
 
@@ -56,8 +111,6 @@ function run(json: unknown, args: string[] = []) {
   return { status: result.status, out: result.stdout ?? '', summary: readFileSync(summary, 'utf8') };
 }
 
-const REQUIRED_CAST = 'contrato de despacho (motor real, mazo determinista) › lanzar desde la hoja ejecuta una acción legal del motor';
-
 test('publica aprobadas, fallidas, omitidas y reintentos', () => {
   const { status, summary } = run(report([
     { suite: 'contrato de despacho (motor real, mazo determinista)', title: 'lanzar desde la hoja ejecuta una acción legal del motor', status: 'expected' },
@@ -68,6 +121,7 @@ test('publica aprobadas, fallidas, omitidas y reintentos', () => {
   expect(summary).toContain('1 omitidas');
   expect(summary).toContain('1 con reintentos');
   expect(summary).toContain('`arena-hand-sheet.spec.ts` (UX-HAND)');
+  expect(summary).toContain('`ux-decision.spec.ts` (UX-DECISION)');
   expect(summary).toContain('otra prueba');
   // A required test that did not even run is a failure, so the exit is 1.
   expect(status).toBe(1);
@@ -82,6 +136,14 @@ test('falla si una prueba funcional obligatoria se omite', () => {
   expect(summary).toContain('se omitió');
 });
 
+test('falla si una transición obligatoria de UX-DECISION se omite', () => {
+  const skipped = UX_DECISION_TITLES[0];
+  const { status, summary } = run(report(uxHandSpecs(), [uxDecisionSuite(skipped)]));
+  expect(status).toBe(1);
+  expect(summary).toContain(skipped);
+  expect(summary).toContain('se omitió');
+});
+
 test('falla si una prueba funcional obligatoria no existe en el informe', () => {
   const { status, summary } = run(report([]));
   expect(status).toBe(1);
@@ -89,22 +151,10 @@ test('falla si una prueba funcional obligatoria no existe en el informe', () => 
 });
 
 test('pasa cuando todas las obligatorias pasan, y lo dice', () => {
-  const titles = [
-    ['contrato de despacho (motor real, mazo determinista)', 'lanzar desde la hoja ejecuta una acción legal del motor'],
-    ['contrato de despacho (motor real, mazo determinista)', 'doble pulsación produce exactamente un despacho aceptado'],
-    ['escenarios deterministas (Phase GameScenario, motor real)', '1 · lanzamiento con objetivo: elegirlo y ver el daño'],
-    ['escenarios deterministas (Phase GameScenario, motor real)', '2 · pago manual: pagar el maná y completar el lanzamiento'],
-    ['escenarios deterministas (Phase GameScenario, motor real)', '3 · cancelación real: la carta vuelve a la mano y el estado se restaura'],
-    ['rechazo explícito (fixture, cliente guionizado)', '4 · rechazo explícito: mensaje, hoja abierta y reintento'],
-    ['escenarios deterministas (Phase GameScenario, motor real)', '5 · cambio de asiento con hoja y detalle abiertos: identificadores, no cantidades'],
-    ['legalidad explícita (fixture con acciones)', 'una carta con lanzamiento y activación no se ejecuta de un toque'],
-    ['legalidad explícita (fixture con acciones)', 'las alternativas del mismo lanzamiento se identifican'],
-    ['legalidad explícita (fixture con acciones)', 'una habilidad activada sigue visible y accionable'],
-    ['navegación por teclado de la hoja', 'Tab y Shift+Tab recorren sólo controles visibles de la hoja, sin duplicar la mano']
-  ];
-  const { status, summary } = run(report(titles.map(([suite, title]) => ({ suite, title, status: 'expected' }))));
+  const { status, summary } = run(report(uxHandSpecs(), [uxDecisionSuite()]));
   expect(status).toBe(0);
-  expect(summary).toContain('se ejecutaron y pasaron');
+  expect(summary).toContain('Las 22 se ejecutaron y pasaron.');
+  expect(summary).toContain('`ux-decision.spec.ts` (UX-DECISION)');
 });
 
 test('un reintento que acaba en verde no cuenta como aprobada a la primera', () => {

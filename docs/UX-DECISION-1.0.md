@@ -96,7 +96,9 @@ ganar el disclosure que abre las demás opciones.
 
 Las capturas se nombran `variant/viewport-escenario.png`, `variant/tema-*.png` y
 quedan fijadas a los SHA que `metrics.json` publica (`baselineSha`, `afterSha`).
-Se copian a `docs/screenshots/ux-decision/` tras la run de CI.
+Se publican como artefacto `ux-decision-evidence` de la run de CI, no se
+copian al árbol: un commit nuevo con las imágenes reiniciaría la propia
+validación que las produce.
 
 ---
 
@@ -214,11 +216,12 @@ bajo `<details data-advanced-controls>`; `MobilePhaseChip` conserva su hoja.
 ## 7. Escenarios `GameScenario` (harness de #72)
 
 `crates/mtg-engine-wasm/src/bin/e2e_scenarios.rs` amplía los cuatro fixtures de
-UX-HAND. Los estados se fijan con `GameScenario` y, para las ventanas exactas, se
-parchea el `GameState` serializado y se **round-trip de la variante
-`WaitingFor` a través del `Deserialize` del propio motor** (`GameState` sólo
-deriva `Serialize`): una ventana que Phase no aceptaría falla en el job Rust, no
-en el navegador. No se recorren turnos ni se depende de barajadas.
+UX-HAND hasta **once estados exactos**. Los estados se fijan con `GameScenario`
+y, para las ventanas exactas, se parchea el `GameState` serializado y se valida
+la variante `WaitingFor` con un round-trip a través del `Deserialize` del motor
+(`GameState` sólo deriva `Serialize`): una ventana que Phase no aceptaría falla
+en el job Rust, no en el navegador. No se recorren turnos ni se depende de
+barajadas.
 
 | Fixture | Estado exacto | Capa |
 | --- | --- | --- |
@@ -244,16 +247,22 @@ flujos con pipeline completo (prioridad, lanzamiento, objetivos, pago, combate).
 ## 8. Validación UX y CI
 
 - **Local (este entorno):** `bun run check` 0 errores / 2 avisos preexistentes,
-  `bun test src/lib` **845 pass / 0 fail / 4575 expects**, `bun run build`, `playwright --list`
+  `bun test src/lib` **846 pass / 0 fail / 4580 expects**, `bun run build`, `playwright --list`
   317 pruebas en 27 ficheros, YAML de workflows parseado. No hay `cargo`,
   `rustc` ni Chromium aquí: la compilación Rust/WASM, la paridad, los escenarios
   y el navegador los emite GitHub CI.
 - **GitHub CI:** `Mesa CI` (static, paridad nativa, WASM, Chromium con gate de
-  Playwright y 60 min de techo tras añadir diez pruebas de transición real),
+  Playwright y 60 min de techo tras añadir once pruebas de transición real),
   `Phase source regressions` y el job nuevo **`ux-evidence`**. El marcador de
   las pruebas de evidencia es `MESA_EVIDENCE_UX_DECISION`: un `EVIDENCIA` simple
   también habría excluido los siete tests de `arena-quality-gate` cuyo título
   termina en «y evidencia».
+- **Gate de pruebas huecas:** `scripts/e2e-summary.ts` exige que las once
+  pruebas funcionales de UX-HAND y las once de `ux-decision.spec.ts` ejecuten y
+  pasen en Chromium; una omisión, un reintento que acaba en verde o un informe
+  sin esas filas hace fallar el job. El contrato se prueba sin navegador en
+  `ci-e2e-summary.test.ts`. `ux-decision-evidence.spec.ts` queda fuera de esta
+  lista porque su gate es la comparación de métricas del job `ux-evidence`.
 - **Chromium real:** seis viewports, claro/oscuro, teclado (Tab + Enter con
   transición real), táctil (`hasTouch`, un toque con transición real) y axe
   (sin violaciones `critical`/`serious`).

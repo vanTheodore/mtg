@@ -199,7 +199,7 @@ jobs:
     runs-on: ubuntu-latest
     # GameScenario fixtures place Phase directly in the state each E2E needs;
     # the browser suite no longer plays through random draws to find a card.
-    # UX-DECISION adds ten motor-real transition tests on top of the measured
+    # UX-DECISION adds eleven motor-real transition tests on top of the measured
     # 26-minute baseline; keep headroom without weakening the Playwright gate.
     timeout-minutes: 60
     steps:
@@ -249,11 +249,11 @@ jobs:
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/report.json
       # The job summary is the evidence and the gate: it publishes passed /
-      # failed / skipped / retries plus the per-test rows of the hand sheet, and
-      # fails the job when a required UX-HAND test was skipped. A `test.skip`
-      # written inside a spec leaves the runner green, which is exactly the hole
-      # the WASM guard cannot see (`docs/UX-HAND.md`, section G).
-      - name: Publish Playwright summary and gate skipped UX-HAND tests
+      # failed / skipped / retries plus the per-test rows of UX-HAND and
+      # UX-DECISION, and fails the job when a required test was skipped.
+      # A `test.skip` written inside a spec leaves the runner green, which is
+      # exactly the hole the WASM guard cannot see (`docs/UX-HAND.md`, section G).
+      - name: Publish Playwright summary and gate skipped required tests
         if: always()
         run: bun scripts/e2e-summary.ts
       # The HTML report, the traces and the job log live behind an artifact
