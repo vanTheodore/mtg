@@ -97,11 +97,14 @@
         </section>
       {/if}
     {/each}
-    <p class="integrity" data-decision-integrity={projection.integrity.ok}>
-      {projection.integrity.total} acciones legales globales · {projection.integrity.byObject} por objeto en el tablero · {projection.integrity.classified} clasificadas
-    </p>
   </div>
 </details>
+
+<!-- Auditoría siempre visible: la garantía de integridad no debe depender de
+     abrir el desplegable, igual que la cancelación. -->
+<p class="integrity" data-decision-integrity={projection.integrity.ok}>
+  {projection.integrity.total} acciones legales globales · {projection.integrity.byObject} por objeto en el tablero · {projection.integrity.classified} clasificadas
+</p>
 
 <style>
   .tiers { margin-top: .5rem; font-size: .8rem; }

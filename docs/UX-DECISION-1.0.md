@@ -198,9 +198,13 @@ bajo `<details data-advanced-controls>`; `MobilePhaseChip` conserva su hoja.
   desplegar nada. La privacidad hotseat sigue en `needsHandoff` y se ejerce con
   el fixture `privacy-handoff`. El aislamiento WASM y el rechazo de la operación
   5 en producción siguen en `engine:verify-no-e2e-op`.
-- **Capa de los fixtures de error:** no se añadió un fixture de red nuevo; los
-  errores de despacho se prueban en la capa unitaria (`dispatchOutcome`) y el
-  aislamiento del WASM en CI. Se declara explícitamente para no confundir capas.
+- **Capa de los fixtures de error:** `ux-decision-transport.test.ts` contiene
+  seis fixtures guionizados (`worker-muerto`, `sin-respuesta`,
+  `stale-revisitado`, `invalid-action`, `rechazo-explicito`, `sin-motor`) que
+  **declaran su capa: transporte/despacho**, no motor. No restauran
+  `GameState` ni usan el WASM; comprueban `classifyDispatch` y que un error
+  nunca se convierte en «aceptado» ni altera la proyección. El aislamiento del
+  WASM y el rechazo de la operación 5 se verifican por separado en CI.
 
 ---
 
@@ -237,7 +241,7 @@ flujos con pipeline completo (prioridad, lanzamiento, objetivos, pago, combate).
 ## 8. Validación UX y CI
 
 - **Local (este entorno):** `bun run check` 0 errores / 2 avisos preexistentes,
-  `bun test src/lib` **838 pass / 0 fail**, `bun run build`, `playwright --list`
+  `bun test src/lib` **845 pass / 0 fail / 4575 expects**, `bun run build`, `playwright --list`
   317 pruebas en 27 ficheros, YAML de workflows parseado. No hay `cargo`,
   `rustc` ni Chromium aquí: la compilación Rust/WASM, la paridad, los escenarios
   y el navegador los emite GitHub CI.
