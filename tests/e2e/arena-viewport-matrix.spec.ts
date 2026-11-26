@@ -141,7 +141,11 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
       const rect = panel.getBoundingClientRect();
       // M8: the panel itself never scrolls — only the Phase explanation inside
       // it does — so a legal button can't be parked outside the scrollport.
-      const buttons = [...panel.querySelectorAll('button')];
+      // UX-DECISION: las opciones avanzadas están plegadas. Sólo un botón
+      // visible puede ser el último que responda al puntero.
+      const buttons = [...panel.querySelectorAll('button')].filter(
+        (button) => (button as HTMLElement).offsetParent !== null
+      );
       const last = buttons.at(-1);
       const box = last?.getBoundingClientRect();
       const hit = box

@@ -100,17 +100,18 @@
   </div>
 </details>
 
-<!-- Auditoría siempre visible: la garantía de integridad no debe depender de
-     abrir el desplegable, igual que la cancelación. -->
-<p class="integrity" data-decision-integrity={projection.integrity.ok}>
+<!-- Auditoría de integridad: siempre en el DOM, sin costar una fila de alto.
+     No depende de abrir el desplegable, igual que la cancelación, y sigue
+     siendo legible por el lector de pantalla. -->
+<span class="sr-only" data-decision-integrity={projection.integrity.ok} role="status">
   {projection.integrity.total} acciones legales globales · {projection.integrity.byObject} por objeto en el tablero · {projection.integrity.classified} clasificadas
-</p>
+</span>
 
 <style>
   .tiers { margin-top: .5rem; font-size: .8rem; }
   summary {
-    cursor: pointer; min-height: 40px; display: flex; align-items: center; gap: .4rem;
-    padding: .35rem .5rem; border: 1px solid var(--line); border-radius: 9px;
+    cursor: pointer; min-height: 32px; display: flex; align-items: center; gap: .35rem;
+    padding: .25rem .45rem; border: 1px solid var(--line); border-radius: 9px;
     background: var(--surface-2); color: var(--ink); list-style-position: inside;
   }
   summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -133,6 +134,9 @@
   .actions button:focus-visible, .cancel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .cancel-row { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
   .cancel { min-height: 40px; font-size: .78rem; }
-  .integrity { margin: .15rem 0 0; font-size: .68rem; color: var(--ink-muted); }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
   button:disabled { opacity: .55; cursor: wait; }
 </style>

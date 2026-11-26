@@ -51,7 +51,7 @@ test('prioridad con pila vacía: contexto, una acción principal y cesión real'
   const primary = page.locator('[data-decision-primary]');
   await expect(primary).toContainText('Pasar');
   await expect(page.locator('[data-decision-consequence]')).toContainText('no garantiza un cambio de fase');
-  await expect(page.locator('[data-decision-integrity="true"]')).toBeVisible();
+  await expect(page.locator('[data-decision-integrity="true"]')).toHaveCount(1);
 
   const before = Number(await applied(page));
   await primary.click();
@@ -162,7 +162,7 @@ test('pago manual: accesible bajo demanda, nunca dominante', async ({ page }) =>
   const before = Number(await applied(page));
   await manual.click();
   await expect.poll(() => applied(page), { timeout: 10_000 }).not.toBe(String(before));
-  await expect(page.locator('[data-decision-integrity="true"]')).toBeVisible();
+  await expect(page.locator('[data-decision-integrity="true"]')).toHaveCount(1);
   expect(await driver.waiting()).not.toBe('Priority');
 });
 
@@ -188,7 +188,7 @@ test('cancelación y busy: un doble pulso no despacha dos acciones', async ({ pa
   const before = Number(await applied(page));
   await Promise.all([primary.click({ force: true }), primary.click({ force: true }).catch(() => {})]);
   await expect.poll(() => applied(page), { timeout: 10_000 }).toBe(String(before + 1));
-  await expect(page.locator('[data-decision-integrity="true"]')).toBeVisible();
+  await expect(page.locator('[data-decision-integrity="true"]')).toHaveCount(1);
 });
 
 test('cancelación del lanzamiento: la acción de seguridad está fuera del desplegable', async ({ page }) => {

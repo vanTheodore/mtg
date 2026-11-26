@@ -3,11 +3,11 @@
    * UX-DECISION · la acción principal contextual.
    *
    * Un único botón dominante cuando la ventana lo permite. La consecuencia se
-   * asocia con `aria-describedby` pero NO forma parte del nombre accesible del
-   * botón: así «No atacar» sigue siendo exactamente «No atacar» para el lector
-   * de pantalla, para el teclado y para las pruebas que buscan esa etiqueta.
-   * `decisionProjection` decide qué acción es dominante; este componente nunca
-   * elige ni calcula.
+   * asocia con `aria-describedby` mediante un texto sólo para lectores de
+   * pantalla: NO forma parte del nombre accesible del botón, así «No atacar»
+   * sigue siendo exactamente «No atacar». La explicación visible ya la publica
+   * `DecisionContext`; duplicarla aquí costaba el alto que el rail de escritorio
+   * y la hoja fija del teléfono necesitan para que el último botón responda.
    */
   import type { GameAction } from '#lib/engine/types.ts';
   import type { ProjectedAction } from '#lib/game/decisionProjection.ts';
@@ -33,31 +33,29 @@
       disabled={disabled}
       onclick={() => onplay(action.action)}
     >{action.label}</button>
-    {#if action.hint}
-      <p id="decision-primary-hint" class="consequence">{action.hint}</p>
-    {/if}
+    {#if action.hint}<span id="decision-primary-hint" class="sr-only">{action.hint}</span>{/if}
   </div>
 {/if}
 
 <style>
-  .primary-block { display: grid; gap: .25rem; min-width: 0; }
+  .primary-block { display: grid; min-width: 0; }
   button {
     width: 100%;
     text-align: left;
-    min-height: 48px;
-    padding: .6rem .75rem;
+    min-height: 40px;
+    padding: .5rem .65rem;
     border: 1px solid var(--accent);
-    border-radius: 11px;
+    border-radius: 10px;
     background: var(--accent);
     color: var(--accent-ink);
     font: inherit;
-    font-size: .95rem;
+    font-size: .88rem;
     font-weight: 700;
     cursor: pointer;
   }
-  .consequence {
-    margin: 0; font-size: .72rem; line-height: 1.3; color: var(--ink-muted);
-    border-left: 2px solid var(--accent); padding-left: .5rem;
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
   }
   button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   button:disabled { opacity: .55; cursor: wait; }

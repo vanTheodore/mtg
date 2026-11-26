@@ -422,7 +422,7 @@ async function choosePlayerTarget(page: Page, playerNumber: number) {
 
 /** Pass one actual priority window through the rendered legal action. */
 async function passPriority(page: Page) {
-  const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
+  const pass = page.locator('section[aria-label="Decisión pendiente"] button:visible').filter({ hasText: /^Pasar/ }).first();
   await expect(pass, 'Phase no publicó Pasar prioridad').toBeVisible();
   await pass.tap();
   await expect(page.locator('.app')).toHaveAttribute('data-busy', 'false');
@@ -504,10 +504,10 @@ async function waitForMain(page: Page, budget = 90_000) {
     // Answer what the panel asks: keep the hand at mulligan, pitch one card if
     // the cleanup asks for it, otherwise pass priority. Each is a real decision
     // the engine published, not a shortcut past it.
-    const keep = panel.locator('button').filter({ hasText: /Conservar|^Mantener/ }).or(
+    const keep = panel.locator('button:visible').filter({ hasText: /Conservar|^Mantener/ }).or(
       page.locator('button[aria-label*="Conservar"]')
     ).first();
-    const pass = panel.locator('button').filter({ hasText: /^Pasar/ }).first();
+    const pass = panel.locator('button:visible').filter({ hasText: /^Pasar/ }).first();
     if (await keep.count()) {
       await keep.tap({ timeout: 5_000 }).catch(() => {});
     } else if (now.waiting === 'DiscardToHandSize') {
@@ -574,7 +574,7 @@ async function playCard(page: Page, name: string) {
     // In hand but not legal in this window: leave the sheet and move the game on.
     await page.keyboard.press('Escape');
     const panel = page.locator('section[aria-label="Decisión pendiente"]');
-    const pass = panel.locator('button').filter({ hasText: /^Pasar/ }).first();
+    const pass = panel.locator('button:visible').filter({ hasText: /^Pasar/ }).first();
     if (await pass.count()) await pass.tap({ timeout: 5_000 }).catch(() => {});
     await page.waitForTimeout(150);
   }

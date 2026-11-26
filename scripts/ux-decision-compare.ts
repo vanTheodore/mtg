@@ -123,6 +123,15 @@ const lines = [
 await writeFile(`${root}/COMPARACION.md`, lines.join('\n'));
 
 console.log(JSON.stringify(summary, null, 2));
+// Workflow commands: the artifact host is not reachable from every network,
+// but check-run annotations are plain API JSON. Publish the measured deltas so
+// the PR can quote them without downloading a zip.
+const notice = (label: string, value: unknown) => console.log(`::notice title=UX-DECISION ${label}::${JSON.stringify(value)}`);
+notice('SHA', { baselineSha: summary.baselineSha, afterSha: summary.afterSha, pairs: summary.pairs });
+for (const metric of ['visibleControls', 'primaryControls', 'totalControls', 'advancedStopsVisible', 'interactionsNeeded', 'effectiveTouchTargets', 'panelHeight', 'boardSharePercent'] as const) {
+  notice(metric, summary[metric]);
+}
+notice('gate', failures.length ? failures : 'OK — integridad conservada');
 if (failures.length) {
   console.error(`UX-DECISION comparison gate: ${failures.length} incumplimiento(s)`);
   process.exit(1);

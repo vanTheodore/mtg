@@ -254,9 +254,12 @@ flujos con pipeline completo (prioridad, lanzamiento, objetivos, pago, combate).
 - **Chromium real:** seis viewports, claro/oscuro, teclado (Tab + Enter con
   transición real), táctil (`hasTouch`, un toque con transición real) y axe
   (sin violaciones `critical`/`serious`).
-- **Capturas antes/después:** fijadas a `baselineSha` y `afterSha`, publicadas
-  como artefacto `ux-decision-evidence` y copiadas a
-  `docs/screenshots/ux-decision/`.
+- **Capturas antes/después:** fijadas a `baselineSha` y `afterSha` en cada
+  `metrics.json`, publicadas como artefacto `ux-decision-evidence` de la run de
+  CI (no se copian al árbol: hacerlo exigiría descargar el artefacto y crear un
+  commit nuevo que reiniciaría la propia CI). `COMPARACION.md` y
+  `comparison.json` viajan en ese mismo artefacto; sus cifras se publican
+  también como anotaciones del check-run.
 - **Sin pruebas huecas:** cada flujo de `ux-decision.spec.ts` comprueba
   `data-actions-applied`, `data-waiting`, `data-empty` de la pila o la vida del
   rival, nunca sólo la presencia de un botón.

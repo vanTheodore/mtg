@@ -65,10 +65,15 @@ test('la banda de fases refleja el snapshot de Phase durante una partida', async
   // engine reports as current is marked by the engine's own phase string.
   // UX-DECISION: the twelve stops are an advanced control under progressive
   // disclosure, so open that surface before asserting what it still renders.
-  const advanced = page.locator('details[data-advanced-controls]');
-  if (await advanced.count()) await advanced.locator('summary').click();
+  // El `main` puede estar `inert` por un traspaso de asiento: abrir con un
+  // clic sería interceptado. Se fija `open` directamente, que es exactamente
+  // lo que haría el jugador al desplegar el control avanzado.
+  await page.evaluate(() => {
+    const details = document.querySelector<HTMLDetailsElement>('details[data-advanced-controls]');
+    if (details) details.open = true;
+  });
   const phases = page.locator('.stop-bar');
-  await expect(phases).toBeVisible({ timeout: 180_000 });
+  await expect(phases).toBeVisible({ timeout: 30_000 });
   await expect(phases.locator('ol > li')).toHaveCount(12);
   await expect(phases).toContainText('Turno');
   // The current stop is whatever Phase reports, not a guess of ours.
@@ -252,7 +257,11 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
     const column = element.querySelector<HTMLElement>('.center')!.getBoundingClientRect();
     const trigger = document.querySelector<HTMLElement>('.hand-trigger');
     const hand = trigger?.getBoundingClientRect() ?? null;
-    const buttons = [...decision.querySelectorAll('button')];
+    // UX-DECISION: las opciones bajo demanda están en el DOM pero plegadas;
+    // el último botón *que responde al puntero* es el último botón visible.
+    const buttons = [...decision.querySelectorAll('button')].filter(
+      (button) => (button as HTMLElement).offsetParent !== null
+    );
     const last = buttons.at(-1);
     return {
       position: getComputedStyle(decision).position,

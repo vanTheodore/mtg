@@ -67,7 +67,7 @@ test('partida completa y victoria desde controles Svelte', async ({ page }) => {
     if ((await revision()) > before) { interactions++; return true; }
     return false;
   }
-  const passButton = () => decision.locator('.confirmations button').filter({ hasText: /^Pasar/ }).first();
+  const passButton = () => decision.locator('.confirmations button:visible').filter({ hasText: /^Pasar/ }).first();
   const keepButton = () => decision.locator('button').filter({ hasText: 'Conservar mano' }).first();
 
   let sawDamage = false;
@@ -149,7 +149,7 @@ test('partida completa y victoria desde controles Svelte', async ({ page }) => {
     if (await press(confirmPayment)) continue;
     if (await press(passButton())) continue;
 
-    if (await press(decision.locator('.confirmations button:not([disabled]), .actions button:not([disabled])').first())) continue;
+    if (await press(decision.locator('.confirmations button:visible:not([disabled]), .actions button:visible:not([disabled])').first())) continue;
 
     // The panel can change between reading the state and acting, so a miss is
     // only fatal when it repeats without any revision progress.

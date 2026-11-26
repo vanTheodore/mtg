@@ -139,7 +139,10 @@
     attackDraft: session.attacks,
     blockDraft: session.blocks,
     specialistActive,
-    suppressPrimary: session.selected !== null
+    // Sólo una carta seleccionada durante la prioridad compite con la acción
+    // principal. En ventanas de pago o de combate el botón de confirmación
+    // debe seguir dominando aunque el jugador haya tocado una fuente/criatura.
+    suppressPrimary: session.selected !== null && kind === 'Priority'
   }));
 
   const objects = $derived(s?.state.objects ?? {});
@@ -552,9 +555,9 @@
       <p class="muted discard-count">{discard.upTo ? `Puedes descartar hasta ${discard.count} carta(s).` : `Elige exactamente ${discard.count} carta(s).`}</p>
     {/if}
     {#if projection}
-      <div class="decision-surface" data-decision-surface data-visible-controls={projection.counters.visible}>
-        <PrimaryAction action={projection.primary} disabled={session.busy} onplay={play} />
-        <DecisionTiers {projection} disabled={session.busy} onplay={play} />
+      <div class="decision-surface confirmations" data-decision-surface data-visible-controls={projection.counters.visible}>
+        <div class="primary-slot"><PrimaryAction action={projection.primary} disabled={session.busy} onplay={play} /></div>
+        <div class="tiers-slot"><DecisionTiers {projection} disabled={session.busy} onplay={play} /></div>
       </div>
     {/if}
     {#if s.outcome}<p class="finished">{s.outcome.draw ? 'La partida terminó en empate.' : `Jugador ${s.outcome.winner! + 1} gana la partida.`}</p>{/if}
@@ -570,7 +573,15 @@
   .actions { display: flex; flex-direction: column; gap: .4rem; }
   .actions button { text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 9px; padding: .55rem .65rem; font-size: .84rem; min-height: 36px; }
   .actions button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 650; }
-  .decision-surface { margin-top: .65rem; display: grid; gap: .25rem; }
+  /* Compatibilidad: `.confirmations` es el nombre que el gate de Playwright y
+     los drivers de partida completa ya conocen. La nueva superficie se reparte
+     en dos columnas para no sumar una fila entera de alto. */
+  .decision-surface {
+    margin-top: .4rem; display: flex; flex-wrap: wrap;
+    align-items: flex-start; gap: .35rem;
+  }
+  .primary-slot { flex: 1 1 190px; min-width: 0; }
+  .tiers-slot { flex: 1 1 160px; min-width: 0; }
   .discard-count { margin: .35rem 0 0; }
   .link { background: none; border: none; color: var(--focus); font-size: .78rem; padding: .2rem; text-align: left; }
   .actions button.manual { font-size: .76rem; color: var(--ink-muted); min-height: 36px; }
