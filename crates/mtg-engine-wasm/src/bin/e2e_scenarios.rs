@@ -7,13 +7,15 @@
 //! declarations, targeting, manual payment, obligatory and optional choices,
 //! cancellation and hotseat privacy). No turn is played through and no shuffle
 //! is involved: `GameScenario` places the cards, and the windows are set by
-//! patching the serialized `GameState` and **round-tripping it back through the
-//! engine's own `Deserialize`**. A window that Phase would not accept fails
+//! patching the serialized `GameState`; the window itself is validated by
+//! round-tripping `WaitingFor` through the engine's own `Deserialize`. `GameState`
+//! derives `Serialize` only, so it is deliberately never deserialized here.
+//! A window that Phase would not accept fails
 //! here, in the Rust fixture job, instead of silently drifting into the browser.
 use engine::database::CardDatabase;
 use engine::game::scenario::{GameScenario, GameRunner, P0, P1};
 use engine::game::scenario_db::GameScenarioDbExt;
-use engine::types::game_state::GameState;
+use engine::types::game_state::WaitingFor;
 use engine::types::mana::{ManaType, ManaUnit};
 use engine::types::phase::Phase;
 use engine::types::identifiers::ObjectId;
@@ -42,10 +44,11 @@ fn write_runner_fixture(dir: &Path, id: &str, runner: GameRunner) {
 
 /// Place one exact decision window on a runner built by `GameScenario`.
 ///
-/// The patch is applied to the serialized state, then `GameState` is
-/// deserialized again: this is the guard that keeps a hand-written window from
-/// becoming a state the production engine would never produce. It is a
-/// *fixture* helper (feature `e2e-scenario-generator`), never an app path.
+/// The patch is applied to the serialized state; the window is then parsed as
+/// the real `WaitingFor` enum and written back in its canonical wire shape.
+/// That is the guard that keeps a hand-written window from becoming a state the
+/// production engine would never produce. It is a *fixture* helper (feature
+/// `e2e-scenario-generator`), never an app path.
 fn with_window(
     dir: &Path,
     id: &str,
@@ -57,9 +60,10 @@ fn with_window(
     let mut value = serde_json::to_value(runner.state()).expect("serialize GameState");
     patch(&mut value);
     value["waiting_for"] = window;
-    let state: GameState = serde_json::from_value(value)
+    let waiting: WaitingFor = serde_json::from_value(window)
         .unwrap_or_else(|error| panic!("fixture {id}: Phase rejected the window: {error}"));
-    let fixture = json!({ "id": id, "seed": SEED, "state": state });
+    value["waiting_for"] = serde_json::to_value(&waiting).expect("serialize WaitingFor");
+    let fixture = json!({ "id": id, "seed": SEED, "state": value });
     let path = dir.join(format!("{id}.json"));
     fs::write(&path, serde_json::to_vec_pretty(&fixture).unwrap())
         .unwrap_or_else(|error| panic!("write {}: {error}", path.display()));
@@ -227,6 +231,7 @@ fn main() {
 
 /// Same guard as `with_window`, but starting from an already-built runner whose
 /// state came from real engine actions (used by the blockers fixture).
+/// `GameState` derives `Serialize` only, so the state is kept as a `Value`.
 fn with_runner_window(
     dir: &Path,
     id: &str,
@@ -237,9 +242,10 @@ fn with_runner_window(
     let mut value = serde_json::to_value(runner.state()).expect("serialize GameState");
     patch(&mut value);
     value["waiting_for"] = window;
-    let state: GameState = serde_json::from_value(value)
+    let waiting: WaitingFor = serde_json::from_value(window)
         .unwrap_or_else(|error| panic!("fixture {id}: Phase rejected the window: {error}"));
-    let fixture = json!({ "id": id, "seed": SEED, "state": state });
+    value["waiting_for"] = serde_json::to_value(&waiting).expect("serialize WaitingFor");
+    let fixture = json!({ "id": id, "seed": SEED, "state": value });
     let path = dir.join(format!("{id}.json"));
     fs::write(&path, serde_json::to_vec_pretty(&fixture).unwrap())
         .unwrap_or_else(|error| panic!("write {}: {error}", path.display()));

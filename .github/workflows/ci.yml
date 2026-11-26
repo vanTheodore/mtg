@@ -154,7 +154,14 @@ jobs:
           CARGO_TARGET_DIR: target-native
           CARGO_LOCKED: "1"
           MESA_E2E_SCENARIOS_DIR: static/e2e-scenarios
-        run: bun run e2e:scenarios
+        run: |
+          set -o pipefail
+          bun run e2e:scenarios 2>&1 | tee /tmp/e2e-scenarios.log
+      - name: Annotate GameScenario generator errors
+        if: failure()
+        run: |
+          test ! -s /tmp/e2e-scenarios.log || bun scripts/rust-annotations.ts /tmp/e2e-scenarios.log
+          test ! -s /tmp/e2e-scenarios.log || tail -45 /tmp/e2e-scenarios.log | sed 's/^/::error::/'
       - name: Annotate Rust errors
         if: failure()
         run: |

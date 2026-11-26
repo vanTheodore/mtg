@@ -208,8 +208,9 @@ bajo `<details data-advanced-controls>`; `MobilePhaseChip` conserva su hoja.
 
 `crates/mtg-engine-wasm/src/bin/e2e_scenarios.rs` amplía los cuatro fixtures de
 UX-HAND. Los estados se fijan con `GameScenario` y, para las ventanas exactas, se
-parchea el `GameState` serializado y se **round-trip a través del `Deserialize`
-del propio motor**: una ventana que Phase no aceptaría falla en el job Rust, no
+parchea el `GameState` serializado y se **round-trip de la variante
+`WaitingFor` a través del `Deserialize` del propio motor** (`GameState` sólo
+deriva `Serialize`): una ventana que Phase no aceptaría falla en el job Rust, no
 en el navegador. No se recorren turnos ni se depende de barajadas.
 
 | Fixture | Estado exacto | Capa |
