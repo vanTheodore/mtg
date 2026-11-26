@@ -537,7 +537,16 @@
              height the decision needs (`arena-ui.spec.ts` measures that the
              decision fits whole inside the column). -->
         <div class="board-phases">
-          <PhaseStopBar phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
+          <!-- UX-DECISION · divulgación progresiva: las doce paradas de fase
+               son un control avanzado, no información de la decisión actual.
+               Nacen plegadas; se abren desde «Más opciones» del panel de
+               decisión o desde este resumen. La funcionalidad no cambia:
+               PhaseStopBar conserva sus chips, aria-pressed y aria-current.
+               En el teléfono el chip sigue ofreciendo su hoja bajo demanda. -->
+          <details class="advanced-controls" data-advanced-controls>
+            <summary>Controles avanzados · paradas de fase</summary>
+            <PhaseStopBar phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
+          </details>
           <MobilePhaseChip phase={snapshot?.state.phase ?? ''} turn={snapshot?.state.turn_number ?? 0} activePlayer={snapshot?.state.active_player ?? 0} />
         </div>
       {/if}
@@ -748,6 +757,16 @@
   .middle { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.3fr); gap: .8rem; align-items: start; }
   /* Chips de estado y consejo: comparten fila con el asiento propio. */
   .board-phases { min-width: 0; }
+  .advanced-controls { min-width: 0; }
+  .advanced-controls > summary {
+    cursor: pointer; min-height: 40px; display: flex; align-items: center;
+    padding: .35rem .55rem; font-size: .74rem; font-weight: 650;
+    color: var(--ink-muted); border: 1px solid var(--line); border-radius: 9px;
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+    list-style-position: inside;
+  }
+  .advanced-controls > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .advanced-controls[open] > summary { color: var(--ink); margin-bottom: .25rem; }
   .table-status { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; min-width: 0; flex-wrap: wrap; }
   /* La fila de chips ocupa una celda de la rejilla: sin esto se dimensiona a su
      contenido en el eje cruzado y en escritorio (donde es la fila 4) los chips

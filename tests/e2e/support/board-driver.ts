@@ -139,7 +139,13 @@ export function createBoardDriver(page: Page): BoardDriver {
     if (await press(decision.locator('button').filter({ hasText: 'Confirmar pago' }).first())) return true;
     if (await press(decision.locator('button').filter({ hasText: /^No atacar$/ }).first())) return true;
     if (await press(decision.locator('button').filter({ hasText: /^No bloquear$/ }).first())) return true;
+    // UX-DECISION: la acción principal se mudó de `.confirmations` a
+    // `[data-decision-primary]`. El driver sigue reconociendo ambas formas
+    // (la segunda es la del commit base que mide la evidencia comparativa).
+    if (await press(decision.locator('[data-decision-primary]').filter({ hasText: /^Pasar/ }).first())) return true;
     if (await press(decision.locator('.confirmations button').filter({ hasText: /^Pasar/ }).first())) return true;
+    if (await press(decision.locator('[data-decision-primary]').first())) return true;
+    if (await press(decision.locator('[data-decision-tiers] button:not([disabled])').first())) return true;
     return press(decision.locator('.confirmations button:not([disabled])').first());
   };
 

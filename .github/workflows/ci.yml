@@ -215,13 +215,19 @@ jobs:
       - name: Verify isolated GameScenario artifacts
         run: |
           test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
-          for fixture in target-cast manual-payment cancel-cast privacy-handoff; do
+          for fixture in \
+            target-cast manual-payment cancel-cast privacy-handoff \
+            priority-empty priority-stack opponent-turn-response \
+            declare-attackers declare-blockers obligatory-decision optional-decision; do
             test -s "static/e2e-scenarios/$fixture.json"
           done
       # The JSON report feeds the annotation step below: the directory names
       # alone say which test broke, the message says why. `list` keeps the
       # readable console output.
-      - run: bun --bun playwright test --reporter=list,json
+      # The evidence matrix runs in the parallel `ux-evidence` job against
+      # BOTH the base UI and this UI; it is excluded here so the Chromium gate
+      # keeps its measured 40-minute budget.
+      - run: bun --bun playwright test --reporter=list,json --grep-invert EVIDENCIA
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/report.json
       # The job summary is the evidence and the gate: it publishes passed /
@@ -247,3 +253,78 @@ jobs:
             docs/performance.json
           if-no-files-found: warn
           retention-days: 7
+
+  ux-evidence:
+    name: UX-DECISION baseline and result evidence
+    needs: [static, wasm, native-integration]
+    if: needs.static.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun --bun playwright install --with-deps chromium
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm
+          path: static/wasm
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm-e2e
+          path: static/wasm-e2e
+      - uses: actions/download-artifact@v4
+        with:
+          name: e2e-scenario-fixtures
+          path: static/e2e-scenarios
+      - name: Prepare the fixed baseline worktree
+        env:
+          BASE_SHA: dd531f46d20b6136cb2b7a40962a210fad6a4de0
+        run: |
+          set -euo pipefail
+          git rev-parse "$BASE_SHA^{commit}" >/dev/null 2>&1 || git fetch origin "$BASE_SHA" --depth=1
+          git worktree add --detach /tmp/mesa-baseline "$BASE_SHA"
+          ln -s "$GITHUB_WORKSPACE/node_modules" /tmp/mesa-baseline/node_modules
+          mkdir -p /tmp/mesa-baseline/static/wasm /tmp/mesa-baseline/static/wasm-e2e /tmp/mesa-baseline/static/e2e-scenarios
+          cp -r static/wasm/. /tmp/mesa-baseline/static/wasm/
+          cp -r static/wasm-e2e/. /tmp/mesa-baseline/static/wasm-e2e/
+          cp -r static/e2e-scenarios/. /tmp/mesa-baseline/static/e2e-scenarios/
+      - name: Measure baseline and result with one spec, one WASM and one fixture set
+        env:
+          BASE_SHA: dd531f46d20b6136cb2b7a40962a210fad6a4de0
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          cd /tmp/mesa-baseline
+          nohup bun run dev --port 5174 > /tmp/mesa-baseline-vite.log 2>&1 &
+          cd "$GITHUB_WORKSPACE"
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:5174/ >/dev/null; then break; fi
+            sleep 1
+          done
+          for variant in after baseline; do
+            url=http://127.0.0.1:5173
+            if [ "$variant" = baseline ]; then url=http://127.0.0.1:5174; fi
+            MESA_UI_VARIANT="$variant" \
+            MESA_EVIDENCE_URL="$url" \
+            MESA_EVIDENCE_SHA="$HEAD_SHA" \
+            MESA_BASELINE_SHA="$BASE_SHA" \
+            MESA_EVIDENCE_OUT="$GITHUB_WORKSPACE/evidence/$variant" \
+              bun --bun playwright test tests/e2e/ux-decision-evidence.spec.ts --reporter=list --grep EVIDENCIA
+          done
+          MESA_EVIDENCE_ROOT="$GITHUB_WORKSPACE/evidence" bun scripts/ux-decision-compare.ts
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-decision-evidence
+          path: evidence
+          if-no-files-found: warn
+          retention-days: 14

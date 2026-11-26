@@ -1,0 +1,185 @@
+import { expect, test, type Page } from '@playwright/test';
+import { createBoardDriver } from './support/board-driver';
+
+/**
+ * UX-DECISION 1.0 · transiciones reales del motor.
+ *
+ * Capa: **motor real**. Cada estado lo produce `GameScenario` en el job
+ * `native-integration` (`static/e2e-scenarios/*.json`) y lo restaura el WASM
+ * E2E aislado; el de producción sigue rechazando la operación 5
+ * (`engine:verify-no-e2e-op`). No se recorren turnos ni se depende de barajadas.
+ * Cuando se prueba la resolución de un hechizo se ejecutan las prioridades
+ * reales que Phase pide.
+ *
+ * «No aceptes pruebas que puedan aprobar sin alcanzar el estado requerido»:
+ * cada flujo comprueba `data-actions-applied` o `data-waiting`, nunca sólo la
+ * presencia de un botón. Los errores de transporte no se simulan aquí: su
+ * capa es `dispatchOutcome` (unitaria) y el gate de aislamiento WASM de CI.
+ */
+async function openScenario(page: Page, id: string) {
+  await page.addInitScript(() => {
+    localStorage.setItem('mesa:autoPass', 'off');
+    localStorage.setItem('mesa:handoffMode', 'turn');
+  });
+  await page.route('**/api.scryfall.com/**', (route) => route.abort());
+  await page.goto(`/?e2e-scenario=${id}`);
+  await expect(page.locator('.hand-trigger'), `no se montó el estado GameScenario ${id}`).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator('.app')).toHaveAttribute('data-viewer', '0');
+  return createBoardDriver(page);
+}
+
+const panel = (page: Page) => page.locator('section[aria-label="Decisión pendiente"]');
+const applied = (page: Page) => page.locator('.app').getAttribute('data-actions-applied');
+
+test('prioridad con pila vacía: contexto, una acción principal y cesión real', async ({ page }) => {
+  await openScenario(page, 'priority-empty');
+  await expect(page.locator('.app')).toHaveAttribute('data-waiting', 'Priority');
+  await expect(page.locator('[data-decision-context]')).toHaveAttribute('data-intent', 'Jugar');
+  await expect(page.locator('[data-decision-context]')).toContainText('Prioridad: Jugador 1');
+  const primary = page.locator('[data-decision-primary]');
+  await expect(primary).toContainText('Pasar');
+  await expect(page.locator('[data-decision-consequence]')).toContainText('no garantiza un cambio de fase');
+  await expect(page.locator('[data-decision-integrity="true"]')).toBeVisible();
+
+  const before = Number(await applied(page));
+  await primary.click();
+  await expect.poll(() => applied(page), { timeout: 15_000 }).not.toBe(String(before));
+});
+
+test('prioridad con hechizo pendiente: pila real, cesión contextual y resolución por prioridades reales', async ({ page }) => {
+  const driver = await openScenario(page, 'priority-stack');
+  const before = Number(await applied(page));
+  // Lanzar el Rayo por la interfaz: la pila la crea Phase, no el test.
+  const card = driver.hand.locator('[data-card-id]').first();
+  await driver.clickCard(card);
+  const cast = panel(page).locator('button').filter({ hasText: 'Lanzar' }).first();
+  await expect(cast).toBeVisible();
+  await cast.click();
+  await expect.poll(() => applied(page), { timeout: 20_000 }).not.toBe(String(before));
+  await expect(page.locator('section[aria-label="Pila"]')).toHaveAttribute('data-empty', 'false');
+
+  const rivalLife = page.locator('.player-bar[data-player-id="1"]');
+  const lifeBefore = Number(await rivalLife.getAttribute('data-life'));
+  let sawResponseLabel = false;
+  for (let step = 0; step < 14; step += 1) {
+    if (Number(await rivalLife.getAttribute('data-life')) < lifeBefore) break;
+    const waiting = await panel(page).getAttribute('data-waiting');
+    if (waiting === 'TargetSelection' || waiting === 'TriggerTargetSelection') {
+      const list = panel(page).locator('details[data-target-list] summary');
+      if (await list.count()) await list.click();
+      const choice = panel(page).locator('details[data-target-list] button').filter({ hasText: /^Elegir / }).first();
+      if (await choice.count()) await choice.click();
+      else break;
+      continue;
+    }
+    const primary = page.locator('[data-decision-primary]');
+    const label = (await primary.textContent().catch(() => '')) ?? '';
+    if (label.includes('permitir respuestas')) sawResponseLabel = true;
+    const advanced = await driver.answerAnyPrompt();
+    if (!advanced) break;
+  }
+  expect(sawResponseLabel).toBe(true);
+  expect(Number(await rivalLife.getAttribute('data-life'))).toBeLessThan(lifeBefore);
+  await expect(page.locator('section[aria-label="Pila"]')).toHaveAttribute('data-empty', 'true');
+});
+
+test('respuesta durante el turno rival: intención y consecuencia del motor', async ({ page }) => {
+  await openScenario(page, 'opponent-turn-response');
+  await expect(page.locator('[data-decision-context]')).toHaveAttribute('data-intent', 'Responder');
+  await expect(page.locator('[data-decision-consequence]')).toContainText('turno del Jugador 1');
+  await expect(panel(page)).toHaveAttribute('data-waiting', 'Priority');
+});
+
+test('declaración de atacantes: no atacar y confirmar borrador son decisiones distintas', async ({ page }) => {
+  const driver = await openScenario(page, 'declare-attackers');
+  await expect(page.locator('.app')).toHaveAttribute('data-waiting', 'DeclareAttackers');
+  const primary = page.locator('[data-decision-primary]');
+  await expect(primary).toContainText('No atacar');
+  const creature = driver.battlefield.locator('[data-card-id]').first();
+  await expect(creature).toBeVisible();
+  await driver.clickCard(creature);
+  await expect(primary).toContainText('Confirmar ataque');
+  const before = Number(await applied(page));
+  await primary.click();
+  await expect.poll(() => applied(page), { timeout: 15_000 }).not.toBe(String(before));
+});
+
+test('declaración de bloqueadores: no bloquear es explícito y el motor responde', async ({ page }) => {
+  await openScenario(page, 'declare-blockers');
+  await expect(page.locator('.app')).toHaveAttribute('data-waiting', 'DeclareBlockers');
+  const primary = page.locator('[data-decision-primary]');
+  await expect(primary).toContainText('No bloquear');
+  const before = Number(await applied(page));
+  await primary.click();
+  await expect.poll(() => applied(page), { timeout: 15_000 }).not.toBe(String(before));
+});
+
+test('objetivos: selección directa, lista accesible y progreso sin duplicados', async ({ page }) => {
+  const driver = await openScenario(page, 'target-cast');
+  const card = driver.hand.locator('[data-card-id]').first();
+  await driver.clickCard(card);
+  await expect(panel(page).locator('[aria-label^="Carta seleccionada"]')).toBeVisible();
+  // El pago manual es secundario: no compite con «Lanzar».
+  const manual = panel(page).locator('button.manual[data-tier="secondary"]');
+  await expect(manual).toContainText('Elegir maná manualmente');
+  await expect(panel(page).locator('[data-tier="primary"]')).toHaveCount(0);
+  const before = Number(await applied(page));
+  await panel(page).locator('button').filter({ hasText: 'Lanzar' }).first().click();
+  await expect.poll(() => applied(page), { timeout: 20_000 }).not.toBe(String(before));
+  const waiting = await panel(page).getAttribute('data-waiting');
+  expect(['TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'Priority']).toContain(waiting);
+  if (waiting === 'TargetSelection' || waiting === 'TriggerTargetSelection') {
+    await expect(panel(page).locator('details[data-target-list]')).toBeVisible();
+    await expect(panel(page).locator('[data-decision-progress]')).toBeVisible();
+  }
+});
+
+test('pago manual: accesible bajo demanda, nunca dominante', async ({ page }) => {
+  const driver = await openScenario(page, 'manual-payment');
+  await expect(page.locator('.app')).toHaveAttribute('data-waiting', 'Priority');
+  const manual = panel(page).locator('button.manual[data-tier="secondary"]');
+  await expect(manual).toBeVisible();
+  await expect(page.locator('[data-decision-primary]')).not.toContainText('maná manualmente');
+  const before = Number(await applied(page));
+  await manual.click();
+  await expect.poll(() => applied(page), { timeout: 20_000 }).not.toBe(String(before));
+  await expect(page.locator('[data-decision-integrity="true"]')).toBeVisible();
+  expect(await driver.waiting()).not.toBe('Priority');
+});
+
+test('decisión obligatoria: KeepExact conserva la ventana exacta sin auto-selección', async ({ page }) => {
+  await openScenario(page, 'obligatory-decision');
+  await expect(page.locator('.app')).toHaveAttribute('data-waiting', 'KeepExactPermanentsChoice');
+  await expect(panel(page).locator('[data-keep-exact]')).toBeVisible();
+  await expect(panel(page).locator('[data-keep-exact-up-to]')).toHaveAttribute('data-keep-exact-up-to', 'false');
+  await expect(page.locator('[data-decision-primary]')).toHaveCount(0);
+});
+
+test('decisión opcional: ambas ramas legales siguen en el especialista', async ({ page }) => {
+  await openScenario(page, 'optional-decision');
+  await expect(page.locator('.app')).toHaveAttribute('data-waiting', 'OptionalEffectChoice');
+  await expect(panel(page).locator('[data-optional-effect]')).toBeVisible();
+  await expect(panel(page).locator('[data-optional-effect] button')).toHaveCount(2);
+  await expect(page.locator('[data-decision-primary]')).toHaveCount(0);
+});
+
+test('cancelación y busy: un doble pulso no despacha dos acciones', async ({ page }) => {
+  await openScenario(page, 'priority-empty');
+  const primary = page.locator('[data-decision-primary]');
+  const before = Number(await applied(page));
+  await Promise.all([primary.click({ force: true }), primary.click({ force: true }).catch(() => {})]);
+  await expect.poll(() => applied(page), { timeout: 15_000 }).toBe(String(before + 1));
+  await expect(page.locator('[data-decision-integrity="true"]')).toBeVisible();
+});
+
+test('cancelación del lanzamiento: la acción de seguridad está fuera del desplegable', async ({ page }) => {
+  const driver = await openScenario(page, 'cancel-cast');
+  const card = driver.hand.locator('[data-card-id]').first();
+  await driver.clickCard(card);
+  await panel(page).locator('button.manual[data-tier="secondary"]').click();
+  const cancel = page.locator('[data-decision-cancel]');
+  await expect(cancel).toBeVisible({ timeout: 20_000 });
+  const before = Number(await applied(page));
+  await cancel.first().click();
+  await expect.poll(() => applied(page), { timeout: 15_000 }).not.toBe(String(before));
+});

@@ -63,6 +63,10 @@ test('la banda de fases refleja el snapshot de Phase durante una partida', async
   // The arena band is the step bar with stops (`PhaseStopBar`), which replaced
   // the five-segment drawing: one stop per step Phase names, and the step the
   // engine reports as current is marked by the engine's own phase string.
+  // UX-DECISION: the twelve stops are an advanced control under progressive
+  // disclosure, so open that surface before asserting what it still renders.
+  const advanced = page.locator('details[data-advanced-controls]');
+  if (await advanced.count()) await advanced.locator('summary').click();
   const phases = page.locator('.stop-bar');
   await expect(phases).toBeVisible({ timeout: 180_000 });
   await expect(phases.locator('ol > li')).toHaveCount(12);

@@ -117,7 +117,9 @@ describe('the 10E end-to-end deck', () => {
       ['Campo de batalla', 'Campo de batalla · Jugador', 'src/lib/components/Board.svelte'],
       ['Decisión pendiente', 'Decisión pendiente', 'src/lib/components/DecisionPanel.svelte'],
       ['Bloqueos elegidos', 'Bloqueos elegidos', 'src/lib/components/DecisionPanel.svelte'],
-      ['Confirmar bloqueos', 'Confirmar bloqueos', 'src/lib/components/DecisionPanel.svelte'],
+      // UX-DECISION: la etiqueta de confirmación la produce la proyección
+      // pura y la pinta PrimaryAction; el panel ya sólo orquesta superficies.
+      ['Confirmar bloqueos', 'Confirmar bloqueos', 'src/lib/game/decisionProjection.ts'],
       ['Registro de la partida', 'Registro de la partida', 'src/lib/components/HistoryPanel.svelte'],
       ['Paso de asiento', 'Paso de asiento', 'src/lib/components/Board.svelte'],
       ['Estoy listo', 'Estoy listo', 'src/lib/components/Board.svelte'],
