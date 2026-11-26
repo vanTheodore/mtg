@@ -227,6 +227,81 @@ jobs:
         run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics event_referent_identity -- --test-threads=1
       - name: Execute deterministic save/restore serialization regressions
         run: cargo test --locked -p phase-engine --test mesa_phase_pin_mechanics deterministic_game_state_serde -- --test-threads=1
+      # UP-133: original integration modules added by the v0.133.0 pin
+      # (31123e2b...e5368963, 60 commits). Every file below is copied verbatim
+      # from the pinned tarball and needs only `support`, so they share one
+      # target. This is a SELECTED suite, not the 357 upstream modules Mesa
+      # prunes; it covers the mechanics this pin changed, including the two
+      # wire-contract changes (up-to keepers, shared-team priority).
+      - name: Assemble the UP-133 target from upstream's own tests
+        run: |
+          cat > crates/phase-engine/tests/mesa_phase_up133.rs <<'RUST'
+          // Selected coverage for the mechanics v0.133.0 changed. Original upstream
+          // files, unmodified; see docs/PHASE-UPSTREAM-2026-11-26-E5368963.md.
+          #[path = "integration/support.rs"]
+          mod support;
+          // The HEAD fix: a required additional cost must not consume the cards
+          // its own mana ability needs (CR 118.9d + CR 118.10).
+          #[path = "integration/additional_cost_shared_mana_resource.rs"]
+          mod additional_cost_shared_mana_resource;
+          // "Up to" keepers: the WaitingFor floor Mesa's client now renders.
+          #[path = "integration/keeper_up_to_cardinality.rs"]
+          mod keeper_up_to_cardinality;
+          // CR 106.7: what a departed permanent could produce (could_produce.rs).
+          #[path = "integration/could_produce_mana_types.rs"]
+          mod could_produce_mana_types;
+          // Conditional "add ... instead" mana, Urza lands and typed carriers.
+          #[path = "integration/conditional_instead_mana.rs"]
+          mod conditional_instead_mana;
+          // Firebender Ascension: observer-trigger copies and trigger ordering.
+          #[path = "integration/issue_11338_observer_copies.rs"]
+          mod issue_11338_observer_copies;
+          // CR 805.5a/805.5b: shared-team seats act on team priority.
+          #[path = "integration/two_headed_giant_teammate_priority.rs"]
+          mod two_headed_giant_teammate_priority;
+          // "An opponent is dealt damage by one or more creatures" fires once.
+          #[path = "integration/lolth_emblem_recipient.rs"]
+          mod lolth_emblem_recipient;
+          // Station thresholds and charge-counter loss.
+          #[path = "integration/planet_station_thresholds.rs"]
+          mod planet_station_thresholds;
+          // Tyvar the Bellicose: counters on a mana ability's resolution.
+          #[path = "integration/tyvar_the_bellicose_mana_counters.rs"]
+          mod tyvar_the_bellicose_mana_counters;
+          // Death by Dragons: "each player other than target" scope.
+          #[path = "integration/death_by_dragons.rs"]
+          mod death_by_dragons;
+          RUST
+      - name: Assert the UP-133 modules compile and register their tests
+        run: |
+          set -o pipefail
+          cargo test --locked -p phase-engine --test mesa_phase_up133 -- --list 2>&1 \
+            | tee /tmp/up133-list.log > /tmp/up133-list.txt
+          for module in \
+            additional_cost_shared_mana_resource \
+            keeper_up_to_cardinality \
+            could_produce_mana_types \
+            conditional_instead_mana \
+            issue_11338_observer_copies \
+            two_headed_giant_teammate_priority \
+            lolth_emblem_recipient \
+            planet_station_thresholds \
+            tyvar_the_bellicose_mana_counters \
+            death_by_dragons; do
+            grep -Fq "$module::" /tmp/up133-list.txt || {
+              echo "Missing UP-133 module: $module" >&2
+              exit 1
+            }
+          done
+          registered=$(grep -c ': test' /tmp/up133-list.txt || true)
+          echo "registered: $registered tests"
+          # A filter that matches nothing still exits 0: prove the suite is real.
+          test "$registered" -ge 150 || {
+            echo "UP-133 registered only $registered tests, expected at least 150" >&2
+            exit 1
+          }
+      - name: Execute the UP-133 pinned-mechanics regressions
+        run: cargo test --locked -p phase-engine --test mesa_phase_up133 -- --test-threads=1
       # The job log lives behind a blob download that is unreachable on some
       # networks; annotations are plain JSON on api.github.com.
       - name: Annotate Rust errors

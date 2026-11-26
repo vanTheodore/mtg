@@ -3,15 +3,15 @@ import { keepExactAction, keepExactPrompt } from '../interaction';
 import type { EngineSnapshot } from '../../engine/types';
 
 /**
- * CR 101.4 + CR 701.21a (`KeepExactPermanentsChoice`): the player protects exactly
- * `required_count` eligible permanents and every other in-scope permanent is
- * sacrificed afterwards.
+ * CR 101.4 + CR 701.21a (`KeepExactPermanentsChoice`): the player protects
+ * permanents inside the engine's [minimum_count, required_count] window and every
+ * other in-scope permanent is sacrificed afterwards.
  *
- * The engine resolves and validates the number — the payload's own contract says
- * it arrives **already capped** to the eligible pool under CR 609.3's "do as much
- * as possible", and that clients render it instead of deriving a second legality
- * rule from `eligible.len()`. So the prompt parses the figure and never recomputes
- * it, and the answer is exactly that many distinct eligible ids.
+ * Phase v0.133.0 redefined the payload: `required_count` is an uncapped CEILING
+ * (CR 609.3 is resolved by the engine, not by a display client) and
+ * `minimum_count` is the FLOOR — absent/null means exactly the ceiling, `0` means
+ * "up to N". Both are parsed as they arrive; the client never recomputes either
+ * from `eligible.length`.
  *
  * `keeper_counter` (CR 608.2c + CR 122.1) rides along with its count already
  * resolved (CR 608.2h): Promise of Loyalty's vow counter is on the kept creature
@@ -70,6 +70,30 @@ test('the prompt publishes the pool and the exact number the engine resolved', (
   expect(prompt.sourceId).toBe(374);
   expect(prompt.remainingPlayers).toEqual([1]);
   expect(prompt.keptBefore).toEqual([]);
+});
+
+test('v0.133.0: an "up to" keeper publishes floor zero and keeps the ceiling', () => {
+  const prompt = keepExactPrompt(keepExact({ minimum_count: 0, required_count: 3 }))!;
+  expect(prompt.requiredCount).toBe(3);
+  expect(prompt.minimumCount).toBe(0);
+});
+
+test('v0.133.0: no floor (or a null one) is still the exact keeper', () => {
+  expect(keepExactPrompt(keepExact())!.minimumCount).toBe(3);
+  expect(keepExactPrompt(keepExact({ minimum_count: null }))!.minimumCount).toBe(3);
+});
+
+test('v0.133.0: a floor is clamped to the ceiling and never negative', () => {
+  expect(keepExactPrompt(keepExact({ minimum_count: -2 }))!.minimumCount).toBe(0);
+  expect(keepExactPrompt(keepExact({ minimum_count: 9 }))!.minimumCount).toBe(3);
+  expect(keepExactPrompt(keepExact({ minimum_count: 1.9 }))!.minimumCount).toBe(1);
+});
+
+test('v0.133.0: the ceiling is the printed number, not the eligible pool size', () => {
+  const prompt = keepExactPrompt(keepExact({ eligible: [100], required_count: 5 }))!;
+  expect(prompt.requiredCount).toBe(5);
+  expect(prompt.minimumCount).toBe(5);
+  expect(prompt.eligible).toEqual([100]);
 });
 
 test('`count` is the older alias of the same figure', () => {

@@ -105,7 +105,7 @@
   import SeparatePilesPrompt from '#lib/components/SeparatePilesPrompt.svelte';
   import type { EngineSnapshot, GameObject, PlayerView } from '#lib/engine/types.ts';
 
-  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway' | 'ringBearer' | 'ringBearerOne' | 'ringBearerAway' | 'legend' | 'legendAway' | 'protoProtector' | 'protoOne' | 'protoAway' | 'dungeon' | 'dungeonOne' | 'dungeonAway' | 'dungeonRoom' | 'dungeonRoomOne' | 'dungeonRoomAway' | 'behold' | 'beholdOne' | 'beholdAway' | 'populate' | 'populateOne' | 'populateAway' | 'specialize' | 'specializeOne' | 'specializeAway' | 'roomDoor' | 'roomDoorOne' | 'roomDoorAway' | 'blight' | 'blightOne' | 'blightAway' | 'harmonize' | 'harmonizeDecline' | 'harmonizeAway' | 'bounce' | 'bounceOne' | 'bounceAway' | 'sacrifice' | 'sacrificeOne' | 'sacrificeUpTo' | 'sacrificeAway' | 'heroEvent' | 'heroEventOpen' | 'heroEventAway' | 'topdeck' | 'topdeckOne' | 'topdeckAway' | 'partition' | 'partitionOne' | 'partitionAway' | 'replacementOrder' | 'replacementOrderOne' | 'replacementOrderAway';
+  type Scene = 'targets' | 'combat' | 'idle' | 'damage' | 'attackers' | 'cleanup' | 'discard' | 'discardUpTo' | 'chooseX' | 'triggerOrder' | 'modeChoice' | 'search' | 'dig' | 'optional' | 'pay' | 'opponent' | 'reveal' | 'unless' | 'pair' | 'host' | 'branches' | 'tribute' | 'ward' | 'wardPower' | 'startingPlayer' | 'scry' | 'surveil' | 'crew' | 'saddle' | 'equip' | 'station' | 'multiTarget' | 'multiTargetExact' | 'distribute' | 'distributeAnnounced' | 'moveCounters' | 'retarget' | 'retargetSingle' | 'chooseObjects' | 'chooseObjectsRecipient' | 'proliferate' | 'timeTravelRemove' | 'timeTravelAdd' | 'category' | 'categoryForAll' | 'copyChosen' | 'copyChosenNeighbor' | 'keepPower' | 'keepPowerForAll' | 'keepExact' | 'keepExactVow' | 'keepExactUpTo' | 'removeCounters' | 'removeCountersCapped' | 'copyRetarget' | 'copyAnnounce' | 'vote' | 'voteObject' | 'explore' | 'exploreShared' | 'pilePartition' | 'pileChoice' | 'miracle' | 'castOffer' | 'castOfferCascade' | 'castOfferWindow' | 'meld' | 'meldAttack' | 'revealAny' | 'unlessRepeat' | 'entryAttack' | 'replacement' | 'replacementCompose' | 'replacementOptional' | 'copyTarget' | 'copyTargetToken' | 'resolveAll' | 'resolveAllStale' | 'untapChoice' | 'untapSubset' | 'untapResume' | 'exert' | 'enlist' | 'payCost' | 'payCostHidden' | 'payCostAggregate' | 'phyrexian' | 'combatTax' | 'combatTaxBlock' | 'optionalCost' | 'optionalCostMulti' | 'optionalCostChoice' | 'optionalCostAlt' | 'optionalCostGift' | 'optionalCostAway' | 'defiler' | 'defilerAway' | 'zoneChoice' | 'zoneChoiceTypes' | 'zoneChoiceAway' | 'modalFace' | 'modalFaceOne' | 'modalFaceAway' | 'altCast' | 'altCastEmerge' | 'altCastOne' | 'altCastAway' | 'castVariant' | 'castVariantAuth' | 'castVariantAway' | 'typeSlot' | 'typeSlotLand' | 'typeSlotAway' | 'splice' | 'spliceHidden' | 'spliceAway' | 'mutate' | 'mutateOne' | 'mutateAway' | 'cipher' | 'cipherHidden' | 'cipherAway' | 'costOrder' | 'costOrderOne' | 'costOrderAway' | 'resPay' | 'resPayOne' | 'resPayAway' | 'gift' | 'giftOne' | 'giftCost' | 'giftAway' | 'topBottom' | 'topBottomNth' | 'topBottomOne' | 'topBottomAway' | 'clash' | 'clashOne' | 'clashAway' | 'clashPlace' | 'clashPlaceHidden' | 'clashPlaceAway' | 'sideboard' | 'sideboardNoSide' | 'sideboardAway' | 'playDraw' | 'playDrawDraw' | 'playDrawAway' | 'bottomRipple' | 'bottomReveal' | 'bottomDig' | 'bottomEmpty' | 'bottomAway' | 'ringBearer' | 'ringBearerOne' | 'ringBearerAway' | 'legend' | 'legendAway' | 'protoProtector' | 'protoOne' | 'protoAway' | 'dungeon' | 'dungeonOne' | 'dungeonAway' | 'dungeonRoom' | 'dungeonRoomOne' | 'dungeonRoomAway' | 'behold' | 'beholdOne' | 'beholdAway' | 'populate' | 'populateOne' | 'populateAway' | 'specialize' | 'specializeOne' | 'specializeAway' | 'roomDoor' | 'roomDoorOne' | 'roomDoorAway' | 'blight' | 'blightOne' | 'blightAway' | 'harmonize' | 'harmonizeDecline' | 'harmonizeAway' | 'bounce' | 'bounceOne' | 'bounceAway' | 'sacrifice' | 'sacrificeOne' | 'sacrificeUpTo' | 'sacrificeAway' | 'heroEvent' | 'heroEventOpen' | 'heroEventAway' | 'topdeck' | 'topdeckOne' | 'topdeckAway' | 'partition' | 'partitionOne' | 'partitionAway' | 'replacementOrder' | 'replacementOrderOne' | 'replacementOrderAway';
   const SCENES: { value: Scene; label: string }[] = [
     { value: 'targets', label: 'Objetivos y pila' },
     { value: 'combat', label: 'Combate declarado' },
@@ -157,6 +157,7 @@
     { value: 'keepPowerForAll', label: 'Conservar por fuerza: todos' },
     { value: 'keepExact', label: 'Conservar exactos' },
     { value: 'keepExactVow', label: 'Conservar exactos con voto' },
+    { value: 'keepExactUpTo', label: 'Conservar hasta N (v0.133.0)' },
     { value: 'removeCounters', label: 'Quitar contadores' },
     { value: 'removeCountersCapped', label: 'Quitar contadores con tope' },
     { value: 'copyRetarget', label: 'Objetivos de la copia' },
@@ -362,6 +363,7 @@
     keepPowerForAll: 'KeepWithinTotalPowerChoice · CR 101.4, por todos',
     keepExact: 'KeepExactPermanentsChoice · CR 701.21a, exactamente tres',
     keepExactVow: 'KeepExactPermanentsChoice · CR 122.1, contador de voto',
+    keepExactUpTo: 'KeepExactPermanentsChoice · v0.133.0, mínimo cero (hasta tres)',
     removeCounters: 'RemoveCountersChoice · CR 107.1c, cualquier número',
     removeCountersCapped: 'RemoveCountersChoice · CR 608.2d, hasta N en total',
     copyRetarget: 'CopyRetarget · CR 707.10c, objetivos nuevos',
@@ -1377,12 +1379,14 @@
         }
       };
     }
-    if (scene === 'keepExact' || scene === 'keepExactVow') {
-      // `KeepExactPermanentsChoice`: a fixed number, already capped by the engine.
-      // `Razia's Purification` asks for three permanents out of five; `Promise of
-      // Loyalty` asks for one creature and owes it a vow counter (CR 122.1) before
-      // the rest is sacrificed.
+    if (scene === 'keepExact' || scene === 'keepExactVow' || scene === 'keepExactUpTo') {
+      // `KeepExactPermanentsChoice`: v0.133.0 publishes a ceiling (`required_count`)
+      // that is NOT capped to the pool, and an optional floor (`minimum_count`).
+      // `Razia's Purification` asks for three out of five; `Promise of Loyalty`
+      // asks for one and owes a vow counter (CR 122.1); Covetous Elegy's "up to"
+      // form sends floor 0, so keeping nothing is a legal answer.
       const vow = scene === 'keepExactVow';
+      const upTo = scene === 'keepExactUpTo';
       return {
         type: 'KeepExactPermanentsChoice',
         data: {
@@ -1390,6 +1394,7 @@
           target_player: 0,
           eligible: vow ? [100, 101, 105] : [100, 101, 105, 102, 340],
           required_count: vow ? 1 : 3,
+          ...(upTo ? { minimum_count: 0 } : {}),
           keeper_counter: vow ? ['vow', 1] : null,
           chooser_scope: 'EachPlayerSelf',
           source_id: vow ? 375 : 374,
@@ -3122,7 +3127,7 @@
           : scene === 'ward' || scene === 'wardPower' ? 'PreCombatMain'
           : scene === 'startingPlayer' ? 'Beginning'
           : scene === 'scry' || scene === 'surveil' ? 'PreCombatMain'
-          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' || scene === 'explore' || scene === 'exploreShared' || scene === 'pilePartition' || scene === 'pileChoice' ? 'PreCombatMain'
+          : scene === 'crew' || scene === 'saddle' || scene === 'equip' || scene === 'station' || scene === 'multiTarget' || scene === 'multiTargetExact' || scene === 'distribute' || scene === 'distributeAnnounced' || scene === 'moveCounters' || scene === 'retarget' || scene === 'retargetSingle' || scene === 'chooseObjects' || scene === 'chooseObjectsRecipient' || scene === 'proliferate' || scene === 'timeTravelRemove' || scene === 'timeTravelAdd' || scene === 'category' || scene === 'categoryForAll' || scene === 'copyChosen' || scene === 'copyChosenNeighbor' || scene === 'keepPower' || scene === 'keepPowerForAll' || scene === 'keepExact' || scene === 'keepExactVow' || scene === 'keepExactUpTo' || scene === 'removeCounters' || scene === 'removeCountersCapped' || scene === 'copyRetarget' || scene === 'copyAnnounce' || scene === 'vote' || scene === 'voteObject' || scene === 'explore' || scene === 'exploreShared' || scene === 'pilePartition' || scene === 'pileChoice' ? 'PreCombatMain'
           : scene === 'miracle' ? 'Draw'
           : scene === 'castOffer' || scene === 'castOfferCascade' || scene === 'castOfferWindow' ? 'PreCombatMain'
           : scene === 'meld' ? 'PreCombatMain'
@@ -3540,7 +3545,7 @@
         {#if scene === 'category' || scene === 'categoryForAll'}<CategoryPrompt />{/if}
         {#if scene === 'copyChosen' || scene === 'copyChosenNeighbor'}<CopyChosenPrompt />{/if}
         {#if scene === 'keepPower' || scene === 'keepPowerForAll'}<KeepPowerPrompt />{/if}
-        {#if scene === 'keepExact' || scene === 'keepExactVow'}<KeepExactPrompt />{/if}
+        {#if scene === 'keepExact' || scene === 'keepExactVow' || scene === 'keepExactUpTo'}<KeepExactPrompt />{/if}
         {#if scene === 'removeCounters' || scene === 'removeCountersCapped'}<RemoveCountersPrompt />{/if}
         {#if scene === 'copyRetarget' || scene === 'copyAnnounce'}<CopyRetargetPrompt />{/if}
         {#if scene === 'vote' || scene === 'voteObject'}<VotePrompt />{/if}

@@ -2064,6 +2064,7 @@ fn legacy_trigger_condition(x: &TriggerCondition) -> bool {
         | TriggerCondition::CastVariantPaid { .. }
         | TriggerCondition::CastVariantPaidPersistent { .. }
         | TriggerCondition::ActivatedAbilityIsNonMana
+        | TriggerCondition::LoyaltyCountersRemovedAtLeast { .. }
         | TriggerCondition::FirstTimeObjectTappedThisTurn
         // Both first-time siblings are terminal here: neither carries a legacy
         // player-filter/quantity ref, so the D5 legacy-batch-prompt flag is
@@ -2720,6 +2721,7 @@ fn legacy_filter_prop(p: &FilterProp) -> bool {
         | FilterProp::HasColor { .. }
         | FilterProp::PowerGTSource
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -3058,6 +3060,7 @@ fn member_bound_filter_prop(p: &FilterProp) -> bool {
         | FilterProp::HasColor { .. }
         | FilterProp::PowerGTSource
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -3639,7 +3642,7 @@ fn legacy_effect(x: &Effect) -> bool {
             target_player,
             ..
         } => legacy_target_filter(filter) || legacy_quantity_expr(count) || otf(target_player),
-        // `keeper_constraint`'s `ExactCount { count }` and
+        // `keeper_constraint`'s `Count { count }` and
         // `keeper_counter`'s `KeeperCounterMark::count` are both unread
         // `QuantityExpr` positions closed together here — the pre-existing
         // `keeper_constraint` omission is the same fail-open shape the new
@@ -3656,7 +3659,7 @@ fn legacy_effect(x: &Effect) -> bool {
                 || legacy_target_filter(sacrifice_filter)
                 || oqe(total_power_cap)
                 || keeper_constraint.as_ref().is_some_and(
-                    |KeeperConstraint::ExactCount { count }| legacy_quantity_expr(count),
+                    |KeeperConstraint::Count { count }| legacy_quantity_expr(count),
                 )
                 || keeper_counter
                     .as_ref()
@@ -4528,6 +4531,7 @@ fn filter_prop_operand_reads(prop: &FilterProp) -> RwProfile {
         | FilterProp::OtherThanTriggerObject
         | FilterProp::HasColor { .. }
         | FilterProp::ColorCount { .. }
+        | FilterProp::CardTypeCount { .. }
         | FilterProp::ManaSymbolCount { .. }
         | FilterProp::HasSupertype { .. }
         | FilterProp::IsChosenCreatureType
@@ -7768,6 +7772,7 @@ fn rw_trigger_condition(x: &TriggerCondition) -> RwProfile {
         | TriggerCondition::CastVariantPaid { .. }
         | TriggerCondition::CastVariantPaidPersistent { .. }
         | TriggerCondition::ActivatedAbilityIsNonMana
+        | TriggerCondition::LoyaltyCountersRemovedAtLeast { minimum: _ }
         | TriggerCondition::FirstTimeObjectTappedThisTurn
         | TriggerCondition::WasType { .. }
         | TriggerCondition::AttackedThisTurn

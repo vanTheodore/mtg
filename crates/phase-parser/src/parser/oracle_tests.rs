@@ -12194,65 +12194,9 @@ fn parses_activate_only_land_condition_into_activation_restriction() {
     );
 }
 
-#[test]
-fn parses_urza_tower_conditional_mana_as_delta() {
-    let r = parse(
-            "{T}: Add {C}. If you control an Urza's Mine and an Urza's Power-Plant, add {C}{C}{C} instead.",
-            "Urza's Tower",
-            &[],
-            &["Land"],
-            &["Urza's", "Tower"],
-        );
-    assert_eq!(r.abilities.len(), 1);
-    let ability = &r.abilities[0];
-    match ability.effect.as_ref() {
-        Effect::Mana {
-            produced: ManaProduction::Colorless { count },
-            ..
-        } => assert_eq!(*count, QuantityExpr::Fixed { value: 1 }),
-        other => panic!("expected base colorless mana, got {other:?}"),
-    }
-    let sub = ability
-        .sub_ability
-        .as_ref()
-        .expect("expected conditional delta");
-    match sub.effect.as_ref() {
-        Effect::Mana {
-            produced: ManaProduction::Colorless { count },
-            ..
-        } => assert_eq!(*count, QuantityExpr::Fixed { value: 2 }),
-        other => panic!("expected colorless mana delta, got {other:?}"),
-    }
-    match sub.condition.as_ref().expect("expected condition") {
-        AbilityCondition::And { conditions } => assert_eq!(conditions.len(), 2),
-        other => panic!("expected conjunction condition, got {other:?}"),
-    }
-}
-
-#[test]
-fn activated_mana_instead_delta_preserves_non_instead_condition() {
-    let mut ability = parse(
-        "{T}: Add {C}. If you control an Urza's Mine and an Urza's Power-Plant, add {C}{C}{C} instead.",
-        "Urza's Tower",
-        &[],
-        &["Land"],
-        &["Urza's", "Tower"],
-    )
-    .abilities
-    .remove(0);
-    let before = ability.clone();
-
-    normalize_activated_mana_instead_delta(&mut ability);
-
-    assert_eq!(
-        ability, before,
-        "the normalizer must leave an already-lowered non-replacement condition intact"
-    );
-}
-
 /// CR 205.3i + CR 614.1a + CR 605.1a: All three Urza lands share a single
 /// parsed shape — an activated mana ability (`{T}: Add {C}.` per CR 605.1a)
-/// plus a conditional `Add {C}{C}{C} instead` sub-ability whose "instead"
+/// plus a conditional mana sub-ability whose "instead"
 /// makes it a replacement effect (CR 614.1a) gated on the player
 /// controlling the OTHER two Urza land subtypes (from the CR 205.3i land
 /// type list: Mine, Power-Plant, Tower). The
@@ -12262,31 +12206,40 @@ fn activated_mana_instead_delta_preserves_non_instead_condition() {
 /// silently change the rules. Each row in the table below pins the exact
 /// pair of subtypes the parsed condition must reference.
 #[test]
-fn urzas_lands_share_delta_shape() {
-    // (card name, oracle text, expected subtypes on the And conditions in
-    // the order the parser emits them)
-    let cases: [(&str, &str, [&str; 2], &[&str]); 3] = [
+fn urzas_lands_share_conditional_mana_swap_shape() {
+    // The expected And subtypes are in the order the parser emits them.
+    type UrzaLand = (
+        &'static str,
+        &'static str,
+        [&'static str; 2],
+        &'static [&'static str],
+        i32,
+    );
+    let cases: [UrzaLand; 3] = [
             (
                 "Urza's Tower",
                 "{T}: Add {C}. If you control an Urza's Mine and an Urza's Power-Plant, add {C}{C}{C} instead.",
                 ["Mine", "Power-Plant"],
                 &["Urza's", "Tower"],
+                3,
             ),
             (
                 "Urza's Power Plant",
-                "{T}: Add {C}. If you control an Urza's Mine and an Urza's Tower, add {C}{C}{C} instead.",
+                "{T}: Add {C}. If you control an Urza's Mine and an Urza's Tower, add {C}{C} instead.",
                 ["Mine", "Tower"],
                 &["Urza's", "Power-Plant"],
+                2,
             ),
             (
                 "Urza's Mine",
-                "{T}: Add {C}. If you control an Urza's Power-Plant and an Urza's Tower, add {C}{C}{C} instead.",
+                "{T}: Add {C}. If you control an Urza's Power-Plant and an Urza's Tower, add {C}{C} instead.",
                 ["Power-Plant", "Tower"],
                 &["Urza's", "Mine"],
+                2,
             ),
         ];
 
-    for (name, text, expected_subs, subtypes) in cases {
+    for (name, text, expected_subs, subtypes, replacement_count) in cases {
         let r = parse(text, name, &[], &["Land"], subtypes);
         assert_eq!(r.abilities.len(), 1, "{name}: expected one ability");
         let ability = &r.abilities[0];
@@ -12306,7 +12259,7 @@ fn urzas_lands_share_delta_shape() {
         let sub = ability
             .sub_ability
             .as_ref()
-            .unwrap_or_else(|| panic!("{name}: expected conditional delta sub-ability"));
+            .unwrap_or_else(|| panic!("{name}: expected conditional replacement sub-ability"));
 
         match sub.effect.as_ref() {
             Effect::Mana {
@@ -12314,10 +12267,12 @@ fn urzas_lands_share_delta_shape() {
                 ..
             } => assert_eq!(
                 *count,
-                QuantityExpr::Fixed { value: 2 },
-                "{name}: delta must be +2 colorless (total 3 minus base 1)"
+                QuantityExpr::Fixed {
+                    value: replacement_count
+                },
+                "{name}: the swap must carry the full production"
             ),
-            other => panic!("{name}: expected colorless mana delta, got {other:?}"),
+            other => panic!("{name}: expected replacement colorless mana, got {other:?}"),
         }
 
         let conditions = match sub
@@ -12325,8 +12280,11 @@ fn urzas_lands_share_delta_shape() {
             .as_ref()
             .unwrap_or_else(|| panic!("{name}: expected sub-ability condition"))
         {
-            AbilityCondition::And { conditions } => conditions,
-            other => panic!("{name}: expected And condition, got {other:?}"),
+            AbilityCondition::ConditionInstead { inner } => match inner.as_ref() {
+                AbilityCondition::And { conditions } => conditions,
+                other => panic!("{name}: expected And condition, got {other:?}"),
+            },
+            other => panic!("{name}: expected ConditionInstead, got {other:?}"),
         };
         assert_eq!(
             conditions.len(),
@@ -12358,15 +12316,133 @@ fn urzas_lands_share_delta_shape() {
 }
 
 #[test]
-fn parses_ugin_labyrinth_exiled_card_mana_as_delta() {
+fn conditional_mana_swap_owns_one_instead_clause_per_card() {
+    use crate::parser::oracle_ir::feature::audit_units;
+
+    type Card = (
+        &'static str,
+        &'static str,
+        &'static [&'static str],
+        &'static [&'static str],
+        i32,
+    );
+    let cases: [Card; 6] = [
+        (
+            "Urza's Tower",
+            "{T}: Add {C}. If you control an Urza's Mine and an Urza's Power-Plant, add {C}{C}{C} instead.",
+            &["Land"],
+            &["Urza's", "Tower"],
+            3,
+        ),
+        (
+            "Urza's Mine",
+            "{T}: Add {C}. If you control an Urza's Power-Plant and an Urza's Tower, add {C}{C} instead.",
+            &["Land"],
+            &["Urza's", "Mine"],
+            2,
+        ),
+        (
+            "Urza's Power Plant",
+            "{T}: Add {C}. If you control an Urza's Mine and an Urza's Tower, add {C}{C} instead.",
+            &["Land"],
+            &["Urza's", "Power-Plant"],
+            2,
+        ),
+        (
+            "Tower Worker",
+            "Reach\n{T}: Add {C}. If you control creatures named Mine Worker and Power Plant Worker, add {C}{C}{C} instead.",
+            &["Artifact", "Creature"],
+            &["Assembly-Worker"],
+            3,
+        ),
+        (
+            "Sarevok's Tome",
+            "When this artifact enters, you take the initiative.\n{T}: Add {C}. If you have the initiative, add {C}{C} instead.\n{3}, {T}: Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost. Activate only if you've completed a dungeon.",
+            &["Artifact"],
+            &["Book"],
+            2,
+        ),
+        (
+            "Ugin's Labyrinth",
+            "Imprint — When this land enters, you may exile a colorless card with mana value 7 or greater from your hand.\n{T}: Add {C}. If a card is exiled with this land, add {C}{C} instead.\n{T}: Return the exiled card to its owner's hand.",
+            &["Land"],
+            &[],
+            2,
+        ),
+    ];
+    for (name, oracle, types, subtypes, amount) in cases {
+        let types = types.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let subtypes = subtypes.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let keywords = if name == "Tower Worker" {
+            vec!["Reach".to_string()]
+        } else {
+            Vec::new()
+        };
+        let mut ir = parse_oracle_ir(oracle, name, &keywords, &types, &subtypes);
+        let units = audit_units(&ir.items, &ir.source_text);
+        let instead_units = units
+            .iter()
+            .filter(|unit| unit.text.contains("instead"))
+            .collect::<Vec<_>>();
+        let [unit] = instead_units.as_slice() else {
+            panic!("{name}: expected one Oracle unit with an instead clause");
+        };
+        assert_eq!(unit.text.matches("instead").count(), 1, "{name}");
+        assert!(unit.text.contains("{T}: Add {C}."), "{name}");
+        assert!(!unit.item_ids().is_empty(), "{name}: unclaimed Oracle unit");
+
+        let parsed = lower_oracle_ir(&mut ir);
+        assert!(
+            parsed.abilities.iter().all(|def| !has_unimplemented(def)),
+            "{name}: unimplemented ability in {:?}",
+            parsed.abilities
+        );
+        // CR 614.15: The conditional clause replaces the base with the full amount.
+        assert!(
+            parsed.abilities.iter().any(|def| {
+                matches!(
+                    def.effect.as_ref(),
+                    Effect::Mana {
+                        produced: ManaProduction::Colorless {
+                            count: QuantityExpr::Fixed { value: 1 },
+                        },
+                        ..
+                    }
+                ) && def.sub_ability.as_ref().is_some_and(|sub| {
+                    matches!(
+                        sub.condition,
+                        Some(AbilityCondition::ConditionInstead { .. })
+                    ) && matches!(
+                        sub.effect.as_ref(),
+                        Effect::Mana {
+                            produced: ManaProduction::Colorless {
+                                count: QuantityExpr::Fixed { value },
+                            },
+                            ..
+                        } if *value == amount
+                    )
+                })
+            }),
+            "{name}: expected a typed mana swap"
+        );
+        assert!(
+            parsed.parse_warnings.is_empty(),
+            "{name}: {:?}",
+            parsed.parse_warnings
+        );
+    }
+}
+
+#[test]
+fn parses_ugin_labyrinth_exiled_card_mana_as_swap() {
     let r = parse(
-            "Imprint — When this land enters, you may exile a colorless card with mana value 7 or greater from your hand.\n{T}: Add {C}. If a card is exiled with Ugin's Labyrinth, add {C}{C} instead.",
+            "Imprint — When this land enters, you may exile a colorless card with mana value 7 or greater from your hand.\n{T}: Add {C}. If a card is exiled with this land, add {C}{C} instead.\n{T}: Return the exiled card to its owner's hand.",
             "Ugin's Labyrinth",
             &[],
             &["Land"],
             &[],
         );
-    assert_eq!(r.abilities.len(), 1);
+    assert_eq!(r.abilities.len(), 2);
     let ability = &r.abilities[0];
     match ability.effect.as_ref() {
         Effect::Mana {
@@ -12378,15 +12454,18 @@ fn parses_ugin_labyrinth_exiled_card_mana_as_delta() {
     let sub = ability
         .sub_ability
         .as_ref()
-        .expect("expected conditional delta");
+        .expect("expected conditional replacement");
     match sub.effect.as_ref() {
         Effect::Mana {
             produced: ManaProduction::Colorless { count },
             ..
-        } => assert_eq!(*count, QuantityExpr::Fixed { value: 1 }),
-        other => panic!("expected colorless mana delta, got {other:?}"),
+        } => assert_eq!(*count, QuantityExpr::Fixed { value: 2 }),
+        other => panic!("expected replacement colorless mana, got {other:?}"),
     }
-    match sub.condition.as_ref().expect("expected condition") {
+    let Some(AbilityCondition::ConditionInstead { inner }) = &sub.condition else {
+        panic!("expected ConditionInstead, got {:?}", sub.condition);
+    };
+    match inner.as_ref() {
         AbilityCondition::QuantityCheck {
             lhs:
                 QuantityExpr::Ref {
@@ -28363,6 +28442,62 @@ fn plate_armor_equip_cost_reduction_stays_on_equip_ability() {
     );
 }
 
+/// CR 725.1 + CR 109.5 + CR 602.2b: Crown of Gondor's equip discount is gated
+/// on a player designation ("if you're the monarch"), not on a filter or a
+/// quantity. The designation must be captured on the equip ability as a typed
+/// `ParsedCondition::IsMonarch` restriction condition; otherwise the whole
+/// trailing sentence is swallowed by the equip line and the discount is lost.
+#[test]
+fn crown_of_gondor_equip_discount_carries_monarch_condition() {
+    let result = parse(
+        "Equipped creature gets +1/+1 for each creature you control.\n\
+         When a legendary creature you control enters, if there is no monarch, you become the monarch.\n\
+         Equip {4}. This ability costs {3} less to activate if you're the monarch.",
+        "Crown of Gondor",
+        &[Keyword::Equip(ManaCost::Cost {
+            generic: 4,
+            shards: vec![],
+        })],
+        &["Artifact"],
+        &["Equipment"],
+    );
+
+    assert_eq!(result.abilities.len(), 1);
+    let equip = &result.abilities[0];
+    assert_eq!(
+        equip.cost,
+        Some(AbilityCost::Mana {
+            cost: ManaCost::Cost {
+                generic: 4,
+                shards: vec![],
+            },
+        })
+    );
+    let reduction = equip
+        .cost_reduction
+        .as_ref()
+        .expect("the monarch discount must stay on the equip ability");
+    assert_eq!(
+        reduction.mode,
+        crate::types::statics::CostModifyMode::Reduce
+    );
+    assert_eq!(reduction.amount_per, 3);
+    assert_eq!(reduction.count, QuantityExpr::Fixed { value: 1 });
+    assert_eq!(
+        reduction.condition,
+        Some(ParsedCondition::IsMonarch),
+        "the 'if you're the monarch' gate must be the typed monarch leaf"
+    );
+    assert!(
+        result
+            .parse_warnings
+            .iter()
+            .all(|warning| !warning.to_string().contains("Condition_If")),
+        "the discount clause must not survive as a swallowed Condition_If: {:?}",
+        result.parse_warnings
+    );
+}
+
 /// Regression: pin the broader "Equipment you control have equip {N}"
 /// class — Astor (no ability-word prefix, no em-dash on the line) and
 /// Syr Gwyn (Knight-restricted equip {0}) were silently affected by the
@@ -34447,49 +34582,44 @@ fn cyclops_gladiator_if_you_do_damage_back_reads_targets_power_not_sources() {
 /// power/toughness" class (issue #8460).
 ///
 /// Each row is a real card's VERBATIM Oracle text run through the production
-/// parser, and the expectation is the full multiset of `Power`/`Toughness`
+/// parser, and the expectation is the full multiset of object-stat
 /// scopes in its parse — so a scope that moves anywhere in the card, not just
 /// at the node under test, reds this table.
 ///
-/// The two halves of the table are the two readings of the same English phrase:
+/// The table distinguishes three readings of the same English phrase:
 ///
 /// * `Target` — the clause announces its own "target creature", so CR 115.1
 ///   makes that announced target the antecedent (Thickest in the Thicket,
 ///   Soul's Might, Nantuko Mentor).
-/// * `CostPaidObject` — the antecedent is the CR 608.2k referent named by the
-///   ability's cost or trigger condition, with no announced creature target for
-///   the demonstrative to bind to instead. **Minsc & Boo, Timeless Heroes is the
-///   named non-regression constraint for #8460**: its reflexive "~ deals X
-///   damage to any target, where X is that creature's power" announces
-///   `TargetFilter::Any`, and X must keep reading the creature sacrificed by the
-///   −2 ability. Hamletback Goliath (trigger referent) and Shadowheart, Dark
-///   Justiciar (sacrifice cost) hold the same reading from the other two
-///   directions.
+/// * `CostPaidObject` — a cost or a creature sacrificed during resolution
+///   (Shadowheart and the reflexive ability from Minsc & Boo's −2).
+/// * `EventSource` — the creature named by the trigger condition (Hamletback
+///   Goliath and Monkey Cage).
 #[test]
 fn where_x_that_creature_stat_binds_target_only_when_the_clause_announces_one() {
-    /// Collect every `QuantityRef::Power`/`Toughness` scope in a parse, in
+    /// Collect every `QuantityRef::Power`/`Toughness`/`ObjectManaValue` scope in a parse, in
     /// document order. Serializing the whole `ParsedAbilities` reaches nodes no
     /// hand-written index chain would (sub-abilities, else-branches, granted
     /// definitions), so a scope that moves anywhere is visible here.
-    fn power_scopes(value: &serde_json::Value, out: &mut Vec<String>) {
+    fn stat_scopes(value: &serde_json::Value, out: &mut Vec<String>) {
         match value {
             serde_json::Value::Object(map) => {
                 if let (Some(serde_json::Value::String(kind)), Some(scope)) =
                     (map.get("type"), map.get("scope"))
                 {
-                    if kind == "Power" || kind == "Toughness" {
+                    if matches!(kind.as_str(), "Power" | "Toughness" | "ObjectManaValue") {
                         if let Some(serde_json::Value::String(name)) = scope.get("type") {
                             out.push(format!("{kind}/{name}"));
                         }
                     }
                 }
                 for nested in map.values() {
-                    power_scopes(nested, out);
+                    stat_scopes(nested, out);
                 }
             }
             serde_json::Value::Array(items) => {
                 for nested in items {
-                    power_scopes(nested, out);
+                    stat_scopes(nested, out);
                 }
             }
             _ => {}
@@ -34525,13 +34655,19 @@ fn where_x_that_creature_stat_binds_target_only_when_the_clause_announces_one() 
             "Hamletback Goliath",
             &["Creature"],
             "Whenever another creature enters, you may put X +1/+1 counters on this creature, where X is that creature's power.",
-            &["Power/CostPaidObject"],
+            &["Power/EventSource"],
         ),
         (
             "Shadowheart, Dark Justiciar",
             &["Creature"],
-            "{1}{B}, {T}, Sacrifice another creature: Draw X cards, where X is that creature's power.",
+            "{1}{B}, {T}, Sacrifice another creature: Draw X cards, where X is that creature's power.\nChoose a Background (You can have a Background as a second commander.)",
             &["Power/CostPaidObject"],
+        ),
+        (
+            "Monkey Cage",
+            &["Artifact"],
+            "When a creature enters, sacrifice this artifact and create X 2/2 green Monkey creature tokens, where X is that creature's mana value.",
+            &["ObjectManaValue/EventSource"],
         ),
     ];
 
@@ -34540,7 +34676,7 @@ fn where_x_that_creature_stat_binds_target_only_when_the_clause_announces_one() 
         let parsed = parse_oracle_text(oracle, name, &[], &types, &[]);
         let value = serde_json::to_value(&parsed).expect("ParsedAbilities must serialize");
         let mut scopes = Vec::new();
-        power_scopes(&value, &mut scopes);
+        stat_scopes(&value, &mut scopes);
         assert_eq!(
             scopes, *expected,
             "{name}: per-object power/toughness scopes changed"
@@ -35189,56 +35325,65 @@ fn promise_of_loyalty_routes_to_the_effect_chain_not_a_whole_line_static() {
 }
 
 /// The routing predicate is the recognizer's own head combinator INCLUDING its
-/// supported-combination gate, so the two cards the gate refuses keep the
-/// routing they had at BASE_SHA rather than being deferred into a recognizer
-/// that will not claim them.
+/// supported-combination gate, so a card the gate refuses keeps the routing it
+/// had at BASE_SHA rather than being deferred into a recognizer that will not
+/// claim it.
 ///
-/// Covetous Elegy's "up to two" keeper cardinality has no `KeeperConstraint`
-/// range variant (CR 609.3 clamping is not the same instruction), and Divine
-/// Reckoning's tail is CR 701.8a destroy rather than CR 701.21a sacrifice.
-/// Both parse to the same single `Effect::TargetOnly` head they did at
-/// BASE_SHA — regenerate with
-/// `jq -c '.["covetous elegy"] | {ab:(.abilities|length),
-/// st:((.static_abilities//[])|length), e0:.abilities[0].effect.type}'
-/// client/public/card-data.json`.
+/// Divine Reckoning's tail is CR 701.8a destroy rather than CR 701.21a
+/// sacrifice, and `Effect::ChooseAndSacrificeRest` is sacrifice-specific down to
+/// its terminal, so the per-player keeper-and-destroy form stays declined. It
+/// parses to the same single `Effect::TargetOnly` head it did at BASE_SHA.
 ///
-/// Both Oracle strings are the FULL printed text, verbatim from
+/// The Oracle string is the FULL printed text, verbatim from
 /// `jq -r '.["divine reckoning"].oracle_text' client/public/card-data.json` —
-/// including Divine Reckoning's flashback line, which is why that row passes
-/// the MTGJSON keyword name the card-data pipeline passes at
-/// `database/synthesis.rs`'s `parse_oracle_text` call.
+/// including its flashback line, which is why the row passes the MTGJSON
+/// keyword name the card-data pipeline passes at `database/synthesis.rs`'s
+/// `parse_oracle_text` call.
 #[test]
 fn gate_refused_keeper_cards_keep_their_base_routing() {
-    for (name, oracle, keyword_names) in [
-        (
-            "Covetous Elegy",
-            "Each player chooses up to two creatures they control, then sacrifices the rest. Then you create a tapped Treasure token for each creature your opponents control.",
-            &[][..],
+    let name = "Divine Reckoning";
+    let oracle = "Each player chooses a creature they control. Destroy the rest.
+Flashback {5}{W}{W} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
+    let keyword_names = &["Flashback".to_string()][..];
+    assert!(
+        !crate::parser::oracle_classifier::should_defer_spell_to_effect(&oracle.to_lowercase()),
+        "{name} must not be deferred by the keeper-dispose arm"
+    );
+    let parsed = parse_oracle_text(oracle, name, keyword_names, &["Sorcery".to_string()], &[]);
+    assert!(parsed.statics.is_empty(), "{name}: {:?}", parsed.statics);
+    assert_eq!(parsed.abilities.len(), 1, "{name}");
+    assert!(
+        matches!(
+            parsed.abilities[0].effect.as_ref(),
+            Effect::TargetOnly { .. }
         ),
-        (
-            "Divine Reckoning",
-            "Each player chooses a creature they control. Destroy the rest.\nFlashback {5}{W}{W} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
-            &["Flashback".to_string()][..],
+        "{name} must keep its BASE_SHA head, got {:?}",
+        parsed.abilities[0].effect
+    );
+}
+
+/// CR 101.4 + CR 701.21a: Covetous Elegy's per-player "chooses up to two …
+/// then sacrifices the rest" is admitted by the keeper gate, so the routing
+/// predicate defers the spell to the effect-chain parser and the full card
+/// lowers to a keeper-and-sacrifice root rather than the base `TargetOnly`.
+#[test]
+fn covetous_elegy_is_deferred_to_the_keeper_recognizer() {
+    let oracle = "Each player chooses up to two creatures they control, then sacrifices the rest. Then you create a tapped Treasure token for each creature your opponents control.";
+    assert!(
+        crate::parser::oracle_classifier::should_defer_spell_to_effect(&oracle.to_lowercase()),
+        "Covetous Elegy must be deferred to the keeper-dispose recognizer"
+    );
+    let parsed = parse_oracle_text(oracle, "Covetous Elegy", &[], &["Sorcery".to_string()], &[]);
+    assert!(parsed.statics.is_empty(), "{:?}", parsed.statics);
+    assert_eq!(parsed.abilities.len(), 1);
+    assert!(
+        matches!(
+            parsed.abilities[0].effect.as_ref(),
+            Effect::ChooseAndSacrificeRest { .. }
         ),
-    ] {
-        assert!(
-            !crate::parser::oracle_classifier::should_defer_spell_to_effect(
-                &oracle.to_lowercase()
-            ),
-            "{name} must not be deferred by the keeper-dispose arm"
-        );
-        let parsed = parse_oracle_text(oracle, name, keyword_names, &["Sorcery".to_string()], &[]);
-        assert!(parsed.statics.is_empty(), "{name}: {:?}", parsed.statics);
-        assert_eq!(parsed.abilities.len(), 1, "{name}");
-        assert!(
-            matches!(
-                parsed.abilities[0].effect.as_ref(),
-                Effect::TargetOnly { .. }
-            ),
-            "{name} must keep its BASE_SHA head, got {:?}",
-            parsed.abilities[0].effect
-        );
-    }
+        "Covetous Elegy must resolve as a keeper-and-sacrifice chain, got {:?}",
+        parsed.abilities[0].effect
+    );
 }
 
 // --- RevealUntil pile-disposition / rest-shuffle regressions (PR #8929) ---

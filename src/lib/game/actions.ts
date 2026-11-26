@@ -205,7 +205,7 @@ export function decisionGuide(waitingType: string | undefined, phase: string | u
     case 'CategoryChoice': return 'Conserva un permanente de cada tipo: el resto se sacrifica.';
     case 'EachPlayerCopyChosenSelection': return 'Elige en orden: la primera criatura se copia, la segunda escala la copia.';
     case 'KeepWithinTotalPowerChoice': return 'Conserva criaturas hasta un tope de fuerza: el resto se sacrifica.';
-    case 'KeepExactPermanentsChoice': return 'Conserva exactamente los permanentes que pide el motor: el resto se sacrifica.';
+    case 'KeepExactPermanentsChoice': return 'Conserva los permanentes que pide el motor: el resto se sacrifica.';
     case 'RemoveCountersChoice': return 'Quita contadores de un permanente hasta el tope que publique el motor.';
     case 'CopyRetarget': return 'Elige los objetivos de una copia: cada ranura, una respuesta; las demás pueden quedarse.';
     case 'VoteChoice': return 'Emite tu voto: el recuento se aplica cuando hayan votado todos.';

@@ -789,9 +789,10 @@ test('conservar exactos: el número es del motor y bloquea el candidato de más'
   await expect(block).toBeVisible();
   await expect(block.locator('strong')).toHaveText('Conservar exactamente 3');
   await expect(block).toHaveAttribute('data-keep-exact-required', '3');
-  // CR 609.3: the number arrives capped; the block states the pool but derives nothing.
+  // v0.133.0: the ceiling is NOT capped to the pool; the block publishes it
+  // verbatim and derives no rule from the pool (CR 609.3 belongs to the engine).
   await expect(block.locator('[data-keep-exact-pool]')).toHaveText(
-    'Hay 5 candidatos y el número ya viene recortado a lo que se puede hacer (CR 609.3).'
+    'Hay 5 candidatos; el motor publica el máximo y aquí no se recalcula (CR 609.3).'
   );
   await expect(block.locator('[data-keep-exact-count]')).toHaveText('Elegidos 0 de 3');
   // With no keeper mark owed there is no counter line, and no line is invented.
@@ -846,6 +847,37 @@ test('conservar exactos con voto: el contador se anuncia antes del sacrificio', 
   await expect(confirm).toHaveText('Conservar 1 y sacrificar el resto · después elige el Jugador 2');
   // Exactly one: the other two creatures stay out and cannot be added.
   await expect(block.locator('[data-keep-exact-object="100"]')).toBeDisabled();
+
+  const audit = await new AxeBuilder({ page }).analyze();
+  expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
+test('v0.133.0: un guardián "hasta N" admite cero y conserva el techo', async ({ page }) => {
+  await page.goto('/ux?scene=keepExactUpTo');
+  const block = page.locator('[data-keep-exact]');
+  await expect(block).toBeVisible();
+  await expect(block.locator('strong')).toHaveText('Conservar hasta 3');
+  await expect(block).toHaveAttribute('data-keep-exact-required', '3');
+  await expect(block).toHaveAttribute('data-keep-exact-minimum', '0');
+  await expect(block).toHaveAttribute('data-keep-exact-up-to', 'true');
+  await expect(block.locator('[data-keep-exact-count]')).toHaveText('Elegidos 0 de hasta 3');
+
+  const confirm = block.locator('button.primary');
+  // `minimum_count: 0` makes an empty answer legal. The old exact keeper kept
+  // this button disabled until three picks; that would now refuse a legal answer.
+  await expect(confirm).toBeEnabled();
+  await expect(confirm).toHaveText('Conservar 0 y sacrificar el resto · después elige el Jugador 2');
+  await expect(confirm).toHaveAttribute('data-keep-exact-ready', 'true');
+
+  await block.locator('[data-keep-exact-object="100"]').click();
+  await expect(block.locator('[data-keep-exact-count]')).toHaveText('Elegidos 1 de hasta 3');
+  await expect(confirm).toHaveText('Conservar 1 y sacrificar el resto · después elige el Jugador 2');
+
+  // The ceiling is still the engine's: a fourth candidate cannot be added.
+  await block.locator('[data-keep-exact-object="101"]').click();
+  await block.locator('[data-keep-exact-object="105"]').click();
+  await expect(block.locator('[data-keep-exact-object="102"]')).toBeDisabled();
+  await expect(block.locator('[data-keep-exact-object="340"]')).toBeDisabled();
 
   const audit = await new AxeBuilder({ page }).analyze();
   expect(audit.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
