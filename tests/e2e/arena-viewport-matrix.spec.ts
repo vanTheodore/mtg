@@ -375,6 +375,9 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
       const region = document.querySelector<HTMLElement>('main.layout')!;
       region.scrollTop = 0;
       const app = document.querySelector<HTMLElement>('.app')!;
+      // UX-DECISION: el driver puede dejar «Más opciones» abierto para responder
+      // a otra ventana; la matriz mide la superficie compacta por defecto.
+      document.querySelectorAll<HTMLDetailsElement>('details[data-decision-tiers]').forEach((d) => { d.open = false; });
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
       const hand = document.querySelector<HTMLElement>('.hand-zone')!.getBoundingClientRect();
       return {
@@ -412,6 +415,9 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
     const end = await page.evaluate(() => {
       const region = document.querySelector<HTMLElement>('main.layout')!;
       region.scrollTop = region.scrollHeight;
+      // UX-DECISION: el driver puede dejar «Más opciones» abierto para responder
+      // a otra ventana; la matriz mide la superficie compacta por defecto.
+      document.querySelectorAll<HTMLDetailsElement>('details[data-decision-tiers]').forEach((d) => { d.open = false; });
       // Se mide el desplazamiento ANTES de traer la carta a la vista: el
       // `scrollIntoView` mueve la región otra vez y falsearía el «llegó al
       // final».
@@ -542,6 +548,9 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
     // acusar al tamaño de la ventana de algo que decide el reparto de asientos.
     const measureStart = () => page.evaluate(() => {
       const region = document.querySelector<HTMLElement>('main.layout');
+      // UX-DECISION: el driver puede dejar «Más opciones» abierto para responder
+      // a otra ventana; la matriz mide la superficie compacta por defecto.
+      document.querySelectorAll<HTMLDetailsElement>('details[data-decision-tiers]').forEach((d) => { d.open = false; });
       const app = document.querySelector<HTMLElement>('.app');
       const handEl = document.querySelector<HTMLElement>('.hand-zone');
       const missing = [!region && 'main.layout', !app && '.app', !handEl && '.hand-zone'].filter(Boolean).join(',');
@@ -627,6 +636,9 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
     const atEnd = await page.evaluate(() => {
       const region = document.querySelector<HTMLElement>('main.layout')!;
       region.scrollTop = region.scrollHeight;
+      // UX-DECISION: el driver puede dejar «Más opciones» abierto para responder
+      // a otra ventana; la matriz mide la superficie compacta por defecto.
+      document.querySelectorAll<HTMLDetailsElement>('details[data-decision-tiers]').forEach((d) => { d.open = false; });
       // El desplazamiento se lee ANTES de traer la carta a la vista: el
       // `scrollIntoView` mueve la región otra vez y falsearía el «llegó al final».
       const scrollTop = Math.round(region.scrollTop);
