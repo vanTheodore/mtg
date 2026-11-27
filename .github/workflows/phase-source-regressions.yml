@@ -322,10 +322,8 @@ jobs:
           // `token_attack_destination` reads `super::rules::AttackTarget` and
           // `additional_cost_declaration_tail` reads a helper from the blitz
           // module: both are original upstream files, declared once here.
-          // `mod rules` con #[path] resolvería sus submódulos contra
-          // integration/ en vez de integration/rules/: se incluye el fichero
-          // dentro de un módulo en línea para conservar su directorio.
-          mod rules { include!("integration/rules.rs"); }
+          #[path = "integration/rules.rs"]
+          mod rules;
           #[path = "integration/blitz_em_dash_graveyard_cast.rs"]
           mod blitz_em_dash_graveyard_cast;
           #[path = "integration/equip_keyword_target_legality.rs"]
@@ -359,6 +357,14 @@ jobs:
           #[path = "integration/delayed_trigger_occurrence_fanout.rs"]
           mod delayed_trigger_occurrence_fanout;
           RUST
+      # `rules.rs` declara dos submódulos sin #[path] (`attractions`, `battle`):
+      # cargado con #[path] desde otra raíz, rustc los busca junto al fichero
+      # en vez de en rules/. Dos enlaces generados en el checkout (nunca
+      # commiteados) le dan esa ruta sin tocar el fichero original.
+      - name: Link the rules submodules the selected target resolves by name
+        run: |
+          ln -s rules/attractions.rs crates/phase-engine/tests/integration/attractions.rs
+          ln -s rules/battle.rs crates/phase-engine/tests/integration/battle.rs
       - name: Assert the UP-134 modules compile and register their tests
         run: |
           set -o pipefail
