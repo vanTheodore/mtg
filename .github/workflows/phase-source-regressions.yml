@@ -398,10 +398,33 @@ jobs:
             echo "UP-134 registered only $registered tests, expected at least 250" >&2
             exit 1
           }
+      # Per-module filters, like the UP-131 target: `rules` and
+      # `blitz_em_dash_graveyard_cast` are dependency modules for two of the
+      # selected files, not selected suites of their own, so their tests are
+      # compiled (and registered above) but not executed here.
       - name: Execute the UP-134 pinned-mechanics regressions
         run: |
           set -o pipefail
-          cargo test --locked -p phase-engine --test mesa_phase_up134 -- --test-threads=1 2>&1 | tee /tmp/up134-exec.log
+          for module in \
+            equip_keyword_target_legality \
+            forge_anew_equip_timing \
+            suspend_begin_to_cast \
+            blocking_token_entry \
+            tomik_mangara_player_led_attack \
+            top_of_library_foreign_permission \
+            top_of_library_mixed_permission \
+            additional_cost_declaration_tail \
+            token_attack_destination \
+            loyalty_ability_activated_trigger \
+            issue_3246_windbrisk_heights_hideaway_exiled_by_source \
+            all_in_good_time \
+            archenemy_hero_teammate_priority \
+            commander_team_formats \
+            delayed_trigger_occurrence_fanout; do
+            echo "::group::$module"
+            cargo test --locked -p phase-engine --test mesa_phase_up134 "$module" -- --test-threads=1 2>&1 | tee -a /tmp/up134-exec.log
+            echo "::endgroup::"
+          done
       # The job log lives behind a blob download that is unreachable on some
       # networks; annotations are plain JSON on api.github.com.
       - name: Annotate Rust errors
