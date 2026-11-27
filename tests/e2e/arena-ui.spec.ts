@@ -63,8 +63,18 @@ test('la banda de fases refleja el snapshot de Phase durante una partida', async
   // The arena band is the step bar with stops (`PhaseStopBar`), which replaced
   // the five-segment drawing: one stop per step Phase names, and the step the
   // engine reports as current is marked by the engine's own phase string.
+  // UX-DECISION: the twelve stops are an advanced control under progressive
+  // disclosure, so open that surface before asserting what it still renders.
+  // El `main` puede estar `inert` por un traspaso de asiento: abrir con un
+  // clic sería interceptado. Se fija `open` directamente, que es exactamente
+  // lo que haría el jugador al desplegar el control avanzado.
+  await page.locator('details[data-advanced-controls]').waitFor({ state: 'attached', timeout: 30_000 });
+  await page.evaluate(() => {
+    const details = document.querySelector<HTMLDetailsElement>('details[data-advanced-controls]');
+    if (details) details.open = true;
+  });
   const phases = page.locator('.stop-bar');
-  await expect(phases).toBeVisible({ timeout: 180_000 });
+  await expect(phases).toBeVisible({ timeout: 30_000 });
   await expect(phases.locator('ol > li')).toHaveCount(12);
   await expect(phases).toContainText('Turno');
   // The current stop is whatever Phase reports, not a guess of ours.
@@ -248,7 +258,18 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
     const column = element.querySelector<HTMLElement>('.center')!.getBoundingClientRect();
     const trigger = document.querySelector<HTMLElement>('.hand-trigger');
     const hand = trigger?.getBoundingClientRect() ?? null;
-    const buttons = [...decision.querySelectorAll('button')];
+    // UX-DECISION: las opciones bajo demanda están en el DOM pero plegadas;
+    // el último botón *que responde al puntero* es el último botón visible.
+    const visible = (button: Element) => {
+      const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
+      if (element.closest('details:not([open])')) return false;
+      if (typeof element.checkVisibility === 'function') {
+        return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
+      }
+      const style = getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden' && element.offsetParent !== null;
+    };
+    const buttons = [...decision.querySelectorAll('button')].filter(visible);
     const last = buttons.at(-1);
     return {
       position: getComputedStyle(decision).position,
@@ -267,7 +288,10 @@ test('Arena compacta decisiones e historial sin perder Clásico ni móvil', asyn
       lastButtonHit: last
         ? (() => {
             const box = last.getBoundingClientRect();
-            const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+            const hit = document.elementFromPoint(
+          Math.min(Math.max(box.x + box.width / 2, 0), innerWidth - 1),
+          Math.min(Math.max(box.y + box.height / 2, 0), innerHeight - 1)
+        );
             return hit === last || last.contains(hit);
           })()
         : false,

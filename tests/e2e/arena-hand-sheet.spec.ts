@@ -312,7 +312,10 @@ test.describe('legalidad explícita (fixture con acciones)', () => {
     // One control per published action, in Phase's order: the cast, the manual
     // payment that belongs to it, then the activation.
     const labels = (await page.locator('.sheet-detail .detail-actions button').allInnerTexts()).map((t) => t.trim());
-    expect(labels.filter((text) => /^Lanzar/.test(text))).toHaveLength(1);
+    // UX-DECISION 1.1: el pago manual también *lanza* (con otro modo de pago),
+    // así que hay un lanzamiento automático y uno manual, no una preferencia.
+    expect(labels.filter((text) => /^Lanzar/.test(text))).toHaveLength(2);
+    expect(labels.filter((text) => /^Lanzar$/.test(text))).toHaveLength(1);
     const activations = labels.filter((text) => /^Activar/.test(text));
     expect(activations, 'las dos activaciones publicadas deben tener su control').toHaveLength(2);
     // UX-HAND 1.2 — A: two different activations must not read the same. The
@@ -422,7 +425,7 @@ async function choosePlayerTarget(page: Page, playerNumber: number) {
 
 /** Pass one actual priority window through the rendered legal action. */
 async function passPriority(page: Page) {
-  const pass = page.locator('section[aria-label="Decisión pendiente"] button').filter({ hasText: /^Pasar/ }).first();
+  const pass = page.locator('section[aria-label="Decisión pendiente"] button:visible').filter({ hasText: /^Pasar/ }).first();
   await expect(pass, 'Phase no publicó Pasar prioridad').toBeVisible();
   await pass.tap();
   await expect(page.locator('.app')).toHaveAttribute('data-busy', 'false');
@@ -477,37 +480,51 @@ async function startScenarioDeck(page: Page) {
  */
 const MAIN_PHASES = ['PreCombatMain', 'PostCombatMain'];
 
-async function waitForMain(page: Page, budget = 90_000) {
+async function waitForMain(page: Page, budget = 120_000) {
   const deadline = Date.now() + budget;
   const seen: string[] = [];
   const panel = page.locator('section[aria-label="Decisión pendiente"]');
   const state = () =>
     page.evaluate(() => {
       const app = document.querySelector('.app');
+      const context = document.querySelector<HTMLElement>('[data-decision-context]');
       const line = document.querySelector('section[aria-label="Decisión pendiente"] .phase')?.textContent ?? '';
-      // "Turno 3 · Fase principal · Jugador 2": the panel names who holds
-      // priority, so "a main phase" can mean *our* main phase.
+      const viewer = Number(app?.getAttribute('data-viewer') ?? -1);
+      // DecisionContext publishes the engine's seats. The old regex read the
+      // first «Jugador N» in the line, which is the active player, not always
+      // the viewer; a strict handoff could swap the visible seat before the
+      // helper measured it. «Main» means our own main phase, not that we also
+      // hold priority in it: a response window belongs to the other seat.
+      const active = Number(context?.getAttribute('data-active-player') ?? -1);
+      const priority = Number(context?.getAttribute('data-priority-player') ?? -1);
+      const viewerPriority = context?.getAttribute('data-viewer-priority') === 'true';
+      const activeFromLine = /Jugador\s+(\d+)/.exec(line)?.[1];
+      const mine = active >= 0
+        ? active === viewer
+        : activeFromLine === undefined
+          ? viewerPriority
+          : Number(activeFromLine) - 1 === viewer;
       return {
         waiting: app?.getAttribute('data-waiting') ?? 'desconocida',
         phase: app?.getAttribute('data-phase') ?? 'desconocida',
-        mine: /Jugador\s+(\d+)/.exec(line)?.[1] === String(Number(app?.getAttribute('data-viewer') ?? -1) + 1)
+        viewer, active, priority, viewerPriority, mine,
+        line: line.trim().replace(/\s+/g, ' ').slice(0, 120)
       };
     });
   while (Date.now() < deadline) {
+    // A strict seat dialog makes the board inert; dismiss it before reading the
+    // decision or trying to press one of its controls.
+    await passSeat(page);
     const now = await state();
     // Our own main phase: in the opponent's we hold no priority and no card of
     // ours is legal, so returning there would only make the caller spin.
     if (MAIN_PHASES.includes(now.phase) && now.mine) return now.phase;
     const label = `${now.phase}/${now.waiting}${now.mine ? '' : ' (ajeno)'}`;
     if (!seen.includes(label)) seen.push(label);
-    await passSeat(page);
-    // Answer what the panel asks: keep the hand at mulligan, pitch one card if
-    // the cleanup asks for it, otherwise pass priority. Each is a real decision
-    // the engine published, not a shortcut past it.
-    const keep = panel.locator('button').filter({ hasText: /Conservar|^Mantener/ }).or(
+    const keep = panel.locator('button:visible').filter({ hasText: /Conservar|^Mantener/ }).or(
       page.locator('button[aria-label*="Conservar"]')
     ).first();
-    const pass = panel.locator('button').filter({ hasText: /^Pasar/ }).first();
+    const pass = panel.locator('button:visible').filter({ hasText: /^Pasar/ }).first();
     if (await keep.count()) {
       await keep.tap({ timeout: 5_000 }).catch(() => {});
     } else if (now.waiting === 'DiscardToHandSize') {
@@ -527,15 +544,21 @@ async function waitForMain(page: Page, budget = 90_000) {
     }
     await page.waitForTimeout(120);
   }
-  throw new Error(`no se llegó a una fase principal (ventanas vistas: ${seen.join(', ') || 'ninguna'})`);
+  const last = await state();
+  throw new Error(
+    `no se llegó a una fase principal (ventanas vistas: ${seen.join(', ') || 'ninguna'}; ` +
+    `último: ${last.phase}/${last.waiting}, viewer=${last.viewer}, activo=${last.active}, ` +
+    `prioridad=${last.priority}, viewerPriority=${last.viewerPriority}, línea="${last.line}")`
+  );
 }
 
 /**
  * Reach the state every scenario needs: a main phase, the sheet open on the
  * active seat's hand, and at least one published control.
  */
-async function openScenarioSheet(page: Page) {
-  await waitForMain(page);
+async function openScenarioSheet(page: Page, reachMain = true) {
+  if (reachMain) await waitForMain(page);
+  await passSeat(page);
   const trigger = page.locator('.hand-trigger');
   await expect(trigger).toBeVisible({ timeout: 60_000 });
   if (!(await page.locator('.hand-sheet').count())) await trigger.tap();
@@ -574,7 +597,7 @@ async function playCard(page: Page, name: string) {
     // In hand but not legal in this window: leave the sheet and move the game on.
     await page.keyboard.press('Escape');
     const panel = page.locator('section[aria-label="Decisión pendiente"]');
-    const pass = panel.locator('button').filter({ hasText: /^Pasar/ }).first();
+    const pass = panel.locator('button:visible').filter({ hasText: /^Pasar/ }).first();
     if (await pass.count()) await pass.tap({ timeout: 5_000 }).catch(() => {});
     await page.waitForTimeout(150);
   }
@@ -682,7 +705,7 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
     await bolt.locator('[data-card-id]').first().click();
     const detail = page.locator('.sheet-detail');
     await expect(detail).toBeVisible();
-    const manual = detail.locator('button').filter({ hasText: 'Elegir maná manualmente' });
+    const manual = detail.locator('button').filter({ hasText: 'eligiendo el maná manualmente' });
     await expect(manual, 'la prueba requiere y no sustituye el modo de pago manual').toHaveCount(1);
     await manual.tap();
 
@@ -719,7 +742,7 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
     await openScenarioSheet(page);
     const bolt = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
     await bolt.locator('[data-card-id]').first().click();
-    const manual = page.locator('.sheet-detail button').filter({ hasText: 'Elegir maná manualmente' });
+    const manual = page.locator('.sheet-detail button').filter({ hasText: 'eligiendo el maná manualmente' });
     await expect(manual).toHaveCount(1);
     await manual.tap();
     const app = page.locator('.app');
@@ -740,9 +763,15 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
   });
 
   test('5 · cambio de asiento mientras hoja y detalle están abiertos: comparar identificadores', async ({ page }) => {
+    // El fixture arranca en la fase principal de P0 y, tras ceder prioridad,
+    // P1 recibe una ventana de respuesta en esa misma fase con prioridad
+    // propia. Ninguno de los dos estados es «fase principal del asiento que
+    // mira», así que `waitForMain` aquí sólo giraría hasta agotar el margen:
+    // la comparación de identidades no depende de esa condición.
+    test.setTimeout(180_000);
     await startGameScenario(page, 'privacy-handoff', true);
     const viewerBefore = await page.locator('.app').getAttribute('data-viewer');
-    await openScenarioSheet(page);
+    await openScenarioSheet(page, false);
     const oldIds = await page.locator('.hand-sheet [data-card-id]').evaluateAll((cards) =>
       cards.map((card) => card.getAttribute('data-card-id'))
     );
@@ -767,7 +796,7 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
     await expect(page.locator('.hand-sheet'), 'la mano anterior debe quedar cubierta en el handoff').toHaveCount(0);
     await expect(page.locator('.sheet-detail'), 'el detalle anterior no debe sobrevivir al cambio').toHaveCount(0);
     await passSeat(page);
-    await openScenarioSheet(page);
+    await openScenarioSheet(page, false);
     const newIds = await page.locator('.hand-sheet [data-card-id]').evaluateAll((cards) =>
       cards.map((item) => item.getAttribute('data-card-id'))
     );

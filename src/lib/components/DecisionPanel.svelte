@@ -82,7 +82,11 @@
   import BottomOrderPrompt from './BottomOrderPrompt.svelte';
   import { manaText } from '#lib/game/cards.ts';
   import { actionObjectId, attackLabel, attackTargets, blockTargets, isManaAction, isManaPrompt, isTargetPrompt, manaActions, manualCast, targetLabel } from '#lib/game/interaction.ts';
+  import { projectDecision } from '#lib/game/decisionProjection.ts';
   import type { GameAction } from '#lib/engine/types.ts';
+  import DecisionContext from './DecisionContext.svelte';
+  import PrimaryAction from './PrimaryAction.svelte';
+  import DecisionTiers from './DecisionTiers.svelte';
 
   const s = $derived(session.snapshot);
 
@@ -111,6 +115,47 @@
   });
   const waiting = $derived(s?.state.waiting_for);
   const kind = $derived(waiting?.type);
+
+  /**
+   * UX-DECISION: el orquestador sigue siendo este panel, pero la *decisión* de
+   * qué superficie domina ya no vive aquí. `projectDecision` es una función
+   * pura que clasifica las acciones legales de Phase; los componentes
+   * especializados de la cadena de abajo siguen siendo la autoridad para las
+   * ~100 ventanas complejas.
+   *
+   * Sólo seis ventanas tienen superficie genérica propia (prioridad, pago de
+   * maná y declaración de combate). Todo lo demás se marca como especialista:
+   * no se le superpone un botón principal engañoso y sus opciones legales
+   * permanecen accesibles bajo demanda.
+   */
+  const GENERIC_KINDS = new Set([
+    'Priority', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection',
+    'DeclareAttackers', 'DeclareBlockers'
+  ]);
+  const specialistActive = $derived(!GENERIC_KINDS.has(kind ?? ''));
+  const stackCount = $derived(s?.state.stack?.length ?? 0);
+  /** Sólo una carta con acciones legales propias compite con «Pasar». Una
+   * selección abierta por privacidad hotseat (sin acciones en esta ventana)
+   * no debe quitarle al jugador el botón principal. */
+  const hasSelectedActions = $derived(
+    session.selected !== null &&
+    (s?.legal.by_object?.[String(session.selected)]?.length ?? 0) > 0
+  );
+  const projection = $derived(projectDecision({
+    snapshot: s ?? null,
+    selectedId: session.selected,
+    attackDraft: session.attacks,
+    blockDraft: session.blocks,
+    specialistActive,
+    // Sólo una carta seleccionada durante la prioridad compite con la acción
+    // principal. En ventanas de pago o de combate el botón de confirmación
+    // debe seguir dominando aunque el jugador haya tocado una fuente/criatura.
+    // Con un hechizo en la pila la cesión/respuesta es dominante aunque
+    // quede una carta seleccionada: la superficie de esa carta no debe
+    // esconder «Pasar · permitir respuestas».
+    suppressPrimary: kind === 'Priority' && stackCount === 0 && hasSelectedActions
+  }));
+
   const objects = $derived(s?.state.objects ?? {});
   const actions = $derived.by(() => {
     const seen = new Set<string>();
@@ -131,17 +176,11 @@
   const pendingCost = $derived(waiting?.data?.pending_cast?.cost ?? (pendingId !== undefined ? s?.legal.spell_costs[String(pendingId)] : undefined));
   const targetChoices = $derived(actions.filter((a) => a.type === 'ChooseTarget'));
   const sources = $derived(manaActionsFor());
-  const pass = $derived(actions.find((a) => a.type === 'PassPriority'));
-  const cancel = $derived(actions.find((a) => a.type === 'CancelCast'));
-  const handled = new Set(['PassPriority', 'CancelCast', 'ChooseTarget', 'DeclareAttackers', 'DeclareBlockers', 'CastSpell', 'PlayLand', 'TapLandForMana', 'ActivateManaSource', 'MulliganDecision', 'SelectCards', 'DecideOptionalCost', 'ChooseModalFace', 'ChooseAlternativeCast', 'ChooseCastingVariant', 'ChoosePermanentTypeSlot', 'RespondToSpliceOffer', 'ChooseMutateMergeSide', 'CipherEncode', 'OrderCostReductions', 'ChooseResolutionOptionalPaymentBranch', 'ChooseGiftRecipient', 'ChooseTopOrBottom', 'ChooseClashOpponent', 'SubmitSideboard', 'ChoosePlayDraw', 'SelectCards']);
   const REPRESENTED = new Set(['Priority', 'MulliganDecision', 'DiscardToHandSize', 'ConniveDiscard', 'TargetSelection', 'TriggerTargetSelection', 'ManaPayment', 'ManaAbilityManaPayment', 'ManaSourceSelection', 'DeclareAttackers', 'DeclareBlockers', 'AssignCombatDamage', 'AssignBlockerDamage', 'DiscardChoice', 'WardDiscardChoice', 'ChooseXValue', 'OrderTriggers', 'ModeChoice', 'AbilityModeChoice', 'SearchChoice', 'DigChoice', 'OptionalEffectChoice', 'OpponentMayChoice', 'PayAmountChoice', 'RevealChoice', 'PairChoice', 'ChooseTokenHost', 'GameOver', 'UnlessPayment', 'UnlessPaymentChooseCost', 'TributeChoice', 'WardSacrificeChoice', 'ChooseStartingPlayer', 'ScryChoice', 'SurveilChoice', 'CrewVehicle', 'SaddleMount', 'EquipTarget', 'StationTarget', 'MultiTargetSelection', 'DistributeAmong', 'MoveCountersDistribution', 'RetargetChoice', 'ChooseObjectsSelection', 'ProliferateChoice', 'TimeTravelChoice', 'CategoryChoice', 'EachPlayerCopyChosenSelection', 'KeepWithinTotalPowerChoice', 'KeepExactPermanentsChoice', 'RemoveCountersChoice', 'CopyRetarget', 'VoteChoice', 'ExploreChoice', 'SeparatePilesChooseOpponent', 'SeparatePilesPartition', 'SeparatePilesChoice', 'MiracleReveal', 'CastOffer', 'MeldPairChoice', 'MeldAttackTargetChoice', 'EntryAttackTargetChoice', 'ReplacementChoice', 'CopyTargetChoice', 'ResolveAllConsent', 'UntapChoice', 'ChooseUntapSubset', 'ExertChoice', 'EnlistChoice', 'PayCost', 'PhyrexianPayment', 'CombatTaxPayment', 'OptionalCostChoice', 'DefilerPayment', 'ChooseFromZoneChoice', 'ModalFaceChoice', 'AlternativeCastChoice', 'CastingVariantChoice', 'ChoosePermanentTypeSlot', 'SpliceOffer', 'MutateMergeChoice', 'CipherEncodeChoice', 'OrderCostReductions', 'ResolutionOptionalPaymentChoice', 'ChooseGiftRecipient', 'TopOrBottomChoice', 'ClashChooseOpponent', 'ClashCardPlacement', 'BetweenGamesSideboard', 'BetweenGamesChoosePlayDraw', 'RippleBottomOrder', 'RevealUntilBottomOrder', 'DigBottomOrder', 'ChooseRingBearer', 'ChooseLegend', 'BattleProtectorChoice', 'ChooseDungeon', 'ChooseDungeonRoom', 'BeholdChoice', 'PopulateChoice', 'SpecializeColor', 'ChooseRoomDoor', 'BlightChoice', 'HarmonizeTapChoice', 'UnlessBounceChoice', 'EffectZoneChoice', 'HeroEventChoice', 'DrawnThisTurnTopdeckChoice', 'SearchPartitionChoice', 'ReplacementDecisionOrder']);
-  const manaExtras = new Set(['UntapLandForMana', 'BackToManaPayment', 'PayManaAbilityMana', 'ChooseManaColor']);
-  const globalActions = $derived(actions.filter((a) => !handled.has(a.type) && actionObjectId(a) === undefined && !isManaAction(a) && !(manaPrompt && manaExtras.has(a.type))));
   const attackDraft = $derived(Object.entries(session.attacks));
   const blockDraft = $derived(Object.entries(session.blocks));
   const selectedDestinations = $derived(selected ? attackTargets(s, selected.id) : []);
   const selectedBlockTargets = $derived(selected ? blockTargets(s, selected.id) : []);
-  const canDeclare = $derived(actions.some((a) => a.type === kind));
   const discard = $derived(session.discardPrompt);
   // CR 107.3a: only the spell's controller announces X.
   const chooseX = $derived(session.chooseXPrompt);
@@ -257,7 +296,6 @@
   const topOrBottom = $derived(session.topOrBottomPrompt);
   // CR 608.2d: cuatro `Select` que publican conjunto y ventana.
   const selectFromList = $derived(session.selectFromListPrompt);
-  const PHASES: Record<string, string> = { Untap: 'Enderezar', Upkeep: 'Mantenimiento', Draw: 'Robar', PreCombatMain: 'Fase principal', BeginCombat: 'Inicio de combate', DeclareAttackers: 'Ataque', DeclareBlockers: 'Bloqueo', CombatDamage: 'Daño de combate', EndCombat: 'Fin de combate', PostCombatMain: 'Fase principal posterior', End: 'Final', Cleanup: 'Limpieza' };
   function manaActionsFor(id?: number) { return manaActions(s, id); }
   function play(action: GameAction) { void session.dispatch(action); }
   function costFor(id: number) { return manaText(s?.legal.spell_costs[String(id)] ?? objects[String(id)]?.mana_cost) || 'Sin coste de maná'; }
@@ -272,15 +310,14 @@
 </script>
 
 <section class="decision" aria-label="Decisión pendiente" data-waiting={kind ?? 'none'} bind:this={root}>
-  <!-- The heading block is a unit so the Arena HUD can put the prompt before
-       the log without splitting the announced decision guide from its title. -->
-  <div class="decision-head">
-    <h2>Tu siguiente decisión</h2>
-    {#if s}
-      <p class="phase">Turno {s.state.turn_number} · {PHASES[s.state.phase] ?? s.state.phase} · Jugador {s.state.priority_player + 1}</p>
-      <p class="waiting" aria-label="Guía de decisión" aria-live="polite">{decisionGuide(kind, s.state.phase, s.state.priority_player)}</p>
-    {/if}
-  </div>
+  <!-- UX-DECISION: la cabecera es información contextual pura (turno, fase,
+       prioridad, datos necesarios y consecuencia). Conserva los aria-label que
+       el HUD y las pruebas de accesibilidad ya conocen. -->
+  {#if projection}
+    <DecisionContext {projection} guide={decisionGuide(kind, s?.state.phase, s?.state.priority_player)} />
+  {:else}
+    <div class="decision-head"><h2>Tu siguiente decisión</h2></div>
+  {/if}
   {#if s}
 
     {#if tapPower && tapPower.player === s.viewer}
@@ -429,7 +466,7 @@
     {:else if discard && discard.player === s.viewer}
       <DiscardPrompt />
     {:else if targetPrompt}
-      <div class="prompt" aria-label="Objetivos del hechizo">
+      <div class="prompt" aria-label="Objetivos del hechizo" data-decision-progress={progress ? `${progress.current_slot + 1}/${waiting?.data?.target_slots?.length ?? 1}` : undefined}>
         <strong>{pending?.name ?? 'Elige un objetivo'}</strong>
         {#if pendingCost}<span>Coste: {manaText(pendingCost) || 'sin coste de maná'}</span>{/if}
         {#if progress}<span>Objetivo {progress.current_slot + 1} de {waiting?.data?.target_slots?.length ?? 1}</span>{/if}
@@ -437,8 +474,8 @@
         {#if progress?.selected_slots?.length}
           <ul class="draft">{#each progress.selected_slots as target, i (i)}<li>Objetivo {i + 1}: {targetLabel(target ?? undefined, objects)}</li>{/each}</ul>
         {/if}
-        <p>Las cartas y jugadores válidos tienen el marcador ◎. Selecciónalos para elegir.</p>
-        <details>
+        <p class="board-hint" data-board-hint>Toca un objetivo resaltado en el tablero ◎.</p>
+        <details data-target-list>
           <summary>Elegir desde una lista accesible ({targetChoices.length})</summary>
           <div class="actions">
             {#each targetChoices as action, i (i)}
@@ -451,7 +488,7 @@
       <div class="prompt" aria-label="Pago de maná">
         <strong>{pending?.name ?? 'Pago pendiente'}</strong>
         <span>Coste: {manaText(pendingCost) || 'sin coste de maná'}</span>
-        <p>Selecciona una fuente resaltada para producir maná. La reserva aparece junto a tu vida. Phase comprobará el pago al confirmar.</p>
+        <p class="board-hint" data-board-hint>Toca una fuente resaltada para producir maná; Phase comprueba el coste al confirmar. El pago manual está bajo demanda.</p>
         {#if selected}
           <span>Fuente seleccionada: {selected.name}</span>
           <div class="actions">{#each selectedMana as action, i (i)}<button type="button" disabled={session.busy} onclick={() => play(action)}>{manaLabel(action)}</button>{/each}</div>
@@ -497,7 +534,7 @@
         <div class="actions">
           {#each casts as action, i (i)}
             <button type="button" class="primary" disabled={session.busy} onclick={() => play(action)}>Lanzar {selected.name}{casts.length > 1 ? ` · opción ${i + 1}` : ''}</button>
-            <button type="button" disabled={session.busy} onclick={() => play(manualCast(action))}>Elegir maná manualmente</button>
+            <button type="button" class="manual" data-tier="secondary" disabled={session.busy} onclick={() => play(manualCast(action))}>Lanzar eligiendo el maná manualmente</button>
           {/each}
           {#each otherSelected as action, i (i)}<button type="button" disabled={session.busy} onclick={() => play(action)}>{describeAction(action, objects)}</button>{/each}
           {#each selectedMana as action, i (i)}<button type="button" disabled={session.busy} onclick={() => play(action)}>{manaLabel(action)}</button>{/each}
@@ -513,47 +550,59 @@
         <div class="actions">{#each actions.filter((a) => a.type === 'MulliganDecision') as action, i (i)}<button type="button" class:primary={isKeepHand(action)} disabled={session.busy} onclick={() => play(action)}>{describeAction(action, objects)}</button>{/each}</div>
       </div>
     {:else if kind === 'Priority'}
-      <p class="muted">Selecciona una carta de tu mano para jugarla o un permanente para ver sus opciones.</p>
+      <p class="muted" data-decision-guidance>Toca una carta de tu mano para jugarla, o continúa con la acción principal.</p>
       {#if session.autoPassPending}<p class="muted">Phase no ofrece acciones en esta ventana: se pasará la prioridad automáticamente.</p>{/if}
     {:else if !REPRESENTED.has(kind ?? '') && kind !== 'GameOver'}
       <p class="muted">Esta decisión todavía no tiene una representación visual completa. Puedes elegir una de las opciones legales que ofrece Phase:</p>
       <div class="actions">{#each actions.filter((a) => a.type !== 'PassPriority' && actionObjectId(a) === undefined).slice(0, 12) as action, i (i)}<button type="button" disabled={session.busy} onclick={() => play(action)}>{describeAction(action, objects)}</button>{/each}</div>
     {/if}
 
-    <div class="actions confirmations">
-      {#if discard && discard.player === s.viewer}
-      {#if !session.discardReady}<span class="muted">{discard.upTo ? `Puedes descartar hasta ${discard.count} carta(s).` : `Elige exactamente ${discard.count} carta(s).`}</span>{/if}
-    {:else if kind === 'DeclareAttackers'}
-        <button type="button" class="primary" disabled={session.busy || !canDeclare} onclick={() => session.confirmAttackers()}>{attackDraft.length ? `Confirmar ataque (${attackDraft.length})` : 'No atacar'}</button>
-      {:else if kind === 'DeclareBlockers'}
-        <button type="button" class="primary" disabled={session.busy || !canDeclare} onclick={() => session.confirmBlockers()}>{blockDraft.length ? `Confirmar bloqueos (${blockDraft.length})` : 'No bloquear'}</button>
-      {:else if manaPrompt && pass}
-        <button type="button" class="primary" disabled={session.busy} onclick={() => play(pass)}>Confirmar pago</button>
-      {:else if !targetPrompt && pass}
-        <button type="button" class="primary" disabled={session.busy} onclick={() => play(pass)}>{s.state.stack.length ? 'Pasar · permitir respuestas' : 'Pasar'}</button>
-      {/if}
-      {#if (targetPrompt || manaPrompt) && cancel}<button type="button" disabled={session.busy} onclick={() => play(cancel)}>Cancelar lanzamiento</button>{/if}
-      {#each globalActions as action, i (i)}
-        <button type="button" class:primary={isKeepHand(action)} disabled={session.busy} onclick={() => play(action)}>{describeAction(action, objects)}</button>
-      {/each}
-    </div>
+    <!-- UX-DECISION · superficie de decisión.
+         Una acción principal contextual con su consecuencia, la cancelación
+         siempre a la vista y el resto de las acciones legales de Phase
+         organizadas por niveles bajo demanda. Ninguna acción se elimina:
+         `projection.integrity.ok` es la garantía y `DecisionTiers` la publica. -->
+    {#if discard && discard.player === s.viewer && !session.discardReady}
+      <p class="muted discard-count">{discard.upTo ? `Puedes descartar hasta ${discard.count} carta(s).` : `Elige exactamente ${discard.count} carta(s).`}</p>
+    {/if}
+    {#if projection}
+      <div class="decision-surface confirmations" data-decision-surface data-visible-controls={projection.counters.visible}>
+        <div class="primary-slot"><PrimaryAction action={projection.primary} disabled={session.busy} onplay={play} /></div>
+        <div class="tiers-slot"><DecisionTiers {projection} disabled={session.busy} onplay={play} /></div>
+      </div>
+    {/if}
     {#if s.outcome}<p class="finished">{s.outcome.draw ? 'La partida terminó en empate.' : `Jugador ${s.outcome.winner! + 1} gana la partida.`}</p>{/if}
   {:else}<p class="muted">Inicia una partida para jugar.</p>{/if}
 </section>
 
 <style>
-  .decision { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: .8rem; min-width: 0; }
+  /* El rail de Arena tiene `max-height` y scroll propio: la decisión nunca
+     debe exceder la ventana, o su último botón queda fuera del hit-test. */
+  .decision {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: .8rem; min-width: 0;
+    max-height: calc(100dvh - 1.2rem); overflow-y: auto;
+  }
   h2 { margin: 0 0 .4rem; font-size: .95rem; }
-  .phase { margin: .2rem 0; font-size: .8rem; color: var(--ink-muted); }
-  .waiting { margin: .2rem 0 .6rem; font-size: .88rem; font-weight: 600; }
   .prompt { display: grid; gap: .45rem; border: 1px solid var(--line); border-radius: 10px; padding: .65rem; background: var(--surface-2); }
   .prompt strong { font-size: .9rem; }
   .prompt span, .prompt p { font-size: .82rem; margin: 0; }
   .actions { display: flex; flex-direction: column; gap: .4rem; }
-  .actions button, .confirmations > button { text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 9px; padding: .55rem .65rem; font-size: .84rem; min-height: 36px; }
-  .actions button.primary, .confirmations > button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 650; }
-  .confirmations { margin-top: .65rem; }
+  .actions button { text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 9px; padding: .55rem .65rem; font-size: .84rem; min-height: 44px; }
+  .actions button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 650; }
+  /* Compatibilidad: `.confirmations` es el nombre que el gate de Playwright y
+     los drivers de partida completa ya conocen. La nueva superficie se reparte
+     en dos columnas para no sumar una fila entera de alto. */
+  .decision-surface {
+    margin-top: .4rem; display: flex; flex-wrap: wrap;
+    align-items: flex-start; gap: .35rem;
+  }
+  .primary-slot { flex: 1 1 190px; min-width: 0; }
+  .tiers-slot { flex: 1 1 160px; min-width: 0; }
+  .discard-count { margin: .35rem 0 0; }
   .link { background: none; border: none; color: var(--focus); font-size: .78rem; padding: .2rem; text-align: left; }
+  .actions button.manual { font-size: .76rem; color: var(--ink-muted); min-height: 44px; }
+  .board-hint { color: var(--ink-muted); }
   .muted { color: var(--ink-muted); font-size: .82rem; }
   .draft { margin: .2rem 0; padding-left: 1.1rem; font-size: .82rem; display: grid; gap: .3rem; }
   details { font-size: .8rem; }

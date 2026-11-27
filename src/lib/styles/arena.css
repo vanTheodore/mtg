@@ -1234,6 +1234,28 @@
     padding: .35rem .5rem;
     font-size: .8rem;
   }
+  /* UX-DECISION: en girado el panel fijo mide ~218 px. La superficie nueva
+     añade una fila de «Más opciones» y el prompt heredado de Mulligan seguía
+     llevando una explicación que DecisionContext ya publica en dos líneas:
+     con las dos, `.prompt` encogía con `overflow-y:auto` y su último botón
+     legal quedaba recortado bajo `.tiers-slot` (740×360, y=202). El texto se
+     conserva en el árbol de accesibilidad (patrón sr-only, como el h2 y la
+     guía fija de este mismo bloque) y libera el alto que necesitan los dos
+     botones. No se cambia el reparto flex, así `panelScroll` sigue en cero. */
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .prompt[aria-label="Mulligan"] {
+    gap: .3rem;
+    padding: .35rem .5rem;
+  }
+  .app.app[data-board-style="arena"] > .layout > .middle > .decision > .prompt[aria-label="Mulligan"] > p {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /*

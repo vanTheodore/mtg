@@ -154,7 +154,23 @@ jobs:
           CARGO_TARGET_DIR: target-native
           CARGO_LOCKED: "1"
           MESA_E2E_SCENARIOS_DIR: static/e2e-scenarios
-        run: bun run e2e:scenarios
+        run: |
+          set -o pipefail
+          bun run e2e:scenarios 2>&1 | tee /tmp/e2e-scenarios.log
+      - name: Annotate GameScenario generator errors
+        if: failure()
+        run: |
+          test ! -s /tmp/e2e-scenarios.log || bun scripts/rust-annotations.ts /tmp/e2e-scenarios.log
+          if test -s /tmp/e2e-scenarios.log; then
+            grep -E 'panicked|Phase rejected|assertion failed|error\[|error:|generating fixture' /tmp/e2e-scenarios.log \
+              | tail -25 | while IFS= read -r line; do echo "::error::$line"; done
+          fi
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-scenarios-generator-log
+          path: /tmp/e2e-scenarios.log
+          if-no-files-found: warn
       - name: Annotate Rust errors
         if: failure()
         run: |
@@ -183,8 +199,9 @@ jobs:
     runs-on: ubuntu-latest
     # GameScenario fixtures place Phase directly in the state each E2E needs;
     # the browser suite no longer plays through random draws to find a card.
-    # Keep the measured 40-minute ceiling, with each test independently bounded.
-    timeout-minutes: 40
+    # UX-DECISION adds eleven motor-real transition tests on top of the measured
+    # 26-minute baseline; keep headroom without weakening the Playwright gate.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -215,28 +232,35 @@ jobs:
       - name: Verify isolated GameScenario artifacts
         run: |
           test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
-          for fixture in target-cast manual-payment cancel-cast privacy-handoff; do
+          for fixture in \
+            target-cast manual-payment cancel-cast privacy-handoff \
+            priority-empty priority-stack opponent-turn-response \
+            declare-attackers declare-blockers obligatory-decision optional-decision; do
             test -s "static/e2e-scenarios/$fixture.json"
           done
       # The JSON report feeds the annotation step below: the directory names
       # alone say which test broke, the message says why. `list` keeps the
       # readable console output.
-      - run: bun --bun playwright test --reporter=list,json
+      # The UX-DECISION evidence matrix runs in the parallel `ux-evidence` job
+      # against BOTH the base UI and this UI. The marker is deliberately unique:
+      # a plain `EVIDENCIA` also matches the seven `arena-quality-gate` titles
+      # (which end in «y evidencia») and would silently drop them from this gate.
+      - run: bun --bun playwright test --reporter=list,json --grep-invert MESA_EVIDENCE_UX_DECISION
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/report.json
       # The job summary is the evidence and the gate: it publishes passed /
-      # failed / skipped / retries plus the per-test rows of the hand sheet, and
-      # fails the job when a required UX-HAND test was skipped. A `test.skip`
-      # written inside a spec leaves the runner green, which is exactly the hole
-      # the WASM guard cannot see (`docs/UX-HAND.md`, section G).
-      - name: Publish Playwright summary and gate skipped UX-HAND tests
+      # failed / skipped / retries plus the per-test rows of UX-HAND and
+      # UX-DECISION, and fails the job when a required test was skipped.
+      # A `test.skip` written inside a spec leaves the runner green, which is
+      # exactly the hole the WASM guard cannot see (`docs/UX-HAND.md`, section G).
+      - name: Publish Playwright summary and gate skipped required tests
         if: always()
         run: bun scripts/e2e-summary.ts
       # The HTML report, the traces and the job log live behind an artifact
       # download that some networks cannot reach; annotations are plain JSON on
       # the API, so every failure is repeated there with its error message.
       - name: Annotate failing Playwright tests
-        if: failure()
+        if: always()
         run: bun scripts/e2e-annotations.ts
       - if: always()
         uses: actions/upload-artifact@v4
@@ -247,3 +271,98 @@ jobs:
             docs/performance.json
           if-no-files-found: warn
           retention-days: 7
+
+  ux-evidence:
+    name: UX-DECISION baseline and result evidence
+    needs: [static, wasm, native-integration]
+    if: needs.static.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun --bun playwright install --with-deps chromium
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm
+          path: static/wasm
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm-e2e
+          path: static/wasm-e2e
+      - uses: actions/download-artifact@v4
+        with:
+          name: e2e-scenario-fixtures
+          path: static/e2e-scenarios
+      - name: Prepare the fixed baseline worktree
+        env:
+          BASE_SHA: dd531f46d20b6136cb2b7a40962a210fad6a4de0
+        run: |
+          set -euo pipefail
+          git rev-parse "$BASE_SHA^{commit}" >/dev/null 2>&1 || git fetch origin "$BASE_SHA" --depth=1
+          git worktree add --detach /tmp/mesa-baseline "$BASE_SHA"
+          ln -s "$GITHUB_WORKSPACE/node_modules" /tmp/mesa-baseline/node_modules
+          mkdir -p /tmp/mesa-baseline/static/wasm /tmp/mesa-baseline/static/wasm-e2e /tmp/mesa-baseline/static/e2e-scenarios
+          cp -r static/wasm/. /tmp/mesa-baseline/static/wasm/
+          cp -r static/wasm-e2e/. /tmp/mesa-baseline/static/wasm-e2e/
+          cp -r static/e2e-scenarios/. /tmp/mesa-baseline/static/e2e-scenarios/
+      - name: Measure baseline and result with one spec, one WASM and one fixture set
+        env:
+          BASE_SHA: dd531f46d20b6136cb2b7a40962a210fad6a4de0
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/evidence/after" "$GITHUB_WORKSPACE/evidence/baseline"
+          cd /tmp/mesa-baseline
+          nohup bun run dev --port 5174 > /tmp/mesa-baseline-vite.log 2>&1 &
+          cd "$GITHUB_WORKSPACE"
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:5174/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5174/ >/dev/null || { echo "::error::baseline dev server did not start"; tail -30 /tmp/mesa-baseline-vite.log; exit 1; }
+          for variant in after baseline; do
+            url=http://127.0.0.1:5173
+            if [ "$variant" = baseline ]; then url=http://127.0.0.1:5174; fi
+            echo "::group::evidence $variant ($url)"
+            MESA_UI_VARIANT="$variant" \
+            MESA_EVIDENCE_URL="$url" \
+            MESA_EVIDENCE_SHA="$HEAD_SHA" \
+            MESA_BASELINE_SHA="$BASE_SHA" \
+            MESA_EVIDENCE_OUT="$GITHUB_WORKSPACE/evidence/$variant" \
+              bun --bun playwright test tests/e2e/ux-decision-evidence.spec.ts --reporter=list --grep MESA_EVIDENCE_UX_DECISION 2>&1 | tee "/tmp/ux-evidence-$variant.log"
+            echo "::endgroup::"
+          done
+          MESA_EVIDENCE_ROOT="$GITHUB_WORKSPACE/evidence" bun scripts/ux-decision-compare.ts 2>&1 | tee /tmp/ux-evidence-compare.log
+      - name: Annotate UX evidence failures
+        if: failure()
+        run: |
+          for f in /tmp/ux-evidence-after.log /tmp/ux-evidence-baseline.log /tmp/ux-evidence-compare.log /tmp/mesa-baseline-vite.log; do
+            test ! -s "$f" && continue
+            grep -E 'Error|error|failed|Failed|✘|✖|expect|Timeout|panic|no se montó|comparison gate' "$f" \
+              | tail -20 | while IFS= read -r line; do echo "::error::$line"; done
+          done
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-evidence-logs
+          path: |
+            /tmp/ux-evidence-*.log
+            /tmp/mesa-baseline-vite.log
+          if-no-files-found: warn
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-decision-evidence
+          path: evidence
+          if-no-files-found: warn
+          retention-days: 14

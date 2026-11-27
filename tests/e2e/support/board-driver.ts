@@ -135,12 +135,27 @@ export function createBoardDriver(page: Page): BoardDriver {
    */
   const answerAnyPrompt = async (): Promise<boolean> => {
     if (await discardIfAsked()) return true;
-    if (await press(decision.locator('button').filter({ hasText: 'Conservar mano' }).first())) return true;
-    if (await press(decision.locator('button').filter({ hasText: 'Confirmar pago' }).first())) return true;
-    if (await press(decision.locator('button').filter({ hasText: /^No atacar$/ }).first())) return true;
-    if (await press(decision.locator('button').filter({ hasText: /^No bloquear$/ }).first())) return true;
+    if (await press(decision.locator('button:visible').filter({ hasText: 'Conservar mano' }).first())) return true;
+    if (await press(decision.locator('button:visible').filter({ hasText: 'Confirmar pago' }).first())) return true;
+    if (await press(decision.locator('button:visible').filter({ hasText: /^No atacar$/ }).first())) return true;
+    if (await press(decision.locator('button:visible').filter({ hasText: /^No bloquear$/ }).first())) return true;
+    // UX-DECISION: la acción principal se mudó de `.confirmations` a
+    // `[data-decision-primary]`. El driver sigue reconociendo ambas formas
+    // (la segunda es la del commit base que mide la evidencia comparativa).
+    if (await press(decision.locator('[data-decision-primary]').filter({ hasText: /^Pasar/ }).first())) return true;
     if (await press(decision.locator('.confirmations button').filter({ hasText: /^Pasar/ }).first())) return true;
-    return press(decision.locator('.confirmations button:not([disabled])').first());
+    if (await press(decision.locator('[data-decision-primary]').first())) return true;
+    // UX-DECISION: las acciones no dominantes viven bajo divulgación
+    // progresiva. Un jugador abre el desplegable antes de elegir una de ellas;
+    // el driver hace lo mismo en vez de intentar pulsar un botón oculto.
+    const tiers = decision.locator('details[data-decision-tiers]');
+    if (await tiers.count()) {
+      const isOpen = await tiers.getAttribute('open');
+      if (isOpen === null) await tiers.locator('summary').click({ timeout: 2_000 }).catch(() => {});
+    }
+    if (await press(decision.locator('[data-decision-tiers] button:visible:not([disabled])').first())) return true;
+    if (await press(decision.locator('button:visible:not([disabled])').first())) return true;
+    return press(decision.locator('.confirmations button:visible:not([disabled])').first());
   };
 
   /**
@@ -165,9 +180,9 @@ export function createBoardDriver(page: Page): BoardDriver {
     const attackers = battlefield.locator('[data-card-id][data-attack-options]:not([data-attack-options="0"])');
     if (!(await attackers.count())) return false;
     for (const card of await attackers.all()) await clickCard(card);
-    const confirm = decision.locator('button').filter({ hasText: /^Confirmar ataque/ }).first();
+    const confirm = decision.locator('button:visible').filter({ hasText: /^Confirmar ataque/ }).first();
     if (await confirm.count()) return press(confirm);
-    return press(decision.locator('button').filter({ hasText: /^No atacar$/ }).first());
+    return press(decision.locator('button:visible').filter({ hasText: /^No atacar$/ }).first());
   };
 
   /** Assign one blocker to one attacker, the way the panel asks for it. */
@@ -177,9 +192,9 @@ export function createBoardDriver(page: Page): BoardDriver {
     if (!(await blocker.count()) || !(await attacker.count())) return false;
     await clickCard(blocker);
     await clickCard(attacker);
-    const confirm = decision.locator('button').filter({ hasText: /^Confirmar bloqueos/ }).first();
+    const confirm = decision.locator('button:visible').filter({ hasText: /^Confirmar bloqueos/ }).first();
     if (await confirm.count()) return press(confirm);
-    return press(decision.locator('button').filter({ hasText: /^No bloquear$/ }).first());
+    return press(decision.locator('button:visible').filter({ hasText: /^No bloquear$/ }).first());
   };
 
   return {

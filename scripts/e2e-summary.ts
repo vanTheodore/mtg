@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Publishes the Playwright result to the GitHub Actions job summary, and fails
- * the job when a functional UX-HAND test was skipped.
+ * the job when a functional UX-HAND or UX-DECISION test was skipped.
  *
  * Why this exists: a green Chromium job used to mean "the suite exited 0". It
  * could also mean "the engine was missing and eight tests announced `test.skip`",
@@ -12,7 +12,7 @@
  * So the summary is the evidence and the gate at the same time:
  *
  *  - every outcome is published (passed / failed / skipped / flaky, plus the
- *    per-test table for the hand sheet, which is what UX-HAND is about);
+ *    per-test tables for UX-HAND and the UX-DECISION transitions);
  *  - the required list below is a contract: if one of those tests is skipped,
  *    retried into green, or never ran at all, this script exits 1.
  *
@@ -45,11 +45,14 @@ interface Row {
 }
 
 /**
- * Tests that are the functional guarantee of UX-HAND. Each must RUN and PASS.
- * The names are prefixes of the spec title, because Playwright appends the
- * viewport or the project to parametrised titles.
+ * Tests that are the functional guarantee of UX-HAND and UX-DECISION. Each
+ * must RUN and PASS. The names are spec titles, or their describe prefix for
+ * parametrised UX-HAND cases; a skipped, missing or retried-into-green case
+ * must not leave the Chromium job green.
  *
  * Adding a scenario here is what stops it from being quietly skipped later.
+ * `ux-decision-evidence.spec.ts` is intentionally absent: it runs in the
+ * parallel `ux-evidence` job, whose metrics and comparison are its own gate.
  */
 const REQUIRED: { file: string; title: string; why: string }[] = [
   { file: 'arena-hand-sheet.spec.ts', title: 'contrato de despacho (motor real, mazo determinista) › lanzar desde la hoja ejecuta una acción legal del motor', why: 'una acción legal del motor se despacha de verdad' },
@@ -62,7 +65,18 @@ const REQUIRED: { file: string; title: string; why: string }[] = [
   { file: 'arena-hand-sheet.spec.ts', title: 'escenarios deterministas (Phase GameScenario, motor real) › 5 · cambio de asiento', why: 'cambio de asiento por identidad, no por cantidad' },
   { file: 'arena-hand-sheet.spec.ts', title: 'legalidad explícita (fixture con acciones) › una carta con lanzamiento y activación no se ejecuta de un toque', why: 'ambigüedad: no se adivina' },
   { file: 'arena-hand-sheet.spec.ts', title: 'legalidad explícita (fixture con acciones) › las alternativas del mismo lanzamiento se identifican', why: 'alternativas distinguibles' },
-  { file: 'arena-hand-sheet.spec.ts', title: 'navegación por teclado de la hoja › Tab y Shift+Tab', why: 'sin árbol accesible duplicado' }
+  { file: 'arena-hand-sheet.spec.ts', title: 'navegación por teclado de la hoja › Tab y Shift+Tab', why: 'sin árbol accesible duplicado' },
+  { file: 'ux-decision.spec.ts', title: 'prioridad con pila vacía: contexto, una acción principal y cesión real', why: 'cesión de prioridad despachada por el motor real' },
+  { file: 'ux-decision.spec.ts', title: 'prioridad con hechizo pendiente: pila real, cesión contextual y resolución por prioridades reales', why: 'la pila y la resolución pasan por prioridades reales' },
+  { file: 'ux-decision.spec.ts', title: 'respuesta durante el turno rival: intención y consecuencia del motor', why: 'la consecuencia distingue el turno del rival' },
+  { file: 'ux-decision.spec.ts', title: 'declaración de atacantes: no atacar y confirmar borrador son decisiones distintas', why: 'ambas decisiones de ataque siguen separadas' },
+  { file: 'ux-decision.spec.ts', title: 'declaración de bloqueadores: no bloquear es explícito y el motor responde', why: 'la ventana de bloqueo aplica una acción real' },
+  { file: 'ux-decision.spec.ts', title: 'objetivos: selección directa, lista accesible y progreso sin duplicados', why: 'la selección y el progreso no se duplican' },
+  { file: 'ux-decision.spec.ts', title: 'pago manual: accesible bajo demanda, nunca dominante', why: 'el pago manual no sustituye a la acción principal' },
+  { file: 'ux-decision.spec.ts', title: 'decisión obligatoria: KeepExact conserva la ventana exacta sin auto-selección', why: 'KeepExact no auto-selecciona ni pierde su ventana' },
+  { file: 'ux-decision.spec.ts', title: 'decisión opcional: ambas ramas legales siguen en el especialista', why: 'las ramas opcionales siguen accionables' },
+  { file: 'ux-decision.spec.ts', title: 'cancelación y busy: un doble pulso no despacha dos acciones', why: 'un doble pulso produce un solo despacho' },
+  { file: 'ux-decision.spec.ts', title: 'cancelación del lanzamiento: la acción de seguridad está fuera del desplegable', why: 'cancelar no depende de abrir el panel avanzado' }
 ];
 
 // Playwright spells these `timedOut` / `interrupted`; compare case-insensitively
@@ -131,6 +145,7 @@ const total = rows.length;
 const retried = rows.filter((row) => row.retries > 0).length;
 
 const sheetRows = rows.filter((row) => row.file.includes('arena-hand-sheet.spec.ts'));
+const decisionRows = rows.filter((row) => row.file.includes('ux-decision.spec.ts') && !row.file.includes('ux-decision-evidence.spec.ts'));
 const missing: string[] = [];
 for (const required of REQUIRED) {
   const match = rows.find((row) => row.file.includes(required.file) && row.title.includes(required.title));
@@ -155,10 +170,15 @@ lines.push('');
 if (!sheetRows.length) lines.push('Ninguna prueba de la hoja de la mano se ejecutó.');
 else lines.push(table(sheetRows));
 lines.push('');
+lines.push('### `ux-decision.spec.ts` (UX-DECISION)');
+lines.push('');
+if (!decisionRows.length) lines.push('Ninguna prueba de transición de UX-DECISION se ejecutó.');
+else lines.push(table(decisionRows));
+lines.push('');
 if (missing.length) {
   lines.push('### Pruebas funcionales obligatorias que no pasaron');
   lines.push('');
-  lines.push('Una suite verde no puede significar «nada corrió». Estas pruebas son la garantía funcional de UX-HAND y deben ejecutarse y pasar:');
+  lines.push('Una suite verde no puede significar «nada corrió». Estas pruebas son la garantía funcional de UX-HAND y UX-DECISION y deben ejecutarse y pasar:');
   lines.push('');
   for (const item of missing) lines.push(`- **${item}**`);
   lines.push('');
