@@ -396,4 +396,6 @@ jobs:
       # networks; annotations are plain JSON on api.github.com.
       - name: Annotate Rust errors
         if: failure()
-        run: bun scripts/rust-annotations.ts /tmp/phase-tests.log
+        run: |
+          bun scripts/rust-annotations.ts /tmp/phase-tests.log
+          bun scripts/rust-annotations.ts /tmp/up134-list.log
