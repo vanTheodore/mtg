@@ -555,7 +555,13 @@
           <StackPanel />
           <HistoryPanel compact={session.boardStyle === 'arena'} />
         </div>
-        <DecisionPanel />
+        {#if !needsHandoff}
+          <!-- The board region is inert during a seat handoff, but leaving
+               legal actions mounted still exposes the incoming seat's card
+               names in the DOM. Do not publish its decision surface until
+               that player confirms they are ready. -->
+          <DecisionPanel />
+        {/if}
       </div>
 
       <Battlefield objects={battlefieldObjects} {metas} owner={viewer} side="player" label={`Tu campo de batalla · Jugador ${viewer + 1}`} />

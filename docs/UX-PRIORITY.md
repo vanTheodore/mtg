@@ -69,9 +69,11 @@ respuestas, fronteras y resolución.
 ### Privacidad hotseat
 
 Un pase hasta la frontera que cambia el asiento activa el handoff antes de
-mostrar la mano del nuevo espectador. El tablero queda oculto/inactivo hasta que
-la persona confirme **Estoy listo**. Las preferencias y la cancelación son
-siempre del asiento que el snapshot autoriza.
+mostrar la mano del nuevo espectador. El tablero queda oculto/inactivo y Mesa no
+monta la superficie de decisiones del asiento entrante hasta que confirme
+**Estoy listo**: así tampoco quedan nombres de cartas privadas expuestos en el
+DOM durante el handoff. Las preferencias y la cancelación son siempre del asiento
+que el snapshot autoriza.
 
 ## Cobertura añadida
 

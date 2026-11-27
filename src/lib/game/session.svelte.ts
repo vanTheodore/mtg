@@ -2707,7 +2707,14 @@ class GameSession {
       return;
     }
     const start = performance.now();
-    if (this.snapshot && this.snapshot.viewer !== reply.viewer) { this.selected = null; this.inspect = null; }
+    if (this.snapshot && this.snapshot.viewer !== reply.viewer) {
+      // Seat-specific controls are private too: do not carry an old viewer's
+      // selection, inspector, context menu or attack picker across a handoff.
+      this.selected = null;
+      this.inspect = null;
+      this.cardMenu = null;
+      this.attackPicker = null;
+    }
     if (this.snapshot?.revision !== reply.revision) {
       this.attacks = {}; this.blocks = {}; this.choosing = []; this.searched = []; this.dug = []; this.zonePick = [];
       this.optionalRemember = false; this.optionalSameCard = false; this.payEntry = null; this.revealPick = null; this.revealPicks = []; this.pairPick = null; this.untapSubsetPick = []; this.payCostPick = []; this.phyrexianPick = [];

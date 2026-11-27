@@ -465,25 +465,39 @@ for (const mode of MODES) {
       const responseOffered = true;
       const beforeResponse = await applied(page);
       await cast.click();
-      await expect(app(page)).toHaveAttribute('data-waiting', 'TargetSelection');
-      const targets = panel(page).locator('details[data-target-list]');
-      if (!(await targets.evaluate((node: HTMLDetailsElement) => node.open))) await targets.locator('summary').click();
-      const bolt = targets.locator('button').filter({ hasText: /Elegir Lightning Bolt/ }).first();
-      await expect(bolt).toBeVisible();
-      await bolt.click();
+      // Counterspell has exactly one legal target in this fixture. Phase may
+      // choose it during CastSpell and return directly to Priority, or publish
+      // TargetSelection when it needs an explicit choice; accept either real
+      // engine path, then verify the resulting stack entry names Lightning Bolt.
+      await expect.poll(async () => {
+        const waiting = await app(page).getAttribute('data-waiting');
+        const stackCount = await page.locator('section[aria-label="Pila"] ol li').count();
+        return waiting === 'TargetSelection' || (waiting === 'Priority' && stackCount === 2);
+      }, { timeout: 15_000 }).toBe(true);
+      if (await app(page).getAttribute('data-waiting') === 'TargetSelection') {
+        const targets = panel(page).locator('details[data-target-list]');
+        if (!(await targets.evaluate((node: HTMLDetailsElement) => node.open))) await targets.locator('summary').click();
+        const bolt = targets.locator('button').filter({ hasText: /Elegir Lightning Bolt/ }).first();
+        await expect(bolt).toBeVisible();
+        await bolt.click();
+      }
+      await expect.poll(async () => page.locator('section[aria-label="Pila"] ol li').count(), { timeout: 30_000 }).toBe(2);
       await expect.poll(() => applied(page), { timeout: 30_000 }).toBeGreaterThan(beforeResponse);
       await expect(app(page)).toHaveAttribute('data-waiting', 'Priority');
       await expect(app(page)).toHaveAttribute('data-viewer', '1');
-      await expect(page.locator('section[aria-label="Pila"] ol li')).toHaveCount(2);
 
+      const counterspellEntry = page.locator('section[aria-label="Pila"] ol li').filter({ hasText: 'Counterspell' }).first();
+      const counterspellDetails = await counterspellEntry.innerText();
+      const counterspellTargetsBolt = counterspellDetails.includes('Lightning Bolt');
       const trace = await traceEntries(page);
       const automaticPasses = await autoPassCount(page);
       const responseCastAccepted = acceptedActions(trace, ['CastSpell']) >= 2
-        && acceptedActions(trace, ['ChooseTarget', 'SelectTargets']) >= 2;
+        && acceptedActions(trace, ['ChooseTarget', 'SelectTargets']) >= 1
+        && counterspellTargetsBolt;
       const stackEntriesAfterResponse = await page.locator('section[aria-label="Pila"] ol li').count();
       expect(privacy.hidden).toBe(true);
       expect(responseOffered).toBe(true);
-      expect(responseCastAccepted).toBe(true);
+      expect(responseCastAccepted, `Counterspell debía entrar a la pila dirigido a Lightning Bolt; fila=${counterspellDetails}`).toBe(true);
       expect(stackEntriesAfterResponse).toBe(2);
       expect(fullControlNotPersisted).toBe(true);
       expect(acceptedPriorityPasses(trace)).toBe(1);
