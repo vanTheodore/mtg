@@ -322,8 +322,10 @@ jobs:
           // `token_attack_destination` reads `super::rules::AttackTarget` and
           // `additional_cost_declaration_tail` reads a helper from the blitz
           // module: both are original upstream files, declared once here.
-          #[path = "integration/rules.rs"]
-          mod rules;
+          // `mod rules` con #[path] resolvería sus submódulos contra
+          // integration/ en vez de integration/rules/: se incluye el fichero
+          // dentro de un módulo en línea para conservar su directorio.
+          mod rules { include!("integration/rules.rs"); }
           #[path = "integration/blitz_em_dash_graveyard_cast.rs"]
           mod blitz_em_dash_graveyard_cast;
           #[path = "integration/equip_keyword_target_legality.rs"]
