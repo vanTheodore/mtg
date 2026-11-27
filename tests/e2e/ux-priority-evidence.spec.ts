@@ -378,7 +378,12 @@ for (const mode of MODES) {
     test('mide intervención, pase, ventana omitida y oportunidad rival', async ({ page }) => {
       test.setTimeout(180_000);
       await openScenario(page, 'priority-low-use', mode);
-      const initialWindowObserved = (await frames(page)).some((frame) => frame.viewer === 0 && frame.waiting === 'Priority');
+      // Capture the actual rendered Phase snapshot after preference sync. The
+      // Worker/DOM frame recorder can legitimately coalesce the initial frame
+      // with a fast preference update, so read the two authoritative root attrs
+      // while Standard/FullControl still hold P0's window.
+      const initialWindowObserved = await app(page).getAttribute('data-viewer') === '0'
+        && await app(page).getAttribute('data-waiting') === 'Priority';
       const recommendation = initialRecommendation(await traceEntries(page), 0);
       const manualPasses = await moveToP1Opportunity(page, mode);
       const privacy = await revealAndVerifySailor(page);

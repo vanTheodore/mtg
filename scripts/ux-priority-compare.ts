@@ -89,7 +89,15 @@ for (const mode of expectedModes) {
     require(sequence.p1ModeBeforeTemporaryOverride === 'Standard', `${mode}: P1 heredó una preferencia ajena antes de Control total temporal`);
     require(sequence.fullControlNotPersisted === true, `${mode}: Control total temporal de P1 se persistió`);
     require(sequence.privateIdentityHiddenBeforeHandoff && sequence.privateIdentityShownAfterHandoff, `${mode}: la mano de P1 no respetó el handoff`);
-    require(sequence.gameplayInterventionsExecuted >= 4, `${mode}: el conteo de intervenciones no incluye las dos cartas y sus objetivos`);
+    // Phase auto-selects Counterspell's sole legal target; no separate
+    // ChooseTarget action is sent for that unambiguous target. The real actions
+    // are two CastSpell requests plus P0's Lightning Bolt target, with Full
+    // Control adding its one manual pass before P1 responds.
+    const minimumInterventions = mode === 'FullControl' ? 4 : 3;
+    require(
+      sequence.gameplayInterventionsExecuted >= minimumInterventions,
+      `${mode}: faltan acciones reales de lanzamiento/objetivo${mode === 'FullControl' ? '/pase manual' : ''}; mínimo ${minimumInterventions}, observadas ${sequence.gameplayInterventionsExecuted}`
+    );
     if (mode === 'FullControl') {
       require(sequence.automaticPasses === 0 && sequence.manuallyExecutedPasses === 1, 'Control completo: se esperaba pase manual, no automático');
     } else {

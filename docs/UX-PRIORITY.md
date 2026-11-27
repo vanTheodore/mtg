@@ -82,7 +82,9 @@ que el snapshot autoriza.
 - Playwright con el WASM aislado de `GameScenario`: sincronización de modos y
   scopes, pase explícito con handoff y `Resolve All Own` real. Esta última
   prueba lanza Lightning Bolt, verifica que `Own` deja a P1 en `Priority` con
-  la pila intacta y luego acepta el Counterspell legal de P1. `priority-auto-pass`
+  la pila intacta y luego acepta el Counterspell legal de P1. Si es el único
+  objetivo posible, Phase lo asigna durante `CastSpell`; la evidencia verifica
+  el objetivo publicado en la pila sin inventar un `ChooseTarget`. `priority-auto-pass`
   crea una sesión de cancelación en un fixture generado por el motor; no se
   forja una acción en el navegador. La matriz retiene una respuesta real de
   `PassPriority` después de que Phase la procesa, solicita cancelar mientras la
