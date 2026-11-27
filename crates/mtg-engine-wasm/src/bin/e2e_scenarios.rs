@@ -141,13 +141,14 @@ fn main() {
         P1,
         vec![ManaUnit::new(ManaType::Blue, ObjectId(0), false, vec![])],
     );
+    let mut priority_auto_pass = priority_auto_pass.build();
     priority_auto_pass.state_mut().auto_pass.insert(
         P0,
         AutoPassMode::UntilTurnBoundary {
             until: TurnBoundary::EndOfCurrentTurn,
         },
     );
-    write_fixture(out, "priority-auto-pass", priority_auto_pass);
+    write_runner_fixture(out, "priority-auto-pass", priority_auto_pass);
 
     // UX-PRIORITY evidence · an active-player End window with a meaningful
     // instant available. Standard should retain the decision, SkipLowUseWindows
