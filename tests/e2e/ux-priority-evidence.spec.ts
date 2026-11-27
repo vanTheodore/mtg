@@ -393,8 +393,12 @@ for (const mode of MODES) {
       expect(manualPasses).toBe(mode.engineMode === 'SkipLowUseWindows' ? 0 : 1);
       expect(privacy.hiddenBefore, `la identidad privada se reveló antes del handoff: ${JSON.stringify(await priorityDiagnostic(page))}`).toBe(true);
       expect(privacy.shownAfter).toBe(true);
-      const opportunity = await panel(page).locator('button').filter({ hasText: 'Lanzar Spectral Sailor' }).count() === 1;
-      expect(opportunity, `P1 no recibió la oportunidad de responder: ${JSON.stringify(await priorityDiagnostic(page))}`).toBe(true);
+      const opportunityOffers = await panel(page).locator('button').filter({ hasText: 'Lanzar Spectral Sailor' }).count();
+      // Phase's global legal-action projection and the selected-card surface
+      // may both render this same available action. The contract is that P1
+      // has at least one real way to cast it, not that its label is unique.
+      const opportunity = opportunityOffers > 0;
+      expect(opportunity, `P1 no recibió la oportunidad de responder (${opportunityOffers} ofertas): ${JSON.stringify(await priorityDiagnostic(page))}`).toBe(true);
       await saveRow(page, {
         scenario: 'priority-low-use', mode: mode.label, engineMode: mode.engineMode,
         engineModeConfirmed: true, initialPriorityWindowObserved: initialWindowObserved,
