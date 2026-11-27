@@ -103,13 +103,10 @@ async function measure(page: Page, scenario: string, viewport: string, theme: st
       const rect = el.getBoundingClientRect();
       if (!rect.width || !rect.height) return false;
       // Chromium hides the contents of a collapsed `<details>` with
-      // `content-visibility`, which still reports a layout box. Svelte sets
-      // `open` as a DOM property, so `[open]` alone is not reliable here.
-      // `checkVisibility` is the browser's own verdict and is what
-      // «control visible» must mean; without it the closed advanced surface
-      // would be counted as exposed.
-      const disclosure = el.closest('details');
-      if (disclosure && !disclosure.open) return false;
+      // `content-visibility`, which still reports a layout box. `checkVisibility`
+      // is the browser's own verdict and is what «control visible» must mean;
+      // without it the closed advanced surface would be counted as exposed.
+      if (el.closest('details:not([open])')) return false;
       const probe = el as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
       if (typeof probe.checkVisibility === 'function') {
         return probe.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });

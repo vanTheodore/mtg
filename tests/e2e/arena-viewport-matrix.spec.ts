@@ -146,8 +146,7 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
       // visible puede ser el último que responda al puntero.
       const visible = (button: Element) => {
         const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
-        const disclosure = element.closest('details');
-        if (disclosure && !disclosure.open) return false;
+        if (element.closest('details:not([open])')) return false;
         if (typeof element.checkVisibility === 'function') {
           return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
         }
@@ -229,8 +228,7 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
         const box = panel.getBoundingClientRect();
         const visible = (button: Element) => {
           const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
-          const disclosure = element.closest('details');
-          if (disclosure && !disclosure.open) return false;
+          if (element.closest('details:not([open])')) return false;
           if (typeof element.checkVisibility === 'function') {
             return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
           }
@@ -423,8 +421,7 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
       const box = panel.getBoundingClientRect();
       const visible = (button: Element) => {
         const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
-        const disclosure = element.closest('details');
-        if (disclosure && !disclosure.open) return false;
+        if (element.closest('details:not([open])')) return false;
         if (typeof element.checkVisibility === 'function') {
           return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
         }
@@ -553,8 +550,7 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
       const panel = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]')!;
       const visible = (button: Element) => {
         const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
-        const disclosure = element.closest('details');
-        if (disclosure && !disclosure.open) return false;
+        if (element.closest('details:not([open])')) return false;
         if (typeof element.checkVisibility === 'function') {
           return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
         }
@@ -639,8 +635,7 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
       const box = panel.getBoundingClientRect();
       const visible = (button: Element) => {
         const element = button as HTMLElement & { checkVisibility?: (options?: { checkOpacity?: boolean; checkVisibilityCSS?: boolean; contentVisibilityAuto?: boolean }) => boolean };
-        const disclosure = element.closest('details');
-        if (disclosure && !disclosure.open) return false;
+        if (element.closest('details:not([open])')) return false;
         if (typeof element.checkVisibility === 'function') {
           return element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: true, contentVisibilityAuto: true });
         }

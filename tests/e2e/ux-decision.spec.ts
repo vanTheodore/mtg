@@ -93,7 +93,7 @@ test('prioridad con hechizo pendiente: pila real, cesión contextual y resoluci�
     if (waiting === 'TargetSelection' || waiting === 'TriggerTargetSelection') {
       const details = panel(page).locator('details[data-target-list]');
       if (!(await details.count())) break;
-      if (await details.getAttribute('open') === null) await details.locator('summary').click();
+      if (!(await details.evaluate((node: HTMLDetailsElement) => node.open))) await details.locator('summary').click();
       // Lightning Bolt debe apuntar al rival: la lista accesible publica los
       // dos jugadores y elegir el primero dispararía el hechizo contra P0.
       const choice = details.locator('button').filter({ hasText: /^Elegir Jugador 2$/ }).first();
