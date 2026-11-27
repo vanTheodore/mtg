@@ -410,7 +410,11 @@ jobs:
       - name: Execute UX-PRIORITY measurements in Chromium
         env:
           MESA_PRIORITY_EVIDENCE_OUT: evidence/priority
-        run: bun --bun playwright test tests/e2e/ux-priority-evidence.spec.ts --reporter=list --grep MESA_EVIDENCE_UX_PRIORITY
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/priority-report.json
+        run: bun --bun playwright test tests/e2e/ux-priority-evidence.spec.ts --reporter=list,json --grep MESA_EVIDENCE_UX_PRIORITY
+      - name: Annotate UX-PRIORITY E2E failures
+        if: failure()
+        run: bun scripts/e2e-annotations.ts test-results/priority-report.json
       - name: Compare measured modes and gate response/privacy/recovery contracts
         if: always()
         env:
