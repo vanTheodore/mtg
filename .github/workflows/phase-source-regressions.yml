@@ -399,7 +399,9 @@ jobs:
             exit 1
           }
       - name: Execute the UP-134 pinned-mechanics regressions
-        run: cargo test --locked -p phase-engine --test mesa_phase_up134 -- --test-threads=1
+        run: |
+          set -o pipefail
+          cargo test --locked -p phase-engine --test mesa_phase_up134 -- --test-threads=1 2>&1 | tee /tmp/up134-exec.log
       # The job log lives behind a blob download that is unreachable on some
       # networks; annotations are plain JSON on api.github.com.
       - name: Annotate Rust errors
@@ -407,3 +409,4 @@ jobs:
         run: |
           bun scripts/rust-annotations.ts /tmp/phase-tests.log
           bun scripts/rust-annotations.ts /tmp/up134-list.log
+          grep -E 'FAILED|panicked at|failures:' /tmp/up134-exec.log 2>/dev/null | head -25 | while IFS= read -r line; do echo "::error title=UP-134 exec::$line"; done || true
