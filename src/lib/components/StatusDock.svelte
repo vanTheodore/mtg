@@ -1,12 +1,12 @@
 <script lang="ts">
   /**
    * The table's status row: who holds priority, how many cards are in hand, the
-   * step Phase reports and the manual/auto-pass switch.
+   * step Phase reports and the temporary Full Control switch.
    *
    * Ported from Phase's bottom dock (`hud/PlayerHud.tsx` + `controls/
    * PassButton.tsx` + `controls/FullControlToggle.tsx`). Composition only: the
-   * labels come from the snapshot Phase sends, and the switch drives the same
-   * `autoPass` preference the top bar already had — no rule lives here.
+   * labels come from the snapshot Phase sends, and the switch changes the
+   * actor-scoped `FullControl` mode in Phase — no rule lives here.
    *
    * The pass itself stays in `DecisionPanel`: that is where the engine-authored
    * `PassPriority` action is rendered with the rest of the legal actions, and
@@ -38,16 +38,16 @@
   <button
     type="button"
     class="chip control"
-    aria-pressed={!session.autoPass}
-    aria-label="Control total (desactiva el auto-paso)"
+    aria-pressed={session.fullControl}
+    aria-label="Control total"
     aria-describedby="mesa-control-hint"
-    onclick={() => session.setAutoPass(!session.autoPass)}
+    onclick={() => session.setFullControl(!session.fullControl)}
   >
     Control
   </button>
   <span id="mesa-control-hint" class="sr-only">
-    Con el control total activo recibes cada ventana de prioridad; con el auto-paso, Phase pasa las ventanas que no
-    ofrecen acciones.
+    Control total conserva todas tus ventanas de prioridad, incluso con la pila ocupada. Si lo desactivas, Phase
+    aplica el modo de pase elegido y sólo recomienda una ventana cuando sus propios criterios lo permiten.
   </span>
 </div>
 

@@ -1,12 +1,8 @@
 <script lang="ts">
   /**
-   * The step bar with stops, ported from Phase's `controls/PhaseStopBar.tsx`.
-   *
-   * A stop is a preference, not a rule: it says "do not let the automatic pass
-   * close this step on my behalf". The engine still publishes every window and
-   * keeps its own recommendation; `session.stopActive` only makes
-   * `autoPassPending` false for the marked step. With no stop the table behaves
-   * exactly as before.
+   * The step bar with Phase's three-cycle stop scopes: all turns, my turn, or
+   * opponents' turns. A stop is a preference, not a rule: it can retain a Phase
+   * window but cannot create one or force a pass.
    *
    * Twelve steps do not fit in a 290 px rail as twelve labelled buttons, so the
    * row shares the width it has — abbreviated labels, then two lines — instead
@@ -19,6 +15,15 @@
   let { phase, turn, activePlayer }: { phase: string; turn: number; activePlayer: number } = $props();
 
   const stopped = $derived(PHASE_STEPS.filter((step) => session.isStop(step.value)));
+  const SCOPE_LABELS = {
+    AllTurns: 'todos los turnos',
+    OwnTurn: 'mi turno',
+    OpponentsTurns: 'turnos de oponentes'
+  } as const;
+
+  function scopeLabel(scope: keyof typeof SCOPE_LABELS | undefined): string {
+    return scope ? SCOPE_LABELS[scope] : 'sin parada';
+  }
 
   /**
    * The row fits, or it says what it had to give up.
@@ -80,12 +85,12 @@
     {#if compact}
       <span class="current">Ahora: {current?.short ?? phase}</span>
     {/if}
-    <span class="state" data-active={stopped.length > 0}>
-      {stopped.length === 0
-        ? 'Sin paradas: el auto-paso decide'
-        : stopped.length === 1
-          ? `Parada en ${stopped[0].label}`
-          : `${stopped.length} paradas`}
+    <span class="state" data-active={session.stopActive}>
+      {session.stopActive
+        ? `Parada activa · ${current?.label ?? phase}`
+        : stopped.length === 0
+          ? 'Sin paradas configuradas'
+          : `${stopped.length} parada${stopped.length === 1 ? '' : 's'} configurada${stopped.length === 1 ? '' : 's'}`}
     </span>
   </p>
   <ol class="steps" bind:this={row} data-fit={layout}>
@@ -96,11 +101,12 @@
           type="button"
           class="step"
           data-step={step.value}
+          data-stop-scope={session.stopScope(step.value) ?? 'off'}
           aria-pressed={session.isStop(step.value)}
           aria-current={phase === step.value ? 'step' : undefined}
-          aria-label={`${step.short} · parada en ${step.label}`}
-          title={`Parada en ${step.label}`}
-          onclick={() => session.toggleStop(step.value)}
+          aria-label={`Cambiar parada en ${step.short}. Estado: ${scopeLabel(session.stopScope(step.value))}`}
+          title={`Parada en ${step.label} · ${scopeLabel(session.stopScope(step.value))}`}
+          onclick={() => session.cycleStop(step.value)}
         >
           {label}
         </button>
@@ -191,6 +197,10 @@
     border-color: var(--accent);
     font-weight: 750;
   }
+  /* Both scoped modes stay filled, while their border treatment makes the
+     distinction visible even when the abbreviated step label is the same. */
+  .step[aria-pressed='true'][data-stop-scope='OwnTurn'] { border-style: dashed; }
+  .step[aria-pressed='true'][data-stop-scope='OpponentsTurns'] { border-style: dotted; }
   .step[aria-pressed='true'][aria-current='step'] {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
   }

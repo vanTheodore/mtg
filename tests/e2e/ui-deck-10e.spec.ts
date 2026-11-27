@@ -133,7 +133,7 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   // combat state that Phase published when the blocks were declared, not the
   // state left after the game moved on (a blocker that died is no longer on
   // the battlefield, and its role with it).
-  await page.getByRole('checkbox', { name: 'Auto-pasar ventanas sin acciones' }).uncheck();
+  await page.getByRole('checkbox', { name: 'Pase recomendado por Phase (se desactiva con Control total)' }).uncheck();
   await startDeckGame(page);
   const driver = createBoardDriver(page);
 

@@ -1,6 +1,6 @@
 import { tick } from 'svelte';
 import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
-import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId, type PlayerId, type TargetRef } from '#lib/engine/types.ts';
+import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EnginePhaseStop, type EnginePriorityPassingMode, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId, type PlayerId, type StoredAutoPassMode, type TargetRef } from '#lib/engine/types.ts';
 import {
   attackDeclaration, attackTargets, blockDeclaration, blockTargets, cancelCastAction, chooseXAction,
   decideOptionalEffect, decideTribute, defaultOrder, defaultX, digPrompt as readDigPrompt, digReady as isDigReady,
@@ -25,6 +25,12 @@ import {
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
 import { classifyDispatch, type DispatchOutcome } from './dispatchOutcome.ts';
+import {
+  autoPassUntilBoundaryAction, cancelAutoPassAction, nextPhaseStopScope, phaseStopApplies, phaseStopsAction, PRIORITY_PHASES,
+  priorityModeAction, priorityWindowMatches, PriorityPassGate, readSeatPriorityPreferences,
+  resolveAllOwnAction, type AutoPassResult, type PhaseStopScope, type PriorityMode,
+  type PriorityWindowAnchor, type SeatPriorityPreferences, type TurnBoundary
+} from './priority.ts';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type BoardStyle = 'arena' | 'classic';
@@ -60,17 +66,24 @@ class GameSession {
   blocks = $state<Record<string, ObjectId>>({});
   history = $state<HistoryEntry[]>([]);
   lifeChanges = $state<Record<string, { amount: number; revision: number }>>({});
-  autoPass = $state(true);
-  /**
-   * Stops per step (`PhaseStopBar`). A stop means "do not let the auto-pass
-   * close this window": Phase still decides whether there *is* a window and
-   * whether passing is recommended, and the UI only refuses to take the
-   * recommendation on the steps the player marked.
-   *
-   * Presentation preference, persisted per device. It never creates a priority
-   * window the engine did not offer.
-   */
-  stops = $state<Record<string, boolean>>({});
+  /** Persistent mode and scoped phase stops are saved separately for each local seat. */
+  priorityPreferences = $state<Record<string, SeatPriorityPreferences>>({});
+  /** Full Control is a temporary, in-game seat authorization; it is never persisted. */
+  fullControlSeats = $state<number[]>([]);
+  private fullControlOnNextStart = false;
+  private legacyFullControlOnNextStart = false;
+  /** A viewer reached by an automated pass must confirm before private UI is rendered. */
+  private automaticHandoffViewer: number | null = null;
+  private readonly autoPassGate = new PriorityPassGate();
+  private gameGeneration = 0;
+  /** Latest engine initialization request; rejects overlapping start replies. */
+  private startRequestGeneration = 0;
+  /** Generation already reset by Board.prepareStart(); start must not reset it twice. */
+  private preparedStartGeneration: number | null = null;
+  private preferencesVersion = 0;
+  private readonly syncedPreferences = new Map<string, string>();
+  private readonly failedPreferenceSync = new Map<string, string>();
+  private preferenceSyncInFlight: string | null = null;
   /**
    * Phone hand drawer. On a touch-sized screen the hand is a fixed sheet over
    * the board instead of an inline row: thirty cards inline pushed the
@@ -84,8 +97,9 @@ class GameSession {
   handDrawerOpen = $state(false);
   setHandDrawer(open: boolean) { this.handDrawerOpen = open; }
   autoPasses = $state(0);
+  /** An in-flight engine pass cannot be withdrawn; a cancel request queues behind it. */
+  autoPassCancellationPending = $state(false);
   choosing = $state<number[]>([]);
-  private autoPassQueued = false;
   private historyId = 0;
   private client = new EngineClient();
   private queue: Promise<unknown> = Promise.resolve();
@@ -102,13 +116,33 @@ class GameSession {
       if (scale >= 0.7 && scale <= 1.6) this.cardScale = scale;
       const density = localStorage.getItem('mesa:density');
       if (density === 'compact' || density === 'comfortable') this.density = density;
-      if (localStorage.getItem('mesa:autoPass') === 'off') this.autoPass = false;
       if (localStorage.getItem('mesa:handoffMode') === 'every') this.handoffMode = 'every';
+      const savedPreferences = localStorage.getItem('mesa:priorityPreferences');
       try {
-        const savedStops = JSON.parse(localStorage.getItem('mesa:stops') ?? '{}') as Record<string, unknown>;
-        this.stops = Object.fromEntries(Object.entries(savedStops).filter(([, on]) => on === true)) as Record<string, boolean>;
+        this.priorityPreferences = readSeatPriorityPreferences(savedPreferences ? JSON.parse(savedPreferences) : null);
       } catch {
-        this.stops = {};
+        this.priorityPreferences = {};
+      }
+      // One-way compatibility migration: old device-wide preferences become P0's
+      // preference only. They never silently authorize P1 in a hotseat game.
+      if (!savedPreferences) {
+        try {
+          const oldStops = JSON.parse(localStorage.getItem('mesa:stops') ?? '{}') as Record<string, unknown>;
+          const migrated = readSeatPriorityPreferences({ 0: { mode: 'Standard', stops: oldStops } });
+          if (migrated['0'] && Object.keys(migrated['0'].stops).length) {
+            this.priorityPreferences = migrated;
+          }
+        } catch {
+          // Ignore malformed legacy preferences; Phase starts from Standard.
+        }
+      }
+      this.legacyFullControlOnNextStart = localStorage.getItem('mesa:autoPass') === 'off';
+      try {
+        localStorage.removeItem('mesa:autoPass');
+        localStorage.removeItem('mesa:stops');
+      } catch { /* private mode */ }
+      if (!savedPreferences && Object.keys(this.priorityPreferences).length) {
+        try { localStorage.setItem('mesa:priorityPreferences', JSON.stringify(this.priorityPreferences)); } catch { /* private mode */ }
       }
     }
   }
@@ -128,49 +162,367 @@ class GameSession {
     this.revealedTurn = this.snapshot?.state.turn_number ?? null;
   }
   /**
-   * A blocking seat handoff is only required when another player's turn starts
-   * (default) or on every seat change (strict). Priority windows inside one turn
-   * swap only the visible hand, which is already the acting seat's own hand.
+   * Per-turn handoff is the normal hotseat boundary. A viewer reached by an
+   * automated pass always gets a blocking handoff, even inside the same turn.
+   * The hand is hidden before `apply()` publishes the new seat's snapshot.
    */
   get needsHandoff() {
     const s = this.snapshot;
     if (!s || s.outcome || this.revealedViewer === null) return false;
-    if (this.autoPassPending) return false;
     if (s.viewer === this.revealedViewer) return false;
+    if (this.automaticHandoffViewer === s.viewer) return true;
     return this.handoffMode === 'every' || s.state.turn_number !== this.revealedTurn || s.state.waiting_for.type === 'MulliganDecision';
   }
-  setAutoPass(enabled: boolean) { this.autoPass = enabled; localStorage.setItem('mesa:autoPass', enabled ? 'on' : 'off'); if (enabled) this.maybeAutoPass(); }
-  /** Whether the player asked to hold this step. Unknown steps are never stops. */
-  isStop(step: string | null | undefined): boolean { return !!step && this.stops[step] === true; }
-  setStop(step: string, enabled: boolean) {
-    const next = { ...this.stops };
-    if (enabled) next[step] = true; else delete next[step];
-    this.stops = next;
-    try { localStorage.setItem('mesa:stops', JSON.stringify(next)); } catch { /* private mode */ }
-    // Turning a stop off may release a window the player was holding.
-    if (!enabled) this.maybeAutoPass();
+
+  private get preferenceSeat(): number { return this.snapshot?.viewer ?? 0; }
+  private preferencesFor(seat: number): SeatPriorityPreferences {
+    return this.priorityPreferences[String(seat)] ?? { mode: 'Standard', stops: {} };
   }
-  toggleStop(step: string) { this.setStop(step, !this.isStop(step)); }
-  get stopActive() { return this.isStop(this.snapshot?.state.phase); }
-  /** Phase's viewer-scoped recommendation; the UI never decides that by itself. */
-  get autoPassPending() {
-    return this.autoPass
-      && !this.stopActive
-      && !!this.snapshot
-      && !this.snapshot.outcome
-      && this.snapshot.state.waiting_for.type === 'Priority'
-      && this.snapshot.auto_pass_recommended === true;
+  get priorityMode(): PriorityMode { return this.preferencesFor(this.preferenceSeat).mode; }
+  get effectivePriorityMode(): 'Standard' | 'SkipLowUseWindows' | 'FullControl' {
+    return this.fullControlSeats.includes(this.preferenceSeat)
+      || (!this.snapshot && (this.fullControlOnNextStart || this.legacyFullControlOnNextStart))
+      ? 'FullControl'
+      : this.priorityMode;
   }
-  private maybeAutoPass() {
-    if (this.autoPassQueued || !this.autoPassPending) return;
-    if (this.autoPasses >= 5000) { this.autoPass = false; this.error = 'Se desactivó el auto-paso tras 5000 ventanas; revisa la partida.'; return; }
-    this.autoPassQueued = true;
-    queueMicrotask(() => {
-      this.autoPassQueued = false;
-      if (!this.autoPassPending) return;
-      this.autoPasses++;
-      void this.dispatch({ type: 'PassPriority' });
+  get fullControl(): boolean { return this.effectivePriorityMode === 'FullControl'; }
+  /** Compatibility for the tutorial and older controls; Full Control is temporary, not persisted. */
+  get autoPass(): boolean { return !this.fullControl; }
+  set autoPass(enabled: boolean) { this.setAutoPass(enabled); }
+  get stops(): Record<string, PhaseStopScope> { return this.preferencesFor(this.preferenceSeat).stops; }
+  get autoPassPaused(): boolean { return this.autoPassGate.paused; }
+  get prioritySyncFailed(): boolean {
+    if (!this.snapshot) return false;
+    const seat = this.snapshot.viewer;
+    return this.failedPreferenceSync.get(this.preferenceSyncKey(seat)) === this.preferenceFingerprint(seat);
+  }
+  get prioritySyncPending(): boolean {
+    if (this.status !== 'ready' || !this.snapshot || this.prioritySyncFailed) return false;
+    return !this.preferenceSyncIsCurrent(this.snapshot.viewer);
+  }
+  get enginePriorityMode(): EnginePriorityPassingMode {
+    const seat = this.snapshot?.viewer ?? this.preferenceSeat;
+    return this.snapshot?.state.priority_passing_modes?.[String(seat)] ?? 'Standard';
+  }
+  get enginePhaseStops(): EnginePhaseStop[] {
+    const seat = this.snapshot?.viewer ?? this.preferenceSeat;
+    return this.snapshot?.state.phase_stops?.[String(seat)] ?? [];
+  }
+  get currentAutoPass(): StoredAutoPassMode | null {
+    return this.snapshot?.state.auto_pass?.[String(this.preferenceSeat)] ?? null;
+  }
+  get canCancelAutoPass(): boolean { return this.currentAutoPass !== null; }
+
+  private persistPreferences(): void {
+    try { localStorage.setItem('mesa:priorityPreferences', JSON.stringify(this.priorityPreferences)); } catch { /* private mode */ }
+  }
+  private preferenceFingerprint(seat: number): string {
+    const preferences = this.preferencesFor(seat);
+    return JSON.stringify({
+      mode: this.fullControlSeats.includes(seat) ? 'FullControl' : preferences.mode,
+      stops: Object.entries(preferences.stops).sort(([a], [b]) => a.localeCompare(b))
     });
+  }
+  private preferenceSyncKey(seat: number): string { return `${this.gameGeneration}:${seat}`; }
+  private preferenceSyncIsCurrent(seat: number): boolean {
+    const key = this.preferenceSyncKey(seat);
+    return this.syncedPreferences.get(key) === this.preferenceFingerprint(seat);
+  }
+  private preferencesChanged(): void {
+    this.preferencesVersion += 1;
+    // A preference change cancels an unsent recommendation, but it is not an
+    // implicit retry after stale/rejected work. Only a game/manual action or
+    // the explicit Resume control clears the gate's halted state.
+    this.autoPassGate.invalidate();
+    const seat = this.preferenceSeat;
+    this.failedPreferenceSync.delete(this.preferenceSyncKey(seat));
+    this.maybeAutoPass();
+  }
+  private updateSeatPreferences(seat: number, next: SeatPriorityPreferences): void {
+    this.priorityPreferences = { ...this.priorityPreferences, [String(seat)]: next };
+    this.persistPreferences();
+  }
+
+  setPriorityMode(mode: PriorityMode): void {
+    const seat = this.preferenceSeat;
+    const previous = this.preferencesFor(seat);
+    this.updateSeatPreferences(seat, { ...previous, mode });
+    this.fullControlSeats = this.fullControlSeats.filter((id) => id !== seat);
+    if (!this.snapshot) this.fullControlOnNextStart = false;
+    this.legacyFullControlOnNextStart = false;
+    this.preferencesChanged();
+  }
+  setFullControl(enabled: boolean): void {
+    const seat = this.preferenceSeat;
+    if (!this.snapshot) this.fullControlOnNextStart = enabled;
+    else this.fullControlOnNextStart = false;
+    this.legacyFullControlOnNextStart = false;
+    this.fullControlSeats = enabled
+      ? [...new Set([...this.fullControlSeats, seat])]
+      : this.fullControlSeats.filter((id) => id !== seat);
+    this.preferencesChanged();
+  }
+  setAutoPass(enabled: boolean): void { this.setFullControl(!enabled); }
+  /** Explicit lesson/start-flow override; consumed by the next game only. */
+  setFullControlForNextStart(enabled: boolean): void {
+    this.fullControlOnNextStart = enabled;
+    this.legacyFullControlOnNextStart = false;
+    this.fullControlSeats = enabled ? [0] : [];
+    this.autoPassGate.invalidate();
+  }
+
+  /** Stop scopes use Phase's cycle and are synchronized to this seat in the engine. */
+  isStop(step: string | null | undefined): boolean { return !!step && this.stops[step] !== undefined; }
+  stopScope(step: string | null | undefined): PhaseStopScope | undefined {
+    return step ? this.stops[step] : undefined;
+  }
+  stopApplies(step: string | null | undefined, owner = this.preferenceSeat, activePlayer = this.snapshot?.state.active_player ?? owner): boolean {
+    const scope = this.stopScope(step);
+    return !!scope && phaseStopApplies(scope, owner, activePlayer);
+  }
+  setStop(step: string, value: boolean | PhaseStopScope | null): void {
+    if (!PRIORITY_PHASES.includes(step as (typeof PRIORITY_PHASES)[number])) return;
+    const previous = this.preferencesFor(this.preferenceSeat);
+    const stops = { ...previous.stops };
+    if (value === false || value === null) delete stops[step];
+    else stops[step] = value === true ? 'AllTurns' : value;
+    const seat = this.preferenceSeat;
+    this.updateSeatPreferences(seat, { ...previous, stops });
+    this.preferencesChanged();
+  }
+  cycleStop(step: string): void {
+    this.setStop(step, nextPhaseStopScope(this.stopScope(step)) ?? null);
+  }
+  /** Compatibility alias for older callers; taps now cycle all Phase scopes. */
+  toggleStop(step: string): void { this.cycleStop(step); }
+  get stopActive(): boolean {
+    const snapshot = this.snapshot;
+    return !!snapshot && this.stopApplies(snapshot.state.phase, snapshot.viewer, snapshot.state.active_player);
+  }
+  /** Compatibility labels only; the engine remains the only pass recommendation source. */
+  get autoPassPending(): boolean {
+    const snapshot = this.snapshot;
+    return !!snapshot
+      && !snapshot.outcome
+      && !this.needsHandoff
+      && !this.autoPassGate.paused
+      && this.preferenceSyncIsCurrent(snapshot.viewer)
+      && this.effectivePriorityMode !== 'FullControl'
+      && snapshot.state.waiting_for.type === 'Priority'
+      && snapshot.auto_pass_recommended === true
+      && snapshot.legal.actions.some((action) => action.type === 'PassPriority');
+  }
+
+  private currentPriorityAnchor(): PriorityWindowAnchor | null {
+    const snapshot = this.snapshot;
+    if (!snapshot) return null;
+    return {
+      game: this.gameGeneration,
+      actor: snapshot.viewer,
+      revision: snapshot.revision,
+      activePlayer: snapshot.state.active_player,
+      phase: snapshot.state.phase,
+      preferencesVersion: this.preferencesVersion,
+      waitingFor: snapshot.state.waiting_for.type,
+      recommended: snapshot.auto_pass_recommended === true
+        && snapshot.legal.actions.some((action) => action.type === 'PassPriority'),
+      outcome: !!snapshot.outcome
+    };
+  }
+
+  private ensureEnginePreferences(snapshot: EngineSnapshot): boolean {
+    // `/ux` uses hand-authored snapshots for presentation-only tests; they do
+    // not own an engine worker. Real games become `ready` only after INIT or
+    // GameScenario has returned, at which point this sync is deliberately
+    // started from the caller.
+    if (this.status !== 'ready') return false;
+    const seat = snapshot.viewer;
+    const syncKey = this.preferenceSyncKey(seat);
+    const fingerprint = this.preferenceFingerprint(seat);
+    if (this.syncedPreferences.get(syncKey) === fingerprint) return true;
+    if (this.failedPreferenceSync.get(syncKey) === fingerprint) return false;
+    const pendingKey = `${syncKey}:${fingerprint}`;
+    if (this.preferenceSyncInFlight === pendingKey) return false;
+    if (snapshot.state.waiting_for.type === 'LoopShortcut' || snapshot.state.waiting_for.type === 'RespondToShortcut') return false;
+
+    const game = this.gameGeneration;
+    const revision = snapshot.revision;
+    const actions = [
+      priorityModeAction(this.fullControlSeats.includes(seat) ? 'FullControl' : this.preferencesFor(seat).mode),
+      phaseStopsAction(this.preferencesFor(seat).stops)
+    ];
+    this.preferenceSyncInFlight = pendingKey;
+    const run = async () => {
+      let failed = false;
+      try {
+        const initial = this.snapshot;
+        if (!initial || this.gameGeneration !== game || initial.viewer !== seat || initial.revision !== revision) return;
+        if (this.busy || this.needsHandoff || this.preferenceFingerprint(seat) !== fingerprint) return;
+        this.busy = true;
+        for (const action of actions) {
+          const current = this.snapshot;
+          if (!current || this.gameGeneration !== game || current.viewer !== seat || current.outcome) return;
+          if (this.preferenceFingerprint(seat) !== fingerprint) return;
+          const reply = await this.client.action(seat, action, current.revision);
+          if (this.gameGeneration !== game) return;
+          if (!reply.ok) {
+            failed = true;
+            if (reply.code === 'stale_action') {
+              const refreshed = await this.client.view(seat);
+              if (this.gameGeneration !== game) return;
+              await this.apply(refreshed);
+            } else {
+              this.error = reply.error;
+            }
+            return;
+          }
+          if (reply.viewer !== seat) {
+            failed = true;
+            this.error = 'Phase cambió de asiento mientras se sincronizaban los controles; la automatización quedó en pausa.';
+            await this.apply(reply);
+            return;
+          }
+          await this.apply(reply);
+        }
+        if (this.gameGeneration === game && this.snapshot?.viewer === seat && this.preferenceFingerprint(seat) === fingerprint) {
+          this.syncedPreferences.set(syncKey, fingerprint);
+        }
+      } catch (error) {
+        if (this.gameGeneration === game) {
+          failed = true;
+          this.error = error instanceof Error ? error.message : String(error);
+        }
+      } finally {
+        this.busy = false;
+        if (this.preferenceSyncInFlight === pendingKey) this.preferenceSyncInFlight = null;
+        if (failed && this.gameGeneration === game) {
+          this.failedPreferenceSync.set(syncKey, fingerprint);
+          this.autoPassGate.pause();
+          this.error ??= 'Phase rechazó la sincronización de preferencias; no se reintentará automáticamente.';
+        }
+        if (this.gameGeneration === game) this.maybeAutoPass();
+      }
+    };
+    this.queue = this.queue.then(run, run);
+    return false;
+  }
+
+  confirmHandoff() {
+    if (!this.snapshot) return;
+    this.revealedViewer = this.snapshot.viewer;
+    this.revealedTurn = this.snapshot.state.turn_number;
+    if (this.automaticHandoffViewer === this.snapshot.viewer) this.automaticHandoffViewer = null;
+    this.maybeAutoPass();
+  }
+
+  passUntilBoundary(until: TurnBoundary): void {
+    const snapshot = this.snapshot;
+    if (!snapshot || snapshot.outcome || snapshot.state.waiting_for.type !== 'Priority'
+      || !snapshot.legal.actions.some((action) => action.type === 'PassPriority')) return;
+    // This is an explicit player command, separate from Phase's one-window
+    // recommendation. SetAutoPass includes an immediate pass by its owner.
+    // Full Control is a standing refusal of *automatic* passes, so leave it
+    // before explicitly requesting this Phase-managed pass session.
+    if (this.fullControl) this.setFullControl(false);
+    void this.dispatch(autoPassUntilBoundaryAction(until));
+  }
+  beginResolveAllOwn(): void {
+    const snapshot = this.snapshot;
+    if (!snapshot || snapshot.outcome || snapshot.state.waiting_for.type !== 'Priority' || snapshot.state.stack.length === 0) return;
+    // Always Own + unlimited (0): only Phase may decide the actual pass order,
+    // representative restrictions, responses and consent boundaries. Explicit
+    // Resolve All supersedes this seat's Full Control preference; otherwise
+    // Full Control would immediately suspend the requested own-seat session.
+    if (this.fullControl) this.setFullControl(false);
+    void this.dispatch(resolveAllOwnAction());
+  }
+  cancelAutoPass(): void {
+    if (!this.canCancelAutoPass || this.autoPassCancellationPending) return;
+    // Cancel the engine's turn/stack session and keep the local recommendation
+    // gate paused until the player explicitly resumes it. Capture the requester:
+    // if a PassPriority is already in the Worker, it must finish first and can
+    // hand priority to the other seat before this queued cancellation is sent.
+    const game = this.gameGeneration;
+    const actor = this.preferenceSeat;
+    this.autoPassCancellationPending = true;
+    this.autoPassGate.pause();
+    const settle = () => {
+      if (game !== this.gameGeneration) return;
+      this.autoPassCancellationPending = false;
+      this.autoPassGate.pause();
+    };
+    void this.enqueueDispatch(cancelAutoPassAction(), { actor }).then(settle, settle);
+  }
+  retryPrioritySync(): void {
+    if (!this.snapshot) return;
+    const seat = this.snapshot.viewer;
+    this.failedPreferenceSync.delete(this.preferenceSyncKey(seat));
+    this.autoPassGate.resume();
+    this.error = null;
+    this.maybeAutoPass();
+  }
+  resumeAutoPass(): void {
+    this.autoPassGate.resume();
+    this.error = null;
+    this.maybeAutoPass();
+  }
+
+  private maybeAutoPass(): void {
+    const snapshot = this.snapshot;
+    if (!snapshot || snapshot.outcome || this.needsHandoff) {
+      this.autoPassGate.invalidate();
+      return;
+    }
+    if (!this.ensureEnginePreferences(snapshot)) return;
+    const anchor = this.currentPriorityAnchor();
+    if (!anchor || this.effectivePriorityMode === 'FullControl' || !anchor.recommended
+      || anchor.waitingFor !== 'Priority'
+      || !snapshot.legal.actions.some((action) => action.type === 'PassPriority')) {
+      this.autoPassGate.invalidate();
+      return;
+    }
+    if (this.autoPasses >= 5000) {
+      this.autoPassGate.pause();
+      this.error = 'Se pausó el auto-paso tras 5000 ventanas; revisa la partida antes de reanudar.';
+      return;
+    }
+    this.autoPassGate.schedule(
+      anchor,
+      () => this.currentPriorityAnchor(),
+      (captured, stillCurrent) => this.enqueueDispatch({ type: 'PassPriority' }, {
+        automaticAnchor: captured,
+        autoGuard: stillCurrent
+      }).then((outcome) => outcome.kind),
+      (result) => {
+        if (result === 'accepted') {
+          this.autoPasses += 1;
+          this.maybeAutoPass();
+        } else if (result !== 'unavailable') {
+          this.error = result === 'stale'
+            ? 'La prioridad cambió antes del pase automático. Phase actualizó la vista y pausó la automatización; no se reintentará.'
+            : result === 'failed'
+              ? 'No se pudo verificar el pase automático. La automatización quedó pausada; revisa la ventana y reanúdala explícitamente si corresponde.'
+              : 'Phase no aceptó el pase automático. La automatización quedó pausada; revisa la ventana y reanúdala explícitamente si corresponde.';
+        }
+      }
+    );
+  }
+
+  /** Advance the local game identity and clear actor-scoped engine sync state. */
+  private resetPriorityAutomationForNewGame(): void {
+    const initialFullControl = this.fullControlOnNextStart || this.legacyFullControlOnNextStart;
+    this.gameGeneration += 1;
+    this.preferencesVersion += 1;
+    this.autoPassGate.reset();
+    this.fullControlSeats = initialFullControl ? [0] : [];
+    this.fullControlOnNextStart = false;
+    this.legacyFullControlOnNextStart = false;
+    this.automaticHandoffViewer = null;
+    this.syncedPreferences.clear();
+    this.failedPreferenceSync.clear();
+    this.preferenceSyncInFlight = null;
+    this.autoPasses = 0;
+    this.autoPassCancellationPending = false;
   }
 
   /**
@@ -182,43 +534,76 @@ class GameSession {
    * exporting it is how two resets drift apart.
    */
   prepareStart() {
+    this.startRequestGeneration += 1;
     this.status = 'loading'; this.error = null; this.snapshot = null;
     this.revealedViewer = null; this.revealedTurn = null; this.selected = null; this.inspect = null;
     this.attacks = {}; this.blocks = {}; this.attackPicker = null; this.history = []; this.lifeChanges = {}; this.lastMetrics = null;
-    this.choosing = []; this.autoPasses = 0; this.autoPassQueued = false; this.historyId = 0;
+    this.choosing = []; this.historyId = 0;
+    this.resetPriorityAutomationForNewGame();
+    this.preparedStartGeneration = this.gameGeneration;
   }
 
   /** Load a browser-only state emitted by Phase's GameScenario fixture runner. */
   async startE2EScenario(fixture: unknown) {
     if (!import.meta.env.DEV) throw new Error('GameScenario fixtures are available only in the E2E development build.');
-    await this.queue.catch(() => {});
     this.prepareStart();
+    const game = this.gameGeneration;
+    const request = ++this.startRequestGeneration;
+    await this.queue.catch(() => {});
+    if (game !== this.gameGeneration || request !== this.startRequestGeneration) return;
+    this.preparedStartGeneration = null;
     try {
       const reply = await this.client.e2eScenario(fixture);
+      if (game !== this.gameGeneration || request !== this.startRequestGeneration) return;
       await this.apply(reply);
+      if (game !== this.gameGeneration || request !== this.startRequestGeneration) return;
       if (reply.ok) {
         this.revealedViewer = reply.viewer;
         this.revealedTurn = reply.state.turn_number;
         this.status = 'ready';
+        this.maybeAutoPass();
       } else this.status = 'error';
     } catch (error) {
+      if (game !== this.gameGeneration || request !== this.startRequestGeneration) return;
       this.status = 'error';
       this.error = error instanceof Error ? error.message : String(error);
     }
   }
 
   async start(catalog: unknown, decks: unknown, seed = 42) {
-    await this.queue.catch(() => {});
+    // A direct start invalidates queued recommendations immediately. Board may
+    // already have called prepareStart(), whose generation and one-shot modes
+    // must be preserved rather than reset a second time here.
+    if (this.preparedStartGeneration !== this.gameGeneration) {
+      this.resetPriorityAutomationForNewGame();
+    }
+    const game = this.gameGeneration;
+    const request = ++this.startRequestGeneration;
+    this.preparedStartGeneration = null;
+    this.fullControlOnNextStart = false;
+    this.legacyFullControlOnNextStart = false;
     this.status = 'loading'; this.error = null; this.snapshot = null;
     this.revealedViewer = null; this.revealedTurn = null; this.selected = null; this.inspect = null;
     this.attacks = {}; this.blocks = {}; this.attackPicker = null; this.history = []; this.lifeChanges = {}; this.lastMetrics = null;
-    this.choosing = []; this.autoPasses = 0; this.autoPassQueued = false; this.historyId = 0;
+    this.choosing = []; this.historyId = 0;
+    await this.queue.catch(() => {});
+    if (game !== this.gameGeneration || request !== this.startRequestGeneration) return;
     try {
       const reply = await this.client.init({ protocol_version: ENGINE_PROTOCOL_VERSION, catalog, decks, seed, first_player: 0 });
+      if (game !== this.gameGeneration || request !== this.startRequestGeneration) return;
       await this.apply(reply);
-      if (reply.ok) { this.revealedViewer = reply.viewer; this.revealedTurn = reply.state.turn_number; this.status = 'ready'; }
-      else this.status = 'error';
-    } catch (e) { this.status = 'error'; this.error = e instanceof Error ? e.message : String(e); }
+      if (game !== this.gameGeneration || request !== this.startRequestGeneration) return;
+      if (reply.ok) {
+        this.revealedViewer = reply.viewer;
+        this.revealedTurn = reply.state.turn_number;
+        this.status = 'ready';
+        this.maybeAutoPass();
+      } else this.status = 'error';
+    } catch (e) {
+      if (game !== this.gameGeneration || request !== this.startRequestGeneration) return;
+      this.status = 'error';
+      this.error = e instanceof Error ? e.message : String(e);
+    }
   }
 
   /**
@@ -230,6 +615,20 @@ class GameSession {
    */
   reset() {
     this.client.terminate();
+    this.gameGeneration += 1;
+    this.startRequestGeneration += 1;
+    this.preparedStartGeneration = null;
+    this.preferencesVersion += 1;
+    this.autoPassGate.reset();
+    this.fullControlSeats = [];
+    this.fullControlOnNextStart = false;
+    this.legacyFullControlOnNextStart = false;
+    this.automaticHandoffViewer = null;
+    this.syncedPreferences.clear();
+    this.failedPreferenceSync.clear();
+    this.preferenceSyncInFlight = null;
+    this.autoPasses = 0;
+    this.autoPassCancellationPending = false;
     this.snapshot = null;
     this.status = 'idle';
     this.error = null;
@@ -287,27 +686,47 @@ class GameSession {
    * other than their action. The value used to be `void`; no consumer read it,
    * so returning a result changes nothing for them.
    */
-  dispatch(action: GameAction): Promise<DispatchOutcome> {
+  private enqueueDispatch(
+    action: GameAction,
+    options: { automaticAnchor?: PriorityWindowAnchor; autoGuard?: () => boolean; actor?: number } = {}
+  ): Promise<DispatchOutcome> {
+    const game = this.gameGeneration;
     let outcome: DispatchOutcome = { kind: 'unavailable', message: 'No hay una partida activa que pueda aceptar esa acción.' };
     const run = async () => {
-      if (!this.snapshot || this.busy || this.snapshot.outcome) return outcome;
-      const actionRevision = this.snapshot.revision;
+      const current = this.snapshot;
+      const anchor = options.automaticAnchor;
+      if (game !== this.gameGeneration || !current || current.outcome || this.busy
+        || (options.autoGuard && !options.autoGuard())
+        || (anchor && !priorityWindowMatches(anchor, this.currentPriorityAnchor()))) return outcome;
+      const actionRevision = anchor?.revision ?? current.revision;
       this.busy = true; this.error = null;
       let reply: EngineReply | null = null;
       let reViewed = false;
       let failure: unknown;
       try {
-        reply = await this.client.action(this.snapshot.viewer, action, actionRevision);
+        reply = await this.client.action(options.actor ?? current.viewer, action, actionRevision);
+        if (game !== this.gameGeneration) return outcome;
+        const requiresHandoff = !!anchor || action.type === 'SetAutoPass'
+          || action.type === 'BeginResolveAll' || action.type === 'RespondResolveAllConsent';
+        if (requiresHandoff && isSnapshot(reply) && reply.viewer !== current.viewer) {
+          // Set the privacy barrier before Svelte can render the new viewer.
+          this.automaticHandoffViewer = reply.viewer;
+        }
         await this.apply(reply);
         if (!reply.ok && reply.code === 'stale_action') {
-          await this.apply(await this.client.view(this.snapshot.viewer));
+          const refreshed = await this.client.view(current.viewer);
+          if (game !== this.gameGeneration) return outcome;
+          await this.apply(refreshed);
           reViewed = true;
         }
       } catch (e) {
+        if (game !== this.gameGeneration) return outcome;
         failure = e;
         this.error = e instanceof Error ? e.message : String(e);
       } finally { this.busy = false; }
+      if (game !== this.gameGeneration) return outcome;
       outcome = classifyDispatch({ actionRevision, snapshotBefore: actionRevision, reply, reViewed, error: failure });
+      if (anchor && (outcome.kind === 'failed' || outcome.kind === 'rejected')) this.autoPassGate.pause();
       // A rejection or a stale re-view leaves a sentence on screen: the player
       // has to know the card did not resolve, and be able to try again.
       if (outcome.kind === 'stale' || outcome.kind === 'failed') this.error = outcome.message ?? this.error;
@@ -315,6 +734,15 @@ class GameSession {
     };
     this.queue = this.queue.then(run, run);
     return this.queue as Promise<DispatchOutcome>;
+  }
+
+  dispatch(action: GameAction): Promise<DispatchOutcome> {
+    // A user action takes precedence over an unsent recommendation. The gate's
+    // ticket is checked again at the queue's send boundary, not just when its
+    // microtask is first scheduled.
+    this.autoPassGate.invalidate();
+    this.autoPassGate.resume();
+    return this.enqueueDispatch(action);
   }
 
   openCardMenu(id: ObjectId) { this.cardMenu = id; }
@@ -380,11 +808,6 @@ class GameSession {
   }
   confirmBlockers() {
     void this.dispatch(blockDeclaration(this.blocks));
-  }
-  confirmHandoff() {
-    if (!this.snapshot) return;
-    this.revealedViewer = this.snapshot.viewer;
-    this.revealedTurn = this.snapshot.state.turn_number;
   }
   /** Discard prompts publish the chooseable set and exact count; the UI only picks among them. */
   get discardPrompt() {

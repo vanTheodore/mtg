@@ -141,7 +141,7 @@ export class TutorialController {
       // would take the decisions away from the learner. The setting is not
       // persisted: it belongs to the lesson, not to the player's preferences.
       this.privateAutoPass = session.autoPass;
-      session.autoPass = false;
+      session.setFullControlForNextStart(true);
       session.modeLabel = 'Lección · Mi primera partida';
       await session.start(loaded.catalog, TUTORIAL_DECK, TUTORIAL_SEED);
       if (generation !== this.startGeneration) return;

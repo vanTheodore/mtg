@@ -214,7 +214,7 @@ test('la interfaz explica objetivos, maná y combate sin nombres internos', asyn
   }
   const texts = await decision.innerText();
   expect(texts).not.toMatch(/PassPriority|DeclareAttackers|ManaPayment|TargetSelection|SelectTargets|DiscardToHandSize/);
-  await expect(page.getByRole('checkbox', { name: 'Auto-pasar ventanas sin acciones' })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Pase recomendado por Phase (se desactiva con Control total)' })).toBeVisible();
   const card = page.locator('section[aria-label^="Tu campo de batalla"] [data-card-id]').first();
   if (await card.count()) expect(await card.getAttribute('aria-label')).toContain('Plains');
 });

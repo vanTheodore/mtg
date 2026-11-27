@@ -199,8 +199,8 @@ jobs:
     runs-on: ubuntu-latest
     # GameScenario fixtures place Phase directly in the state each E2E needs;
     # the browser suite no longer plays through random draws to find a card.
-    # UX-DECISION adds eleven motor-real transition tests on top of the measured
-    # 26-minute baseline; keep headroom without weakening the Playwright gate.
+    # UX-DECISION and UX-PRIORITY add motor-real transitions on top of the
+    # measured baseline; keep headroom without weakening the Playwright gate.
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -234,23 +234,23 @@ jobs:
           test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
           for fixture in \
             target-cast manual-payment cancel-cast privacy-handoff \
-            priority-empty priority-stack opponent-turn-response \
+            priority-empty priority-stack priority-auto-pass priority-low-use \
+            priority-resolve-own opponent-turn-response \
             declare-attackers declare-blockers obligatory-decision optional-decision; do
             test -s "static/e2e-scenarios/$fixture.json"
           done
       # The JSON report feeds the annotation step below: the directory names
       # alone say which test broke, the message says why. `list` keeps the
       # readable console output.
-      # The UX-DECISION evidence matrix runs in the parallel `ux-evidence` job
-      # against BOTH the base UI and this UI. The marker is deliberately unique:
-      # a plain `EVIDENCIA` also matches the seven `arena-quality-gate` titles
-      # (which end in «y evidencia») and would silently drop them from this gate.
-      - run: bun --bun playwright test --reporter=list,json --grep-invert MESA_EVIDENCE_UX_DECISION
+      # UX-DECISION and UX-PRIORITY evidence run in their dedicated jobs. Their
+      # markers are deliberately unique: a plain `EVIDENCIA` would also match
+      # the arena-quality-gate titles and silently drop those contracts here.
+      - run: bun --bun playwright test --reporter=list,json --grep-invert 'MESA_EVIDENCE_UX_(DECISION|PRIORITY)'
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/report.json
       # The job summary is the evidence and the gate: it publishes passed /
-      # failed / skipped / retries plus the per-test rows of UX-HAND and
-      # UX-DECISION, and fails the job when a required test was skipped.
+      # failed / skipped / retries plus the per-test rows of UX-HAND,
+      # UX-DECISION and UX-PRIORITY, and fails when a required test was skipped.
       # A `test.skip` written inside a spec leaves the runner green, which is
       # exactly the hole the WASM guard cannot see (`docs/UX-HAND.md`, section G).
       - name: Publish Playwright summary and gate skipped required tests
@@ -366,3 +366,93 @@ jobs:
           path: evidence
           if-no-files-found: warn
           retention-days: 14
+
+  ux-priority-evidence:
+    name: UX-PRIORITY evidence (three Phase modes and live responses)
+    needs: [static, wasm, native-integration]
+    if: needs.static.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun --bun playwright install --with-deps chromium
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm
+          path: static/wasm
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm-e2e
+          path: static/wasm-e2e
+      - uses: actions/download-artifact@v4
+        with:
+          name: e2e-scenario-fixtures
+          path: static/e2e-scenarios
+      - name: Verify Phase artifacts and equivalent fixtures
+        run: |
+          test -s static/wasm/mtg_engine_wasm.wasm
+          test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
+          test -s static/e2e-scenarios/priority-low-use.json
+          test -s static/e2e-scenarios/priority-resolve-own.json
+          test -s static/e2e-scenarios/priority-auto-pass.json
+      - name: Execute UX-PRIORITY measurements in Chromium
+        env:
+          MESA_PRIORITY_EVIDENCE_OUT: evidence/priority
+        run: bun --bun playwright test tests/e2e/ux-priority-evidence.spec.ts --reporter=list --grep MESA_EVIDENCE_UX_PRIORITY
+      - name: Compare measured modes and gate response/privacy/recovery contracts
+        if: always()
+        env:
+          MESA_PRIORITY_EVIDENCE_FILE: evidence/priority/metrics.json
+          MESA_PRIORITY_EVIDENCE_OUT: evidence/priority
+        run: bun scripts/ux-priority-compare.ts
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-priority-evidence
+          path: |
+            evidence/priority
+            test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+  required-ci:
+    name: Required CI gate
+    if: always()
+    needs: [static, wasm, native-integration, browser, ux-evidence, ux-priority-evidence]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every applicable validation job
+        env:
+          STATIC: ${{ needs.static.result }}
+          HEAVY: ${{ needs.static.outputs.heavy }}
+          WASM: ${{ needs.wasm.result }}
+          NATIVE: ${{ needs.native-integration.result }}
+          BROWSER: ${{ needs.browser.result }}
+          UX_DECISION: ${{ needs.ux-evidence.result }}
+          UX_PRIORITY: ${{ needs.ux-priority-evidence.result }}
+        run: |
+          set -euo pipefail
+          test "$STATIC" = success || { echo "static=$STATIC"; exit 1; }
+          for status in "$WASM" "$NATIVE" "$BROWSER" "$UX_DECISION" "$UX_PRIORITY"; do
+            if [ "$HEAVY" = true ]; then
+              test "$status" = success || { echo "heavy CI job did not pass: $status"; exit 1; }
+            else
+              case "$status" in
+                success|skipped) ;;
+                *) echo "unexpected CI result for a light diff: $status"; exit 1 ;;
+              esac
+            fi
+          done
+          echo "Required CI gate passed (heavy=$HEAVY)."

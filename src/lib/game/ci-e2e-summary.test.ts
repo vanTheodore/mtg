@@ -8,8 +8,8 @@ import { join } from 'node:path';
  * The job summary is a gate, not decoration.
  *
  * `scripts/e2e-summary.ts` must (a) publish passed / failed / skipped / retries
- * and the per-test rows of UX-HAND and UX-DECISION, and (b) exit non-zero when a
- * required test of either feature was skipped — that is the hole the WASM guard
+ * and the per-test rows of UX-HAND, UX-DECISION and UX-PRIORITY, and (b) exit
+ * non-zero when a required test of any feature was skipped — that is the hole the WASM guard
  * cannot see, because a `test.skip` inside a spec leaves the Chromium job green.
  *
  * These tests run the real script over synthetic Playwright JSON, so the gate
@@ -48,6 +48,15 @@ const UX_DECISION_TITLES = [
   'cancelación del lanzamiento: la acción de seguridad está fuera del desplegable'
 ];
 
+const UX_PRIORITY_TITLES = [
+  'modos temporales y alcances por asiento se sincronizan con Phase',
+  'pasar hasta una frontera es explícito y protege la mano del siguiente asiento',
+  'handoff estricto oculta y después identifica la mano privada del asiento siguiente',
+  'Resolve All propio no solicita consentimiento compartido',
+  'una pila vacía no se presenta como Resolve All satisfactorio',
+  'CancelAutoPass revoca la sesión propia publicada por Phase'
+];
+
 function uxHandSpecs(): ReportSpec[] {
   return UX_HAND_TITLES.map(([suite, title]) => ({ suite, title, status: 'expected' }));
 }
@@ -61,6 +70,24 @@ function uxDecisionSuite(skippedTitle?: string) {
       return {
         title,
         file: 'ux-decision.spec.ts',
+        line: 1,
+        ok: status === 'expected',
+        tests: [{ status, results: [{ status }] }]
+      };
+    }),
+    suites: []
+  };
+}
+
+function uxPrioritySuite(skippedTitle?: string) {
+  return {
+    file: 'ux-priority.spec.ts',
+    title: '',
+    specs: UX_PRIORITY_TITLES.map((title) => {
+      const status = title === skippedTitle ? 'skipped' : 'expected';
+      return {
+        title,
+        file: 'ux-priority.spec.ts',
         line: 1,
         ok: status === 'expected',
         tests: [{ status, results: [{ status }] }]
@@ -150,11 +177,20 @@ test('falla si una prueba funcional obligatoria no existe en el informe', () => 
   expect(summary).toContain('no se ejecutó');
 });
 
+test('falla si una transición obligatoria de UX-PRIORITY se omite', () => {
+  const skipped = UX_PRIORITY_TITLES[0];
+  const { status, summary } = run(report(uxHandSpecs(), [uxDecisionSuite(), uxPrioritySuite(skipped)]));
+  expect(status).toBe(1);
+  expect(summary).toContain(skipped);
+  expect(summary).toContain('se omitió');
+});
+
 test('pasa cuando todas las obligatorias pasan, y lo dice', () => {
-  const { status, summary } = run(report(uxHandSpecs(), [uxDecisionSuite()]));
+  const { status, summary } = run(report(uxHandSpecs(), [uxDecisionSuite(), uxPrioritySuite()]));
   expect(status).toBe(0);
-  expect(summary).toContain('Las 22 se ejecutaron y pasaron.');
+  expect(summary).toContain('Las 28 se ejecutaron y pasaron.');
   expect(summary).toContain('`ux-decision.spec.ts` (UX-DECISION)');
+  expect(summary).toContain('`ux-priority.spec.ts` (UX-PRIORITY)');
 });
 
 test('un reintento que acaba en verde no cuenta como aprobada a la primera', () => {

@@ -459,7 +459,7 @@ async function startScenarioDeck(page: Page) {
   // in, and with it on a test races the engine — the CI run of 45592511329
   // measured exactly that, a control that appeared and was gone before the click
   // landed. Off, every window is answered on purpose by `waitForMain`.
-  const autoPass = page.getByRole('checkbox', { name: 'Auto-pasar ventanas sin acciones' });
+  const autoPass = page.getByRole('checkbox', { name: 'Pase recomendado por Phase (se desactiva con Control total)' });
   await autoPass.uncheck();
   await expect(autoPass).not.toBeChecked();
 }
