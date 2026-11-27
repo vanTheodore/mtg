@@ -297,7 +297,7 @@ async function executeFlow(page: Page, scenario: string): Promise<number> {
   const before = Number(await applied(page));
   let interactions = 0;
   const click = async (locator: ReturnType<Page['locator']>) => {
-    await locator.click();
+    await locator.click({ timeout: 15_000 });
     interactions += 1;
   };
   if (scenario === 'priority-empty' || scenario === 'priority-stack') {
@@ -313,7 +313,10 @@ async function executeFlow(page: Page, scenario: string): Promise<number> {
     await click(panel.locator('[data-keep-exact] button.primary'));
   } else if (scenario === 'target-cast' || scenario === 'manual-payment') {
     const card = page.locator('.hand-zone [data-card-id], .hand [data-card-id]').first();
-    await click(card);
+    // La carta del abanico queda parcialmente solapada por la siguiente: el
+    // clic que recibe el componente es el de su propio elemento.
+    await card.evaluate((el) => (el as HTMLElement).click());
+    interactions += 1;
     const castButton = scenario === 'manual-payment'
       ? panel.locator('button').filter({ hasText: 'maná manualmente' }).first()
       : panel.locator('button').filter({ hasText: /^Lanzar/ }).first();
