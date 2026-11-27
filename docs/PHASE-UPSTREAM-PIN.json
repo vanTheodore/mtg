@@ -1,8 +1,8 @@
 {
   "origin": "https://github.com/phase-rs/phase",
-  "commit": "e53689630206f113ec61f4813b41856d5cd7c8a9",
-  "version": "0.133.0",
-  "sourceSha256": "7df79a5862ef1e3d54f78e7d4a106c534ad1880c2ab98813f521e7df5b79445f",
+  "commit": "c551672cd7f262579a6cdcd25db128376b1fd9c7",
+  "version": "0.134.0",
+  "sourceSha256": "8cecff1ed3c50164ea5b255c39e48cf3f2ff73baaab46837775fd5f11910db7f",
   "crates": [
     "phase-engine",
     "phase-ast",
@@ -12,26 +12,26 @@
     {
       "local": "crates/phase-engine/src",
       "upstream": "crates/engine/src",
-      "files": 503,
-      "sha256": "7df79a5862ef1e3d54f78e7d4a106c534ad1880c2ab98813f521e7df5b79445f"
+      "files": 504,
+      "sha256": "8cecff1ed3c50164ea5b255c39e48cf3f2ff73baaab46837775fd5f11910db7f"
     },
     {
       "local": "crates/phase-ast/src",
       "upstream": "crates/phase-ast/src",
       "files": 34,
-      "sha256": "77a7609e5493d504a98c95033f1c47746f9b7f0797108cecf0145bb8646e59cd"
+      "sha256": "df1e792753f289d95b497866ee0b3566db73e5b20d9d5ee50132ca42b9a225aa"
     },
     {
       "local": "crates/phase-ast/data",
       "upstream": "crates/phase-ast/data",
       "files": 5,
-      "sha256": "9d30de5f2b22902fdc871f3a1ac02848a2b9548b1e893ecfc2cd63f47e768ee3"
+      "sha256": "52272998542e9ccedbdf1d87ed413ec0e2267c9cf3063bd02e23d1ccce987814"
     },
     {
       "local": "crates/phase-parser/src",
       "upstream": "crates/phase-parser/src",
       "files": 404,
-      "sha256": "22bfbec3f998171c4330008960ab96845d35ae5ad065997cc51d36a464645113"
+      "sha256": "d2bd1d360c9a96d792f152dc6e0bc9807fd79fb20be0ffd3a82e64609b840769"
     },
     {
       "local": "crates/phase-engine/data",

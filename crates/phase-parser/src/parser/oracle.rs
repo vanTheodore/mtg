@@ -54,8 +54,8 @@ use super::oracle_nom::primitives::{
 use super::oracle_attraction::parse_attraction_visit_triggers;
 use super::oracle_casting::{
     additional_cost_line_text, extract_spend_only_on_x_prefix, is_cast_this_spell_only_line,
-    parse_additional_cost_line, parse_casting_restriction_line, parse_spell_casting_option_line,
-    split_additional_cost_trailing_spell_reduction,
+    parse_additional_cost_line, parse_casting_restriction_line, parse_conditional_self_payment,
+    parse_spell_casting_option_line, split_additional_cost_trailing_spell_reduction,
 };
 use super::oracle_class::parse_class_oracle_text;
 use super::oracle_classifier::{
@@ -3816,6 +3816,7 @@ fn filter_references_source_chosen_player(filter: &TargetFilter) -> bool {
                         prop,
                         FilterProp::Attacking {
                             defender: Some(ControllerRef::SourceChosenPlayer),
+                            ..
                         }
                     )
                 })
@@ -4888,7 +4889,7 @@ fn parse_flash_cleanup_sacrifice_casting_option(
         AbilityKind::Spell,
         Effect::Sacrifice {
             target: TargetFilter::SelfRef,
-            count: QuantityExpr::Fixed { value: 1 },
+            count: QuantityExpr::Fixed { value: 1 }.into(),
             min_count: 0,
         },
     );
@@ -8319,6 +8320,12 @@ fn parse_normalized_oracle_ir(
             continue;
         }
 
+        if let Some(option) = parse_conditional_self_payment(&line) {
+            emitter.casting_option_at(item_line, option);
+            i += 1;
+            continue;
+        }
+
         // Priority 7: Static/continuous patterns
         // CR 611.2a + CR 611.3a: On permanents, "creatures you control get +1/+1"
         // is a static ability (CR 611.3a). On instants/sorceries, lines with an
@@ -11101,6 +11108,7 @@ fn resolve_guards_in_effect(effect: &mut Effect) {
         | Effect::ArrangePlanarDeckTop { .. }
         | Effect::Planeswalk
         | Effect::AbandonScheme
+        | Effect::SetSchemeInMotion { .. }
         | Effect::ChaosEnsues
         | Effect::ReverseTurnOrder
         | Effect::RedistributeLifeTotals
@@ -12199,6 +12207,7 @@ fn demote_lifetimes_in_effect(effect: &mut Effect) {
         | Effect::ArrangePlanarDeckTop { .. }
         | Effect::Planeswalk
         | Effect::AbandonScheme
+        | Effect::SetSchemeInMotion { .. }
         | Effect::ChaosEnsues
         | Effect::ReverseTurnOrder
         | Effect::RedistributeLifeTotals
@@ -13090,18 +13099,18 @@ fn parse_equip_target_filter(cost_text: &str) -> Option<TargetFilter> {
         nom::sequence::terminated(take_until::<_, _, OracleError<'_>>("{"), tag("{"))
             .parse(lower.as_str())
     else {
-        return Some(default_equip_target_filter());
+        return Some(TargetFilter::equip_target());
     };
     let descriptor = descriptor.trim();
     if descriptor.is_empty() {
-        return Some(default_equip_target_filter());
+        return Some(TargetFilter::equip_target());
     }
 
     if tag::<_, _, OracleError<'_>>("pay")
         .parse(descriptor)
         .is_ok()
     {
-        return Some(default_equip_target_filter());
+        return Some(TargetFilter::equip_target());
     }
 
     if alt((
@@ -13162,12 +13171,6 @@ fn equip_target_has_explicit_attachable_type(typed: &TypedFilter) -> bool {
                 | crate::types::ability::TypeFilter::Planeswalker
         )
     })
-}
-
-fn default_equip_target_filter() -> TargetFilter {
-    TargetFilter::Typed(
-        TypedFilter::creature().controller(crate::types::ability::ControllerRef::You),
-    )
 }
 
 fn parse_equip_cost(cost_text: &str) -> AbilityCost {
