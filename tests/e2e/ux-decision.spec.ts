@@ -159,7 +159,7 @@ test('objetivos: selección directa, lista accesible y progreso sin duplicados',
   await expect(panel(page).locator('[aria-label^="Carta seleccionada"]')).toBeVisible();
   // El pago manual es secundario: no compite con «Lanzar».
   const manual = panel(page).locator('button.manual[data-tier="secondary"]');
-  await expect(manual).toContainText('Elegir maná manualmente');
+  await expect(manual).toContainText('eligiendo el maná manualmente');
   await expect(panel(page).locator('[data-tier="primary"]')).toHaveCount(0);
   const before = Number(await applied(page));
   await panel(page).locator('button').filter({ hasText: 'Lanzar' }).first().click();
@@ -175,11 +175,9 @@ test('objetivos: selección directa, lista accesible y progreso sin duplicados',
 test('pago manual: accesible bajo demanda, nunca dominante', async ({ page }) => {
   const driver = await openScenario(page, 'manual-payment');
   await expect(page.locator('.app')).toHaveAttribute('data-waiting', 'Priority');
-  // Sin carta seleccionada, la preferencia vive en `DecisionTiers`; al
-  // inspeccionar el Rayo aparece también el control secundario de su ficha.
-  // Ambas superficies deben existir y ninguna puede ser la acción principal.
-  const tiersManual = panel(page).locator('[data-decision-tiers] button').filter({ hasText: 'Elegir maná manualmente' }).first();
-  await expect(tiersManual).toHaveCount(1);
+  // UX-DECISION 1.1: sin carta elegida no existe ningún comando de pago
+  // derivado del primer CastSpell; el pago manual nace de la carta elegida.
+  await expect(panel(page).locator('[data-starts-cast="true"]')).toHaveCount(0);
   await expect(page.locator('[data-decision-primary]')).not.toContainText('maná manualmente');
   const card = driver.hand.locator('[data-card-id]').first();
   await driver.clickCard(card);

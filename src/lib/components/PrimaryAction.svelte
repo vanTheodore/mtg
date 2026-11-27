@@ -42,7 +42,7 @@
   button {
     width: 100%;
     text-align: left;
-    min-height: 40px;
+    min-height: 44px;
     padding: .5rem .65rem;
     border: 1px solid var(--accent);
     border-radius: 10px;

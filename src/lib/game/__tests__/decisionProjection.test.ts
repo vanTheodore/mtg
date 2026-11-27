@@ -106,7 +106,10 @@ describe('UX-DECISION · proyección de decisiones', () => {
     expect(projection.primary?.action.type).toBe('PassPriority');
     expect(projection.tiers.strategic.filter((a) => a.action.type === 'CastSpell')).toHaveLength(2);
     expect(projection.tiers.strategic.filter((a) => a.action.type === 'ChooseOption')).toHaveLength(2);
-    expect(projection.tiers.secondary.some((a) => a.label === 'Elegir maná manualmente')).toBe(true);
+    // UX-DECISION 1.1: sin carta elegida no se deriva ningún comando de pago
+    // del primer CastSpell publicado.
+    expect(projection.tiers.secondary.some((a) => a.startsCast)).toBe(false);
+    expect(projection.tiers.advanced.some((a) => a.startsCast)).toBe(false);
   });
 
   test('maná: el pago manual es una preferencia derivada, no una acción dominante', () => {
@@ -124,16 +127,80 @@ describe('UX-DECISION · proyección de decisiones', () => {
 
   test('maná sacrificial: se ofrece el modo del DTO sin simular previsualización', () => {
     const s = snapshot((v) => {
+      v.state.objects = { '7': { id: 7, name: 'Rayo' } as GameObject };
       v.legal.actions = [{ type: 'PassPriority' }, { type: 'CastSpell', data: { object_id: 7 } }];
     });
-    const projection = projectDecision({ snapshot: s })!;
-    const avoid = projection.tiers.advanced.find((a) => a.label === 'Evitar fuentes sacrificiales');
+    const projection = projectDecision({ snapshot: s, selectedId: 7 })!;
+    const avoid = projection.tiers.advanced.find((a) => a.startsCast);
     expect(avoid).toBeDefined();
+    expect(avoid!.label).toContain('Lanzar Rayo');
+    expect(avoid!.label).toContain('evitando fuentes sacrificiales');
+    expect(avoid!.startsCast).toBe(true);
+    expect(avoid!.boundObjectId).toBe(7);
     expect((avoid!.action.data?.payment_mode as { type?: string })?.type).toBe('AutoExceptSacrificialMana');
-    expect(avoid!.hint).toContain('no previsualiza fuentes');
+    expect(avoid!.hint).toContain('no las previsualiza');
     // La acción original del motor no se muta: la proyección es pura.
     expect(s.legal.actions[1].data?.payment_mode).toBeUndefined();
     expect(projection.integrity.ok).toBe(true);
+  });
+
+  test('UX-DECISION 1.1 · pago vinculado a la segunda carta lanzable, no a la primera', () => {
+    const first = { type: 'CastSpell', data: { object_id: 7, card_id: 7, targets: [], payment_mode: { type: 'Auto' } } };
+    const second = { type: 'CastSpell', data: { object_id: 8, card_id: 8, targets: [{ Player: 1 }], payment_mode: { type: 'Auto' } } };
+    const s = snapshot((v) => {
+      v.state.objects = { '7': { id: 7, name: 'Primera' } as GameObject, '8': { id: 8, name: 'Segunda' } as GameObject };
+      v.legal.actions = [{ type: 'PassPriority' }, first, second];
+    });
+    const projection = projectDecision({ snapshot: s, selectedId: 8 })!;
+    const manual = projection.tiers.secondary.find((a) => a.startsCast)!;
+    expect(manual.boundObjectId).toBe(8);
+    expect(manual.boundCastKey).toBeDefined();
+    expect(manual.label).toContain('Segunda');
+    // Payload exacto que `session.dispatch` entrega a `EngineClient.action`
+    // (éste lo clona con JSON antes de postMessage): sólo cambia payment_mode.
+    expect(JSON.parse(JSON.stringify(manual.action))).toEqual({
+      type: 'CastSpell',
+      data: { object_id: 8, card_id: 8, targets: [{ Player: 1 }], payment_mode: { type: 'Manual' } }
+    });
+    expect(JSON.parse(JSON.stringify(first))).toEqual({ type: 'CastSpell', data: { object_id: 7, card_id: 7, targets: [], payment_mode: { type: 'Auto' } } });
+    // Y sin carta elegida no se deriva ningún comando de pago.
+    const unbound = projectDecision({ snapshot: s })!;
+    expect(unbound.tiers.secondary.some((a) => a.startsCast)).toBe(false);
+    expect(unbound.tiers.advanced.some((a) => a.startsCast)).toBe(false);
+  });
+
+  test('UX-DECISION 1.1 · dos alternativas de una carta exigen la alternativa explícita', () => {
+    const base = { type: 'CastSpell', data: { object_id: 7, card_id: 7, targets: [], payment_mode: { type: 'Auto' } } };
+    const adventure = { type: 'CastSpell', data: { object_id: 7, card_id: 7, face: 'Adventure', targets: [], payment_mode: { type: 'Auto' } } };
+    const s = snapshot((v) => {
+      v.state.objects = { '7': { id: 7, name: 'Doble cara' } as GameObject };
+      v.legal.actions = [{ type: 'PassPriority' }, base, adventure];
+    });
+    // La carta elegida no identifica la alternativa: no se adivina la primera.
+    const ambiguous = projectDecision({ snapshot: s, selectedId: 7 })!;
+    expect(ambiguous.tiers.secondary.some((a) => a.startsCast)).toBe(false);
+    expect(ambiguous.tiers.advanced.some((a) => a.startsCast)).toBe(false);
+    // Con la alternativa elegida, el payload conserva su `face`.
+    const chosen = projectDecision({ snapshot: s, selectedId: 7, selectedCastKey: 'CastSpell:{"card_id":7,"face":"Adventure","object_id":7,"payment_mode":{"type":"Auto"},"targets":[]}' })!;
+    const manual = chosen.tiers.secondary.find((a) => a.startsCast)!;
+    expect(JSON.parse(JSON.stringify(manual.action))).toEqual({
+      type: 'CastSpell',
+      data: { object_id: 7, card_id: 7, face: 'Adventure', targets: [], payment_mode: { type: 'Manual' } }
+    });
+  });
+
+  test('UX-DECISION 1.1 · una acción que consume su carta no se presenta como confirmación inexistente', () => {
+    const s = snapshot((v) => {
+      v.state.objects = { '5': { id: 5, name: 'Ciclante', abilities: [{ consumes_source: true }] } as unknown as GameObject };
+      v.legal.actions = [{ type: 'PassPriority' }, { type: 'ActivateAbility', data: { source_id: 5, ability_index: 0 } }];
+    });
+    const projection = projectDecision({ snapshot: s })!;
+    const cycling = projection.tiers.secondary.find((a) => a.confirmation === 'card-consuming')!;
+    // El contrato es la pulsación explícita de su propio botón: no hay un
+    // segundo paso de confirmación y la etiqueta no debe prometerlo.
+    expect(cycling.label).not.toContain('confirmación');
+    expect(cycling.hint).toContain('inspeccionar nunca lo ejecuta');
+    expect(projection.primary?.action.type).toBe('PassPriority');
   });
 
   test('objetivos: progreso y etiqueta de ranura salen del DTO de Phase', () => {

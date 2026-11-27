@@ -534,7 +534,7 @@
         <div class="actions">
           {#each casts as action, i (i)}
             <button type="button" class="primary" disabled={session.busy} onclick={() => play(action)}>Lanzar {selected.name}{casts.length > 1 ? ` · opción ${i + 1}` : ''}</button>
-            <button type="button" class="manual" data-tier="secondary" disabled={session.busy} onclick={() => play(manualCast(action))}>Elegir maná manualmente</button>
+            <button type="button" class="manual" data-tier="secondary" disabled={session.busy} onclick={() => play(manualCast(action))}>Lanzar eligiendo el maná manualmente</button>
           {/each}
           {#each otherSelected as action, i (i)}<button type="button" disabled={session.busy} onclick={() => play(action)}>{describeAction(action, objects)}</button>{/each}
           {#each selectedMana as action, i (i)}<button type="button" disabled={session.busy} onclick={() => play(action)}>{manaLabel(action)}</button>{/each}
@@ -588,7 +588,7 @@
   .prompt strong { font-size: .9rem; }
   .prompt span, .prompt p { font-size: .82rem; margin: 0; }
   .actions { display: flex; flex-direction: column; gap: .4rem; }
-  .actions button { text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 9px; padding: .55rem .65rem; font-size: .84rem; min-height: 36px; }
+  .actions button { text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 9px; padding: .55rem .65rem; font-size: .84rem; min-height: 44px; }
   .actions button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 650; }
   /* Compatibilidad: `.confirmations` es el nombre que el gate de Playwright y
      los drivers de partida completa ya conocen. La nueva superficie se reparte
@@ -601,7 +601,7 @@
   .tiers-slot { flex: 1 1 160px; min-width: 0; }
   .discard-count { margin: .35rem 0 0; }
   .link { background: none; border: none; color: var(--focus); font-size: .78rem; padding: .2rem; text-align: left; }
-  .actions button.manual { font-size: .76rem; color: var(--ink-muted); min-height: 36px; }
+  .actions button.manual { font-size: .76rem; color: var(--ink-muted); min-height: 44px; }
   .board-hint { color: var(--ink-muted); }
   .muted { color: var(--ink-muted); font-size: .82rem; }
   .draft { margin: .2rem 0; padding-left: 1.1rem; font-size: .82rem; display: grid; gap: .3rem; }

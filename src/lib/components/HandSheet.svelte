@@ -300,7 +300,7 @@
             </button>
             {#if choice.kind === 'cast'}
               <button type="button" disabled={session.busy} onclick={() => play(manualCast(choice.action))}>
-                Elegir maná manualmente
+                Lanzar eligiendo el maná manualmente
               </button>
             {/if}
           {/each}

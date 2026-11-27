@@ -702,7 +702,7 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
     await bolt.locator('[data-card-id]').first().click();
     const detail = page.locator('.sheet-detail');
     await expect(detail).toBeVisible();
-    const manual = detail.locator('button').filter({ hasText: 'Elegir maná manualmente' });
+    const manual = detail.locator('button').filter({ hasText: 'eligiendo el maná manualmente' });
     await expect(manual, 'la prueba requiere y no sustituye el modo de pago manual').toHaveCount(1);
     await manual.tap();
 
@@ -739,7 +739,7 @@ test.describe('escenarios deterministas (Phase GameScenario, motor real)', () =>
     await openScenarioSheet(page);
     const bolt = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Lightning Bolt' }).first();
     await bolt.locator('[data-card-id]').first().click();
-    const manual = page.locator('.sheet-detail button').filter({ hasText: 'Elegir maná manualmente' });
+    const manual = page.locator('.sheet-detail button').filter({ hasText: 'eligiendo el maná manualmente' });
     await expect(manual).toHaveCount(1);
     await manual.tap();
     const app = page.locator('.app');

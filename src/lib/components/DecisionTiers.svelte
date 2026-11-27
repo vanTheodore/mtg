@@ -84,11 +84,11 @@
                 type="button"
                 data-tier={tier}
                 data-decision-action={action.key}
-                data-confirmation={action.confirmation ?? undefined}
+                data-card-consuming={action.confirmation ? 'true' : undefined} data-starts-cast={action.startsCast ? 'true' : undefined} data-bound-object={action.boundObjectId ?? undefined} data-bound-cast={action.boundCastKey ?? undefined}
                 disabled={disabled}
                 onclick={() => activate(action)}
               >
-                <span>{action.label}{action.confirmation ? ' · requiere confirmación' : ''}</span>
+                <span>{action.label}{action.confirmation ? ' · consume su carta' : ''}</span>
                 {#if action.hint}<small>{action.hint}</small>{/if}
               </button>
             {/each}
@@ -109,7 +109,7 @@
 <style>
   .tiers { margin-top: .5rem; font-size: .8rem; }
   summary {
-    cursor: pointer; min-height: 28px; display: flex; align-items: center; gap: .3rem;
+    cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: .3rem;
     padding: .2rem .4rem; border: 1px solid var(--line); border-radius: 9px;
     background: var(--surface-2); color: var(--ink); list-style-position: inside;
   }
@@ -123,15 +123,15 @@
   h3 { margin: 0; font-size: .74rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-muted); }
   .actions { display: grid; gap: .3rem; }
   .actions button, .cancel {
-    display: grid; gap: .1rem; text-align: left; min-height: 40px;
+    display: grid; gap: .1rem; text-align: left; min-height: 44px;
     border: 1px solid var(--line); border-radius: 9px; background: var(--surface);
     color: var(--ink); font: inherit; font-size: .8rem; padding: .45rem .6rem; cursor: pointer;
   }
   .actions button small { font-size: .69rem; color: var(--ink-muted); line-height: 1.3; }
-  .actions button[data-confirmation] { border-color: color-mix(in srgb, #b45309 65%, var(--line)); }
+  .actions button[data-card-consuming] { border-color: color-mix(in srgb, #b45309 65%, var(--line)); }
   .actions button:focus-visible, .cancel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .cancel-row { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
-  .cancel { min-height: 40px; font-size: .78rem; }
+  .cancel { min-height: 44px; font-size: .78rem; }
   .sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;

@@ -308,3 +308,42 @@ flujos con pipeline completo (prioridad, lanzamiento, objetivos, pago, combate).
 Ver [`docs/ROADMAP.md`](ROADMAP.md). UX-PRIORITY queda como la continuación
 natural: política de automatización, preview de pagos en el ABI y consumo de la
 sugerencia de daño de Phase.
+
+
+---
+
+## 7. UX-DECISION 1.1 — identidad, instrumentación y ergonomía
+
+Revisión posterior a la revisión externa de 1.0 (PR #76). No cambia la
+arquitectura aprobada; cierra defectos concretos:
+
+- **A1 · Identidad de las acciones.** Los comandos de pago derivados ya no
+  salen de `actions.find(a => a.type === 'CastSpell')`. Se vinculan a la carta
+  (`boundObjectId`) y a la alternativa (`boundCastKey` = `stableKey` del
+  lanzamiento) explícitamente elegidas: sin elección no se deriva ningún
+  comando; con dos alternativas de una carta hace falta `selectedCastKey`.
+  El payload conserva carta, cara y objetivos byte a byte y sólo cambia
+  `payment_mode` (regresiones con dos cartas lanzables y dos alternativas).
+  Esos controles **inician un lanzamiento** (`startsCast`) y se etiquetan como
+  tal; la preferencia global sigue siendo `SetPriorityPassingMode`. Las
+  acciones que consumen su carta (`consumes_source`) ya no prometen una
+  «confirmación» inexistente: el contrato es la pulsación explícita de su
+  propio botón, e inspeccionar nunca ejecuta.
+- **A2 · Instrumentación.** Un `<summary>` con su `<details>` cerrado cuenta
+  como control visible; «visible» se descompone en CSS, viewport, recorte y
+  hit-testing real. `interactionsNeeded` se **ejecuta** (clics contados hasta
+  que el motor aplica la decisión). El comparador comprueba identidad y
+  accesibilidad de la acción principal y ya no penaliza quitar controles
+  redundantes: el recuento total de botones es informativo, no un gate.
+- **A3 · Evidencia representativa.** Ocho estados verificados por
+  `data-waiting` (prioridad vacía y con pila, objetivos, pago manual,
+  atacantes, bloqueadoras, obligatoria y opcional), comparados antes/después
+  con el mismo fixture. La superficie avanzada **abierta** se mide en
+  escritorio, móvil y landscape: todos sus controles deben ser alcanzables.
+- **A4 · Ergonomía.** El `0` de `effectiveTouchTargets` era un artefacto de
+  medir sólo ≥44 px con controles de 28–40 px: acción principal, botones de
+  nivel, cancelación, `<summary>`, modos de prioridad y enlace de paradas
+  miden ahora 44 px de alto mínimo, y el gate cuenta cuántos objetivos
+  alcanzables quedan por debajo.
+- **A5 · Cierre.** Se mantienen las 22 pruebas funcionales obligatorias, las
+  mejoras de UX-HAND, el aislamiento WASM, GameScenario y los especialistas.

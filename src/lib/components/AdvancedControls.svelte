@@ -69,10 +69,10 @@
   .advanced { display: grid; gap: .35rem; font-size: .76rem; }
   .state { margin: 0; color: var(--ink-muted); }
   .row { display: flex; }
-  .link { background: none; border: none; color: var(--focus); font: inherit; padding: .25rem 0; text-align: left; cursor: pointer; min-height: 32px; }
+  .link { background: none; border: none; color: var(--focus); font: inherit; padding: .25rem 0; text-align: left; cursor: pointer; min-height: 44px; }
   .modes { display: flex; flex-wrap: wrap; gap: .3rem; }
   .modes button {
-    min-height: 36px; padding: .35rem .55rem; font: inherit; font-size: .74rem;
+    min-height: 44px; padding: .35rem .55rem; font: inherit; font-size: .74rem;
     border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer;
   }
   .modes button:focus-visible, .link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

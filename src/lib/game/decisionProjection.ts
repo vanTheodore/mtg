@@ -73,8 +73,16 @@ export interface ProjectedAction {
    * el motor lo publica como `consumes_source`. Nunca se auto-despacha. */
   confirmation?: 'card-consuming';
   origin: 'legal.actions' | 'draft' | 'preference' | 'navigation';
-  /** Un control derivado de una preferencia, no una `GameAction` del motor. */
+  /** Un control derivado, no una `GameAction` tal como la publicó el motor. */
   panel?: 'phase-stops' | 'priority-mode' | 'payment-mode' | 'inspect';
+  /** UX-DECISION 1.1: carta a la que está vinculado un comando derivado. */
+  boundObjectId?: ObjectId;
+  /** Identidad (`stableKey`) del lanzamiento concreto del que deriva. Dos
+   * alternativas de la misma carta tienen claves distintas. */
+  boundCastKey?: string;
+  /** El control no cambia una preferencia global: al pulsarlo se *inicia* el
+   * lanzamiento vinculado, con el modo de pago indicado. */
+  startsCast?: boolean;
 }
 
 export interface DecisionContextInfo {
@@ -144,6 +152,10 @@ export interface ProjectionInput {
   /** Hay una carta seleccionada: su propia superficie (inspeccionar / lanzar)
    * es la acción dominante y la proyección no debe competir con ella. */
   suppressPrimary?: boolean;
+  /** UX-DECISION 1.1: lanzamiento elegido explícitamente (`stableKey`). Es la
+   * única vía para vincular un pago cuando una carta tiene dos alternativas:
+   * la carta sola no identifica cuál de las dos quiere el jugador. */
+  selectedCastKey?: string;
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -375,51 +387,65 @@ export function projectDecision(input: ProjectionInput): DecisionProjection | nu
       tiers.strategic.push({ ...entry, hint: context.consequence });
       classified.add(key);
     } else if (action.type === 'MulliganDecision' || action.type === 'DeclareAttackers' || action.type === 'DeclareBlockers' || action.type === 'CastSpell' || action.type === 'ChooseTarget' || action.type === 'ChooseOption') {
-      tiers.strategic.push({ ...entry, hint: entry.confirmation ? 'Esta acción consume su carta: requiere confirmación explícita.' : undefined });
+      tiers.strategic.push({ ...entry, hint: entry.confirmation ? 'Consume su carta: sólo se ejecuta al pulsar este botón explícito; inspeccionar nunca lo ejecuta.' : undefined });
       classified.add(key);
     } else if (MANA_ACTIONS.has(action.type)) {
-      tiers.secondary.push({ ...entry, hint: entry.confirmation ? 'Requiere confirmación explícita.' : undefined });
+      tiers.secondary.push({ ...entry, hint: entry.confirmation ? 'Consume su carta: sólo se ejecuta al pulsar este botón explícito; inspeccionar nunca lo ejecuta.' : undefined });
       classified.add(key);
     } else {
-      tiers.secondary.push({ ...entry, hint: entry.confirmation ? 'Requiere confirmación explícita.' : undefined });
+      tiers.secondary.push({ ...entry, hint: entry.confirmation ? 'Consume su carta: sólo se ejecuta al pulsar este botón explícito; inspeccionar nunca lo ejecuta.' : undefined });
       classified.add(key);
     }
   }
 
-  // 3 · Preferencias de pago: derivadas de acciones legales de lanzamiento,
-  // nunca acciones inventadas. `Manual` y `AutoExceptSacrificialMana` son
-  // modos del DTO que Phase ya acepta (`CastPaymentMode`).
-  if (!specialistActive && (kind === 'Priority' || manaWindow)) {
-    const cast = actions.find((a) => a.type === 'CastSpell');
-    if (cast && !classified.has(`preference:manual:${stableKey(cast)}`)) {
-      tiers.secondary.push({
-        key: `preference:manual:${stableKey(cast)}`,
-        label: 'Elegir maná manualmente',
-        hint: 'El pago automático sigue siendo la vía principal; éste es un acceso bajo demanda.',
-        action: JSON.parse(JSON.stringify(manualCast(cast))) as GameAction, origin: 'preference', panel: 'payment-mode'
-      });
-    }
+  // 3 · Comandos de lanzamiento con un modo de pago, vinculados a la carta y
+  // a la alternativa *explícitamente elegidas* (UX-DECISION 1.1). 1.0 derivaba
+  // estos controles de `actions.find(a => a.type === 'CastSpell')`: con dos
+  // cartas lanzables —o dos caras de la misma— eso apuntaba al primer
+  // lanzamiento publicado, no necesariamente al que el jugador quería, y la
+  // etiqueta («Elegir maná manualmente») lo presentaba como si sólo cambiara
+  // una preferencia cuando en realidad *inicia* ese lanzamiento. Ahora:
+  //   - sin elección explícita no se deriva ningún comando de pago;
+  //   - con una carta elegida que tiene un único lanzamiento, se vincula a él;
+  //   - con dos alternativas de la misma carta hace falta `selectedCastKey`;
+  //     la carta sola no identifica la alternativa, así que no se adivina.
+  // `Manual` y `AutoExceptSacrificialMana` son modos del DTO que Phase ya
+  // acepta (`CastPaymentMode`); el resto del payload (carta, cara, objetivos)
+  // se conserva byte a byte, y eso lo comprueban las regresiones.
+  const casts = actions.filter((a) => a.type === 'CastSpell');
+  let boundCast: GameAction | undefined;
+  if (input.selectedCastKey) {
+    boundCast = casts.find((a) => stableKey(a) === input.selectedCastKey);
+  } else if (input.selectedId !== undefined && input.selectedId !== null) {
+    const forCard = casts.filter((a) => actionObjectId(a) === input.selectedId);
+    if (forCard.length === 1) boundCast = forCard[0];
   }
-
-  // 3b · `CastPaymentMode::AutoExceptSacrificialMana` es un modo del DTO que
-  // Phase ya acepta. Se ofrece como control avanzado, derivado de un CastSpell
-  // legal. NO hay previsualización: nuestro ABI (INIT/ACTION/VIEW/E2E_SCENARIO)
-  // no expone `previewManaPayment`, así que no se muestra ni se inventa qué
-  // fuentes usaría el motor. La decisión sigue siendo de Phase.
-  if (!specialistActive && (kind === 'Priority' || manaWindow)) {
-    const cast = actions.find((a) => a.type === 'CastSpell');
-    if (cast) {
-      tiers.advanced.push({
-        key: `preference:sacrificial:${stableKey(cast)}`,
-        label: 'Evitar fuentes sacrificiales',
-        hint: 'Phase decide el pago; Mesa no previsualiza fuentes porque el ABI no publica esa operación.',
-        action: {
-          ...JSON.parse(JSON.stringify(cast)) as GameAction,
-          data: { ...(cast.data ?? {}), payment_mode: { type: 'AutoExceptSacrificialMana' } }
-        },
-        origin: 'preference', panel: 'payment-mode'
-      });
-    }
+  if (!specialistActive && (kind === 'Priority' || manaWindow) && boundCast) {
+    const cast = boundCast;
+    const castKey = stableKey(cast);
+    const cardName = (() => { const id = actionObjectId(cast); return id !== undefined ? (objects[String(id)]?.name ?? 'la carta elegida') : 'la carta elegida'; })();
+    const manualAction = JSON.parse(JSON.stringify(manualCast(cast))) as GameAction;
+    tiers.secondary.push({
+      key: `preference:manual:${castKey}`,
+      label: describeAction(manualAction, objects),
+      hint: `Comando de lanzamiento: al pulsarlo se lanza ${cardName} eligiendo el maná manualmente. No es una preferencia global.`,
+      action: manualAction, origin: 'preference', panel: 'payment-mode',
+      boundObjectId: actionObjectId(cast), boundCastKey: castKey, startsCast: true
+    });
+    // 3b · `AutoExceptSacrificialMana`: mismo vínculo, mismo carácter de
+    // comando. NO hay previsualización: nuestro ABI no expone
+    // `previewManaPayment`, así que no se inventa qué fuentes usaría Phase.
+    tiers.advanced.push({
+      key: `preference:sacrificial:${castKey}`,
+      label: `Lanzar ${cardName} evitando fuentes sacrificiales`,
+      hint: `Comando de lanzamiento: al pulsarlo se lanza ${cardName} con ese modo de pago. Phase decide las fuentes; Mesa no las previsualiza porque el ABI no publica esa operación.`,
+      action: {
+        ...JSON.parse(JSON.stringify(cast)) as GameAction,
+        data: { ...(cast.data ?? {}), payment_mode: { type: 'AutoExceptSacrificialMana' } }
+      },
+      origin: 'preference', panel: 'payment-mode',
+      boundObjectId: actionObjectId(cast), boundCastKey: castKey, startsCast: true
+    });
   }
 
   // 4 · Controles avanzados que no son acciones del motor. La superficie
