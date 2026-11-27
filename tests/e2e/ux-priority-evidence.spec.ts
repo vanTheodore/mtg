@@ -115,6 +115,7 @@ async function installEvidenceHarness(page: Page) {
           super(...args);
           const worker = this;
           const workerId = window.__mesaPriorityNextWorkerId++;
+          this.__mesaPriorityWorkerId = workerId;
           super.addEventListener('message', (event) => {
             const message = event.data || {};
             if (window.__mesaPriorityReleasedPassReplyId === message.id) {
@@ -146,7 +147,8 @@ async function installEvidenceHarness(page: Page) {
         }
         postMessage(message, options) {
           window.__mesaPriorityTrace.push({
-            kind: 'request', at: performance.now(), id: message && message.id, workerId,
+            kind: 'request', at: performance.now(), id: message && message.id,
+            workerId: this.__mesaPriorityWorkerId,
             op: message && message.op, payload: clone(message && message.payload)
           });
           if (message?.op === 2 && message.payload?.action?.type === 'PassPriority') {
