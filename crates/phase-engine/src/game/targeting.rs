@@ -1,4 +1,5 @@
 use crate::game::game_object::{ObjectIdentityBindingExt, ObjectIncarnationRefExt};
+use crate::game::keywords::ProtectionSourceRef;
 use crate::types::ability::{
     ControllerRef, FilterProp, ResolvedAbility, TargetChoiceTiming, TargetFilter, TargetRef,
     TypeFilter, TypedFilter,
@@ -10,7 +11,7 @@ use crate::types::game_state::{
 use crate::types::identifiers::{
     ObjectId, ObjectIncarnationRef, TrackedSetId, TriggeringObjectRef,
 };
-use crate::types::keywords::{HexproofFilter, Keyword};
+use crate::types::keywords::Keyword;
 use crate::types::player::PlayerId;
 use crate::types::resolution::CapturedDeclarationPayload;
 use crate::types::zones::Zone;
@@ -678,8 +679,12 @@ fn find_legal_targets_with_context(
     // Target-invariant player-scoped hexproof bypass (CR 702.11b, Detection Tower):
     // hoisted ONCE per enumeration and threaded into every `can_target` call below, so the
     // O(battlefield) player-scoped scan runs once rather than once per candidate target.
-    let source_ignores_hexproof =
-        crate::game::static_abilities::player_ignores_hexproof(state, source_controller);
+    let source = BattlefieldTargetingSource::live(
+        state,
+        source_controller,
+        source_id,
+        source_projection_name,
+    );
 
     let explicit_zones = extract_explicit_zones(filter);
 
@@ -689,21 +694,8 @@ fn find_legal_targets_with_context(
             match zone {
                 Zone::Battlefield => {
                     for &obj_id in &state.battlefield {
-                        if super::filter::matches_target_filter(state, obj_id, filter, target_ctx) {
-                            let obj = match state.objects.get(&obj_id) {
-                                Some(o) => o,
-                                None => continue,
-                            };
-                            if can_target_with_source_name(
-                                obj,
-                                source_controller,
-                                source_id,
-                                source_ignores_hexproof,
-                                source_projection_name,
-                                state,
-                            ) {
-                                targets.push(TargetRef::Object(obj_id));
-                            }
+                        if battlefield_target_is_legal(state, obj_id, filter, target_ctx, &source) {
+                            targets.push(TargetRef::Object(obj_id));
                         }
                     }
                 }
@@ -795,21 +787,8 @@ fn find_legal_targets_with_context(
         }
 
         for &obj_id in &state.battlefield {
-            if super::filter::matches_target_filter(state, obj_id, filter, target_ctx) {
-                let obj = match state.objects.get(&obj_id) {
-                    Some(o) => o,
-                    None => continue,
-                };
-                if can_target_with_source_name(
-                    obj,
-                    source_controller,
-                    source_id,
-                    source_ignores_hexproof,
-                    source_projection_name,
-                    state,
-                ) {
-                    targets.push(TargetRef::Object(obj_id));
-                }
+            if battlefield_target_is_legal(state, obj_id, filter, target_ctx, &source) {
+                targets.push(TargetRef::Object(obj_id));
             }
         }
     }
@@ -847,29 +826,20 @@ fn has_legal_target_with_context(
     // Target-invariant player-scoped hexproof bypass (CR 702.11b) hoisted ONCE per
     // enumeration and threaded into every `can_target` below (mirrors
     // `find_legal_targets_with_context`).
-    let source_ignores_hexproof =
-        crate::game::static_abilities::player_ignores_hexproof(state, source_controller);
-
     let source_projection_name = source_projection_name(state, target_ctx, source_id);
+    let source = BattlefieldTargetingSource::live(
+        state,
+        source_controller,
+        source_id,
+        source_projection_name,
+    );
 
     let explicit_zones = extract_explicit_zones(filter);
     if !explicit_zones.is_empty() {
         if explicit_zones.contains(&Zone::Battlefield) {
             for &obj_id in &state.battlefield {
-                if super::filter::matches_target_filter(state, obj_id, filter, target_ctx) {
-                    let Some(obj) = state.objects.get(&obj_id) else {
-                        continue;
-                    };
-                    if can_target_with_source_name(
-                        obj,
-                        source_controller,
-                        source_id,
-                        source_ignores_hexproof,
-                        source_projection_name,
-                        state,
-                    ) {
-                        return true;
-                    }
+                if battlefield_target_is_legal(state, obj_id, filter, target_ctx, &source) {
+                    return true;
                 }
             }
         }
@@ -884,20 +854,8 @@ fn has_legal_target_with_context(
     }
 
     for &obj_id in &state.battlefield {
-        if super::filter::matches_target_filter(state, obj_id, filter, target_ctx) {
-            let Some(obj) = state.objects.get(&obj_id) else {
-                continue;
-            };
-            if can_target_with_source_name(
-                obj,
-                source_controller,
-                source_id,
-                source_ignores_hexproof,
-                source_projection_name,
-                state,
-            ) {
-                return true;
-            }
+        if battlefield_target_is_legal(state, obj_id, filter, target_ctx, &source) {
+            return true;
         }
     }
 
@@ -3379,23 +3337,20 @@ pub(crate) fn resolve_event_context_target_for_event_or_state(
             // the trigger, not an intervening triggered ability above it.
             extract_source_from_event(event).map(TargetRef::Object)
         }
-        // CR 508.5 + CR 508.5a: "defending player" is the player the *attacking creature*
-        // is attacking, determined individually per attacker. resolve_defending_player
-        // tries the source as the attacker first (a creature's own attack trigger), then
-        // falls back to the attacker carried by the current triggering event (a separate
-        // permanent's attack trigger — Leeching Sliver watching another Sliver, or an
-        // Equipment). When combat state is no longer available, the triggering event's
-        // captured defender remains the resolution-time authority.
-        TargetFilter::DefendingPlayer => {
-            crate::game::combat::resolve_defending_player(state, source_id)
-                .or_else(|| match event? {
-                    GameEvent::AttackersDeclared {
-                        defending_player, ..
-                    } => Some(*defending_player),
-                    _ => None,
-                })
-                .map(TargetRef::Player)
-        }
+        // CR 508.5 + CR 508.5a: The attack named by the firing determines its
+        // defender, even when the ability's source attacked a different player.
+        TargetFilter::DefendingPlayer => event
+            .and_then(|event| {
+                crate::game::combat::defending_player_in_attack_event(state, event, source_id)
+            })
+            .or_else(|| crate::game::combat::resolve_defending_player(state, source_id))
+            .or_else(|| match event? {
+                GameEvent::AttackersDeclared {
+                    defending_player, ..
+                } => Some(*defending_player),
+                _ => None,
+            })
+            .map(TargetRef::Player),
         // CR 506.3 + CR 115.10a: "the player or planeswalker it's attacking" is read by
         // `combat::resolve_attacked_player_or_planeswalker`, which needs the ability's
         // trigger source (the latch) as well as the bound event. This event-and-state
@@ -3967,6 +3922,12 @@ pub(crate) fn extract_source_from_event(
         GameEvent::CreatureNoLongerSuspected { object_id } => Some(*object_id),
         GameEvent::Detained { object_id } => Some(*object_id),
         GameEvent::CaseSolved { object_id } => Some(*object_id),
+        // CR 904.9 + CR 701.32b: "that scheme" in a set-in-motion trigger
+        // (My Laughter Echoes: "set that scheme in motion again") is the
+        // scheme the event set in motion. Self-triggers are unaffected: their
+        // ability source IS the event scheme, which is also what every
+        // resolution-site fallback reads on `None`.
+        GameEvent::SchemeSetInMotion { scheme_id, .. } => Some(*scheme_id),
         GameEvent::AttackersDeclared { attacker_ids, .. } if attacker_ids.len() == 1 => {
             attacker_ids.first().copied()
         }
@@ -4210,6 +4171,20 @@ pub(crate) fn extract_target_object_from_event(
     }
 }
 
+/// CR 508.3d: The declaring controller is fixed by the declaration snapshot.
+/// Older events without snapshots can still read the live attacker.
+pub(super) fn attack_declaration_controller(
+    state: &GameState,
+    records: &[crate::types::game_state::AttackDeclarationRecord],
+    attacker: ObjectId,
+) -> Option<PlayerId> {
+    records
+        .iter()
+        .find(|record| record.object_id == attacker)
+        .map(|record| record.lki.controller)
+        .or_else(|| state.objects.get(&attacker).map(|object| object.controller))
+}
+
 /// Extract the relevant player from a trigger event.
 pub(crate) fn extract_player_from_event(
     event: &crate::types::events::GameEvent,
@@ -4260,12 +4235,15 @@ pub(crate) fn extract_player_from_event(
         // Un-card touch: "that player" is the player who touched the object.
         GameEvent::ObjectTouched { player, .. } => Some(*player),
         GameEvent::PlayerEliminated { player_id, .. } => Some(*player_id),
-        // CR 506.2 + CR 508.1: The attacking player is the common controller of the
-        // declared attackers in this batch. All attackers in one AttackersDeclared
-        // batch share the active player as their controller.
-        GameEvent::AttackersDeclared { attacker_ids, .. } => attacker_ids
+        // CR 508.3d + CR 805.10b: A player-led occurrence carries that
+        // player's declared attackers. Read the actor at declaration time.
+        GameEvent::AttackersDeclared {
+            attacker_ids,
+            declaration_records,
+            ..
+        } => attacker_ids
             .iter()
-            .find_map(|id| state.objects.get(id).map(|obj| obj.controller)),
+            .find_map(|&id| attack_declaration_controller(state, declaration_records, id)),
         GameEvent::BecomesTarget {
             target,
             source_controller,
@@ -4709,7 +4687,7 @@ fn can_target_off_battlefield(
 /// is scoped from the static's controller (CR 109.5): `obj`'s controller for a
 /// printed ability of `obj`, or the granting source's controller for one
 /// grafted onto it (`StaticDefinition::source_controller`). The one read of `obj`'s own targeting
-/// prohibition for both the permanent check ([`can_target_with_source_name`])
+/// prohibition for both the permanent check ([`can_target_from`])
 /// and the off-battlefield check ([`can_target_off_battlefield`]).
 pub fn own_cant_be_targeted_prohibits(
     obj: &crate::game::game_object::GameObject,
@@ -4912,34 +4890,70 @@ fn add_specific_player(
     targets.push(TargetRef::Player(player_id));
 }
 
-/// CR 702.16b + CR 608.2h: Protection prevents targeting from sources with the relevant quality.
-fn is_protected_from(
-    obj: &crate::game::game_object::GameObject,
-    source_id: ObjectId,
-    source_name: Option<&str>,
-    state: &GameState,
-) -> bool {
-    crate::game::keywords::protection_prevents_from_with_source_name(
-        obj,
-        state.objects.get(&source_id),
-        source_name,
-    )
+struct BattlefieldTargetingSource<'a> {
+    controller: PlayerId,
+    // CR 113.8: available when rechecking a specific ability on the stack.
+    stack_ability_controller: Option<PlayerId>,
+    characteristics: ProtectionSourceRef<'a>,
+    name: Option<&'a str>,
+    ignores_hexproof: bool,
 }
 
-/// CR 702.11d: Check if a source matches a HexproofFilter.
-///
-/// The filter-vs-source match itself lives in
-/// `keywords::source_matches_hexproof_filter`, shared with the player path
-/// (`static_abilities::player_has_hexproof_from`); this wrapper resolves the
-/// source object from its id for the object targeting path.
-fn hexproof_filter_matches(
-    filter: &HexproofFilter,
-    source_id: ObjectId,
+impl<'a> BattlefieldTargetingSource<'a> {
+    fn live(
+        state: &'a GameState,
+        controller: PlayerId,
+        id: ObjectId,
+        name: Option<&'a str>,
+    ) -> Self {
+        Self {
+            controller,
+            stack_ability_controller: None,
+            characteristics: state
+                .objects
+                .get(&id)
+                .map_or(ProtectionSourceRef::NameOnly, ProtectionSourceRef::Live),
+            name,
+            ignores_hexproof: crate::game::static_abilities::player_ignores_hexproof(
+                state, controller,
+            ),
+        }
+    }
+}
+
+fn battlefield_target_is_legal(
     state: &GameState,
+    target: ObjectId,
+    filter: &TargetFilter,
+    ctx: &super::filter::FilterContext,
+    source: &BattlefieldTargetingSource,
 ) -> bool {
-    state.objects.get(&source_id).is_some_and(|source_obj| {
-        crate::game::keywords::source_matches_hexproof_filter(filter, source_obj)
-    })
+    super::filter::matches_target_filter(state, target, filter, ctx)
+        && state.objects.get(&target).is_some_and(|object| {
+            object.is_phased_in_permanent() && can_target_from(object, source, state)
+        })
+}
+
+/// CR 608.2b + CR 400.7: the battlefield target must still be the announced
+/// object. A departed source contributes its last known characteristics.
+pub(crate) fn pinned_battlefield_target_is_legal(
+    state: &GameState,
+    target: ObjectIncarnationRef,
+    filter: &TargetFilter,
+    controller: PlayerId,
+    source_id: ObjectId,
+    characteristics: ProtectionSourceRef<'_>,
+) -> bool {
+    let ctx = super::filter::FilterContext::from_source_with_controller(source_id, controller);
+    let source = BattlefieldTargetingSource {
+        controller,
+        stack_ability_controller: Some(controller),
+        characteristics,
+        name: None,
+        ignores_hexproof: crate::game::static_abilities::player_ignores_hexproof(state, controller),
+    };
+    target.is_current(state)
+        && battlefield_target_is_legal(state, target.object_id, filter, &ctx, &source)
 }
 
 /// Full battlefield targeting check: shroud + hexproof + protection (CR 702.16b).
@@ -4951,14 +4965,11 @@ fn can_target(
     source_ignores_hexproof: bool,
     state: &GameState,
 ) -> bool {
-    can_target_with_source_name(
-        obj,
-        source_controller,
-        source_id,
-        source_ignores_hexproof,
-        None,
-        state,
-    )
+    let source = BattlefieldTargetingSource {
+        ignores_hexproof: source_ignores_hexproof,
+        ..BattlefieldTargetingSource::live(state, source_controller, source_id, None)
+    };
+    can_target_from(obj, &source, state)
 }
 
 /// CR 113.6 + CR 113.6b: whether a functioning `StaticMode::CantBeTargeted` of
@@ -4966,7 +4977,7 @@ fn can_target(
 /// control" restriction) prohibits `source_controller` from targeting `obj`. The
 /// static's source functions where its own zones of function say (the battlefield
 /// by default); `obj` may be anywhere. The single scan authority for both
-/// [`can_target_with_source_name`] (battlefield) and
+/// [`can_target_from`] (battlefield) and
 /// [`can_target_off_battlefield`] (stack, graveyard, exile, ...).
 ///
 /// CR 109.2 + CR 109.2a: a filter that names no zone ("creatures you control",
@@ -5034,14 +5045,12 @@ fn functioning_static_cant_be_targeted_prohibits(
 
 /// CR 702.16b + CR 608.2h: Full battlefield targeting check taking an optional source name
 /// into account for `ProtectionTarget::ChosenCardName`.
-fn can_target_with_source_name(
+fn can_target_from(
     obj: &crate::game::game_object::GameObject,
-    source_controller: PlayerId,
-    source_id: ObjectId,
-    source_ignores_hexproof: bool,
-    source_name: Option<&str>,
+    source: &BattlefieldTargetingSource,
     state: &GameState,
 ) -> bool {
+    let source_controller = source.controller;
     // CR 702.18a: Shroud prevents targeting by any player.
     if obj.has_keyword(&Keyword::Shroud) {
         return false;
@@ -5059,7 +5068,7 @@ fn can_target_with_source_name(
     //     opens the permanents to ANY player; a "you control" qualifier (Glaring
     //     Spotlight) restricts the bypass to the static controller. This half is
     //     per-object (and now per-source-controller) and stays inside the loop.
-    let ignores_hexproof = source_ignores_hexproof
+    let ignores_hexproof = source.ignores_hexproof
         || crate::game::static_abilities::target_ignores_hexproof(state, obj.id, source_controller);
     // CR 702.11b + CR 102.3: Hexproof on a permanent prevents targeting by opponents.
     if !ignores_hexproof
@@ -5073,14 +5082,22 @@ fn can_target_with_source_name(
     if !ignores_hexproof && super::players::is_opponent(state, obj.controller, source_controller) {
         for kw in &obj.keywords {
             if let Keyword::HexproofFrom(ref filter) = kw {
-                if hexproof_filter_matches(filter, source_id, state) {
+                if crate::game::keywords::source_ref_matches_hexproof_filter(
+                    filter,
+                    source.characteristics,
+                ) {
                     return false;
                 }
             }
         }
     }
     // Per-object (depends on `obj`) — correctly NOT hoisted out of the enumeration loop.
-    if is_protected_from(obj, source_id, source_name, state) {
+    if crate::game::keywords::protection_prevents_from_source(
+        obj,
+        source.characteristics,
+        source.name,
+        source.stack_ability_controller,
+    ) {
         return false;
     }
     // CR 702.18a / CR 702.11b / CR 109.5: A static "can't be the target of spells or abilities
@@ -7948,10 +7965,10 @@ mod tests {
             source_id,
             controller: PlayerId(1),
             kind: crate::types::game_state::StackEntryKind::KeywordAction {
-                action: crate::types::ability::KeywordAction::Equip {
-                    equipment_id: source_id,
-                    target_creature_id: creature,
-                },
+                action: crate::types::ability::KeywordAction::equip(
+                    &state.objects[&source_id],
+                    &state.objects[&creature],
+                ),
             },
         });
 
@@ -8036,10 +8053,10 @@ mod tests {
             source_id,
             controller: PlayerId(1),
             kind: crate::types::game_state::StackEntryKind::KeywordAction {
-                action: crate::types::ability::KeywordAction::Equip {
-                    equipment_id: source_id,
-                    target_creature_id: creature,
-                },
+                action: crate::types::ability::KeywordAction::equip(
+                    &state.objects[&source_id],
+                    &state.objects[&creature],
+                ),
             },
         });
 

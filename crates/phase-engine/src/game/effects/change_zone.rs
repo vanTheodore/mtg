@@ -2884,7 +2884,7 @@ pub(crate) fn process_one_zone_move_with_terminal(
     event_members: &[ObjectIncarnationRef],
     events: &mut Vec<GameEvent>,
 ) -> crate::game::zone_pipeline::ZoneMoveTerminalResult {
-    entrants.deliver_member(state, |state| {
+    entrants.deliver_member(state, member.object_id, |state| {
         process_one_zone_move_with_attack_seat(
             state,
             ctx,
@@ -4477,7 +4477,7 @@ pub fn resolve_all(
             logical_zone_change_group.logical_group_id,
             anticipated_pause.as_ref(),
         );
-        match entrants.deliver_member(state, |state| {
+        match entrants.deliver_member(state, obj_id, |state| {
             crate::game::zone_pipeline::execute_zone_move_with_terminal_and_controller(
                 state,
                 obj_id,
@@ -9370,6 +9370,7 @@ mod tests {
         );
         ability.sub_ability = Some(Box::new(ResolvedAbility::new(
             Effect::Token {
+                enters_blocking: None,
                 name: "Illusion".to_string(),
                 power: PtValue::Quantity(QuantityExpr::Ref {
                     qty: QuantityRef::CardsExiledBySource,
@@ -10853,7 +10854,7 @@ mod tests {
             ResolvedAbility::new(
                 Effect::Sacrifice {
                     target: TargetFilter::ParentTargetSlot { index: 0 },
-                    count: crate::types::ability::QuantityExpr::Fixed { value: 1 },
+                    count: crate::types::ability::QuantityExpr::Fixed { value: 1 }.into(),
                     min_count: 0,
                 },
                 vec![],
@@ -16543,6 +16544,7 @@ mod tests {
         //     └─ Token{name:"Plant", count: EventContextAmount}
         let create_tokens = ResolvedAbility::new(
             Effect::Token {
+                enters_blocking: None,
                 name: "Plant".to_string(),
                 power: PtValue::Fixed(4),
                 toughness: PtValue::Fixed(2),

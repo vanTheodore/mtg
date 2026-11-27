@@ -302,8 +302,134 @@ jobs:
           }
       - name: Execute the UP-133 pinned-mechanics regressions
         run: cargo test --locked -p phase-engine --test mesa_phase_up133 -- --test-threads=1
+      # UP-134: original integration modules for the mechanics v0.134.0 changed
+      # (e5368963...c551672c, 22 commits). Every file below is copied verbatim
+      # from the pinned tarball and needs only `support`, so they share one
+      # target. This is a SELECTED suite, not the upstream modules Mesa prunes;
+      # it covers Archenemy seats/schemes (engine-internal only — the product
+      # stays two-player), Equip identity/legality, Suspend from hand,
+      # "this turn" delayed triggers, tokens entering blocking, Xanathar
+      # foreign-library permissions, linked exile, Ajani mass-damage
+      # exclusions, Asmoranomardicadaistinaculdacar conditional costs, Mardu
+      # Siegebreaker attacking copies and Tomik/Mangara player-led attacks.
+      - name: Assemble the UP-134 target from upstream's own tests
+        run: |
+          cat > crates/phase-engine/tests/mesa_phase_up134.rs <<'RUST'
+          // Selected coverage for the mechanics v0.134.0 changed. Original upstream
+          // files, unmodified; see docs/PHASE-UPSTREAM-2026-11-27-C551672C.md.
+          #[path = "integration/support.rs"]
+          mod support;
+          // `token_attack_destination` reads `super::rules::AttackTarget` and
+          // `additional_cost_declaration_tail` reads a helper from the blitz
+          // module: both are original upstream files, declared once here.
+          #[path = "integration/rules.rs"]
+          mod rules;
+          #[path = "integration/blitz_em_dash_graveyard_cast.rs"]
+          mod blitz_em_dash_graveyard_cast;
+          #[path = "integration/equip_keyword_target_legality.rs"]
+          mod equip_keyword_target_legality;
+          #[path = "integration/forge_anew_equip_timing.rs"]
+          mod forge_anew_equip_timing;
+          #[path = "integration/suspend_begin_to_cast.rs"]
+          mod suspend_begin_to_cast;
+          #[path = "integration/blocking_token_entry.rs"]
+          mod blocking_token_entry;
+          #[path = "integration/tomik_mangara_player_led_attack.rs"]
+          mod tomik_mangara_player_led_attack;
+          #[path = "integration/top_of_library_foreign_permission.rs"]
+          mod top_of_library_foreign_permission;
+          #[path = "integration/top_of_library_mixed_permission.rs"]
+          mod top_of_library_mixed_permission;
+          #[path = "integration/additional_cost_declaration_tail.rs"]
+          mod additional_cost_declaration_tail;
+          #[path = "integration/token_attack_destination.rs"]
+          mod token_attack_destination;
+          #[path = "integration/loyalty_ability_activated_trigger.rs"]
+          mod loyalty_ability_activated_trigger;
+          #[path = "integration/issue_3246_windbrisk_heights_hideaway_exiled_by_source.rs"]
+          mod issue_3246_windbrisk_heights_hideaway_exiled_by_source;
+          #[path = "integration/all_in_good_time.rs"]
+          mod all_in_good_time;
+          #[path = "integration/archenemy_hero_teammate_priority.rs"]
+          mod archenemy_hero_teammate_priority;
+          #[path = "integration/commander_team_formats.rs"]
+          mod commander_team_formats;
+          #[path = "integration/delayed_trigger_occurrence_fanout.rs"]
+          mod delayed_trigger_occurrence_fanout;
+          RUST
+      # `rules.rs` declara dos submódulos sin #[path] (`attractions`, `battle`):
+      # cargado con #[path] desde otra raíz, rustc los busca junto al fichero
+      # en vez de en rules/. Dos enlaces generados en el checkout (nunca
+      # commiteados) le dan esa ruta sin tocar el fichero original.
+      - name: Link the rules submodules the selected target resolves by name
+        run: |
+          ln -s rules/attractions.rs crates/phase-engine/tests/integration/attractions.rs
+          ln -s rules/battle.rs crates/phase-engine/tests/integration/battle.rs
+      - name: Assert the UP-134 modules compile and register their tests
+        run: |
+          set -o pipefail
+          cargo test --locked -p phase-engine --test mesa_phase_up134 -- --list 2>&1 \
+            | tee /tmp/up134-list.log > /tmp/up134-list.txt
+          for module in \
+            equip_keyword_target_legality \
+            forge_anew_equip_timing \
+            suspend_begin_to_cast \
+            blocking_token_entry \
+            tomik_mangara_player_led_attack \
+            top_of_library_foreign_permission \
+            top_of_library_mixed_permission \
+            additional_cost_declaration_tail \
+            token_attack_destination \
+            loyalty_ability_activated_trigger \
+            issue_3246_windbrisk_heights_hideaway_exiled_by_source \
+            all_in_good_time \
+            archenemy_hero_teammate_priority \
+            commander_team_formats \
+            delayed_trigger_occurrence_fanout; do
+            grep -Fq "$module::" /tmp/up134-list.txt || {
+              echo "Missing UP-134 module: $module" >&2
+              exit 1
+            }
+          done
+          registered=$(grep -c ': test' /tmp/up134-list.txt || true)
+          echo "registered: $registered tests"
+          # A filter that matches nothing still exits 0: prove the suite is real.
+          test "$registered" -ge 250 || {
+            echo "UP-134 registered only $registered tests, expected at least 250" >&2
+            exit 1
+          }
+      # Per-module filters, like the UP-131 target: `rules` and
+      # `blitz_em_dash_graveyard_cast` are dependency modules for two of the
+      # selected files, not selected suites of their own, so their tests are
+      # compiled (and registered above) but not executed here.
+      - name: Execute the UP-134 pinned-mechanics regressions
+        run: |
+          set -o pipefail
+          for module in \
+            equip_keyword_target_legality \
+            forge_anew_equip_timing \
+            suspend_begin_to_cast \
+            blocking_token_entry \
+            tomik_mangara_player_led_attack \
+            top_of_library_foreign_permission \
+            top_of_library_mixed_permission \
+            additional_cost_declaration_tail \
+            token_attack_destination \
+            loyalty_ability_activated_trigger \
+            issue_3246_windbrisk_heights_hideaway_exiled_by_source \
+            all_in_good_time \
+            archenemy_hero_teammate_priority \
+            commander_team_formats \
+            delayed_trigger_occurrence_fanout; do
+            echo "::group::$module"
+            cargo test --locked -p phase-engine --test mesa_phase_up134 "$module" -- --test-threads=1 2>&1 | tee -a /tmp/up134-exec.log
+            echo "::endgroup::"
+          done
       # The job log lives behind a blob download that is unreachable on some
       # networks; annotations are plain JSON on api.github.com.
       - name: Annotate Rust errors
         if: failure()
-        run: bun scripts/rust-annotations.ts /tmp/phase-tests.log
+        run: |
+          bun scripts/rust-annotations.ts /tmp/phase-tests.log
+          bun scripts/rust-annotations.ts /tmp/up134-list.log
+          grep -E 'FAILED|panicked at|failures:' /tmp/up134-exec.log 2>/dev/null | head -25 | while IFS= read -r line; do echo "::error title=UP-134 exec::$line"; done || true
