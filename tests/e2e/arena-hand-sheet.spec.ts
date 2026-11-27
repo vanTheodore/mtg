@@ -312,7 +312,10 @@ test.describe('legalidad explícita (fixture con acciones)', () => {
     // One control per published action, in Phase's order: the cast, the manual
     // payment that belongs to it, then the activation.
     const labels = (await page.locator('.sheet-detail .detail-actions button').allInnerTexts()).map((t) => t.trim());
-    expect(labels.filter((text) => /^Lanzar/.test(text))).toHaveLength(1);
+    // UX-DECISION 1.1: el pago manual también *lanza* (con otro modo de pago),
+    // así que hay un lanzamiento automático y uno manual, no una preferencia.
+    expect(labels.filter((text) => /^Lanzar/.test(text))).toHaveLength(2);
+    expect(labels.filter((text) => /^Lanzar$/.test(text))).toHaveLength(1);
     const activations = labels.filter((text) => /^Activar/.test(text));
     expect(activations, 'las dos activaciones publicadas deben tener su control').toHaveLength(2);
     // UX-HAND 1.2 — A: two different activations must not read the same. The
