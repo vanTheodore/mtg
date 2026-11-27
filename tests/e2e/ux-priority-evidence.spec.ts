@@ -214,6 +214,35 @@ async function traceEntries(page: Page): Promise<TraceEntry[]> {
     return win.__mesaPriorityTrace ?? [];
   });
 }
+async function priorityDiagnostic(page: Page) {
+  return page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('.app');
+    const win = window as Window & {
+      __mesaPriorityTrace?: TraceEntry[];
+      __mesaPriorityHoldPassReply?: boolean;
+      __mesaPriorityPendingPassIds?: Set<number>;
+      __mesaPriorityHeldPassReply?: { id: number } | null;
+    };
+    const trace = (win.__mesaPriorityTrace ?? []).slice(-6).map((entry) => entry.kind === 'request'
+      ? `>${entry.op}:${entry.payload.actor ?? '-'}:${entry.payload.action?.type ?? '-'}:${entry.id}`
+      : `<${entry.reply?.ok === true ? 'ok' : 'err'}:${entry.reply?.viewer ?? '-'}:${entry.reply?.state?.waiting_for?.type ?? '-'}:${entry.error ?? ''}`);
+    const offers = Array.from(document.querySelectorAll('section[aria-label="Decisión pendiente"] button'))
+      .map((button) => button.textContent?.trim() ?? '')
+      .filter((text) => /Lightning Bolt|Counterspell|Spectral Sailor|Pasar/.test(text))
+      .slice(0, 5);
+    return {
+      waiting: root?.getAttribute('data-waiting'), viewer: root?.getAttribute('data-viewer'),
+      busy: root?.getAttribute('data-busy'), actions: root?.getAttribute('data-actions-applied'),
+      handoff: !!document.querySelector('.handoff'),
+      stackEntries: document.querySelectorAll('section[aria-label="Pila"] ol li').length,
+      alert: root?.querySelector('[role="alert"]')?.textContent?.trim().slice(0, 100) ?? null,
+      holdConfigured: win.__mesaPriorityHoldPassReply ?? null,
+      heldPassReply: win.__mesaPriorityHeldPassReply?.id ?? null,
+      pendingPassReplies: win.__mesaPriorityPendingPassIds?.size ?? null,
+      offers, trace
+    };
+  });
+}
 async function frames(page: Page): Promise<Frame[]> {
   return page.evaluate(() => {
     const win = window as Window & { __mesaPriorityFrames?: Frame[] };
@@ -330,7 +359,12 @@ async function castBoltAtP1(page: Page) {
   const cast = panel(page).locator('button').filter({ hasText: 'Lanzar Lightning Bolt' }).first();
   await expect(cast).toBeVisible();
   await cast.click();
-  await expect(app(page)).toHaveAttribute('data-waiting', 'TargetSelection');
+  try {
+    await expect(app(page)).toHaveAttribute('data-waiting', 'TargetSelection');
+  } catch (error) {
+    const diagnostic = await priorityDiagnostic(page);
+    throw new Error(`CastSpell did not open TargetSelection: ${JSON.stringify(diagnostic)}; ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
+  }
   const targets = panel(page).locator('details[data-target-list]');
   if (!(await targets.evaluate((node: HTMLDetailsElement) => node.open))) await targets.locator('summary').click();
   const opponent = targets.locator('button').filter({ hasText: /^Elegir Jugador 2$/ }).first();
@@ -351,13 +385,16 @@ for (const mode of MODES) {
       const trace = await traceEntries(page);
       const automaticPasses = await autoPassCount(page);
       const recommendationExpected = mode.engineMode === 'SkipLowUseWindows';
-      expect(recommendation).toBe(recommendationExpected);
+      expect(
+        recommendation,
+        `${mode.engineMode} auto_pass_recommended=${recommendation}, esperado=${recommendationExpected}; ${JSON.stringify(await priorityDiagnostic(page))}`
+      ).toBe(recommendationExpected);
       expect(acceptedPriorityPasses(trace)).toBe(1);
       expect(manualPasses).toBe(mode.engineMode === 'SkipLowUseWindows' ? 0 : 1);
-      expect(privacy.hiddenBefore).toBe(true);
+      expect(privacy.hiddenBefore, `la identidad privada se reveló antes del handoff: ${JSON.stringify(await priorityDiagnostic(page))}`).toBe(true);
       expect(privacy.shownAfter).toBe(true);
       const opportunity = await panel(page).locator('button').filter({ hasText: 'Lanzar Spectral Sailor' }).count() === 1;
-      expect(opportunity).toBe(true);
+      expect(opportunity, `P1 no recibió la oportunidad de responder: ${JSON.stringify(await priorityDiagnostic(page))}`).toBe(true);
       await saveRow(page, {
         scenario: 'priority-low-use', mode: mode.label, engineMode: mode.engineMode,
         engineModeConfirmed: true, initialPriorityWindowObserved: initialWindowObserved,
@@ -484,7 +521,11 @@ test.describe('MESA_EVIDENCE_UX_PRIORITY · recuperación explícita', () => {
       const win = window as Window & { __mesaPriorityHeldPassReply?: { id: number; message: { reply?: ResponseTrace['reply'] } } | null };
       return win.__mesaPriorityHeldPassReply ?? null;
     });
-    await expect.poll(async () => !!(await heldReply()), { timeout: 30_000 }).toBe(true);
+    try {
+      await expect.poll(async () => !!(await heldReply()), { timeout: 30_000 }).toBe(true);
+    } catch (error) {
+      throw new Error(`No llegó un PassPriority al punto de espera: ${JSON.stringify(await priorityDiagnostic(page))}; ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
+    }
     const passTrace = completedRequests(await traceEntries(page)).find(({ request, response }) =>
       request.op === 2 && request.payload.actor === 0
         && request.payload.action?.type === 'PassPriority'

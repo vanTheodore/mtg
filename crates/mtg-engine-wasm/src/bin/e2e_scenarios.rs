@@ -130,12 +130,13 @@ fn main() {
     );
     write_fixture(out, "priority-empty", empty);
 
-    // UX-PRIORITY · owner-visible pass session for the cancel control. The
-    // fixture is already at the requester's priority window, so the browser
-    // can verify that the per-viewer projection exposes only P0's own session
-    // and that CancelAutoPass removes it through the real reducer.
+    // UX-PRIORITY · owner-visible pass session for the cancel control. P0's
+    // empty priority window must also be one Phase recommends passing; a
+    // castable Lightning Bolt would correctly withhold that recommendation,
+    // so no PassPriority would be in flight for the cancellation measurement.
+    // P1 keeps a real flash spell so the browser can verify control recovery
+    // after CancelAutoPass removes only P0's session through the real reducer.
     let mut priority_auto_pass = scenario();
-    priority_auto_pass.add_real_card(P0, "Lightning Bolt", Zone::Hand, &db);
     priority_auto_pass.add_real_card(P1, "Spectral Sailor", Zone::Hand, &db);
     priority_auto_pass.with_mana_pool(
         P1,
