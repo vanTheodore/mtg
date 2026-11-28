@@ -206,7 +206,25 @@ export function createBoardDriver(page: Page): BoardDriver {
       // not from assuming that a fixed delay means the engine is done.
       await page.waitForTimeout(50);
     }
-    throw new Error('No apareció una decisión visible después de resolver los handoffs de privacidad.');
+    const finalState = await readBoardState();
+    if (finalState.gameOverVisible || finalState.engineWaiting === 'GameOver') {
+      checkpoint('board-driver: terminal game state reached during wait');
+      return 'game-over';
+    }
+    if (finalState.handoffVisible) {
+      throw new Error('El handoff de privacidad sigue visible; el driver no lo trató como un panel de decisión ausente.');
+    }
+    if (!finalState.decisionVisible) {
+      throw new Error(`Phase espera ${finalState.engineWaiting || 'un estado desconocido'}, pero no hay un panel de decisión visible.`);
+    }
+    const blockers = [
+      finalState.busy !== 'false' ? 'sesión ocupada' : '',
+      finalState.syncPending !== 'false' ? 'sincronización de prioridad pendiente' : '',
+      finalState.syncFailed !== 'false' ? 'sincronización de prioridad fallida' : '',
+      finalState.autoPassPending !== 'false' ? 'auto-pase aún pendiente' : '',
+      finalState.panelWaiting !== finalState.engineWaiting ? 'panel y Phase muestran decisiones distintas' : ''
+    ].filter(Boolean);
+    throw new Error(`El panel de decisión está visible, pero no se estabilizó${blockers.length ? `: ${blockers.join(', ')}` : '.'}`);
   };
 
   /** A caller asking for a decision must not mistake GameOver for success. */
