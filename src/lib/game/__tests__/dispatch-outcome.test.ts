@@ -13,7 +13,7 @@ import { describe, expect, test } from 'bun:test';
  * The classifier below is pure so the three outcomes can be asserted without a
  * browser, and the same function is what `session.dispatch` returns.
  */
-import { classifyDispatch } from '../dispatchOutcome.ts';
+import { classifyDispatch, dispatchExpectationMatches } from '../dispatchOutcome.ts';
 
 const snapshot = (revision: number) => ({ ok: true, revision } as never);
 const failure = (code: string) => ({ ok: false, code, error: `Phase dijo ${code}` } as never);
@@ -49,6 +49,14 @@ describe('C — resultado explícito del despacho', () => {
     // acceptance: the kind comes from the reply, not from comparing numbers.
     const outcome = classifyDispatch({ actionRevision: 7, snapshotBefore: 8, reply: failure('stale_action'), reViewed: true });
     expect(outcome.kind).toBe('stale');
+  });
+
+  test('el actor y la revisión esperados deben seguir vigentes al enviar', () => {
+    const expected = { viewer: 0, revision: 7 };
+    expect(dispatchExpectationMatches(expected, { viewer: 0, revision: 7 })).toBe(true);
+    expect(dispatchExpectationMatches(expected, { viewer: 0, revision: 8 })).toBe(false);
+    expect(dispatchExpectationMatches(expected, { viewer: 1, revision: 7 })).toBe(false);
+    expect(dispatchExpectationMatches(expected, null)).toBe(false);
   });
 
   test('sin motor disponible el despacho no se declara aceptado', () => {

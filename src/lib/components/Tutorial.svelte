@@ -93,6 +93,7 @@
   data-turn={snapshot?.state.turn_number ?? 0}
   data-waiting={snapshot?.state.waiting_for?.type ?? ''}
   data-active={snapshot?.state.active_player ?? ''}
+  data-session-auto-passes={session.autoPasses}
 >
   {#if session.boardStyle === 'arena'}
     <ArenaSurface color="white" />

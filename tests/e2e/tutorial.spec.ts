@@ -18,12 +18,28 @@ import { checkpoint } from './support/e2e-checkpoint';
  */
 const trail: string[] = [];
 
+const TEST_PREFERENCES = {
+  '0': { mode: 'SkipLowUseWindows', stops: { Upkeep: 'OwnTurn' } },
+  '1': { mode: 'Standard', stops: { Cleanup: 'OpponentsTurns' } }
+};
+
+function traceEntries(): Record<string, unknown>[] {
+  return trail.flatMap((line) => {
+    if (!line.startsWith('[tutorial-trace] ')) return [];
+    try {
+      return [JSON.parse(line.slice('[tutorial-trace] '.length)) as Record<string, unknown>];
+    } catch {
+      return [];
+    }
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   trail.length = 0;
   page.on('console', (message) => {
-    if (!message.text().startsWith('[lección]')) return;
+    if (!message.text().startsWith('[tutorial-trace] ')) return;
     trail.push(message.text());
-    if (trail.length > 32) trail.shift();
+    if (trail.length > 96) trail.shift();
   });
 });
 
@@ -44,7 +60,7 @@ test.afterEach(async ({ page }) => {
     })
     .catch(() => null);
   console.log(`MESA_E2E_TUTORIAL_STATE ${JSON.stringify(state)}`);
-  console.log(`MESA_E2E_TUTORIAL_TRACE ${JSON.stringify(trail.slice(-6))}`);
+  console.log(`MESA_E2E_TUTORIAL_TRACE ${JSON.stringify(trail.slice(-12))}`);
 });
 
 const panel = (page: Page): Locator => page.locator('aside[aria-label="Lección"]');
@@ -74,9 +90,18 @@ async function handNames(page: Page): Promise<string[]> {
   return page.locator('section[aria-label^="Tu mano"] [data-card-id] .fallback-name').allTextContents();
 }
 
-test('la lección se completa jugrando de verdad con el motor Phase', async ({ page }) => {
+test('la lección se completa jugando de verdad con el motor Phase', async ({ page }) => {
   test.setTimeout(420_000);
+  await page.addInitScript((preferences) => {
+    if (sessionStorage.getItem('mesa:test:tutorial-preferences-seeded') === '1') return;
+    localStorage.setItem('mesa:priorityPreferences', JSON.stringify(preferences));
+    sessionStorage.setItem('mesa:test:tutorial-preferences-seeded', '1');
+  }, TEST_PREFERENCES);
   await openLesson(page);
+  const readPreferences = () => page.evaluate(() => JSON.parse(localStorage.getItem('mesa:priorityPreferences') ?? 'null'));
+  expect(await readPreferences()).toEqual(TEST_PREFERENCES);
+  const tutorialApp = page.locator('.app[data-tutorial-step]');
+  await expect(tutorialApp).toHaveAttribute('data-session-auto-passes', '0');
 
   // ── Paso 1: leer ───────────────────────────────────────────────────────────
   checkpoint('tutorial: confirmar la introducción');
@@ -107,9 +132,34 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   checkpoint('tutorial: esperar el foco de la primera acción');
   await expect(focusedCard(page)).toBeVisible();
   await expect(focusedCard(page)).toContainText('Plains');
+  const proposedLand = [...traceEntries()].reverse().find((entry) =>
+    entry.event === 'proposal' && entry.step === 'play-land' && entry.actorSeat === 'learner'
+  );
+  expect(proposedLand).toMatchObject({
+    source: 'await-learner',
+    playLandLegal: true
+  });
+  expect(Number(proposedLand?.availableLands)).toBeGreaterThan(0);
   checkpoint('tutorial: activar la acción enfocada');
+  const beforePlayLand = Number(await tutorialApp.getAttribute('data-actions-applied'));
   await focusedCard(page).click();
   await expect(stepTitle(page)).toHaveText('Genera maná', { timeout: 30_000 });
+  await expect.poll(async () => Number(await tutorialApp.getAttribute('data-actions-applied')))
+    .toBeGreaterThan(beforePlayLand);
+  const acceptedLand = [...traceEntries()].reverse().find((entry) =>
+    entry.event === 'dispatch' && entry.actionType === 'PlayLand'
+  );
+  expect(acceptedLand).toBeDefined();
+  expect(acceptedLand).toMatchObject({
+    source: 'learner',
+    actorSeat: 'learner',
+    phaseResult: 'accepted',
+    step: 'play-land',
+    playLandLegal: true
+  });
+  expect(Number(acceptedLand?.availableLands)).toBeGreaterThan(0);
+  expect(acceptedLand?.dispatchRevision).toBe(acceptedLand?.proposalRevision);
+  await expect(tutorialApp).toHaveAttribute('data-session-auto-passes', '0');
 
   // ── Paso 3: generar maná ──────────────────────────────────────────────────
   checkpoint('tutorial: esperar el foco de la siguiente acción');
@@ -181,6 +231,14 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   // for one frame before the next snapshot replaces the hand. Assert the
   // eventual, complete deterministic hand rather than sampling that transition.
   await expect.poll(() => handNames(page), { timeout: 60_000 }).toEqual(openingHand);
+  expect(await readPreferences()).toEqual(TEST_PREFERENCES);
+  await expect(tutorialApp).toHaveAttribute('data-session-auto-passes', '0');
+
+  // Leaving the restarted lesson also releases the tutorial-only session scope;
+  // both saved per-seat preference records remain unchanged.
+  await page.getByRole('link', { name: 'Volver al inicio' }).click();
+  await expect(page).toHaveURL('/');
+  expect(await readPreferences()).toEqual(TEST_PREFERENCES);
 });
 
 test('la lección se puede usar con teclado y sinaxe grave', async ({ page }) => {
@@ -204,6 +262,10 @@ test('la lección se puede usar con teclado y sinaxe grave', async ({ page }) =>
   checkpoint('tutorial teclado: activar la acción enfocada');
   await page.keyboard.press('Enter');
   await expect(stepTitle(page)).toHaveText('Genera maná', { timeout: 30_000 });
+  const keyboardLand = [...traceEntries()].reverse().find((entry) =>
+    entry.event === 'dispatch' && entry.actionType === 'PlayLand'
+  );
+  expect(keyboardLand).toMatchObject({ source: 'learner', phaseResult: 'accepted', step: 'play-land' });
 
   // La ayuda está disponible sin interrumpir la partida.
   await panel(page).getByRole('button', { name: 'Palabras nuevas' }).click();

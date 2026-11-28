@@ -25,7 +25,7 @@ import {
   type BottomOrderPrompt
 } from './interaction.ts';
 import { summarizeEvents, type HistoryEntry } from './events.ts';
-import { classifyDispatch, type DispatchOutcome } from './dispatchOutcome.ts';
+import { classifyDispatch, dispatchExpectationMatches, type DispatchExpectation, type DispatchOutcome } from './dispatchOutcome.ts';
 import {
   autoPassUntilBoundaryAction, cancelAutoPassAction, nextPhaseStopScope, phaseStopApplies, phaseStopsAction, PRIORITY_PHASES,
   priorityModeAction, priorityWindowMatches, PriorityPassGate, readSeatPriorityPreferences,
@@ -75,6 +75,8 @@ class GameSession {
   private legacyFullControlOnNextStart = false;
   /** A viewer reached by an automated pass must confirm before private UI is rendered. */
   private automaticHandoffViewer: number | null = null;
+  /** A guided lesson owns every automatic decision while its session is active. */
+  private tutorialAutomationActive = false;
   private readonly autoPassGate = new PriorityPassGate();
   private gameGeneration = 0;
   /** Latest engine initialization request; rejects overlapping start replies. */
@@ -274,6 +276,17 @@ class GameSession {
     this.autoPassGate.invalidate();
   }
 
+  /**
+   * Give the guided lesson exclusive ownership of automatic decisions. This is
+   * an in-memory session scope: it never edits saved preferences or forces a
+   * temporary Phase mode. Normal synchronization still applies the player's
+   * own saved settings; only the session's automatic pass dispatch is blocked.
+   */
+  setTutorialAutomationActive(active: boolean): void {
+    this.tutorialAutomationActive = active;
+    this.autoPassGate.invalidate();
+  }
+
   /** Stop scopes use Phase's cycle and are synchronized to this seat in the engine. */
   isStop(step: string | null | undefined): boolean { return !!step && this.stops[step] !== undefined; }
   stopScope(step: string | null | undefined): PhaseStopScope | undefined {
@@ -307,6 +320,7 @@ class GameSession {
     const snapshot = this.snapshot;
     return !!snapshot
       && !snapshot.outcome
+      && !this.tutorialAutomationActive
       && !this.needsHandoff
       && !this.autoPassGate.paused
       && this.preferenceSyncIsCurrent(snapshot.viewer)
@@ -476,7 +490,15 @@ class GameSession {
       this.autoPassGate.invalidate();
       return;
     }
-    if (!this.ensureEnginePreferences(snapshot)) return;
+    // Keep Phase's ordinary per-seat preference sync intact, but do not let the
+    // session act on its auto-pass recommendation in a guided lesson. That
+    // window belongs exclusively to TutorialController for both seats.
+    const preferencesReady = this.ensureEnginePreferences(snapshot);
+    if (this.tutorialAutomationActive) {
+      this.autoPassGate.invalidate();
+      return;
+    }
+    if (!preferencesReady) return;
     const anchor = this.currentPriorityAnchor();
     if (!anchor || this.effectivePriorityMode === 'FullControl' || !anchor.recommended
       || anchor.waitingFor !== 'Priority'
@@ -623,6 +645,7 @@ class GameSession {
     this.preparedStartGeneration = null;
     this.preferencesVersion += 1;
     this.autoPassGate.reset();
+    this.tutorialAutomationActive = false;
     this.fullControlSeats = [];
     this.fullControlOnNextStart = false;
     this.legacyFullControlOnNextStart = false;
@@ -691,7 +714,12 @@ class GameSession {
    */
   private enqueueDispatch(
     action: GameAction,
-    options: { automaticAnchor?: PriorityWindowAnchor; autoGuard?: () => boolean; actor?: number } = {}
+    options: {
+      automaticAnchor?: PriorityWindowAnchor;
+      autoGuard?: () => boolean;
+      actor?: number;
+      expectedSnapshot?: DispatchExpectation;
+    } = {}
   ): Promise<DispatchOutcome> {
     const game = this.gameGeneration;
     let outcome: DispatchOutcome = { kind: 'unavailable', message: 'No hay una partida activa que pueda aceptar esa acción.' };
@@ -701,6 +729,15 @@ class GameSession {
       if (game !== this.gameGeneration || !current || current.outcome || this.busy
         || (options.autoGuard && !options.autoGuard())
         || (anchor && !priorityWindowMatches(anchor, this.currentPriorityAnchor()))) return outcome;
+      const expected = options.expectedSnapshot;
+      if (expected && !dispatchExpectationMatches(expected, current)) {
+        outcome = {
+          kind: 'stale',
+          code: 'snapshot_changed_before_dispatch',
+          revision: current.revision
+        };
+        return outcome;
+      }
       const actionRevision = anchor?.revision ?? current.revision;
       this.busy = true; this.error = null;
       let reply: EngineReply | null = null;
@@ -728,7 +765,10 @@ class GameSession {
         this.error = e instanceof Error ? e.message : String(e);
       } finally { this.busy = false; }
       if (game !== this.gameGeneration) return outcome;
-      outcome = classifyDispatch({ actionRevision, snapshotBefore: actionRevision, reply, reViewed, error: failure });
+      outcome = {
+        ...classifyDispatch({ actionRevision, snapshotBefore: actionRevision, reply, reViewed, error: failure }),
+        actionRevision
+      };
       if (anchor && (outcome.kind === 'failed' || outcome.kind === 'rejected')) this.autoPassGate.pause();
       // A rejection or a stale re-view leaves a sentence on screen: the player
       // has to know the card did not resolve, and be able to try again.
@@ -739,13 +779,15 @@ class GameSession {
     return this.queue as Promise<DispatchOutcome>;
   }
 
-  dispatch(action: GameAction): Promise<DispatchOutcome> {
+  dispatch(action: GameAction, expectedSnapshot?: DispatchExpectation): Promise<DispatchOutcome> {
     // A user action takes precedence over an unsent recommendation. The gate's
     // ticket is checked again at the queue's send boundary, not just when its
-    // microtask is first scheduled.
+    // microtask is first scheduled. Tutorial actions also carry their source
+    // snapshot through this same boundary so a changed viewer/revision is
+    // rejected locally before Phase receives the old proposal.
     this.autoPassGate.invalidate();
     this.autoPassGate.resume();
-    return this.enqueueDispatch(action);
+    return this.enqueueDispatch(action, { expectedSnapshot });
   }
 
   openCardMenu(id: ObjectId) { this.cardMenu = id; }

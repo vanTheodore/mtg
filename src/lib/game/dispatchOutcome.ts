@@ -22,10 +22,26 @@ export interface DispatchOutcome {
   kind: DispatchOutcomeKind;
   /** Revision the engine reported after the reply, when it reported one. */
   revision?: number;
+  /** Revision actually sent to Phase, when a dispatch reached the engine. */
+  actionRevision?: number;
   /** Engine code (`stale_action`, `invalid_action`…) when there was one. */
   code?: string;
   /** Human sentence in es-419, ready to show. */
   message?: string;
+}
+
+/** Snapshot identity required by callers that must not send a stale action. */
+export interface DispatchExpectation {
+  viewer: number;
+  revision: number;
+}
+
+/** Exact identity check used at the serial queue's send boundary. */
+export function dispatchExpectationMatches(
+  expected: DispatchExpectation,
+  current: { viewer: number; revision: number } | null
+): boolean {
+  return !!current && current.viewer === expected.viewer && current.revision === expected.revision;
 }
 
 const STALE_MESSAGE = 'La partida cambió mientras elegías. La vista se actualizó; vuelve a intentarlo.';

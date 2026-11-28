@@ -6,7 +6,10 @@
  * artifact host. Annotations therefore preserve only static test metadata,
  * bounded E2E checkpoints, a coarse failure kind, and explicitly whitelisted
  * diagnostic fields. Expected/received text, arbitrary stdout, card names,
- * card counts, seat identifiers, and alert contents are never published.
+ * raw seat IDs, full hands, and alert contents are never published. The tutorial
+ * allowlist may report only logical seat roles and the learner-land count while
+ * the learner is the current viewer; no other card counts or private hand data
+ * are emitted.
  *
  * Usage (inside the workflow, after `playwright test`):
  *
@@ -130,16 +133,41 @@ function safeTutorialTrace(line: string): string | null {
   const raw = parseMarker<unknown>(line, 'MESA_E2E_TUTORIAL_TRACE ');
   if (!Array.isArray(raw)) return null;
   const entries = raw.flatMap((entry) => {
-    if (typeof entry !== 'string') return [];
-    const match = entry.match(/^\[lección\] rev=(\d+) paso=(\d+)\/(\d+) fase=([A-Za-z][A-Za-z0-9_-]*) espera=([A-Za-z][A-Za-z0-9_-]*) turno=(\d+) → ([A-Za-z][A-Za-z0-9_-]*|espera)$/);
-    if (!match) return [];
+    if (typeof entry !== 'string' || !entry.startsWith('[tutorial-trace] ')) return [];
+    let value: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(entry.slice('[tutorial-trace] '.length));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+      value = parsed as Record<string, unknown>;
+    } catch {
+      return [];
+    }
+    const phaseResult = ['accepted', 'stale', 'rejected', 'failed', 'unavailable'].includes(String(value.phaseResult))
+      ? value.phaseResult as string
+      : null;
+    const learnerIsViewer = value.learnerSeat === 'learner' && value.actorSeat === 'learner';
+    const playLandLegal = learnerIsViewer && (value.playLandLegal === true || value.playLandLegal === false)
+      ? value.playLandLegal
+      : null;
     return [{
-      revision: safeCount(match[1]),
-      step: safeCount(match[2], 32),
-      phase: safeToken(match[4]),
-      waiting: safeToken(match[5]),
-      turn: safeCount(match[6]),
-      action: safeToken(match[7])
+      event: safeToken(value.event),
+      source: safeToken(value.source),
+      learnerSeat: value.learnerSeat === 'learner' ? 'learner' : null,
+      dummySeat: value.dummySeat === 'mannequin' ? 'mannequin' : null,
+      actorSeat: ['learner', 'mannequin', 'unknown'].includes(String(value.actorSeat)) ? value.actorSeat : null,
+      proposalRevision: safeCount(value.proposalRevision),
+      dispatchRevision: safeCount(value.dispatchRevision),
+      actionType: safeToken(value.actionType),
+      phaseResult,
+      phaseCode: safeToken(value.phaseCode),
+      step: safeToken(value.step),
+      phase: safeToken(value.phase),
+      waiting: safeToken(value.waiting),
+      turn: safeCount(value.turn, 10_000),
+      // Explicitly scoped tutorial diagnostic: count learner lands only while
+      // the learner is the viewer. No hand contents, card names, or object IDs.
+      availableLands: learnerIsViewer ? safeCount(value.availableLands, 40) : null,
+      playLandLegal
     }];
   }).slice(-6);
   return entries.length ? `tutorial-trace ${JSON.stringify(entries)}` : null;

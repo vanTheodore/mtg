@@ -104,39 +104,57 @@ export function createBoardDriver(page: Page): BoardDriver {
   };
 
   /**
-   * Wait for either a visible decision or the privacy dialog, and confirm every
-   * dialog through its own button. The decision must stay visible across a
-   * short stability window: during a mulligan or turn transition the previous
-   * seat's panel can appear for one render just before the next privacy barrier.
+   * Wait for a settled decision or the visible terminal state. Confirm every
+   * privacy dialog through its own button, then rely on Phase's revision,
+   * waiting kind, the rendered panel, session busy state, preference sync and
+   * pending auto-pass—not an elapsed delay as a promise that the engine settled.
    */
   const waitForDecision = async (timeout = 30_000): Promise<void> => {
     checkpoint('board-driver: wait for a decision through privacy handoffs');
     const deadline = Date.now() + timeout;
     let stableState = '';
-    let stableSince = 0;
     while (Date.now() < deadline) {
+      if (await gameOver.isVisible().catch(() => false) || (await waiting()) === 'GameOver') {
+        checkpoint('board-driver: terminal game state reached during wait');
+        return;
+      }
       if (await handoff.isVisible().catch(() => false)) {
         await confirmSeat();
         stableState = '';
         continue;
       }
       if (await decision.isVisible().catch(() => false)) {
-        const busy = await app.getAttribute('data-busy');
-        const state = `${await revision()}:${await waiting()}:${busy}`;
-        if (busy !== 'false') {
-          stableState = '';
-        } else if (state !== stableState) {
-          stableState = state;
-          stableSince = Date.now();
-        } else if (Date.now() - stableSince >= 120
+        const [busy, syncPending, syncFailed, autoPassPending, engineWaiting, panelWaiting] = await Promise.all([
+          app.getAttribute('data-busy'),
+          app.getAttribute('data-priority-sync-pending'),
+          app.getAttribute('data-priority-sync-failed'),
+          app.getAttribute('data-auto-pass-pending'),
+          waiting(),
+          decision.getAttribute('data-waiting')
+        ]);
+        const state = `${await viewer()}:${await revision()}:${engineWaiting}:${panelWaiting}:${busy}:${syncPending}:${syncFailed}:${autoPassPending}`;
+        const settled = busy === 'false'
+          && syncPending === 'false'
+          && syncFailed === 'false'
+          && autoPassPending === 'false'
+          && engineWaiting !== 'GameOver'
+          && panelWaiting === engineWaiting
           && !(await handoff.isVisible().catch(() => false))
-          && await decision.isVisible().catch(() => false)) {
-          checkpoint('handoff: decision surface visible after confirmation');
-          return;
+          && await decision.isVisible().catch(() => false);
+        if (settled) {
+          if (state === stableState) {
+            checkpoint('handoff: decision surface visible after confirmation');
+            return;
+          }
+          stableState = state;
+        } else {
+          stableState = '';
         }
       } else {
         stableState = '';
       }
+      // Poll the observable state; this interval is only a polling cadence,
+      // never a claim that Phase has completed its work after 50/120 ms.
       await page.waitForTimeout(50);
     }
     throw new Error('No apareció una decisión visible después de resolver los handoffs de privacidad.');
