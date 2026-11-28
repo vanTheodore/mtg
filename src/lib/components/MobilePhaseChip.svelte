@@ -134,6 +134,7 @@
     </p>
     <ol class="rows">
       {#each PHASE_STEPS as step, index (step.value)}
+        {@const position = step.value === phase ? 'Paso actual' : `Paso ${index + 1} de ${PHASE_STEPS.length}`}
         <li>
           <button
             type="button"
@@ -142,15 +143,13 @@
             data-stop-scope={session.stopScope(step.value) ?? 'off'}
             aria-current={step.value === phase ? 'step' : undefined}
             aria-pressed={session.isStop(step.value)}
-            aria-label={`${step.label}: ${scopeLabel(session.stopScope(step.value))}. Toca para cambiar el ámbito`}
+            aria-label={`${step.label}. ${position}. ${scopeLabel(session.stopScope(step.value))}. Toca para cambiar el ámbito`}
             title={`Ámbito actual: ${scopeLabel(session.stopScope(step.value))}`}
             onclick={() => session.cycleStop(step.value)}
           >
             <span class="text">
               <span class="name">{step.label}</span>
-              <span class="mark">
-                {step.value === phase ? 'Paso actual' : `Paso ${index + 1} de ${PHASE_STEPS.length}`}
-              </span>
+              <span class="mark">{position}</span>
             </span>
             <span class="badge" data-on={session.isStop(step.value)} data-scope={session.stopScope(step.value) ?? 'off'}>
               {scopeLabel(session.stopScope(step.value))}

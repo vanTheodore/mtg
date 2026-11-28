@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createBoardDriver } from './support/board-driver.ts';
+import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
 import { captureViewportEvidence } from './support/viewport-evidence';
+
+test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
 /**
  * 0.5 — a pasted 10E deck played through the Svelte controls, including a real

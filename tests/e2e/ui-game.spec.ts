@@ -1,4 +1,7 @@
 import { expect, test, type Locator } from '@playwright/test';
+import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
+
+test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
 /**
  * Full-game interaction test driven only through Svelte controls.

@@ -7,7 +7,8 @@
  * unreachable (`EOF` from the blob storage), so a failing `playwright test` step
  * arrives as «exit code 1» and nothing else. Annotations, on the other hand, are
  * plain JSON on `api.github.com`, so this script repeats each failure — test
- * title, file, line and the first line of the error — as a `::error` command.
+ * title, file, line, error, checkpoint and trailing test output — as a `::error`
+ * command. This preserves diagnostic state even when the artifact host is blocked.
  *
  * Usage (inside the workflow, after `playwright test`):
  *
@@ -26,7 +27,8 @@
 import { existsSync, readdirSync } from 'node:fs';
 
 type JsonError = { message?: string; stack?: string };
-type JsonResult = { status?: string; error?: JsonError };
+type JsonOutput = string | { buffer?: string };
+type JsonResult = { status?: string; error?: JsonError; stdout?: JsonOutput[]; stderr?: JsonOutput[] };
 type JsonTest = {
   status?: string;
   results?: JsonResult[];
@@ -55,6 +57,18 @@ function annotation(file: string, line: number, title: string, message: string) 
   console.log(`::error file=${safeFile},line=${line},title=${safeTitle}::${readableMessage}`);
 }
 
+/** Playwright's JSON reporter stores test stdout/stderr as base64 buffers. */
+function outputTail(result: JsonResult): string {
+  const text = [...(result.stdout ?? []), ...(result.stderr ?? [])]
+    .map((chunk) => typeof chunk === 'string'
+      ? chunk
+      : chunk.buffer ? Buffer.from(chunk.buffer, 'base64').toString('utf8') : '')
+    .join('')
+    .replace(/\u001b\[[0-9;]*m/g, '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
+  return text.split(/\r?\n/).filter(Boolean).slice(-12).join(' · ');
+}
+
 let emitted = 0;
 
 function walk(suite: JsonSuite, file: string) {
@@ -77,7 +91,12 @@ function walk(suite: JsonSuite, file: string) {
       const checkpoint = [...(test.annotations ?? [])]
         .reverse()
         .find((entry) => entry.type === 'e2e-checkpoint' && entry.description)?.description;
-      const message = checkpoint ? `último checkpoint: ${checkpoint} · ${summary}` : summary;
+      const output = outputTail(first);
+      const message = [
+        checkpoint ? `último checkpoint: ${checkpoint}` : '',
+        summary,
+        output ? `salida de prueba: ${output}` : ''
+      ].filter(Boolean).join(' · ');
       annotation(currentFile || spec.file || 'tests/e2e', spec.line ?? 1, spec.title ?? 'prueba sin título', message);
       emitted += 1;
     }

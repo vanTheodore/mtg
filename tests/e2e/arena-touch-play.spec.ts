@@ -1,4 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
+
+test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
 /**
  * El teléfono juega: tocar una carta del cajón tiene que llevar a la acción.

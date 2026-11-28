@@ -138,12 +138,14 @@ test('el cromo de mesa nombra la prioridad, la mano y el paso, y el control conm
   await expect(control).toHaveAttribute('aria-pressed', 'false');
   await control.click();
   await expect(control).toHaveAttribute('aria-pressed', 'true');
-  // The preference is the same one the top bar writes, not a second state.
-  expect(await page.evaluate(() => localStorage.getItem('mesa:autoPass'))).toBe('off');
+  // Full Control is an in-game override, not a persisted seat preference or
+  // the removed device-wide `mesa:autoPass` compatibility key.
+  expect(await page.evaluate(() => localStorage.getItem('mesa:autoPass'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('mesa:priorityPreferences'))).toBeNull();
 
   await page.reload();
   await expect(page.getByRole('group', { name: 'Estado de la mesa' }).getByRole('button', { name: /Control total/ }))
-    .toHaveAttribute('aria-pressed', 'true');
+    .toHaveAttribute('aria-pressed', 'false');
 });
 
 test('el aviso de flujo explica el auto-paso, se descarta y no vuelve', async ({ page }) => {

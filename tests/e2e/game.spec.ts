@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
+
+test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
 /**
  * Real-engine smoke test through the Svelte UI: boot, mulligan with seat

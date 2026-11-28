@@ -1,7 +1,10 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { createBoardDriver } from './support/board-driver.ts';
+import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+
+test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
 /**
  * Arena 1.0 — la matriz de tamaños, medida.
