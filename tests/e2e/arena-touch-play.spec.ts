@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
+import { createBoardDriver } from './support/board-driver.ts';
 
 test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
@@ -74,6 +75,7 @@ async function tapDecisionButton(page: Page, label: RegExp | string): Promise<bo
 
 async function playFromHand(page: Page) {
   await page.goto('/?autostart');
+  await createBoardDriver(page).waitForDecision(180_000);
   await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({
     timeout: 180_000
   });

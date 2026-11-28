@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createBoardDriver } from './support/board-driver';
+import { checkpoint } from './support/e2e-checkpoint';
 
 /**
  * UX-PRIORITY 1.0 · Phase-owned priority controls, seat-scoped preferences,
@@ -46,10 +47,6 @@ async function waitForPrioritySync(page: Page, mode: string, stops?: number) {
   // sync) can still be in flight even though the preference itself is synced.
   // Wait for the controls' disabled guard to clear before issuing the next mode.
   await expect(page.locator('.app')).toHaveAttribute('data-busy', 'false', { timeout: 30_000 });
-}
-
-function checkpoint(description: string) {
-  test.info().annotations.push({ type: 'e2e-checkpoint', description });
 }
 
 test('modos temporales y alcances por asiento se sincronizan con Phase', async ({ page }) => {
@@ -133,14 +130,17 @@ test('pasar hasta una frontera es explícito y protege la mano del siguiente asi
   await expect(panel(page).locator('button[data-auto-pass-until="EndOfCurrentTurn"]')).toBeVisible();
 
   const before = await applied(page);
+  checkpoint('handoff: enviar pase explícito hasta una frontera');
   await panel(page).locator('button[data-auto-pass-until="EndOfCurrentTurn"]').click();
   await expect.poll(() => applied(page), { timeout: 30_000 }).toBeGreaterThan(before);
   await expect(page.locator('.app')).toHaveAttribute('data-viewer', '1', { timeout: 30_000 });
+  checkpoint('handoff: confirmar que la barrera cubre las superficies privadas');
   await expect(page.locator('.handoff'), 'el pase explícito no debe revelar la mano P1 sin confirmar').toBeVisible();
   await expect(page.locator('.app main[data-board-region]')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.locator('section[aria-label^="Tu mano"]')).toHaveCount(0);
   await expect(page.locator('.handoff')).toContainText('Jugador 2');
 
+  checkpoint('handoff: confirmar el diálogo de privacidad');
   await page.locator('.handoff button').click();
   await expect(page.locator('.handoff')).toHaveCount(0);
   await expect(page.locator('.app')).toHaveAttribute('data-viewer', '1');
@@ -149,6 +149,7 @@ test('pasar hasta una frontera es explícito y protege la mano del siguiente asi
 
 test('handoff estricto oculta y después identifica la mano privada del asiento siguiente', async ({ page }) => {
   test.setTimeout(180_000);
+  checkpoint('handoff estricto: preparar el escenario');
   await openScenario(page, 'priority-empty', 'every');
   const outgoingTiers = panel(page).locator('details[data-decision-tiers]');
   await expect(outgoingTiers).toHaveJSProperty('open', false);
@@ -157,6 +158,7 @@ test('handoff estricto oculta y después identifica la mano privada del asiento 
   const pass = page.locator('[data-decision-primary]');
   await expect(pass).toContainText('Pasar');
   const before = await applied(page);
+  checkpoint('handoff estricto: pasar prioridad');
   await pass.click();
   await expect.poll(() => applied(page), { timeout: 30_000 }).toBeGreaterThan(before);
   await expect(page.locator('.app')).toHaveAttribute('data-viewer', '1');
@@ -166,11 +168,13 @@ test('handoff estricto oculta y después identifica la mano privada del asiento 
   await expect(page.locator('section[aria-label^="Tu mano"]')).toHaveCount(0);
   await expect(page.locator('text=Spectral Sailor')).toHaveCount(0);
 
+  checkpoint('handoff estricto: confirmar antes de montar la vista entrante');
   await page.locator('.handoff button').click();
   await expect(page.locator('.handoff')).toHaveCount(0);
   const incomingTiers = panel(page).locator('details[data-decision-tiers]');
   await expect(incomingTiers).toHaveAttribute('data-open-by-default', 'false');
   await expect(incomingTiers).toHaveJSProperty('open', false);
+  checkpoint('handoff estricto: verificar la superficie privada entrante');
   await expect(page.locator('section[aria-label^="Tu mano"] .fallback-name')).toContainText('Spectral Sailor');
 });
 

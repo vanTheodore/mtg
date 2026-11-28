@@ -1,13 +1,12 @@
 import type { Page, TestInfo } from '@playwright/test';
 
 /**
- * Keep a privacy-safe snapshot of the board in the Playwright JSON report when
- * a long browser regression fails. The Actions artifact host may not be
- * reachable from this workspace, but `scripts/e2e-annotations.ts` publishes
- * the trailing test output as a check annotation.
+ * Keep a bounded, privacy-safe snapshot of the board in the Playwright report
+ * when a browser regression fails. The Actions artifact host may be unreachable,
+ * so `scripts/e2e-annotations.ts` republishes only these whitelisted fields.
  *
- * Never include card names, hand contents, or hidden-seat state: only count
- * cards that are visibly rendered for the current viewer.
+ * Never record card names, card counts, seat identifiers, hidden state, or alert
+ * text. During a handoff, even the current viewer's hand visibility is omitted.
  */
 export async function logBoardFailureDiagnostics(page: Page, info: TestInfo): Promise<void> {
   if (info.status === info.expectedStatus) return;
@@ -22,33 +21,30 @@ export async function logBoardFailureDiagnostics(page: Page, info: TestInfo): Pr
     const hand = document.querySelector<HTMLElement>('section[aria-label^="Tu mano"]');
     const decision = document.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]');
     const handoff = document.querySelector<HTMLElement>('.handoff');
-    const alert = document.querySelector<HTMLElement>('[role="alert"]');
     const startPanel = document.querySelector<HTMLElement>('.start-panel');
+    const handoffVisible = visible(handoff);
 
     return {
-      url: `${location.pathname}${location.search}`,
+      url: location.pathname,
       viewport: `${window.innerWidth}x${window.innerHeight}`,
       app: app ? {
-        viewer: app.dataset.viewer ?? null,
         phase: app.dataset.phase ?? null,
         turn: app.dataset.turn ?? null,
         waiting: app.dataset.waiting ?? null,
         busy: app.dataset.busy ?? null,
         actions: app.dataset.actionsApplied ?? null
       } : null,
-      handoffVisible: visible(handoff),
+      handoffVisible,
       decision: decision ? {
         visible: visible(decision),
         waiting: decision.dataset.waiting ?? null,
         buttonCount: decision.querySelectorAll('button').length
       } : null,
-      visibleHandCardCount: hand && visible(hand) ? hand.querySelectorAll('[data-card-id]').length : 0,
+      viewerHandVisible: !handoffVisible && visible(hand),
       startPanelVisible: visible(startPanel),
-      error: alert?.textContent?.trim().slice(0, 180) ?? null
+      alertVisible: visible(document.querySelector('[role="alert"]'))
     };
-  }).catch((error: unknown) => ({
-    unavailable: error instanceof Error ? error.message : String(error)
-  }));
+  }).catch(() => ({ unavailable: true }));
 
-  console.log(`MESA_E2E_FAILURE_UI ${JSON.stringify({ test: info.title, status: info.status, snapshot })}`);
+  console.log(`MESA_E2E_FAILURE_UI ${JSON.stringify({ status: info.status, snapshot })}`);
 }

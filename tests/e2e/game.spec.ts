@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
+import { createBoardDriver } from './support/board-driver.ts';
 
 test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
@@ -16,6 +17,8 @@ test('partida real: inicializa WASM, conserva manos y juega una tierra', async (
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
 
   await page.goto('/?autostart');
+  const driver = createBoardDriver(page);
+  await driver.waitForDecision(60_000);
   await expect(page.getByRole('heading', { name: /Tu mano/ })).toBeVisible({ timeout: 60_000 });
   await expect(page.locator('.metrics')).toContainText('Reglas');
 
@@ -46,6 +49,7 @@ test('partida real: inicializa WASM, conserva manos y juega una tierra', async (
     if (!(await keep.count())) break;
     await press(keep);
   }
+  await driver.waitForDecision(30_000);
   await expect(decision).not.toContainText('MulliganDecision', { timeout: 15_000 });
   await expect(page.locator('.rival-hand .mini-back').first()).toBeVisible();
   await expect(page.locator('.rival-hand')).not.toContainText(/\{T\}|Forest|Lightning|Island|Mountain/);

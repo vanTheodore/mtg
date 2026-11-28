@@ -1,5 +1,6 @@
 import { expect, test, type Locator } from '@playwright/test';
 import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
+import { createBoardDriver } from './support/board-driver.ts';
 
 test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
@@ -26,6 +27,8 @@ test('partida completa y victoria desde controles Svelte', async ({ page }) => {
   const hand = C(page.locator('section[aria-label^="Tu mano"]'));
   const app = C(page.locator('.app'));
   const decision = C(page.locator('section[aria-label="Decisión pendiente"]'));
+  const boardDriver = createBoardDriver(page);
+  await boardDriver.waitForDecision(90_000);
   await expect(hand.locator('[data-card-id]').first()).toBeVisible({ timeout: 90_000 });
 
   let handoffs = 0;
@@ -200,6 +203,7 @@ test('la interfaz explica objetivos, maná y combate sin nombres internos', asyn
     await page.locator('.handoff button').click({ timeout: 3_000 }).catch(() => {});
   });
   const hand = page.locator('section[aria-label^="Tu mano"]');
+  await createBoardDriver(page).waitForDecision(90_000);
   await expect(hand.locator('[data-card-id]').first()).toBeVisible({ timeout: 90_000 });
   const decision = page.locator('section[aria-label="Decisión pendiente"]');
   const keep = decision.locator('button').filter({ hasText: 'Conservar mano' }).first();
@@ -234,6 +238,7 @@ test('objetivo elegido con clic en el jugador y daño visible', async ({ page })
   const hand = page.locator('section[aria-label^="Tu mano"]');
   const decision = page.locator('section[aria-label="Decisión pendiente"]');
   const app = page.locator('.app');
+  await createBoardDriver(page).waitForDecision(90_000);
   await expect(hand.locator('[data-card-id]').first()).toBeVisible({ timeout: 90_000 });
 
   const keep = decision.locator('button').filter({ hasText: 'Conservar mano' }).first();

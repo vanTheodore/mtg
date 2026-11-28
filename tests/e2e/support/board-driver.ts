@@ -1,4 +1,5 @@
 import { type Locator, type Page } from '@playwright/test';
+import { checkpoint } from './e2e-checkpoint';
 
 /**
  * A driver for the Mesa board, shared by the interface tests.
@@ -38,6 +39,8 @@ export interface BoardDriver {
   waiting(): Promise<string | null>;
   /** Pass the device on, if the seat dialog is up. */
   settleSeat(): Promise<void>;
+  /** Wait through any privacy handoffs until a decision surface is available. */
+  waitForDecision(timeout?: number): Promise<void>;
   /** Click a card, crossing the seat dialog if it is in the way. */
   clickCard(card: Locator): Promise<void>;
   /** Press a button and report whether Phase moved the game. */
@@ -66,7 +69,9 @@ export function createBoardDriver(page: Page): BoardDriver {
 
   const revision = async () => Number(await app.getAttribute('data-actions-applied'));
   const viewer = async () => Number(await app.getAttribute('data-viewer'));
-  const waiting = async () => await decision.getAttribute('data-waiting');
+  // Board publishes the engine's pending decision even while the panel is
+  // unmounted behind a privacy handoff.
+  const waiting = async () => await app.getAttribute('data-waiting');
 
   /**
    * The seat dialog covers the board, so a person passes the device before
@@ -75,8 +80,34 @@ export function createBoardDriver(page: Page): BoardDriver {
    */
   const settleSeat = async () => {
     if (!(await handoff.isVisible().catch(() => false))) return;
+    checkpoint('handoff: privacy dialog detected');
     await handoff.locator('button').click({ timeout: 2_000 }).catch(() => {});
     await handoff.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+    checkpoint(await handoff.isVisible().catch(() => false)
+      ? 'handoff: privacy dialog remains visible after confirmation'
+      : 'handoff: privacy dialog cleared after confirmation');
+  };
+
+  /**
+   * Wait for either a visible decision or the privacy dialog, and confirm every
+   * dialog through its own button. This avoids waiting on a panel that the
+   * privacy barrier intentionally unmounts.
+   */
+  const waitForDecision = async (timeout = 30_000): Promise<void> => {
+    checkpoint('board-driver: wait for a decision through privacy handoffs');
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      if (await handoff.isVisible().catch(() => false)) {
+        await settleSeat();
+        continue;
+      }
+      if (await decision.isVisible().catch(() => false)) {
+        checkpoint('handoff: decision surface visible after confirmation');
+        return;
+      }
+      await page.waitForTimeout(50);
+    }
+    throw new Error('No apareció una decisión visible después de resolver los handoffs de privacidad.');
   };
 
   /** Card clicks also cross the seat dialog; keep their timeout short and retry. */
@@ -120,6 +151,7 @@ export function createBoardDriver(page: Page): BoardDriver {
    * confirms. The number is read from the panel, never guessed here.
    */
   const discardIfAsked = async (): Promise<boolean> => {
+    await settleSeat();
     if (!(await discard.isVisible().catch(() => false))) return false;
     const needed = Number((await discard.locator('strong').innerText()).match(/(\d+)/)?.[1] ?? 1);
     for (let index = 0; index < needed; index += 1) {
@@ -134,6 +166,7 @@ export function createBoardDriver(page: Page): BoardDriver {
    * payment, the combat windows and finally the priority pass.
    */
   const answerAnyPrompt = async (): Promise<boolean> => {
+    await settleSeat();
     if (await discardIfAsked()) return true;
     if (await press(decision.locator('button:visible').filter({ hasText: 'Conservar mano' }).first())) return true;
     if (await press(decision.locator('button:visible').filter({ hasText: 'Confirmar pago' }).first())) return true;
@@ -163,6 +196,7 @@ export function createBoardDriver(page: Page): BoardDriver {
    * action the panel offers for it (jugar una tierra, lanzar un hechizo).
    */
   const playPlayableCard = async (): Promise<boolean> => {
+    await settleSeat();
     const card = hand
       .locator('.hand-card')
       .filter({ hasText: 'Disponible para jugar' })
@@ -177,6 +211,7 @@ export function createBoardDriver(page: Page): BoardDriver {
 
   /** Declare every attacker Phase offers, the way the panel asks for it. */
   const declareAttackers = async (): Promise<boolean> => {
+    await settleSeat();
     const attackers = battlefield.locator('[data-card-id][data-attack-options]:not([data-attack-options="0"])');
     if (!(await attackers.count())) return false;
     for (const card of await attackers.all()) await clickCard(card);
@@ -187,6 +222,7 @@ export function createBoardDriver(page: Page): BoardDriver {
 
   /** Assign one blocker to one attacker, the way the panel asks for it. */
   const declareBlocker = async (): Promise<boolean> => {
+    await settleSeat();
     const blocker = battlefield.locator('[data-card-id][data-block-options]:not([data-block-options="0"])').first();
     const attacker = rivalField.locator('[data-combat-role="Atacando"]').first();
     if (!(await blocker.count()) || !(await attacker.count())) return false;
@@ -210,6 +246,7 @@ export function createBoardDriver(page: Page): BoardDriver {
     viewer,
     waiting,
     settleSeat,
+    waitForDecision,
     clickCard,
     press,
     discardIfAsked,

@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
+import { checkpoint } from './support/e2e-checkpoint';
 
 /**
  * Mesa 0.6 — the guided lesson, driven only through the interface.
@@ -20,27 +21,30 @@ const trail: string[] = [];
 test.beforeEach(async ({ page }) => {
   trail.length = 0;
   page.on('console', (message) => {
-    if (message.text().startsWith('[lección]')) trail.push(message.text());
+    if (!message.text().startsWith('[lección]')) return;
+    trail.push(message.text());
+    if (trail.length > 32) trail.shift();
   });
 });
 
 test.afterEach(async ({ page }) => {
   const state = await page
     .evaluate(() => {
-      const app = document.querySelector('[data-tutorial-step]') as HTMLElement | null;
+      const app = document.querySelector<HTMLElement>('[data-tutorial-step]');
+      if (!app) return null;
+      const step = Number(app.dataset.tutorialStep);
+      const turn = Number(app.dataset.turn);
       return {
-        paso: app?.dataset.tutorialStep,
-        fase: app?.dataset.phase,
-        turno: app?.dataset.turn,
-        espera: app?.dataset.waiting,
-        activo: app?.dataset.active,
-        visor: app?.dataset.viewer,
-        titulo: document.querySelector('aside[aria-label="Lección"] h2')?.textContent ?? ''
+        step: Number.isInteger(step) ? step : null,
+        phase: app.dataset.phase ?? null,
+        turn: Number.isInteger(turn) ? turn : null,
+        waiting: app.dataset.waiting ?? null,
+        focusPresent: document.querySelector('[data-tutorial-focus="true"]') !== null
       };
     })
     .catch(() => null);
-  console.log(`estado: ${JSON.stringify(state)}`);
-  console.log(`rastro de la lección:\n${trail.join('\n')}`);
+  console.log(`MESA_E2E_TUTORIAL_STATE ${JSON.stringify(state)}`);
+  console.log(`MESA_E2E_TUTORIAL_TRACE ${JSON.stringify(trail.slice(-6))}`);
 });
 
 const panel = (page: Page): Locator => page.locator('aside[aria-label="Lección"]');
@@ -50,14 +54,17 @@ const shotsDir = fileURLToPath(new URL('../../docs/screenshots/', import.meta.ur
 
 /** Open the lesson from the landing page and wait for the real engine. */
 async function openLesson(page: Page): Promise<void> {
+  checkpoint('tutorial: abrir la página de inicio');
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/');
   const entry = page.getByRole('link', { name: 'Aprender a jugar' });
   await expect(entry).toBeVisible();
+  checkpoint('tutorial: entrar a la lección');
   await entry.click();
   await expect(page).toHaveURL(/\/aprender/);
   await expect(stepTitle(page)).toHaveText('Tu primera partida', { timeout: 30_000 });
-  // The board is the engine's, not a mock: both seats are on the table.
+  checkpoint('tutorial: tablero inicial visible');
+  // The board is the engine's, not a mock: both sides are on the table.
   await expect(page.locator('section[aria-label="Jugador 1"]')).toBeVisible({ timeout: 180_000 });
   await expect(page.locator('section[aria-label="Jugador 2"]')).toContainText('20', { timeout: 30_000 });
 }
@@ -72,8 +79,10 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await openLesson(page);
 
   // ── Paso 1: leer ───────────────────────────────────────────────────────────
+  checkpoint('tutorial: confirmar la introducción');
   await panel(page).getByRole('button', { name: 'Continuar' }).click();
   await expect(stepTitle(page)).toHaveText('Juega tu primera tierra');
+  checkpoint('tutorial: esperar la mano inicial estable');
   // La mano inicial, ya resuelta el mulligan: es la que la repetición debe
   // volver a dar. Al arrancar, el motor todavía puede estar repartiendo.
   // A card can appear while Phase is still resolving the opening mulligan.
@@ -83,22 +92,27 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
     openingHand = await handNames(page);
     return openingHand.length;
   }, { timeout: 60_000 }).toBe(7);
+  checkpoint('tutorial: mano inicial estable');
 
   // ── Una acción inesperada no rompe la lección ─────────────────────────────
   const lions = page.locator('section[aria-label^="Tu mano"] [data-card-id]', { hasText: 'Savannah Lions' }).first();
   if (await lions.count()) {
+    checkpoint('tutorial: comprobar una selección que no corresponde');
     await lions.click();
     await expect(panel(page).locator('.message')).toContainText(/no es la carta que toca|todavía no puede|ahora no toca/i);
     await expect(stepTitle(page)).toHaveText('Juega tu primera tierra');
   }
 
   // ── Paso 2: jugar una tierra ──────────────────────────────────────────────
+  checkpoint('tutorial: esperar el foco de la primera acción');
   await expect(focusedCard(page)).toBeVisible();
   await expect(focusedCard(page)).toContainText('Plains');
+  checkpoint('tutorial: activar la acción enfocada');
   await focusedCard(page).click();
   await expect(stepTitle(page)).toHaveText('Genera maná', { timeout: 30_000 });
 
   // ── Paso 3: generar maná ──────────────────────────────────────────────────
+  checkpoint('tutorial: esperar el foco de la siguiente acción');
   await expect(focusedCard(page)).toBeVisible();
   await focusedCard(page).click();
   await expect(stepTitle(page)).toHaveText('Lanza una criatura', { timeout: 30_000 });
@@ -118,6 +132,7 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await page.setViewportSize({ width: 1440, height: 900 });
 
   // ── Paso 4: lanzar la criatura ────────────────────────────────────────────
+  checkpoint('tutorial: esperar la acción de criatura');
   await expect(focusedCard(page)).toBeVisible();
   await focusedCard(page).click();
   await expect(stepTitle(page)).toHaveText('Fuerza y resistencia', { timeout: 60_000 });
@@ -127,10 +142,12 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await expect(stepTitle(page)).toHaveText('Termina tu turno');
 
   // ── Paso 6: terminar el turno (el maniquí juega solo) ─────────────────────
+  checkpoint('tutorial: comenzar el turno del maniquí');
   await panel(page).getByRole('button', { name: 'Terminar mi turno' }).click();
   await expect(stepTitle(page)).toHaveText('Ataca con tu criatura', { timeout: 90_000 });
 
   // ── Paso 7: atacar ────────────────────────────────────────────────────────
+  checkpoint('tutorial: esperar la acción de combate');
   await expect(focusedCard(page)).toBeVisible();
   await expect(focusedCard(page)).toContainText('Savannah Lions');
   await focusedCard(page).click();
@@ -149,6 +166,7 @@ test('la lección se completa jugrando de verdad con el motor Phase', async ({ p
   await page.screenshot({ path: `${shotsDir}tutorial-final-1440.png`, fullPage: true });
 
   // ── Repetir es determinista ───────────────────────────────────────────────
+  checkpoint('tutorial: reiniciar para comprobar la semilla fija');
   await panel(page).getByRole('button', { name: 'Repetir la lección' }).click();
   await expect(stepTitle(page)).toHaveText('Tu primera partida', { timeout: 180_000 });
   await expect(page.locator('section[aria-label="Jugador 2"]')).toContainText('20', { timeout: 60_000 });
@@ -174,13 +192,16 @@ test('la lección se puede usar con teclado y sinaxe grave', async ({ page }) =>
   const focused = await page.evaluate(() => document.activeElement?.tagName ?? '');
   expect(['BUTTON', 'A', 'INPUT', 'SELECT']).toContain(focused);
 
+  checkpoint('tutorial teclado: confirmar la introducción');
   await panel(page).getByRole('button', { name: 'Continuar' }).click();
   await expect(stepTitle(page)).toHaveText('Juega tu primera tierra');
 
   // La carta resaltada se puede activar con el teclado.
+  checkpoint('tutorial teclado: esperar la acción enfocada');
   const card = focusedCard(page);
   await card.focus();
   await expect(card).toBeFocused();
+  checkpoint('tutorial teclado: activar la acción enfocada');
   await page.keyboard.press('Enter');
   await expect(stepTitle(page)).toHaveText('Genera maná', { timeout: 30_000 });
 

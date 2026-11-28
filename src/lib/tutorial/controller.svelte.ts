@@ -221,8 +221,7 @@ export class TutorialController {
       console.debug(
         `[lección] rev=${snapshot.revision} paso=${this.machine.step + 1}/${STEPS.length} ` +
           `fase=${snapshot.state.phase} espera=${snapshot.state.waiting_for.type} ` +
-          `turno=${snapshot.state.turn_number} activo=${snapshot.state.active_player} ` +
-          `visor=${snapshot.viewer} → ${result.action?.type ?? 'espera'}`
+          `turno=${snapshot.state.turn_number} → ${result.action?.type ?? 'espera'}`
       );
     }
     this.publish();

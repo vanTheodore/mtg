@@ -81,6 +81,7 @@ async function startDeckGame(page: Page) {
   await consent.check();
   await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
   await answerHandoff(page);
+  await createBoardDriver(page).waitForDecision(180_000);
   await expect(hand(page).locator('[data-card-id]').first()).toBeVisible({ timeout: 180_000 });
 }
 

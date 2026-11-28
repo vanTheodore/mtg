@@ -125,6 +125,8 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/?autostart');
   const decision = page.locator('section[aria-label="Decisión pendiente"]');
+  const driver = createBoardDriver(page);
+  await driver.waitForDecision(180_000);
   await expect(decision).toBeVisible({ timeout: 180_000 });
 
   const samples: Array<{
@@ -346,8 +348,9 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/?autostart');
-  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible({ timeout: 180_000 });
   const driver = createBoardDriver(page);
+  await driver.waitForDecision(180_000);
+  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible({ timeout: 180_000 });
 
   const population = () => page.evaluate(() => ({
     hand: document.querySelectorAll('.hand-zone [data-card-id]').length,
@@ -501,8 +504,9 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/?autostart');
-  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible({ timeout: 180_000 });
   const driver = createBoardDriver(page);
+  await driver.waitForDecision(180_000);
+  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible({ timeout: 180_000 });
 
   const population = () => page.evaluate(() => ({
     hand: document.querySelectorAll('.hand-zone [data-card-id]').length,
