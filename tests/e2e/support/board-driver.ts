@@ -37,9 +37,9 @@ export interface BoardDriver {
   viewer(): Promise<number>;
   /** The decision Phase is waiting for. */
   waiting(): Promise<string | null>;
-  /** Pass the device on, if the seat dialog is up. */
-  settleSeat(): Promise<void>;
-  /** Wait through any privacy handoffs until a decision surface is available. */
+  /** Pass the device on, wait for a settled decision, and report GameOver distinctly. */
+  settleSeat(): Promise<'decision' | 'game-over'>;
+  /** Wait through privacy handoffs; throw explicitly if Phase reaches GameOver first. */
   waitForDecision(timeout?: number): Promise<void>;
   /** Click a card, crossing the seat dialog if it is in the way. */
   clickCard(card: Locator): Promise<void>;
@@ -103,83 +103,133 @@ export function createBoardDriver(page: Page): BoardDriver {
     return true;
   };
 
+  type SettledSurface = 'decision' | 'game-over';
+  type BoardState = {
+    viewer: string;
+    revision: string;
+    engineWaiting: string;
+    panelWaiting: string;
+    busy: string;
+    syncPending: string;
+    syncFailed: string;
+    autoPassPending: string;
+    handoffVisible: boolean;
+    decisionVisible: boolean;
+    gameOverVisible: boolean;
+  };
+
+  /** Read the board and its overlays in one browser task, not a series of
+   * locator calls that can straddle a seat/revision change. */
+  const readBoardState = (): Promise<BoardState> => page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('.app');
+    const decisionPanel = root?.querySelector<HTMLElement>('section[aria-label="Decisión pendiente"]') ?? null;
+    const visible = (element: HTMLElement | null): boolean => {
+      if (!element) return false;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+    };
+    return {
+      viewer: root?.dataset.viewer ?? '',
+      revision: root?.dataset.actionsApplied ?? '',
+      engineWaiting: root?.dataset.waiting ?? '',
+      panelWaiting: decisionPanel?.dataset.waiting ?? '',
+      busy: root?.dataset.busy ?? '',
+      syncPending: root?.dataset.prioritySyncPending ?? '',
+      syncFailed: root?.dataset.prioritySyncFailed ?? '',
+      autoPassPending: root?.dataset.autoPassPending ?? '',
+      handoffVisible: visible(root?.querySelector<HTMLElement>('.handoff') ?? null),
+      decisionVisible: visible(decisionPanel),
+      gameOverVisible: visible(root?.querySelector<HTMLElement>('.game-over') ?? null)
+    };
+  });
+
+  const surfaceIsSettled = (state: BoardState): boolean => state.busy === 'false'
+    && state.syncPending === 'false'
+    && state.syncFailed === 'false'
+    && state.autoPassPending === 'false'
+    && state.engineWaiting !== 'GameOver'
+    && state.panelWaiting === state.engineWaiting
+    && !state.handoffVisible
+    && !state.gameOverVisible
+    && state.decisionVisible;
+
+  const surfaceKey = (state: BoardState): string => JSON.stringify([
+    state.viewer,
+    state.revision,
+    state.engineWaiting,
+    state.panelWaiting,
+    state.busy,
+    state.syncPending,
+    state.syncFailed,
+    state.autoPassPending
+  ]);
+
   /**
-   * Wait for a settled decision or the visible terminal state. Confirm every
-   * privacy dialog through its own button, then rely on Phase's revision,
-   * waiting kind, the rendered panel, session busy state, preference sync and
-   * pending auto-pass—not an elapsed delay as a promise that the engine settled.
+   * Wait for a settled decision or explicitly report the terminal state.
+   * Confirm every privacy dialog through its own button. Read Phase's revision,
+   * the rendered panel and both overlays atomically; then recheck the same state
+   * immediately before returning so a replacement handoff is never mistaken
+   * for a missing or settled decision.
    */
-  const waitForDecision = async (timeout = 30_000): Promise<void> => {
+  const waitForSettledSurface = async (timeout = 30_000): Promise<SettledSurface> => {
     checkpoint('board-driver: wait for a decision through privacy handoffs');
     const deadline = Date.now() + timeout;
     let stableState = '';
     while (Date.now() < deadline) {
-      if (await gameOver.isVisible().catch(() => false) || (await waiting()) === 'GameOver') {
+      const state = await readBoardState();
+      if (state.gameOverVisible || state.engineWaiting === 'GameOver') {
         checkpoint('board-driver: terminal game state reached during wait');
-        return;
+        return 'game-over';
       }
-      if (await handoff.isVisible().catch(() => false)) {
+      if (state.handoffVisible) {
         await confirmSeat();
         stableState = '';
         continue;
       }
-      if (await decision.isVisible().catch(() => false)) {
-        const [busy, syncPending, syncFailed, autoPassPending, engineWaiting, panelWaiting] = await Promise.all([
-          app.getAttribute('data-busy'),
-          app.getAttribute('data-priority-sync-pending'),
-          app.getAttribute('data-priority-sync-failed'),
-          app.getAttribute('data-auto-pass-pending'),
-          waiting(),
-          decision.getAttribute('data-waiting')
-        ]);
-        const state = `${await viewer()}:${await revision()}:${engineWaiting}:${panelWaiting}:${busy}:${syncPending}:${syncFailed}:${autoPassPending}`;
-        const settled = busy === 'false'
-          && syncPending === 'false'
-          && syncFailed === 'false'
-          && autoPassPending === 'false'
-          && engineWaiting !== 'GameOver'
-          && panelWaiting === engineWaiting
-          && !(await handoff.isVisible().catch(() => false))
-          && await decision.isVisible().catch(() => false);
-        if (settled) {
-          if (state === stableState) {
+      if (surfaceIsSettled(state)) {
+        const key = surfaceKey(state);
+        if (key === stableState) {
+          const finalState = await readBoardState();
+          if (surfaceIsSettled(finalState) && surfaceKey(finalState) === key) {
             checkpoint('handoff: decision surface visible after confirmation');
-            return;
+            return 'decision';
           }
-          stableState = state;
-        } else {
           stableState = '';
+        } else {
+          stableState = key;
         }
       } else {
         stableState = '';
       }
-      // Poll the observable state; this interval is only a polling cadence,
-      // never a claim that Phase has completed its work after 50/120 ms.
+      // Polling cadence only; settlement comes from matching Phase/UI state,
+      // not from assuming that a fixed delay means the engine is done.
       await page.waitForTimeout(50);
     }
     throw new Error('No apareció una decisión visible después de resolver los handoffs de privacidad.');
   };
 
-  /**
-   * Confirm the dialog, then wait for the next seat's decision before returning.
-   * Callers can act only after both the privacy barrier and panel are settled.
-   */
-  const settleSeat = async () => {
-    if (await gameOver.isVisible().catch(() => false)) return;
-    const confirmed = await confirmSeat();
-    // A state transition can briefly unmount the panel before its handoff is
-    // rendered. Do not let callers interpret that gap as "no action available".
-    if (confirmed
-      || !(await decision.isVisible().catch(() => false))
-      || (await app.getAttribute('data-busy')) !== 'false') {
-      await waitForDecision();
+  /** A caller asking for a decision must not mistake GameOver for success. */
+  const waitForDecision = async (timeout = 30_000): Promise<void> => {
+    if (await waitForSettledSurface(timeout) === 'game-over') {
+      throw new Error('Phase llegó a GameOver antes de presentar una decisión del jugador.');
     }
+  };
+
+  /**
+   * Confirm the dialog, then wait for a settled decision (or an explicit
+   * terminal state) before any caller can interact with the board.
+   */
+  const settleSeat = async (): Promise<SettledSurface> => {
+    if (await gameOver.isVisible().catch(() => false)) return 'game-over';
+    await confirmSeat();
+    return waitForSettledSurface();
   };
 
   /** Card clicks also cross the seat dialog; keep their timeout short and retry. */
   const clickCard = async (card: Locator) => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      await settleSeat();
+      if (await settleSeat() === 'game-over') throw new Error('La partida llegó a GameOver antes de seleccionar una carta.');
       try {
         await card.click({ timeout: 2_500 });
         return;
@@ -196,7 +246,7 @@ export function createBoardDriver(page: Page): BoardDriver {
    * unless the driver stalls.
    */
   const press = async (button: Locator, timeout = 2_500): Promise<boolean> => {
-    await settleSeat();
+    if (await settleSeat() === 'game-over') return false;
     if (!(await button.count())) return false;
     const before = await revision();
     await button.click({ timeout: 2_000 }).catch(() => {});
@@ -210,8 +260,9 @@ export function createBoardDriver(page: Page): BoardDriver {
     const advanced = (await revision()) > before;
     if (advanced && !(await gameOver.isVisible().catch(() => false))) {
       // A successful action may switch seats and unmount the panel. Return only
-      // after the next decision is ready, not while its privacy handoff is up.
-      await waitForDecision();
+      // after the next decision is ready; GameOver remains an explicit terminal
+      // result rather than a successful wait for a missing player prompt.
+      await waitForSettledSurface();
     }
     return advanced;
   };
@@ -223,7 +274,7 @@ export function createBoardDriver(page: Page): BoardDriver {
    * confirms. The number is read from the panel, never guessed here.
    */
   const discardIfAsked = async (): Promise<boolean> => {
-    await settleSeat();
+    if (await settleSeat() === 'game-over') return false;
     if (!(await discard.isVisible().catch(() => false))) return false;
     const needed = Number((await discard.locator('strong').innerText()).match(/(\d+)/)?.[1] ?? 1);
     for (let index = 0; index < needed; index += 1) {
@@ -238,7 +289,7 @@ export function createBoardDriver(page: Page): BoardDriver {
    * payment, the combat windows and finally the priority pass.
    */
   const answerAnyPrompt = async (): Promise<boolean> => {
-    await settleSeat();
+    if (await settleSeat() === 'game-over') return false;
     if (await discardIfAsked()) return true;
     if (await press(decision.locator('button:visible').filter({ hasText: 'Conservar mano' }).first())) return true;
     if (await press(decision.locator('button:visible').filter({ hasText: 'Confirmar pago' }).first())) return true;
@@ -268,7 +319,7 @@ export function createBoardDriver(page: Page): BoardDriver {
    * action the panel offers for it (jugar una tierra, lanzar un hechizo).
    */
   const playPlayableCard = async (): Promise<boolean> => {
-    await settleSeat();
+    if (await settleSeat() === 'game-over') return false;
     const card = hand
       .locator('.hand-card')
       .filter({ hasText: 'Disponible para jugar' })
@@ -283,7 +334,7 @@ export function createBoardDriver(page: Page): BoardDriver {
 
   /** Declare every attacker Phase offers, the way the panel asks for it. */
   const declareAttackers = async (): Promise<boolean> => {
-    await settleSeat();
+    if (await settleSeat() === 'game-over') return false;
     const attackers = battlefield.locator('[data-card-id][data-attack-options]:not([data-attack-options="0"])');
     if (!(await attackers.count())) return false;
     for (const card of await attackers.all()) await clickCard(card);
@@ -294,7 +345,7 @@ export function createBoardDriver(page: Page): BoardDriver {
 
   /** Assign one blocker to one attacker, the way the panel asks for it. */
   const declareBlocker = async (): Promise<boolean> => {
-    await settleSeat();
+    if (await settleSeat() === 'game-over') return false;
     const blocker = battlefield.locator('[data-card-id][data-block-options]:not([data-block-options="0"])').first();
     const attacker = rivalField.locator('[data-combat-role="Atacando"]').first();
     if (!(await blocker.count()) || !(await attacker.count())) return false;
