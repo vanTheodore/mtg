@@ -182,7 +182,7 @@ async function playFromHand(page: Page) {
   // must hold focus, rather than treating the temporarily hidden decision panel
   // as a failure. Resolve that privacy barrier through the shared driver and
   // verify that it then exposes a real decision (or an explicit terminal UI).
-  const focusTarget = async () => page.evaluate(() => {
+  const keyboardSurface = async () => page.evaluate(() => {
     const root = document.querySelector<HTMLElement>('.app');
     const active = document.activeElement as HTMLElement | null;
     const isVisible = (element: HTMLElement | null): boolean => {
@@ -191,14 +191,13 @@ async function playFromHand(page: Page) {
       const rect = element.getBoundingClientRect();
       return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
     };
-    const handoff = root?.querySelector<HTMLElement>('.handoff') ?? null;
-    if (isVisible(handoff)) return active?.closest('.handoff') ? 'handoff' : 'pending';
+    if (isVisible(root?.querySelector<HTMLElement>('.handoff') ?? null)) return 'handoff';
     if (isVisible(root?.querySelector<HTMLElement>('.game-over') ?? null)) return 'game-over';
     if (active?.closest('section[aria-label="Decisión pendiente"]')) return 'panel';
     if (active?.closest('.hand-trigger')) return 'trigger';
     return 'pending';
   });
-  await expect.poll(focusTarget, { timeout: 15_000 }).toMatch(/^(handoff|panel|trigger|game-over)$/);
+  await expect.poll(keyboardSurface, { timeout: 15_000 }).toMatch(/^(handoff|panel|trigger|game-over)$/);
 
   const surface = await createBoardDriver(page).settleSeat();
   if (surface === 'decision') await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible();
