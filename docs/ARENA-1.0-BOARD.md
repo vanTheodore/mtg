@@ -65,7 +65,7 @@ tamaño:
 
 | Intento | Qué rompió | Decisión |
 | --- | --- | --- |
-| Menú `Opciones` con auto-paso y Ajustes dentro | El driver de partidas y los E2E no encuentran el auto-paso (`getByRole('checkbox', { name: 'Auto-pasar ventanas sin acciones' })`); el botón `Ajustes` desaparecía al cambiar a Clásico porque su panel se remontaba | Los controles siguen presentes; en Arena solo se **abrevia la etiqueta visible** (`Auto-paso`, `Asiento`) con el nombre completo en `.sr-only`. Ningún E2E cambia y el jugador no pierde controles |
+| Menú `Opciones` con auto-paso y Ajustes dentro | El driver de partidas y los E2E no encuentran el auto-paso (`getByRole('checkbox', { name: 'Pase recomendado por Phase (se desactiva con Control total)' })`); el botón `Ajustes` desaparecía al cambiar a Clásico porque su panel se remontaba | Los controles siguen presentes; en Arena solo se **abrevia la etiqueta visible** (`Auto-paso`, `Asiento`) con el nombre completo en `.sr-only`. Los E2E usan el nuevo nombre accesible; el jugador no pierde controles |
 | Reordenar el riel HUD entero (decisión primero) | `arena-ui.spec.ts` mide la geometría real: la decisión debe ir debajo de pila/registro y a ≥ −2 px | Se reordena **dentro** de la tarjeta de decisión: la guía de Phase antes de las resoluciones |
 | Etiquetas cortas en el estado del motor | La documentación y los E2E citan `Motor: 40 / 40` y `El mazo se cargó completo` | Se conserva el texto exacto; solo cambia dónde vive |
 

@@ -15,6 +15,7 @@
   import type { GameAction } from '#lib/engine/types.ts';
   import type { DecisionProjection, DecisionTier, ProjectedAction } from '#lib/game/decisionProjection.ts';
   import { TIER_LABELS } from '#lib/game/decisionProjection.ts';
+  import { session } from '#lib/game/session.svelte.ts';
   import AdvancedControls from './AdvancedControls.svelte';
 
   let {
@@ -31,6 +32,12 @@
    * especialista (ventanas de objetivos o de carta seleccionada), nace abierto
    * para que ninguna opción estratégica quede escondida. */
   const openByDefault = $derived(!projection.specialistActive && projection.primary === null);
+  /** Capture the initial presentation default once, then let the native
+   * disclosure own subsequent user intent. Re-evaluating `openByDefault` on a
+   * Phase snapshot update can close a panel the player deliberately opened.
+   * DecisionPanel is removed behind a privacy handoff, so the next seat gets a
+   * fresh instance and its own initial default. */
+  let tiersOpen = $state(openByDefault);
   const deferredCount = $derived(tiers.strategic.length + tiers.secondary.length + tiers.advanced.length);
   const modeActions = $derived(tiers.advanced.filter((a) => a.action.type === 'SetPriorityPassingMode'));
   const otherAdvanced = $derived(tiers.advanced.filter((a) => a.action.type !== 'SetPriorityPassingMode' && a.panel !== 'phase-stops'));
@@ -65,7 +72,31 @@
   </div>
 {/if}
 
-<details class="tiers" data-decision-tiers open={openByDefault} data-open-by-default={openByDefault}>
+{#if session.canCancelAutoPass || session.autoPassCancellationPending}
+  <!-- Unlike game actions, cancellation stays available while busy: it queues behind an already-sent Worker action. -->
+  <div class="cancel-row" data-tier="cancel" aria-label="Cancelación del pase automático">
+    <button
+      type="button"
+      class="cancel"
+      data-decision-cancel="cancel-auto-pass"
+      data-auto-pass-mode={session.currentAutoPass?.type}
+      data-cancellation-pending={session.autoPassCancellationPending}
+      disabled={session.autoPassCancellationPending}
+      onclick={() => session.cancelAutoPass()}
+    >
+      {session.autoPassCancellationPending
+        ? 'Cancelación en curso…'
+        : session.currentAutoPass?.type === 'UntilStackEmpty'
+          ? 'Cancelar resolución automática de la pila'
+          : 'Cancelar pase hasta la frontera de turno'}
+    </button>
+    {#if session.autoPassCancellationPending}
+      <p class="cancel-status" role="status">El despacho ya enviado a Phase no se revierte; la cancelación se aplicará a la sesión de pase del asiento que la solicitó después de la respuesta.</p>
+    {/if}
+  </div>
+{/if}
+
+<details class="tiers" data-decision-tiers bind:open={tiersOpen} data-open-by-default={openByDefault}>
   <summary aria-controls="decision-tier-body" aria-label={`Más opciones: ${deferredCount} acciones legales bajo demanda`}>
     Más opciones <span class="count">{deferredCount}</span>
   </summary>
@@ -132,6 +163,7 @@
   .actions button:focus-visible, .cancel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .cancel-row { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .4rem; }
   .cancel { min-height: 44px; font-size: .78rem; }
+  .cancel-status { flex-basis: 100%; margin: 0; color: var(--ink-muted); font-size: .73rem; line-height: 1.35; }
   .sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;

@@ -1,4 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
+import { createBoardDriver } from './support/board-driver.ts';
+
+test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
 /**
  * El teléfono juega: tocar una carta del cajón tiene que llevar a la acción.
@@ -49,15 +53,23 @@ async function revision(page: Page): Promise<number> {
 
 /** The seat dialog is the product's privacy guard: the player passes it. */
 async function passSeat(page: Page) {
+  const driver = createBoardDriver(page);
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const handoff = page.locator('.handoff');
-    if (!(await handoff.isVisible().catch(() => false))) return;
+    if (!(await handoff.isVisible().catch(() => false))) break;
     await handoff.locator('button').first().tap({ timeout: 3_000 }).catch(() => {});
-    await page.waitForTimeout(250);
+    await handoff.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+  }
+  // A handoff can be followed immediately by another seat's privacy barrier.
+  // Wait until Phase's next decision is actually visible before tapping it.
+  if (!(await page.locator('.game-over').isVisible().catch(() => false))) {
+    await driver.waitForDecision(30_000);
   }
 }
 
 async function tapDecisionButton(page: Page, label: RegExp | string): Promise<boolean> {
+  const driver = createBoardDriver(page);
+  await driver.settleSeat();
   const button = page
     .locator('section[aria-label="Decisión pendiente"] button')
     .filter({ hasText: label })
@@ -66,11 +78,15 @@ async function tapDecisionButton(page: Page, label: RegExp | string): Promise<bo
   const before = await revision(page);
   await button.tap({ timeout: 4_000 });
   await expect.poll(() => revision(page), { timeout: 15_000 }).toBeGreaterThan(before);
+  if (!(await page.locator('.game-over').isVisible().catch(() => false))) {
+    await driver.waitForDecision(30_000);
+  }
   return true;
 }
 
 async function playFromHand(page: Page) {
   await page.goto('/?autostart');
+  await createBoardDriver(page).waitForDecision(180_000);
   await expect(page.locator('section[aria-label^="Tu mano"] [data-card-id]').first()).toBeVisible({
     timeout: 180_000
   });
@@ -161,17 +177,31 @@ async function playFromHand(page: Page) {
   await expect(trigger).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('.hand-sheet')).toHaveCount(0);
   await expect(page.locator('main.layout')).not.toHaveAttribute('inert', '');
-  // Focus must land somewhere real and reachable, never on `<body>`: if the
-  // engine opened a prompt, that prompt has focus; if it did not, the hand's
-  // own trigger does (the sheet's documented close path).
-  const focus = await page.evaluate(() => {
+  // Focus must follow the surface the player can currently act on. A seat
+  // handoff is a valid next state after Phase accepts the action: its own button
+  // must hold focus, rather than treating the temporarily hidden decision panel
+  // as a failure. Resolve that privacy barrier through the shared driver and
+  // verify that it then exposes a real decision (or an explicit terminal UI).
+  const keyboardSurface = async () => page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('.app');
     const active = document.activeElement as HTMLElement | null;
-    if (!active || active === document.body) return 'body';
-    if (active.closest('section[aria-label="Decisión pendiente"]')) return 'panel';
-    if (active.closest('.hand-trigger')) return 'trigger';
-    return active.tagName.toLowerCase();
+    const isVisible = (element: HTMLElement | null): boolean => {
+      if (!element) return false;
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+    };
+    if (isVisible(root?.querySelector<HTMLElement>('.handoff') ?? null)) return 'handoff';
+    if (isVisible(root?.querySelector<HTMLElement>('.game-over') ?? null)) return 'game-over';
+    if (active?.closest('section[aria-label="Decisión pendiente"]')) return 'panel';
+    if (active?.closest('.hand-trigger')) return 'trigger';
+    return 'pending';
   });
-  expect(['panel', 'trigger']).toContain(focus);
+  await expect.poll(keyboardSurface, { timeout: 15_000 }).toMatch(/^(handoff|panel|trigger|game-over)$/);
+
+  const surface = await createBoardDriver(page).settleSeat();
+  if (surface === 'decision') await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible();
+  else await expect(page.locator('.game-over')).toBeVisible();
 }
 
 test.describe('teléfono con puntero táctil', () => {

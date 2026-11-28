@@ -1,7 +1,10 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import { createBoardDriver } from './support/board-driver.ts';
+import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+
+test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
 /**
  * Arena 1.0 — la matriz de tamaños, medida.
@@ -122,6 +125,8 @@ test('partida real: la decisión se ve sin desplazar y el cajón sobrevive al ca
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/?autostart');
   const decision = page.locator('section[aria-label="Decisión pendiente"]');
+  const driver = createBoardDriver(page);
+  await driver.waitForDecision(180_000);
   await expect(decision).toBeVisible({ timeout: 180_000 });
 
   const samples: Array<{
@@ -343,8 +348,9 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/?autostart');
-  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible({ timeout: 180_000 });
   const driver = createBoardDriver(page);
+  await driver.waitForDecision(180_000);
+  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible({ timeout: 180_000 });
 
   const population = () => page.evaluate(() => ({
     hand: document.querySelectorAll('.hand-zone [data-card-id]').length,
@@ -371,6 +377,10 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
     const where = `${width}×${height}`;
     await page.setViewportSize({ width, height });
     await settle(page);
+    // Priority may have crossed to another seat during the resize. The privacy
+    // handoff intentionally unmounts the hand and decision; resolve that barrier
+    // before measuring instead of timing out on a hidden panel.
+    await driver.waitForDecision(30_000);
     const sample = await page.evaluate(() => {
       const region = document.querySelector<HTMLElement>('main.layout')!;
       region.scrollTop = 0;
@@ -498,8 +508,9 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/?autostart');
-  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible({ timeout: 180_000 });
   const driver = createBoardDriver(page);
+  await driver.waitForDecision(180_000);
+  await expect(page.locator('section[aria-label="Decisión pendiente"]')).toBeVisible({ timeout: 180_000 });
 
   const population = () => page.evaluate(() => ({
     hand: document.querySelectorAll('.hand-zone [data-card-id]').length,
@@ -527,9 +538,10 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
     const where = `${width}×${height}`;
     await page.setViewportSize({ width, height });
     await settle(page);
-    // La decisión de Phase tiene que estar en pantalla en toda la banda; si en
-    // este estado no hay ninguna pendiente, la medición no dice nada y la
-    // prueba lo dice explícitamente.
+    // La decisión puede desmontarse temporalmente al cambiar de asiento. Resolver
+    // el handoff primero: esperar directamente al panel bloquea justo cuando la
+    // barrera de privacidad funciona como debe.
+    await driver.waitForDecision(30_000);
     await expect(decision, `no hay decisión pendiente que medir a ${where}`).toBeVisible({ timeout: 30_000 });
     // La mano no se monta mientras hay un traspaso de asiento pendiente
     // (`{#if !needsHandoff}` en Board.svelte): medido, una de cada tres corridas

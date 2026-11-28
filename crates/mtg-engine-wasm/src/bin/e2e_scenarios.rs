@@ -15,7 +15,7 @@
 use engine::database::CardDatabase;
 use engine::game::scenario::{GameScenario, GameRunner, P0, P1};
 use engine::game::scenario_db::GameScenarioDbExt;
-use engine::types::game_state::WaitingFor;
+use engine::types::game_state::{AutoPassMode, TurnBoundary, WaitingFor};
 use engine::types::mana::{ManaType, ManaUnit};
 use engine::types::phase::Phase;
 use engine::types::identifiers::ObjectId;
@@ -98,6 +98,15 @@ fn main() {
         P0,
         vec![ManaUnit::new(ManaType::Red, ObjectId(0), false, vec![])],
     );
+    // The opponent has a real response after the Bolt is cast. Without one,
+    // Standard priority automation may correctly pass P1's empty window before
+    // the browser reaches a stable state to press; this fixture's two-pass
+    // contract needs P1 to own a legal choice, not a timing assumption.
+    targeted.add_real_card(P1, "Spectral Sailor", Zone::Hand, &db);
+    targeted.with_mana_pool(
+        P1,
+        vec![ManaUnit::new(ManaType::Blue, ObjectId(0), false, vec![])],
+    );
     write_fixture(out, "target-cast", targeted);
 
     let mut manual = scenario();
@@ -123,7 +132,51 @@ fn main() {
     // offer, while the window stays the plain priority window `at_phase` sets.
     let mut empty = scenario();
     empty.add_real_card(P0, "Lightning Bolt", Zone::Hand, &db);
+    empty.add_real_card(P1, "Spectral Sailor", Zone::Hand, &db);
+    empty.with_mana_pool(
+        P1,
+        vec![ManaUnit::new(ManaType::Blue, ObjectId(0), false, vec![])],
+    );
     write_fixture(out, "priority-empty", empty);
+
+    // UX-PRIORITY · owner-visible pass session for the cancel control. P0's
+    // empty priority window must also be one Phase recommends passing; a
+    // castable Lightning Bolt would correctly withhold that recommendation,
+    // so no PassPriority would be in flight for the cancellation measurement.
+    // P1 keeps a real flash spell so the browser can verify control recovery
+    // after CancelAutoPass removes only P0's session through the real reducer.
+    let mut priority_auto_pass = scenario();
+    priority_auto_pass.add_real_card(P1, "Spectral Sailor", Zone::Hand, &db);
+    priority_auto_pass.with_mana_pool(
+        P1,
+        vec![ManaUnit::new(ManaType::Blue, ObjectId(0), false, vec![])],
+    );
+    let mut priority_auto_pass = priority_auto_pass.build();
+    priority_auto_pass.state_mut().auto_pass.insert(
+        P0,
+        AutoPassMode::UntilTurnBoundary {
+            until: TurnBoundary::EndOfCurrentTurn,
+        },
+    );
+    write_runner_fixture(out, "priority-auto-pass", priority_auto_pass);
+
+    // UX-PRIORITY evidence · an active-player End window with a meaningful
+    // instant available. Standard should retain the decision, SkipLowUseWindows
+    // may pass it by policy, and FullControl must retain it. The exact same
+    // GameScenario state is used for all three browser measurements.
+    let mut low_use = GameScenario::new();
+    low_use.at_phase(Phase::End);
+    low_use.add_real_card(P0, "Lightning Bolt", Zone::Hand, &db);
+    low_use.with_mana_pool(
+        P0,
+        vec![ManaUnit::new(ManaType::Red, ObjectId(0), false, vec![])],
+    );
+    low_use.add_real_card(P1, "Spectral Sailor", Zone::Hand, &db);
+    low_use.with_mana_pool(
+        P1,
+        vec![ManaUnit::new(ManaType::Blue, ObjectId(0), false, vec![])],
+    );
+    write_fixture(out, "priority-low-use", low_use);
 
     // 7 · Priority with a pending spell: the browser casts Lightning Bolt for
     // real (the required priority passes are executed by the E2E, not here).
@@ -135,6 +188,26 @@ fn main() {
         vec![ManaUnit::new(ManaType::Red, ObjectId(0), false, vec![])],
     );
     write_fixture(out, "priority-stack", pending);
+
+    // UX-PRIORITY · Resolve All Own must stop at P1's real response window.
+    // The browser casts Lightning Bolt through Phase, then submits Own; P1's
+    // actual Counterspell and two blue mana make the preserved opportunity
+    // directly testable without scripting or skipping priority transitions.
+    let mut resolve_own = scenario();
+    resolve_own.add_real_card(P0, "Lightning Bolt", Zone::Hand, &db);
+    resolve_own.with_mana_pool(
+        P0,
+        vec![ManaUnit::new(ManaType::Red, ObjectId(0), false, vec![])],
+    );
+    resolve_own.add_real_card(P1, "Counterspell", Zone::Hand, &db);
+    resolve_own.with_mana_pool(
+        P1,
+        vec![
+            ManaUnit::new(ManaType::Blue, ObjectId(0), false, vec![]),
+            ManaUnit::new(ManaType::Blue, ObjectId(0), false, vec![]),
+        ],
+    );
+    write_fixture(out, "priority-resolve-own", resolve_own);
 
     // 8 · Response during the opponent's turn: P1 is active, P0 holds priority.
     // Only the two plain `PlayerId` fields change; the window remains Phase's.

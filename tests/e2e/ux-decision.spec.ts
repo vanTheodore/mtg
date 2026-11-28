@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createBoardDriver } from './support/board-driver';
+import {
+  ENGINE_ACTION_OP,
+  installEngineWorkerTrace,
+  readEngineWorkerTrace,
+  type WorkerTraceRequest,
+  type WorkerTraceResponse
+} from './support/engine-worker-trace';
 
 /**
  * UX-DECISION 1.0 · transiciones reales del motor.
@@ -207,12 +214,31 @@ test('decisión opcional: ambas ramas legales siguen en el especialista', async 
 });
 
 test('cancelación y busy: un doble pulso no despacha dos acciones', async ({ page }) => {
+  await installEngineWorkerTrace(page);
   await openScenario(page, 'priority-empty');
   const primary = page.locator('[data-decision-primary]');
   const before = Number(await applied(page));
+  const traceStart = (await readEngineWorkerTrace(page)).length;
   await Promise.all([primary.click({ force: true }), primary.click({ force: true }).catch(() => {})]);
-  await expect.poll(() => applied(page), { timeout: 10_000 }).toBe(String(before + 1));
+  // `actions_applied` also counts the two seat-preference sync actions when
+  // the pass hands priority to P1; count the user's PassPriority on the Worker
+  // wire below instead of assuming a global counter delta of exactly one.
+  await expect.poll(async () => Number(await applied(page)), { timeout: 10_000 }).toBeGreaterThan(before);
+  await expect(page.locator('.app')).toHaveAttribute('data-busy', 'false');
   await expect(page.locator('[data-decision-integrity="true"]')).toHaveCount(1);
+
+  const trace = (await readEngineWorkerTrace(page)).slice(traceStart);
+  const passRequests = trace.filter((entry): entry is WorkerTraceRequest =>
+    entry.kind === 'request'
+      && entry.op === ENGINE_ACTION_OP
+      && (entry.payload as { action?: { type?: string } } | undefined)?.action?.type === 'PassPriority'
+  );
+  expect(passRequests, 'el doble pulso no debe enviar una segunda acción al Worker').toHaveLength(1);
+  const passReplies = trace.filter((entry): entry is WorkerTraceResponse =>
+    entry.kind === 'response' && passRequests.some((request) => request.id === entry.id)
+  );
+  expect(passReplies, 'el despacho único debe recibir respuesta del Worker').toHaveLength(1);
+  expect(passReplies[0]?.reply?.ok, 'Phase debe aceptar el único pase enviado').toBe(true);
 });
 
 test('cancelación del lanzamiento: la acción de seguridad está fuera del desplegable', async ({ page }) => {

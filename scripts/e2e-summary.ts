@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Publishes the Playwright result to the GitHub Actions job summary, and fails
- * the job when a functional UX-HAND or UX-DECISION test was skipped.
+ * the job when a functional UX-HAND, UX-DECISION or UX-PRIORITY test was skipped.
  *
  * Why this exists: a green Chromium job used to mean "the suite exited 0". It
  * could also mean "the engine was missing and eight tests announced `test.skip`",
@@ -12,7 +12,7 @@
  * So the summary is the evidence and the gate at the same time:
  *
  *  - every outcome is published (passed / failed / skipped / flaky, plus the
- *    per-test tables for UX-HAND and the UX-DECISION transitions);
+ *    per-test tables for UX-HAND, UX-DECISION and UX-PRIORITY transitions);
  *  - the required list below is a contract: if one of those tests is skipped,
  *    retried into green, or never ran at all, this script exits 1.
  *
@@ -45,9 +45,9 @@ interface Row {
 }
 
 /**
- * Tests that are the functional guarantee of UX-HAND and UX-DECISION. Each
- * must RUN and PASS. The names are spec titles, or their describe prefix for
- * parametrised UX-HAND cases; a skipped, missing or retried-into-green case
+ * Tests that are the functional guarantee of UX-HAND, UX-DECISION and
+ * UX-PRIORITY. Each must RUN and PASS. The names are spec titles, or the
+ * describe prefix for parametrised UX-HAND cases; a skipped, missing or retried-into-green case
  * must not leave the Chromium job green.
  *
  * Adding a scenario here is what stops it from being quietly skipped later.
@@ -76,7 +76,13 @@ const REQUIRED: { file: string; title: string; why: string }[] = [
   { file: 'ux-decision.spec.ts', title: 'decisión obligatoria: KeepExact conserva la ventana exacta sin auto-selección', why: 'KeepExact no auto-selecciona ni pierde su ventana' },
   { file: 'ux-decision.spec.ts', title: 'decisión opcional: ambas ramas legales siguen en el especialista', why: 'las ramas opcionales siguen accionables' },
   { file: 'ux-decision.spec.ts', title: 'cancelación y busy: un doble pulso no despacha dos acciones', why: 'un doble pulso produce un solo despacho' },
-  { file: 'ux-decision.spec.ts', title: 'cancelación del lanzamiento: la acción de seguridad está fuera del desplegable', why: 'cancelar no depende de abrir el panel avanzado' }
+  { file: 'ux-decision.spec.ts', title: 'cancelación del lanzamiento: la acción de seguridad está fuera del desplegable', why: 'cancelar no depende de abrir el panel avanzado' },
+  { file: 'ux-priority.spec.ts', title: 'modos temporales y alcances por asiento se sincronizan con Phase', why: 'modos y scopes llegan al snapshot Phase del asiento' },
+  { file: 'ux-priority.spec.ts', title: 'pasar hasta una frontera es explícito y protege la mano del siguiente asiento', why: 'el handoff cubre la mano antes de revelar el siguiente viewer' },
+  { file: 'ux-priority.spec.ts', title: 'handoff estricto oculta y después identifica la mano privada del asiento siguiente', why: 'el modo estricto conserva la identidad privada hasta confirmar' },
+  { file: 'ux-priority.spec.ts', title: 'Resolve All propio no solicita consentimiento compartido', why: 'Resolve All permanece en scope Own, conserva respuestas y no abre consentimiento Shared' },
+  { file: 'ux-priority.spec.ts', title: 'una pila vacía no se presenta como Resolve All satisfactorio', why: 'una pila vacía no se registra ni se presenta como resuelta' },
+  { file: 'ux-priority.spec.ts', title: 'CancelAutoPass revoca la sesión propia publicada por Phase', why: 'CancelAutoPass retira la sesión Phase del mismo asiento' }
 ];
 
 // Playwright spells these `timedOut` / `interrupted`; compare case-insensitively
@@ -146,6 +152,7 @@ const retried = rows.filter((row) => row.retries > 0).length;
 
 const sheetRows = rows.filter((row) => row.file.includes('arena-hand-sheet.spec.ts'));
 const decisionRows = rows.filter((row) => row.file.includes('ux-decision.spec.ts') && !row.file.includes('ux-decision-evidence.spec.ts'));
+const priorityRows = rows.filter((row) => row.file.includes('ux-priority.spec.ts'));
 const missing: string[] = [];
 for (const required of REQUIRED) {
   const match = rows.find((row) => row.file.includes(required.file) && row.title.includes(required.title));
@@ -175,10 +182,15 @@ lines.push('');
 if (!decisionRows.length) lines.push('Ninguna prueba de transición de UX-DECISION se ejecutó.');
 else lines.push(table(decisionRows));
 lines.push('');
+lines.push('### `ux-priority.spec.ts` (UX-PRIORITY)');
+lines.push('');
+if (!priorityRows.length) lines.push('Ninguna prueba funcional de UX-PRIORITY se ejecutó.');
+else lines.push(table(priorityRows));
+lines.push('');
 if (missing.length) {
   lines.push('### Pruebas funcionales obligatorias que no pasaron');
   lines.push('');
-  lines.push('Una suite verde no puede significar «nada corrió». Estas pruebas son la garantía funcional de UX-HAND y UX-DECISION y deben ejecutarse y pasar:');
+  lines.push('Una suite verde no puede significar «nada corrió». Estas pruebas son la garantía funcional de UX-HAND, UX-DECISION y UX-PRIORITY y deben ejecutarse y pasar:');
   lines.push('');
   for (const item of missing) lines.push(`- **${item}**`);
   lines.push('');

@@ -114,6 +114,14 @@ export interface ManaPoolSummary {
 
 export interface GameOutcome { winner: number | null; draw: boolean }
 
+/** Engine-owned auto-pass session, projected only for its owning viewer. */
+export type StoredAutoPassMode =
+  | { type: 'UntilStackEmpty'; initial_stack_len: number; policy?: string }
+  | { type: 'UntilTurnBoundary'; until: 'EndOfCurrentTurn' | 'MyNextTurnStart' };
+export type EnginePriorityPassingMode = 'Standard' | 'SkipLowUseWindows' | 'FullControl';
+export type EnginePhaseStopScope = 'AllTurns' | 'OwnTurn' | 'OpponentsTurns';
+export interface EnginePhaseStop { phase: string; scope: EnginePhaseStopScope }
+
 export interface PlayerView {
   id: PlayerId;
   life: number;
@@ -143,6 +151,10 @@ export interface EngineSnapshot {
     phase: string;
     waiting_for: WaitingFor;
     players: PlayerView[];
+    /** Phase filters these maps to the current viewer; other seats never appear. */
+    auto_pass?: Record<string, StoredAutoPassMode>;
+    phase_stops?: Record<string, EnginePhaseStop[]>;
+    priority_passing_modes?: Record<string, EnginePriorityPassingMode>;
     battlefield: ObjectId[];
     stack: unknown[];
     exile: ObjectId[];

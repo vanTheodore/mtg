@@ -1,13 +1,15 @@
 #!/usr/bin/env bun
 /**
- * Turns a Playwright JSON report into check-run annotations.
+ * Turns a Playwright JSON report into bounded, privacy-safe check annotations.
  *
- * The HTML report, the traces and the job log all live behind a download from
- * the Actions artifact host; on some networks that download is simply
- * unreachable (`EOF` from the blob storage), so a failing `playwright test` step
- * arrives as «exit code 1» and nothing else. Annotations, on the other hand, are
- * plain JSON on `api.github.com`, so this script repeats each failure — test
- * title, file, line and the first line of the error — as a `::error` command.
+ * The HTML report, traces, and job log may live behind an unreachable Actions
+ * artifact host. Annotations therefore preserve only static test metadata,
+ * bounded E2E checkpoints, a coarse failure kind, and explicitly whitelisted
+ * diagnostic fields. Expected/received text, arbitrary stdout, card names,
+ * raw seat IDs, full hands, and alert contents are never published. The tutorial
+ * allowlist may report only logical seat roles and the learner-land count while
+ * the learner is the current viewer; no other card counts or private hand data
+ * are emitted.
  *
  * Usage (inside the workflow, after `playwright test`):
  *
@@ -19,27 +21,175 @@
  * Exit code is always 0: this runs in an `if: failure()` step and must not mask
  * the real failure.
  */
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 
-type JsonError = { message?: string; stack?: string };
-type JsonResult = { status?: string; error?: JsonError };
-type JsonTest = { status?: string; results?: JsonResult[] };
+type JsonError = { message?: string };
+type JsonOutput = string | { buffer?: string };
+type JsonResult = { status?: string; error?: JsonError; stdout?: JsonOutput[]; stderr?: JsonOutput[] };
+type JsonTest = {
+  status?: string;
+  results?: JsonResult[];
+  annotations?: { type?: string; description?: string }[];
+};
 type JsonSpec = { title?: string; file?: string; line?: number; ok?: boolean; tests?: JsonTest[] };
 type JsonSuite = { file?: string; specs?: JsonSpec[]; suites?: JsonSuite[] };
 
-/** Keeps one annotation readable; GitHub truncates long bodies anyway. */
-const MESSAGE_LIMIT = 400;
+const MESSAGE_LIMIT = 1_800;
+const MAX_CHECKPOINTS = 8;
+const MAX_CHECKPOINT_LENGTH = 120;
 
 function escape(value: string): string {
-  // The workflow command grammar needs the percent-escapes; the commas and
-  // colons of the property list are escaped separately at the call site.
   return value.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
 }
 
 function annotation(file: string, line: number, title: string, message: string) {
   const safeTitle = escape(title).replace(/,/g, '%2C').replace(/:/g, '%3A');
   const safeFile = escape(file).replace(/,/g, '%2C');
-  console.log(`::error file=${safeFile},line=${line},title=${safeTitle}::${escape(message.slice(0, MESSAGE_LIMIT))}`);
+  const readableMessage = escape(message).slice(0, MESSAGE_LIMIT);
+  console.log(`::error file=${safeFile},line=${line},title=${safeTitle}::${readableMessage}`);
+}
+
+function decodeOutput(result: JsonResult): string {
+  return [...(result.stdout ?? []), ...(result.stderr ?? [])]
+    .map((chunk) => typeof chunk === 'string'
+      ? chunk
+      : chunk.buffer ? Buffer.from(chunk.buffer, 'base64').toString('utf8') : '')
+    .join('')
+    .replace(/\u001b\[[0-9;]*m/g, '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
+}
+
+function safeToken(value: unknown): string | null {
+  return typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,48}$/.test(value) ? value : null;
+}
+
+function safeCount(value: unknown, max = 1_000_000): number | null {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 && number <= max ? number : null;
+}
+
+function parseMarker<T>(line: string, marker: string): T | null {
+  if (!line.startsWith(marker)) return null;
+  try {
+    return JSON.parse(line.slice(marker.length).trim()) as T;
+  } catch {
+    return null;
+  }
+}
+
+function safeBoardDiagnostic(line: string): string | null {
+  const marker = 'MESA_E2E_FAILURE_UI ';
+  const data = parseMarker<{
+    status?: unknown;
+    snapshot?: {
+      app?: { phase?: unknown; turn?: unknown; waiting?: unknown; busy?: unknown; actions?: unknown } | null;
+      handoffVisible?: unknown;
+      decision?: { visible?: unknown; waiting?: unknown; buttonCount?: unknown } | null;
+      viewerHandVisible?: unknown;
+      startPanelVisible?: unknown;
+      alertVisible?: unknown;
+    };
+  }>(line, marker);
+  if (!data?.snapshot) return null;
+  const app = data.snapshot.app;
+  const decision = data.snapshot.decision;
+  return `UI ${JSON.stringify({
+    status: safeToken(data.status),
+    phase: safeToken(app?.phase),
+    turn: safeCount(app?.turn),
+    waiting: safeToken(app?.waiting),
+    busy: app?.busy === true || app?.busy === 'true',
+    actions: safeCount(app?.actions),
+    handoffVisible: data.snapshot.handoffVisible === true,
+    decisionVisible: decision?.visible === true,
+    decisionWaiting: safeToken(decision?.waiting),
+    decisionButtons: safeCount(decision?.buttonCount, 100),
+    viewerHandVisible: data.snapshot.viewerHandVisible === true,
+    startPanelVisible: data.snapshot.startPanelVisible === true,
+    alertVisible: data.snapshot.alertVisible === true
+  })}`;
+}
+
+function safeTutorialState(line: string): string | null {
+  const data = parseMarker<{
+    step?: unknown;
+    phase?: unknown;
+    turn?: unknown;
+    waiting?: unknown;
+    focusPresent?: unknown;
+  }>(line, 'MESA_E2E_TUTORIAL_STATE ');
+  if (!data) return null;
+  return `tutorial ${JSON.stringify({
+    step: safeCount(data.step, 32),
+    phase: safeToken(data.phase),
+    turn: safeCount(data.turn),
+    waiting: safeToken(data.waiting),
+    focusPresent: data.focusPresent === true
+  })}`;
+}
+
+function safeTutorialTrace(line: string): string | null {
+  const raw = parseMarker<unknown>(line, 'MESA_E2E_TUTORIAL_TRACE ');
+  if (!Array.isArray(raw)) return null;
+  const entries = raw.flatMap((entry) => {
+    if (typeof entry !== 'string' || !entry.startsWith('[tutorial-trace] ')) return [];
+    let value: Record<string, unknown>;
+    try {
+      const parsed: unknown = JSON.parse(entry.slice('[tutorial-trace] '.length));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+      value = parsed as Record<string, unknown>;
+    } catch {
+      return [];
+    }
+    const phaseResult = ['accepted', 'stale', 'rejected', 'failed', 'unavailable'].includes(String(value.phaseResult))
+      ? value.phaseResult as string
+      : null;
+    const learnerIsViewer = value.learnerSeat === 'learner' && value.actorSeat === 'learner';
+    const playLandLegal = learnerIsViewer && (value.playLandLegal === true || value.playLandLegal === false)
+      ? value.playLandLegal
+      : null;
+    return [{
+      event: safeToken(value.event),
+      source: safeToken(value.source),
+      learnerSeat: value.learnerSeat === 'learner' ? 'learner' : null,
+      dummySeat: value.dummySeat === 'mannequin' ? 'mannequin' : null,
+      actorSeat: ['learner', 'mannequin', 'unknown'].includes(String(value.actorSeat)) ? value.actorSeat : null,
+      proposalRevision: safeCount(value.proposalRevision),
+      dispatchRevision: safeCount(value.dispatchRevision),
+      actionType: safeToken(value.actionType),
+      phaseResult,
+      phaseCode: safeToken(value.phaseCode),
+      step: safeToken(value.step),
+      phase: safeToken(value.phase),
+      waiting: safeToken(value.waiting),
+      turn: safeCount(value.turn, 10_000),
+      // Explicitly scoped tutorial diagnostic: count learner lands only while
+      // the learner is the viewer. No hand contents, card names, or object IDs.
+      availableLands: learnerIsViewer ? safeCount(value.availableLands, 40) : null,
+      playLandLegal
+    }];
+  }).slice(-6);
+  return entries.length ? `tutorial-trace ${JSON.stringify(entries)}` : null;
+}
+
+/** Extract only structured diagnostic markers; ignore all arbitrary test output. */
+function safeDiagnostics(result: JsonResult): string {
+  const lines = decodeOutput(result).split(/\r?\n/);
+  const markers = lines.flatMap((line) => {
+    const safe = safeBoardDiagnostic(line) ?? safeTutorialState(line) ?? safeTutorialTrace(line);
+    return safe ? [safe] : [];
+  });
+  return markers.slice(-3).join(' · ');
+}
+
+/** Classify failures without publishing Playwright's expected/received content. */
+function failureKind(result: JsonResult): string {
+  const message = result.error?.message ?? '';
+  if (result.status === 'timedOut' || /Test timeout of .* exceeded/i.test(message)) return 'timeout';
+  if (/expect\([^\n]*\).*failed|Expected:|Received:/i.test(message)) return 'aserción fallida';
+  if (/locator\.|page\.(?:goto|click|waitFor)|browser has been closed/i.test(message)) return 'interacción del navegador';
+  return 'fallo Playwright';
 }
 
 let emitted = 0;
@@ -53,13 +203,16 @@ function walk(suite: JsonSuite, file: string) {
       );
       if (!failed.length) continue;
       const first = failed[0];
-      // Keep Playwright's Expected/Received lines on one readable annotation;
-      // these often contain the actual engine state (waiting_for, selected card)
-      // that the short first line omits. The workflow command caps this below.
-      const message = (first.error?.message ?? first.status ?? 'fallo sin mensaje')
-        .split('\n')
-        .filter(Boolean)
-        .join(' · ');
+      const checkpoints = (test.annotations ?? [])
+        .filter((entry) => entry.type === 'e2e-checkpoint' && typeof entry.description === 'string')
+        .map((entry) => entry.description!.replace(/[\r\n\u0000-\u001f]/g, ' ').slice(0, MAX_CHECKPOINT_LENGTH))
+        .slice(-MAX_CHECKPOINTS);
+      const diagnostics = safeDiagnostics(first);
+      const message = [
+        `tipo: ${failureKind(first)}`,
+        checkpoints.length ? `checkpoints: ${checkpoints.join(' → ')}` : '',
+        diagnostics
+      ].filter(Boolean).join(' · ');
       annotation(currentFile || spec.file || 'tests/e2e', spec.line ?? 1, spec.title ?? 'prueba sin título', message);
       emitted += 1;
     }
@@ -69,26 +222,20 @@ function walk(suite: JsonSuite, file: string) {
 
 const path = process.argv[2] ?? 'test-results/report.json';
 if (!existsSync(path)) {
-  // Without a report (the runner died, or an older workflow ran this step) the
-  // directory names Playwright leaves behind still say which tests broke.
-  console.log(`::warning title=Sin informe::No existe ${path}; se anotan los directorios de test-results.`);
-  const dirs = existsSync('test-results')
-    ? readdirSync('test-results', { withFileTypes: true }).filter((entry) => entry.isDirectory())
-    : [];
-  for (const dir of dirs) annotation('test-results', 1, 'Prueba de Chromium fallida', dir.name);
+  // Do not print arbitrary directory names from a partial Playwright run.
+  console.log(`::warning title=Sin informe::No existe el informe JSON de Playwright (${path}); las salidas de prueba se omiten por privacidad.`);
   process.exit(0);
 }
 
 try {
   const report = (await Bun.file(path).json()) as { suites?: JsonSuite[]; errors?: JsonError[] };
   for (const suite of report.suites ?? []) walk(suite, 'tests/e2e');
-  // A run can also fail before any test starts (global setup, webServer).
-  for (const error of report.errors ?? []) {
-    annotation('tests/e2e', 1, 'Playwright no llegó a ejecutar las pruebas', error.message ?? 'error global');
+  for (const _error of report.errors ?? []) {
+    annotation('tests/e2e', 1, 'Playwright no llegó a ejecutar las pruebas', 'error global; detalle omitido por privacidad');
     emitted += 1;
   }
-  console.log(`::notice title=Anotaciones::${emitted} prueba(s) fallida(s) anotadas desde ${path}.`);
-} catch (error) {
-  console.log(`::warning title=Informe ilegible::${error instanceof Error ? error.message : String(error)}`);
+  console.log(`::notice title=Anotaciones::${emitted} prueba(s) fallida(s) anotadas con contexto acotado.`);
+} catch {
+  console.log('::warning title=Informe ilegible::No se pudo leer el informe de Playwright; el detalle se omite por privacidad.');
 }
 process.exit(0);

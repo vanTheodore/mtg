@@ -361,7 +361,7 @@
   }}
 />
 
-<div class="app" data-board-style={session.boardStyle} data-chrome={session.boardStyle === 'arena' && snapshot && !needsHandoff ? 'arena' : undefined} style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2)); --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-phase={snapshot?.state.phase ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
+<div class="app" data-board-style={session.boardStyle} data-chrome={session.boardStyle === 'arena' && snapshot && !needsHandoff ? 'arena' : undefined} style="--card-w: min({cardWidth}px, calc((100vw - 6rem) / 2)); --arena-base-card-w: {Math.round(cardWidth * 0.84)}px" data-density={session.density} data-actions-applied={snapshot?.actions_applied ?? 0} data-auto-passes={session.autoPasses} data-auto-pass-pending={String(session.autoPassPending)} data-priority-sync-pending={String(session.prioritySyncPending)} data-priority-sync-failed={String(session.prioritySyncFailed)} data-viewer={viewer} data-busy={String(session.busy)} data-waiting={snapshot?.state.waiting_for.type ?? 'none'} data-phase={snapshot?.state.phase ?? 'none'} data-attacker-ids={JSON.stringify((snapshot?.state.waiting_for?.data as { valid_attacker_ids?: number[] } | undefined)?.valid_attacker_ids ?? [])}>
   {#if session.boardStyle === 'arena'}
     <ArenaSurface color={arenaColor} />
   {/if}
@@ -413,7 +413,7 @@
       <label class="auto-pass chip">
         <input type="checkbox" checked={session.autoPass} onchange={(e) => session.setAutoPass(e.currentTarget.checked)} />
         <span aria-hidden="true">Auto-paso</span>
-        <span class="sr-only">Auto-pasar ventanas sin acciones</span>
+        <span class="sr-only">Pase recomendado por Phase (se desactiva con Control total)</span>
       </label>
       <label class="auto-pass chip">
         <input type="checkbox" checked={session.handoffMode === 'every'} onchange={(e) => session.setHandoffMode(e.currentTarget.checked ? 'every' : 'turn')} />
@@ -555,7 +555,13 @@
           <StackPanel />
           <HistoryPanel compact={session.boardStyle === 'arena'} />
         </div>
-        <DecisionPanel />
+        {#if !needsHandoff}
+          <!-- The board region is inert during a seat handoff, but leaving
+               legal actions mounted still exposes the incoming seat's card
+               names in the DOM. Do not publish its decision surface until
+               that player confirms they are ready. -->
+          <DecisionPanel />
+        {/if}
       </div>
 
       <Battlefield objects={battlefieldObjects} {metas} owner={viewer} side="player" label={`Tu campo de batalla · Jugador ${viewer + 1}`} />

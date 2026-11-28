@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { initialState, reduce, type MachineState } from '../machine.ts';
+import { initialState, reduce, settleMulliganDecision, type MachineState } from '../machine.ts';
 import { STEPS, dummyAction } from '../lesson.ts';
 import { card, makeSnapshot } from './lesson.test.ts';
 import type { EngineSnapshot, GameAction } from '../../engine/types.ts';
@@ -12,6 +12,8 @@ const PLAY_LAND: GameAction = { type: 'PlayLand', data: { object_id: 1, card_id:
 const TAP_LAND: GameAction = { type: 'TapLandForMana', data: { selection: { source: { object_id: 1 } } } };
 const CAST_LIONS: GameAction = { type: 'CastSpell', data: { object_id: 2, card_id: 2, targets: [] } };
 const PASS: GameAction = { type: 'PassPriority' };
+const KEEP_HAND: GameAction = { type: 'MulliganDecision', data: { choice: { type: 'Keep' } } };
+const REDRAW_HAND: GameAction = { type: 'MulliganDecision', data: { choice: { type: 'Mulligan' } } };
 
 /** The learner acknowledged the reading step, so the lesson is on step 1. */
 function acknowledged(): MachineState {
@@ -40,6 +42,35 @@ test('the reading step advances when the learner confirms it', () => {
   // The land play is not legal in this window, so the tutorial only lets the
   // game move on: it never proposes an action the engine did not publish.
   expect(result.action?.type ?? 'PassPriority').toBe('PassPriority');
+});
+
+test('mulligans are counted once, after Phase accepts the redraw', () => {
+  const snapshot = makeSnapshot({ waiting: 'MulliganDecision', hand: [LIONS], actions: [KEEP_HAND, REDRAW_HAND] });
+  const proposed = reduce(initialState(), snapshot, CTX);
+
+  expect(proposed.action).toEqual(REDRAW_HAND);
+  expect(proposed.state.mulligans).toBe(0);
+  expect(proposed.state.mulliganDecisionPending).toBe(true);
+
+  // Priority-mode synchronization may publish new revisions while the same
+  // decision is still pending. It must not consume another mulligan attempt.
+  const preferenceRevision = reduce(proposed.state, { ...snapshot, revision: 2 }, CTX);
+  expect(preferenceRevision.action).toBeUndefined();
+  expect(preferenceRevision.state.mulligans).toBe(0);
+  expect(preferenceRevision.state.mulliganDecisionPending).toBe(true);
+
+  const rejected = settleMulliganDecision(preferenceRevision.state, REDRAW_HAND, false);
+  expect(rejected.mulligans).toBe(0);
+  expect(rejected.mulliganDecisionPending).toBe(false);
+
+  const accepted = settleMulliganDecision(preferenceRevision.state, REDRAW_HAND, true);
+  expect(accepted.mulligans).toBe(1);
+  expect(accepted.mulliganDecisionPending).toBe(false);
+  expect(accepted.notes).toHaveLength(1);
+
+  const secondAttempt = reduce(accepted, { ...snapshot, revision: 3 }, CTX);
+  expect(secondAttempt.action).toEqual(REDRAW_HAND);
+  expect(secondAttempt.state.mulligans).toBe(1);
 });
 
 test('the land step waits for the learner and offers the action Phase published', () => {

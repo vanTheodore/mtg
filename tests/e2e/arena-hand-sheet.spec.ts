@@ -1,4 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
+import {
+  ENGINE_ACTION_OP,
+  installEngineWorkerTrace,
+  readEngineWorkerTrace,
+  type WorkerTraceRequest,
+  type WorkerTraceResponse
+} from './support/engine-worker-trace';
 
 /**
  * UX-HAND — the phone hand sheet.
@@ -459,7 +466,7 @@ async function startScenarioDeck(page: Page) {
   // in, and with it on a test races the engine — the CI run of 45592511329
   // measured exactly that, a control that appeared and was gone before the click
   // landed. Off, every window is answered on purpose by `waitForMain`.
-  const autoPass = page.getByRole('checkbox', { name: 'Auto-pasar ventanas sin acciones' });
+  const autoPass = page.getByRole('checkbox', { name: 'Pase recomendado por Phase (se desactiva con Control total)' });
   await autoPass.uncheck();
   await expect(autoPass).not.toBeChecked();
 }
@@ -633,6 +640,7 @@ test.describe('contrato de despacho (motor real, mazo determinista)', () => {
   });
 
   test('doble pulsación produce exactamente un despacho aceptado', async ({ page }) => {
+    await installEngineWorkerTrace(page);
     await startScenarioDeck(page);
     await openScenarioSheet(page);
     const applied = () => page.evaluate(() => Number(document.querySelector('.app')?.getAttribute('data-actions-applied') ?? -1));
@@ -640,12 +648,27 @@ test.describe('contrato de despacho (motor real, mazo determinista)', () => {
     const playable = page.locator('.hand-sheet .sheet-cell').filter({ hasText: 'Mountain' }).first().locator('.sheet-play');
     await expect(playable).toHaveCount(1);
     const before = { applied: await applied(), hand: await handSection.locator('[data-card-id]').count() };
+    const traceStart = (await readEngineWorkerTrace(page)).length;
     await playable.dblclick({ delay: 0 });
     await expect(page.locator('.hand-sheet')).toBeHidden({ timeout: 30_000 });
     // Exactly one accepted dispatch: the engine's own counter moves by one, and
     // exactly one card left the hand.
     await expect.poll(applied, { timeout: 30_000 }).toBe(before.applied + 1);
     await expect.poll(() => handSection.locator('[data-card-id]').count()).toBe(before.hand - 1);
+    await expect(page.locator('.app')).toHaveAttribute('data-busy', 'false');
+
+    const trace = (await readEngineWorkerTrace(page)).slice(traceStart);
+    const landRequests = trace.filter((entry): entry is WorkerTraceRequest =>
+      entry.kind === 'request'
+        && entry.op === ENGINE_ACTION_OP
+        && (entry.payload as { action?: { type?: string } } | undefined)?.action?.type === 'PlayLand'
+    );
+    expect(landRequests, 'la doble pulsación no debe enviar una segunda acción al Worker').toHaveLength(1);
+    const landReplies = trace.filter((entry): entry is WorkerTraceResponse =>
+      entry.kind === 'response' && landRequests.some((request) => request.id === entry.id)
+    );
+    expect(landReplies, 'el despacho único debe recibir respuesta del Worker').toHaveLength(1);
+    expect(landReplies[0]?.reply?.ok, 'Phase debe aceptar el único lanzamiento de tierra enviado').toBe(true);
   });
 
   test('el contador que se mide es el del motor, no uno inventado por la prueba', async ({ page }) => {

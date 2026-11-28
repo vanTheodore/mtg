@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createBoardDriver } from './support/board-driver.ts';
+import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
 import { captureViewportEvidence } from './support/viewport-evidence';
+
+test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
 /**
  * 0.5 — a pasted 10E deck played through the Svelte controls, including a real
@@ -59,13 +62,6 @@ async function importDeck(page: Page, list = DECK) {
   await expect(page.getByTestId('deck-total')).toHaveText('40 cartas');
 }
 
-/** The seat hand-off dialog blocks the board; dismiss it like a person would. */
-function answerHandoff(page: Page) {
-  return page.addLocatorHandler(page.locator('.handoff button'), async () => {
-    await page.locator('.handoff button').click({ timeout: 3_000 }).catch(() => {});
-  });
-}
-
 /** Import the 10E deck, accept the known limitation and wait for a hand. */
 async function startDeckGame(page: Page) {
   await importDeck(page);
@@ -77,7 +73,8 @@ async function startDeckGame(page: Page) {
   await expect(consent).toBeVisible();
   await consent.check();
   await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
-  await answerHandoff(page);
+  const driver = createBoardDriver(page);
+  await driver.waitForDecision(180_000);
   await expect(hand(page).locator('[data-card-id]').first()).toBeVisible({ timeout: 180_000 });
 }
 
@@ -133,7 +130,7 @@ test('bloqueo real: asignar bloqueadora a un atacante y ver que Phase lo acepta'
   // combat state that Phase published when the blocks were declared, not the
   // state left after the game moved on (a blocker that died is no longer on
   // the battlefield, and its role with it).
-  await page.getByRole('checkbox', { name: 'Auto-pasar ventanas sin acciones' }).uncheck();
+  await page.getByRole('checkbox', { name: 'Pase recomendado por Phase (se desactiva con Control total)' }).uncheck();
   await startDeckGame(page);
   const driver = createBoardDriver(page);
 

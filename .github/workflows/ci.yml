@@ -193,15 +193,95 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # Fast, same-run browser regressions run before Chromium's full serial suite.
+  # A focused failure stops the dependency chain, so a hypothesis never spends
+  # the 90-minute browser budget before the affected contracts are green.
+  target_priority_sync:
+    name: Focused · UX-PRIORITY synchronization and handoff contracts
+    needs: [static, wasm, native-integration]
+    if: needs.static.outputs.heavy == 'true'
+    uses: ./.github/workflows/e2e-regression.yml
+    with:
+      job_name: UX-PRIORITY state sync, boundary pass and Resolve All
+      specs: tests/e2e/ux-priority.spec.ts
+      expected_tests: 6
+      artifact_name: failed-ux-priority-regressions
+
+  target_double_dispatch:
+    name: Focused · one dispatch per double activation
+    needs: [static, wasm, native-integration]
+    if: needs.static.outputs.heavy == 'true'
+    uses: ./.github/workflows/e2e-regression.yml
+    with:
+      job_name: Double-dispatch identity and Worker contract
+      specs: |
+        tests/e2e/ux-decision.spec.ts
+        tests/e2e/arena-hand-sheet.spec.ts
+      grep: 'cancelación y busy|doble pulsación produce exactamente un despacho aceptado'
+      expected_tests: 2
+      artifact_name: failed-double-dispatch-regressions
+
+  target_ux_hand:
+    name: Focused · UX-HAND launch and rejection contracts
+    needs: [static, wasm, native-integration]
+    if: needs.static.outputs.heavy == 'true'
+    uses: ./.github/workflows/e2e-regression.yml
+    with:
+      job_name: UX-HAND target damage, explicit rejection and accepted retry
+      specs: tests/e2e/arena-hand-sheet.spec.ts
+      grep: 'lanzamiento con objetivo|rechazo explícito'
+      expected_tests: 2
+      artifact_name: failed-ux-hand-regressions
+
+  target_handoff_drivers:
+    name: Focused · handoff and board-driver games
+    needs: [target_priority_sync, target_double_dispatch, target_ux_hand]
+    uses: ./.github/workflows/e2e-regression.yml
+    with:
+      job_name: Touch, viewport, gameplay, deck and UI handoffs
+      specs: |
+        tests/e2e/arena-touch-play.spec.ts
+        tests/e2e/arena-viewport-matrix.spec.ts
+        tests/e2e/game.spec.ts
+        tests/e2e/ui-deck-10e.spec.ts
+        tests/e2e/ui-game.spec.ts
+      grep: '390×844: la acción de la carta|320×800: la hoja más estrecha|tablet con la mesa llena|escritorio con la mesa llena|partida real: inicializa WASM|bloqueo real: asignar bloqueadora|la partida se juega hasta el final|partida completa y victoria|la interfaz explica objetivos|objetivo elegido con clic'
+      expected_tests: 10
+      artifact_name: failed-handoff-driver-regressions
+
+  target_tutorial:
+    name: Focused · deterministic tutorial transitions
+    needs: [target_priority_sync, target_double_dispatch, target_ux_hand]
+    uses: ./.github/workflows/e2e-regression.yml
+    with:
+      job_name: Tutorial preference override and seat transitions
+      specs: tests/e2e/tutorial.spec.ts
+      grep: 'la lección se completa|la lección se puede usar con teclado'
+      expected_tests: 2
+      artifact_name: failed-tutorial-regressions
+
+  target_accessibility:
+    name: Focused · Full Control persistence and phase-sheet Axe
+    needs: [target_priority_sync, target_double_dispatch, target_ux_hand]
+    uses: ./.github/workflows/e2e-regression.yml
+    with:
+      job_name: UX lab temporal preference and phase-sheet accessibility
+      specs: tests/e2e/ux-lab.spec.ts
+      grep: 'cromo de mesa nombra la prioridad|en el teléfono la ficha de fase'
+      expected_tests: 2
+      artifact_name: failed-accessibility-regressions
+
   browser:
     name: Chromium integration and visual interaction
-    needs: [wasm, native-integration]
+    needs: [wasm, native-integration, target_handoff_drivers, target_tutorial, target_accessibility]
     runs-on: ubuntu-latest
     # GameScenario fixtures place Phase directly in the state each E2E needs;
     # the browser suite no longer plays through random draws to find a card.
-    # UX-DECISION adds eleven motor-real transition tests on top of the measured
-    # 26-minute baseline; keep headroom without weakening the Playwright gate.
-    timeout-minutes: 60
+    # UX-DECISION and UX-PRIORITY add motor-real transitions on top of the
+    # measured baseline; the full serial suite exceeded 60 minutes before its
+    # JSON summary and 28-test functional gate could complete. Give it headroom
+    # without weakening the Playwright gate.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -234,23 +314,23 @@ jobs:
           test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
           for fixture in \
             target-cast manual-payment cancel-cast privacy-handoff \
-            priority-empty priority-stack opponent-turn-response \
+            priority-empty priority-stack priority-auto-pass priority-low-use \
+            priority-resolve-own opponent-turn-response \
             declare-attackers declare-blockers obligatory-decision optional-decision; do
             test -s "static/e2e-scenarios/$fixture.json"
           done
       # The JSON report feeds the annotation step below: the directory names
       # alone say which test broke, the message says why. `list` keeps the
       # readable console output.
-      # The UX-DECISION evidence matrix runs in the parallel `ux-evidence` job
-      # against BOTH the base UI and this UI. The marker is deliberately unique:
-      # a plain `EVIDENCIA` also matches the seven `arena-quality-gate` titles
-      # (which end in «y evidencia») and would silently drop them from this gate.
-      - run: bun --bun playwright test --reporter=list,json --grep-invert MESA_EVIDENCE_UX_DECISION
+      # UX-DECISION and UX-PRIORITY evidence run in their dedicated jobs. Their
+      # markers are deliberately unique: a plain `EVIDENCIA` would also match
+      # the arena-quality-gate titles and silently drop those contracts here.
+      - run: bun --bun playwright test --reporter=list,json --grep-invert 'MESA_EVIDENCE_UX_(DECISION|PRIORITY)'
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/report.json
       # The job summary is the evidence and the gate: it publishes passed /
-      # failed / skipped / retries plus the per-test rows of UX-HAND and
-      # UX-DECISION, and fails the job when a required test was skipped.
+      # failed / skipped / retries plus the per-test rows of UX-HAND,
+      # UX-DECISION and UX-PRIORITY, and fails when a required test was skipped.
       # A `test.skip` written inside a spec leaves the runner green, which is
       # exactly the hole the WASM guard cannot see (`docs/UX-HAND.md`, section G).
       - name: Publish Playwright summary and gate skipped required tests
@@ -366,3 +446,116 @@ jobs:
           path: evidence
           if-no-files-found: warn
           retention-days: 14
+
+  ux-priority-evidence:
+    name: UX-PRIORITY evidence (three Phase modes and live responses)
+    needs: [static, wasm, native-integration]
+    if: needs.static.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun --bun playwright install --with-deps chromium
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm
+          path: static/wasm
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm-e2e
+          path: static/wasm-e2e
+      - uses: actions/download-artifact@v4
+        with:
+          name: e2e-scenario-fixtures
+          path: static/e2e-scenarios
+      - name: Verify Phase artifacts and equivalent fixtures
+        run: |
+          test -s static/wasm/mtg_engine_wasm.wasm
+          test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
+          test -s static/e2e-scenarios/priority-low-use.json
+          test -s static/e2e-scenarios/priority-resolve-own.json
+          test -s static/e2e-scenarios/priority-auto-pass.json
+      - name: Execute UX-PRIORITY measurements in Chromium
+        env:
+          MESA_PRIORITY_EVIDENCE_OUT: evidence/priority
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/priority-report.json
+        run: bun --bun playwright test tests/e2e/ux-priority-evidence.spec.ts --reporter=list,json --grep MESA_EVIDENCE_UX_PRIORITY
+      - name: Annotate UX-PRIORITY E2E failures
+        if: failure()
+        run: bun scripts/e2e-annotations.ts test-results/priority-report.json
+      - name: Compare measured modes and gate response/privacy/recovery contracts
+        if: always()
+        env:
+          MESA_PRIORITY_EVIDENCE_FILE: evidence/priority/metrics.json
+          MESA_PRIORITY_EVIDENCE_OUT: evidence/priority
+        run: bun scripts/ux-priority-compare.ts
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-priority-evidence
+          path: |
+            evidence/priority
+            test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+  required-ci:
+    name: Required CI gate
+    if: always()
+    needs:
+      - static
+      - wasm
+      - native-integration
+      - target_priority_sync
+      - target_double_dispatch
+      - target_ux_hand
+      - target_handoff_drivers
+      - target_tutorial
+      - target_accessibility
+      - browser
+      - ux-evidence
+      - ux-priority-evidence
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every applicable validation job
+        env:
+          STATIC: ${{ needs.static.result }}
+          HEAVY: ${{ needs.static.outputs.heavy }}
+          WASM: ${{ needs.wasm.result }}
+          NATIVE: ${{ needs.native-integration.result }}
+          TARGET_PRIORITY_SYNC: ${{ needs.target_priority_sync.result }}
+          TARGET_DOUBLE_DISPATCH: ${{ needs.target_double_dispatch.result }}
+          TARGET_UX_HAND: ${{ needs.target_ux_hand.result }}
+          TARGET_HANDOFF_DRIVERS: ${{ needs.target_handoff_drivers.result }}
+          TARGET_TUTORIAL: ${{ needs.target_tutorial.result }}
+          TARGET_ACCESSIBILITY: ${{ needs.target_accessibility.result }}
+          BROWSER: ${{ needs.browser.result }}
+          UX_DECISION: ${{ needs.ux-evidence.result }}
+          UX_PRIORITY: ${{ needs.ux-priority-evidence.result }}
+        run: |
+          set -euo pipefail
+          test "$STATIC" = success || { echo "static=$STATIC"; exit 1; }
+          for status in "$WASM" "$NATIVE" "$TARGET_PRIORITY_SYNC" "$TARGET_DOUBLE_DISPATCH" "$TARGET_UX_HAND" \
+            "$TARGET_HANDOFF_DRIVERS" "$TARGET_TUTORIAL" "$TARGET_ACCESSIBILITY" "$BROWSER" "$UX_DECISION" "$UX_PRIORITY"; do
+            if [ "$HEAVY" = true ]; then
+              test "$status" = success || { echo "heavy CI job did not pass: $status"; exit 1; }
+            else
+              case "$status" in
+                success|skipped) ;;
+                *) echo "unexpected CI result for a light diff: $status"; exit 1 ;;
+              esac
+            fi
+          done
+          echo "Required CI gate passed (heavy=$HEAVY)."

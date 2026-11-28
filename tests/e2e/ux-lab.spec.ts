@@ -138,12 +138,14 @@ test('el cromo de mesa nombra la prioridad, la mano y el paso, y el control conm
   await expect(control).toHaveAttribute('aria-pressed', 'false');
   await control.click();
   await expect(control).toHaveAttribute('aria-pressed', 'true');
-  // The preference is the same one the top bar writes, not a second state.
-  expect(await page.evaluate(() => localStorage.getItem('mesa:autoPass'))).toBe('off');
+  // Full Control is an in-game override, not a persisted seat preference or
+  // the removed device-wide `mesa:autoPass` compatibility key.
+  expect(await page.evaluate(() => localStorage.getItem('mesa:autoPass'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('mesa:priorityPreferences'))).toBeNull();
 
   await page.reload();
   await expect(page.getByRole('group', { name: 'Estado de la mesa' }).getByRole('button', { name: /Control total/ }))
-    .toHaveAttribute('aria-pressed', 'true');
+    .toHaveAttribute('aria-pressed', 'false');
 });
 
 test('el aviso de flujo explica el auto-paso, se descarta y no vuelve', async ({ page }) => {
@@ -182,25 +184,36 @@ test('la barra de fases marca la parada y la conserva entre recargas', async ({ 
   const bar = page.getByRole('region', { name: 'Fases y paradas' });
   await expect(bar).toBeVisible();
   // Twelve steps, exactly the ones the turn track groups.
-  await expect(bar.getByRole('button', { name: /· parada en/ })).toHaveCount(12);
-  await expect(bar.getByRole('button', { name: 'Principal · parada en Principal 1' })).toHaveAttribute('aria-current', 'step');
+  await expect(bar.locator('button[data-step]')).toHaveCount(12);
+  await expect(bar.locator('[data-step="PreCombatMain"]')).toHaveAttribute('aria-current', 'step');
 
-  const block = bar.getByRole('button', { name: 'Bloquear · parada en Declarar bloqueadoras' });
+  const block = bar.locator('button[data-step="DeclareBlockers"]');
   await expect(block).toHaveAttribute('aria-pressed', 'false');
+  await expect(block).toHaveAttribute('data-stop-scope', 'off');
   await block.click();
   await expect(block).toHaveAttribute('aria-pressed', 'true');
-  await expect(bar).toContainText('Parada en Declarar bloqueadoras');
-  expect(await page.evaluate(() => localStorage.getItem('mesa:stops'))).toBe('{"DeclareBlockers":true}');
+  await expect(block).toHaveAttribute('data-stop-scope', 'AllTurns');
+  await expect(bar).toContainText('1 parada configurada');
+  expect(await page.evaluate(() => localStorage.getItem('mesa:priorityPreferences')))
+    .toBe('{"0":{"mode":"Standard","stops":{"DeclareBlockers":"AllTurns"}}}');
 
   await page.reload();
-  await expect(page.getByRole('region', { name: 'Fases y paradas' })
-    .getByRole('button', { name: 'Bloquear · parada en Declarar bloqueadoras' })).toHaveAttribute('aria-pressed', 'true');
+  const reloadedBlock = page.getByRole('region', { name: 'Fases y paradas' }).locator('button[data-step="DeclareBlockers"]');
+  await expect(reloadedBlock).toHaveAttribute('aria-pressed', 'true');
+  await expect(reloadedBlock).toHaveAttribute('data-stop-scope', 'AllTurns');
 
-  // Keyboard reaches and releases it, and the dock stops announcing a stop.
-  await page.getByRole('button', { name: 'Bloquear · parada en Declarar bloqueadoras' }).focus();
+  // Keyboard cycles all scopes, then releases the stop; the dock reports only
+  // a stop that applies to the current step/turn, not any configured scope.
+  await reloadedBlock.focus();
   await page.keyboard.press('Space');
-  await expect(page.getByRole('button', { name: 'Bloquear · parada en Declarar bloqueadoras' })).toHaveAttribute('aria-pressed', 'false');
-  expect(await page.evaluate(() => localStorage.getItem('mesa:stops'))).toBe('{}');
+  await expect(reloadedBlock).toHaveAttribute('data-stop-scope', 'OwnTurn');
+  await page.keyboard.press('Space');
+  await expect(reloadedBlock).toHaveAttribute('data-stop-scope', 'OpponentsTurns');
+  await page.keyboard.press('Space');
+  await expect(reloadedBlock).toHaveAttribute('aria-pressed', 'false');
+  await expect(reloadedBlock).toHaveAttribute('data-stop-scope', 'off');
+  expect(await page.evaluate(() => localStorage.getItem('mesa:priorityPreferences')))
+    .toBe('{"0":{"mode":"Standard","stops":{}}}');
 });
 
 test('en el teléfono la ficha de fase sustituye a la barra y abre las paradas en una hoja', async ({ page }) => {
@@ -229,8 +242,16 @@ test('en el teléfono la ficha de fase sustituye a la barra y abre las paradas e
   await expect(row).toHaveAttribute('aria-pressed', 'false');
   await row.click();
   await expect(row).toHaveAttribute('aria-pressed', 'true');
-  await expect(row).toContainText('Con parada');
-  expect(await page.evaluate(() => localStorage.getItem('mesa:stops'))).toBe('{"DeclareBlockers":true}');
+  await expect(row).toHaveAttribute('data-stop-scope', 'AllTurns');
+  await expect(row).toContainText('Todos los turnos');
+  await row.click();
+  await expect(row).toHaveAttribute('data-stop-scope', 'OwnTurn');
+  await expect(row).toContainText('Mi turno');
+  await row.click();
+  await expect(row).toHaveAttribute('data-stop-scope', 'OpponentsTurns');
+  await expect(row).toContainText('Turnos de oponentes');
+  expect(await page.evaluate(() => localStorage.getItem('mesa:priorityPreferences')))
+    .toBe('{"0":{"mode":"Standard","stops":{"DeclareBlockers":"OpponentsTurns"}}}');
 
   const axe = await new AxeBuilder({ page }).include('dialog.phase-sheet').analyze();
   const serious = axe.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''));
@@ -249,7 +270,9 @@ test('una parada en el paso actual aparece en el estado de la mesa', async ({ pa
 
   const dock = page.getByRole('group', { name: 'Estado de la mesa' });
   await expect(dock).not.toContainText('Parada');
-  await page.getByRole('button', { name: 'Principal · parada en Principal 1' }).click();
+  const currentPhase = page.locator('.stop-bar button[data-step="PreCombatMain"]');
+  await currentPhase.click();
+  await expect(currentPhase).toHaveAttribute('data-stop-scope', 'AllTurns');
   await expect(dock).toContainText('Parada');
 });
 

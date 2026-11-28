@@ -11,12 +11,9 @@
    *
    * What the port keeps: the chip is one line, the sheet lists all twelve steps
    * in turn order (including the ones no other part of the chrome shows), and
-   * the current step is marked. What it changes: Phase cycles a stop through
-   * three scopes (all turns, own turn, opponents' turns); Mesa's `session.stops`
-   * is still a boolean per step, so the row answers "hay parada" or "no hay
-   * parada" and nothing else. No rule lives here: a stop only makes
-   * `session.stopActive` false so the automatic pass does not answer for the
-   * player at that step.
+   * the current step is marked. Each row cycles the three Phase scopes: all
+   * turns, only this seat's turns, opponents' turns, then off. A stop only
+   * retains a window Phase already recommends; it never creates or passes one.
    */
   import { session } from '#lib/game/session.svelte.ts';
   import { PHASE_STEPS } from '#lib/ui/phases.ts';
@@ -30,11 +27,20 @@
 
   const current = $derived(PHASE_STEPS.find((step) => step.value === phase));
   const stopped = $derived(PHASE_STEPS.filter((step) => session.isStop(step.value)));
+  const SCOPE_LABELS = {
+    AllTurns: 'Todos los turnos',
+    OwnTurn: 'Mi turno',
+    OpponentsTurns: 'Turnos de oponentes'
+  } as const;
   const stopText = $derived(stopped.length === 0
     ? 'Sin paradas'
     : stopped.length === 1
       ? 'Parada en 1 paso'
       : `Paradas en ${stopped.length} pasos`);
+
+  function scopeLabel(scope: keyof typeof SCOPE_LABELS | undefined): string {
+    return scope ? SCOPE_LABELS[scope] : 'Sin parada';
+  }
 
   function show() {
     open = true;
@@ -122,28 +128,31 @@
       <button type="button" class="close" onclick={close} aria-label="Cerrar las paradas">✕</button>
     </header>
     <p class="note">
-      Una parada no cambia ninguna regla: el motor sigue publicando la ventana y su recomendación, y aquí
-      sólo dejas de aceptarla en el paso que marques. Turno {turn} · Jugador {activePlayer + 1}.
+      Toca cada paso para alternar: todos los turnos → mi turno → turnos de oponentes → sin parada.
+      Una parada sólo retiene una ventana publicada por Phase; no crea ventanas ni fuerza pases.
+      Turno {turn} · Jugador {activePlayer + 1}.
     </p>
     <ol class="rows">
       {#each PHASE_STEPS as step, index (step.value)}
+        {@const position = step.value === phase ? 'Paso actual' : `Paso ${index + 1} de ${PHASE_STEPS.length}`}
         <li>
           <button
             type="button"
             class="row"
             data-step={step.value}
+            data-stop-scope={session.stopScope(step.value) ?? 'off'}
             aria-current={step.value === phase ? 'step' : undefined}
             aria-pressed={session.isStop(step.value)}
-            onclick={() => session.toggleStop(step.value)}
+            aria-label={`${step.label}. ${position}. ${scopeLabel(session.stopScope(step.value))}. Toca para cambiar el ámbito`}
+            title={`Ámbito actual: ${scopeLabel(session.stopScope(step.value))}`}
+            onclick={() => session.cycleStop(step.value)}
           >
             <span class="text">
               <span class="name">{step.label}</span>
-              <span class="mark">
-                {step.value === phase ? 'Paso actual' : `Paso ${index + 1} de ${PHASE_STEPS.length}`}
-              </span>
+              <span class="mark">{position}</span>
             </span>
-            <span class="badge" data-on={session.isStop(step.value)}>
-              {session.isStop(step.value) ? 'Con parada' : 'Sin parada'}
+            <span class="badge" data-on={session.isStop(step.value)} data-scope={session.stopScope(step.value) ?? 'off'}>
+              {scopeLabel(session.stopScope(step.value))}
             </span>
           </button>
         </li>

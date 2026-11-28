@@ -1,0 +1,102 @@
+name: Focused browser regression
+
+on:
+  workflow_call:
+    inputs:
+      job_name:
+        description: Label shown for this focused browser check.
+        required: true
+        type: string
+      specs:
+        description: Space- or newline-separated Playwright spec paths.
+        required: true
+        type: string
+      grep:
+        description: Optional Playwright title regular expression.
+        required: false
+        default: ''
+        type: string
+      expected_tests:
+        description: Exact number of focused tests expected from this spec and title filter.
+        required: true
+        type: number
+      artifact_name:
+        description: Unique Playwright artifact name for a failed focused run.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: ${{ inputs.job_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bun install --frozen-lockfile
+      - run: bun --bun playwright install --with-deps chromium
+      # These artifacts come from this same workflow run's wasm and
+      # native-integration jobs, so the bridge and GameScenario fixtures share
+      # the checked-out source SHA. Do not substitute artifacts from another run.
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm
+          path: static/wasm
+      - uses: actions/download-artifact@v4
+        with:
+          name: mtg-engine-wasm-e2e
+          path: static/wasm-e2e
+      - uses: actions/download-artifact@v4
+        with:
+          name: e2e-scenario-fixtures
+          path: static/e2e-scenarios
+      - name: Verify same-run Phase and scenario artifacts
+        run: |
+          set -euo pipefail
+          test -s static/wasm/mtg_engine_wasm.wasm
+          test -s static/wasm-e2e/mtg_engine_wasm_e2e.wasm
+          for fixture in \
+            target-cast manual-payment cancel-cast privacy-handoff \
+            priority-empty priority-stack priority-auto-pass priority-low-use \
+            priority-resolve-own opponent-turn-response \
+            declare-attackers declare-blockers obligatory-decision optional-decision; do
+            test -s "static/e2e-scenarios/$fixture.json"
+          done
+      - name: Run focused Playwright regressions
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/targeted-report.json
+          TARGET_SPECS: ${{ inputs.specs }}
+          TARGET_GREP: ${{ inputs.grep }}
+        run: |
+          set -euo pipefail
+          if [ -n "$TARGET_GREP" ]; then
+            bun --bun playwright test $TARGET_SPECS --reporter=list,json --grep "$TARGET_GREP"
+          else
+            bun --bun playwright test $TARGET_SPECS --reporter=list,json
+          fi
+      - name: Gate skipped, missing, retried, and failed focused tests
+        if: always()
+        run: bun scripts/e2e-focused-summary.ts test-results/targeted-report.json ${{ inputs.expected_tests }}
+      - name: Annotate focused Playwright failures
+        if: failure()
+        run: bun scripts/e2e-annotations.ts test-results/targeted-report.json
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: test-results
+          if-no-files-found: warn
+          retention-days: 7

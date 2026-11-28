@@ -14,9 +14,10 @@
  */
 import { loadCatalog } from '#lib/game/catalog.ts';
 import { session } from '#lib/game/session.svelte.ts';
+import type { DispatchExpectation, DispatchOutcome } from '#lib/game/dispatchOutcome.ts';
 import type { EngineSnapshot, GameAction, ObjectId } from '#lib/engine/types.ts';
-import { initialState, reduce, type LessonNote, type MachineState } from './machine.ts';
-import { ActionSlot } from './action-slot.ts';
+import { initialState, reduce, settleMulliganDecision, type LessonNote, type MachineState } from './machine.ts';
+import { ActionSlot, type ActionSlotProposal } from './action-slot.ts';
 import {
   STEPS,
   TUTORIAL_CARD_NAMES,
@@ -24,6 +25,9 @@ import {
   TUTORIAL_DECK,
   TUTORIAL_SEED,
   TUTORIAL_STORAGE_KEY,
+  handObjects,
+  isLand,
+  legalFor,
   type LessonStepKind,
   type TutorialContext
 } from './lesson.ts';
@@ -33,15 +37,15 @@ export type TutorialStatus = 'idle' | 'loading' | 'running' | 'completed' | 'err
 /** What the controller needs from the engine. Swapped in tests. */
 export interface TutorialEngine {
   readonly snapshot: EngineSnapshot | null;
-  /** The outcome is available, but the tutorial only needs it to settle. */
-  dispatch: (action: GameAction) => Promise<unknown>;
+  /** Phase's result settles decisions that must not be counted while queued. */
+  dispatch: (action: GameAction, expected?: DispatchExpectation) => Promise<DispatchOutcome>;
 }
 
 const sessionEngine: TutorialEngine = {
   get snapshot() {
     return session.snapshot;
   },
-  dispatch: (action) => session.dispatch(action)
+  dispatch: (action, expected) => session.dispatch(action, expected)
 };
 
 export interface TutorialView {
@@ -90,6 +94,53 @@ function initialView(): TutorialView {
   };
 }
 
+type TutorialTraceSource = 'tutorial-machine' | 'learner' | 'await-learner';
+type TutorialSeatRole = 'learner' | 'mannequin' | 'unknown';
+
+interface TutorialTrace {
+  event: 'proposal' | 'dispatch';
+  source: TutorialTraceSource;
+  learnerSeat: 'learner';
+  dummySeat: 'mannequin';
+  actorSeat: TutorialSeatRole;
+  proposalRevision: number;
+  dispatchRevision: number | null;
+  actionType: string | null;
+  phaseResult: DispatchOutcome['kind'] | null;
+  phaseCode: string | null;
+  step: string;
+  phase: string;
+  waiting: string;
+  turn: number;
+  /** Count only the learner's lands while their hand is the visible view. */
+  availableLands: number | null;
+  /** Whether Phase exposes at least one playable learner land in this view. */
+  playLandLegal: boolean | null;
+}
+
+function seatRole(viewer: number, context: TutorialContext): TutorialSeatRole {
+  if (viewer === context.learner) return 'learner';
+  if (viewer === context.dummy) return 'mannequin';
+  return 'unknown';
+}
+
+function learnerLandFacts(snapshot: EngineSnapshot, context: TutorialContext): Pick<TutorialTrace, 'availableLands' | 'playLandLegal'> {
+  // Do not inspect or report the learner's private hand while the dummy is the
+  // current viewer. The trace contains a land count, never card names or IDs.
+  if (snapshot.viewer !== context.learner) {
+    return { availableLands: null, playLandLegal: null };
+  }
+  const lands = handObjects(snapshot, context.learner).filter(isLand);
+  return {
+    availableLands: lands.length,
+    playLandLegal: lands.some((land) => !!legalFor(snapshot, 'PlayLand', land.id))
+  };
+}
+
+function recordTutorialTrace(trace: TutorialTrace): void {
+  if (import.meta.env.DEV) console.debug(`[tutorial-trace] ${JSON.stringify(trace)}`);
+}
+
 export class TutorialController {
   engine: TutorialEngine = sessionEngine;
   context: TutorialContext = TUTORIAL_CONTEXT;
@@ -101,12 +152,13 @@ export class TutorialController {
   private status: TutorialStatus = 'idle';
   private message: string | null = null;
   private error: string | null = null;
-  private busy = false;
-  private privateAutoPass: boolean | null = null;
+  /** Count manual and machine dispatches separately; the session queue serializes their sends. */
+  private inFlightDispatches = 0;
   /** Invalidates a lesson start if the user navigates away during loading. */
   private startGeneration = 0;
-  /** The revision of the last snapshot the machine already decided about. */
+  /** Snapshot identity (seat + revision) the machine most recently decided about. */
   private lastRevision = -1;
+  private lastViewer: number | null = null;
   /** True when the lesson changed the machine without the engine moving. */
   private localChange = false;
   /**
@@ -122,8 +174,9 @@ export class TutorialController {
     this.machine = initialState();
     this.message = null;
     this.error = null;
-    this.busy = false;
+    this.inFlightDispatches = 0;
     this.lastRevision = -1;
+    this.lastViewer = null;
     this.localChange = false;
     this.slot = new ActionSlot();
     this.status = 'loading';
@@ -137,11 +190,10 @@ export class TutorialController {
       if (loaded.unverified.length) {
         throw new Error(`El motor todavía no verificó: ${loaded.unverified.join(', ')}.`);
       }
-      // The tutorial drives the priority windows itself: the global auto-pass
-      // would take the decisions away from the learner. The setting is not
-      // persisted: it belongs to the lesson, not to the player's preferences.
-      this.privateAutoPass = session.autoPass;
-      session.autoPass = false;
+      // The tutorial machine is the sole automatic decision-maker for both
+      // seats. This in-memory scope blocks session auto-passes while leaving
+      // both saved preferences and their normal Phase synchronization intact.
+      session.setTutorialAutomationActive(true);
       session.modeLabel = 'Lección · Mi primera partida';
       await session.start(loaded.catalog, TUTORIAL_DECK, TUTORIAL_SEED);
       if (generation !== this.startGeneration) return;
@@ -149,18 +201,17 @@ export class TutorialController {
       this.status = 'running';
     } catch (error) {
       if (generation !== this.startGeneration) return;
+      session.setTutorialAutomationActive(false);
+      session.modeLabel = '';
       this.status = 'error';
       this.error = error instanceof Error ? error.message : String(error);
     }
     this.publish();
   }
 
-  /** Leave the lesson and give the main game back its auto-pass setting. */
+  /** Release the lesson's in-memory authority without touching saved preferences. */
   stop(): void {
-    if (this.privateAutoPass !== null) {
-      session.autoPass = this.privateAutoPass;
-      this.privateAutoPass = null;
-    }
+    session.setTutorialAutomationActive(false);
     session.modeLabel = '';
   }
 
@@ -173,12 +224,15 @@ export class TutorialController {
     this.slot.propose(null);
     this.stop();
     session.reset();
+    this.inFlightDispatches = 0;
     this.status = 'idle';
+    this.publish();
   }
 
   /** Restart the lesson. Same deck, same seed: the same game, every time. */
   async restart(): Promise<void> {
-    this.stop();
+    // Keep the session's tutorial authority continuously held while the old
+    // worker generation is replaced; no normal auto-pass can slip between.
     await this.start();
   }
 
@@ -189,18 +243,17 @@ export class TutorialController {
   observe(): void {
     const snapshot = this.engine.snapshot;
     if (!snapshot) return;
-    // Keep the seat handoff in sync so leaving the lesson does not leave a
-    // stale "pass the device" dialog behind on the main board.
-    session.confirmHandoff();
-    // One decision per snapshot: the same revision always yields the same
-    // answer, and deciding twice about the same state would let the lesson
-    // skip a step. A local change (the learner read, skipped or asked to pass)
-    // is the only reason to decide again about the same revision.
-    if (snapshot.revision === this.lastRevision && !this.localChange) {
+    // The tutorial has no privacy-handoff dialog: the guided dummy is part of
+    // this lesson's own UI. Do not confirm a GameSession handoff here, because
+    // that also re-enters maybeAutoPass for the dummy's priority window.
+    // One decision per (viewer, revision): a viewer can change even when a
+    // presentation-only refresh leaves the revision unchanged.
+    if (snapshot.revision === this.lastRevision && snapshot.viewer === this.lastViewer && !this.localChange) {
       this.publish();
       return;
     }
     this.lastRevision = snapshot.revision;
+    this.lastViewer = snapshot.viewer;
     this.localChange = false;
     const result = reduce(this.machine, snapshot, this.context);
     this.machine = result.state;
@@ -212,19 +265,35 @@ export class TutorialController {
       this.publish();
       return;
     }
-    // The newest decision replaces the waiting one: both describe the same
-    // (latest) snapshot, and only the newest one can still be legal.
-    this.slot.propose(result.action ?? null);
-    if (import.meta.env.DEV) {
-      // The trail is what the browser test reads when the lesson does not
-      // move: it says what the engine offered and what the lesson decided.
-      console.debug(
-        `[lección] rev=${snapshot.revision} paso=${this.machine.step + 1}/${STEPS.length} ` +
-          `fase=${snapshot.state.phase} espera=${snapshot.state.waiting_for.type} ` +
-          `turno=${snapshot.state.turn_number} activo=${snapshot.state.active_player} ` +
-          `visor=${snapshot.viewer} → ${result.action?.type ?? 'espera'}`
-      );
-    }
+    // The newest decision replaces the waiting one, but the proposal carries
+    // its actor/revision so the send boundary can discard it after a handoff.
+    const proposal: ActionSlotProposal | null = result.action
+      ? {
+          action: result.action,
+          viewer: snapshot.viewer,
+          revision: snapshot.revision,
+          step: this.machine.step
+        }
+      : null;
+    this.slot.propose(proposal);
+    const facts = learnerLandFacts(snapshot, this.context);
+    recordTutorialTrace({
+      event: 'proposal',
+      source: proposal ? 'tutorial-machine' : 'await-learner',
+      learnerSeat: 'learner',
+      dummySeat: 'mannequin',
+      actorSeat: seatRole(snapshot.viewer, this.context),
+      proposalRevision: snapshot.revision,
+      dispatchRevision: null,
+      actionType: result.action?.type ?? null,
+      phaseResult: null,
+      phaseCode: null,
+      step: STEPS[this.machine.step]?.id ?? 'unknown',
+      phase: snapshot.state.phase,
+      waiting: snapshot.state.waiting_for.type,
+      turn: snapshot.state.turn_number,
+      ...facts
+    });
     this.publish();
     this.flush();
   }
@@ -236,29 +305,112 @@ export class TutorialController {
    * while another one is in flight waits here instead of being thrown away.
    */
   private flush(): void {
-    const action = this.slot.take();
-    if (!action) return;
-    this.busy = true;
+    const slot = this.slot;
+    const generation = this.startGeneration;
+    const snapshot = this.engine.snapshot;
+    if (!snapshot) {
+      slot.propose(null);
+      return;
+    }
+    const taken = slot.take({ viewer: snapshot.viewer, revision: snapshot.revision });
+    if (taken.kind === 'empty' || taken.kind === 'busy') return;
+    if (taken.kind === 'stale') {
+      // Never send the retained payload. Rebuild from the latest Phase view,
+      // including the case where only the logical viewer changed.
+      if (generation === this.startGeneration) {
+        this.localChange = true;
+        this.observe();
+      }
+      return;
+    }
+
+    const { proposal } = taken;
+    const { action } = proposal;
+    this.inFlightDispatches += 1;
     this.publish();
-    void this.engine
-      .dispatch(action)
+    void this.dispatchWithTrace(action, 'tutorial-machine', proposal, snapshot)
+      .then((outcome) => {
+        if (generation !== this.startGeneration) return;
+        if (action.type !== 'MulliganDecision') return;
+        this.machine = settleMulliganDecision(this.machine, action, outcome.kind === 'accepted');
+        // Only a confirmed redraw consumes the lesson's budget. A settled
+        // mulligan re-runs the reducer against Phase's latest snapshot.
+        if (outcome.kind === 'accepted') this.localChange = true;
+      })
       .catch((failure: unknown) => {
+        if (generation !== this.startGeneration) return;
         this.error = failure instanceof Error ? failure.message : String(failure);
+        if (action.type === 'MulliganDecision') {
+          this.machine = settleMulliganDecision(this.machine, action, false);
+        }
       })
       .finally(() => {
-        this.busy = false;
-        this.slot.release();
+        // Release the exact slot this dispatch took. Restart replaces the slot;
+        // an old completion must not unlock or flush the new lesson's action.
+        slot.release();
+        if (generation !== this.startGeneration) return;
+        this.inFlightDispatches = Math.max(0, this.inFlightDispatches - 1);
         this.publish();
-        // The engine moved: the snapshot changed, the effect will call
-        // observe() again and decide about the new state. If a decision was
-        // already made while this action was in flight, it goes now.
+        const latest = this.engine.snapshot;
+        if (this.localChange || (latest && (latest.revision !== this.lastRevision || latest.viewer !== this.lastViewer))) {
+          this.localChange = true;
+          this.observe();
+        }
         this.flush();
       });
   }
 
+  private async dispatchWithTrace(
+    action: GameAction,
+    source: Exclude<TutorialTraceSource, 'await-learner'>,
+    proposal: ActionSlotProposal,
+    snapshot: EngineSnapshot
+  ): Promise<DispatchOutcome> {
+    const facts = learnerLandFacts(snapshot, this.context);
+    const common = {
+      learnerSeat: 'learner' as const,
+      dummySeat: 'mannequin' as const,
+      actorSeat: seatRole(proposal.viewer, this.context),
+      proposalRevision: proposal.revision,
+      actionType: action.type,
+      step: STEPS[proposal.step]?.id ?? 'unknown',
+      phase: snapshot.state.phase,
+      waiting: snapshot.state.waiting_for.type,
+      turn: snapshot.state.turn_number,
+      ...facts
+    };
+    try {
+      const outcome = await this.engine.dispatch(action, {
+        viewer: proposal.viewer,
+        revision: proposal.revision
+      });
+      recordTutorialTrace({
+        event: 'dispatch',
+        source,
+        ...common,
+        dispatchRevision: outcome.actionRevision ?? null,
+        phaseResult: outcome.kind,
+        phaseCode: outcome.code ?? null
+      });
+      return outcome;
+    } catch (failure) {
+      recordTutorialTrace({
+        event: 'dispatch',
+        source,
+        ...common,
+        dispatchRevision: null,
+        phaseResult: 'failed',
+        phaseCode: 'transport_error'
+      });
+      throw failure;
+    }
+  }
+
   /** The primary button of the lesson panel. */
   async act(): Promise<void> {
-    const step = STEPS[Math.min(this.machine.step, STEPS.length - 1)];
+    if (this.inFlightDispatches > 0) return;
+    const stepIndex = this.machine.step;
+    const step = STEPS[Math.min(stepIndex, STEPS.length - 1)];
     if (!step) return;
     this.message = null;
     if (step.kind === 'read') {
@@ -281,12 +433,35 @@ export class TutorialController {
     }
     const snapshot = this.engine.snapshot;
     const action = snapshot ? step.perform?.(snapshot, this.context) : undefined;
-    if (!action) {
+    if (!snapshot || !action) {
       this.message = 'El motor todavía no ofrece esa acción. Espera un momento o salta el paso.';
       this.publish();
       return;
     }
-    await this.engine.dispatch(action);
+    const proposal: ActionSlotProposal = {
+      action,
+      viewer: snapshot.viewer,
+      revision: snapshot.revision,
+      step: stepIndex
+    };
+    const generation = this.startGeneration;
+    this.inFlightDispatches += 1;
+    this.publish();
+    try {
+      const outcome = await this.dispatchWithTrace(action, 'learner', proposal, snapshot);
+      if (generation === this.startGeneration && outcome.kind === 'stale') {
+        this.message = 'La partida cambió antes de enviar la acción. Revisa la nueva vista y vuelve a intentarlo.';
+      }
+    } catch (failure) {
+      if (generation === this.startGeneration) {
+        this.error = failure instanceof Error ? failure.message : String(failure);
+      }
+    } finally {
+      if (generation === this.startGeneration) {
+        this.inFlightDispatches = Math.max(0, this.inFlightDispatches - 1);
+        this.publish();
+      }
+    }
   }
 
   /**
@@ -353,7 +528,7 @@ export class TutorialController {
       completed: this.machine.completed,
       message: this.message,
       error: this.error,
-      busy: this.busy,
+      busy: this.inFlightDispatches > 0,
       learnerTurn: this.machine.learnerTurn,
       notes: this.machine.notes
     };

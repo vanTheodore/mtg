@@ -177,18 +177,23 @@
     session.status = 'ready';
     const client = (session as unknown as { client: EngineClient }).client;
     client.view = async () => snapshot();
-    let received = 0;
-    client.action = async (_viewer, _action, _expectedRevision) => {
-      received += 1;
+    let receivedUserActions = 0;
+    client.action = async (_viewer, action, _expectedRevision) => {
+      // `apply()` synchronizes the seat's Phase-owned priority preferences
+      // after the first response. Those two engine commands are not presses in
+      // the hand sheet: keep them out of the scripted rejection sequence so
+      // `?reject=1` refuses the second user action the test actually retries.
+      const isPreferenceSync = action.type === 'SetPriorityPassingMode' || action.type === 'SetPhaseStops';
+      if (!isPreferenceSync) receivedUserActions += 1;
       // UX-HAND 1.2 — rejection. The bridge answers a refused action with
       // `{ ok: false, rejected: true, code: 'invalid_action', error }`
-      // (`crates/mtgexec…/lib.rs:submit`), and the sheet has to show that
-      // sentence, stay open and let the player retry. The fixture is a stub, so
-      // it cannot earn a real refusal; with `?reject=1` it answers the second
-      // action of the session that way, on purpose and only there. That is
-      // declared in the test: this proves the *presentation* of a rejection with
-      // the production client code, not a rule.
-      if (rejectMode && received === 2) {
+      // (`crates/mtg-engine-wasm/src/lib.rs:submit`), and the sheet has to show
+      // that sentence, stay open and let the player retry. The fixture is a
+      // stub, so it cannot earn a real refusal; with `?reject=1` it answers the
+      // second user action that way, on purpose and only there. That is
+      // declared in the test: this proves the *presentation* of a rejection
+      // with the production client code, not a rule.
+      if (rejectMode && !isPreferenceSync && receivedUserActions === 2) {
         return {
           ok: false,
           rejected: true,

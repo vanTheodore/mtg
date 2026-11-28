@@ -295,6 +295,13 @@ pub fn project_state(state: &GameState) -> serde_json::Value {
         "phase": state.phase,
         "waiting_for": state.waiting_for,
         "players": players,
+        // `project_state` is called only with `filter_state_for_viewer` output.
+        // Phase retains this map for the authorized viewer, so the UI can show
+        // and cancel that seat's own turn-boundary / stack auto-pass session
+        // without learning another seat's automation preference.
+        "auto_pass": state.auto_pass,
+        "phase_stops": state.phase_stops,
+        "priority_passing_modes": state.priority_passing_modes,
         "battlefield": state.battlefield,
         "stack": state.stack,
         "exile": state.exile,
