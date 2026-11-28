@@ -200,8 +200,10 @@ jobs:
     # GameScenario fixtures place Phase directly in the state each E2E needs;
     # the browser suite no longer plays through random draws to find a card.
     # UX-DECISION and UX-PRIORITY add motor-real transitions on top of the
-    # measured baseline; keep headroom without weakening the Playwright gate.
-    timeout-minutes: 60
+    # measured baseline; the full serial suite exceeded 60 minutes before its
+    # JSON summary and 28-test functional gate could complete. Give it headroom
+    # without weakening the Playwright gate.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
