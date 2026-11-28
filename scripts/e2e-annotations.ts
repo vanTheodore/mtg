@@ -16,6 +16,10 @@
  *   bun scripts/e2e-annotations.ts            # defaults to that path
  *   bun scripts/e2e-annotations.ts path.json
  *
+ * Tests may add an `e2e-checkpoint` annotation before a long interaction; the
+ * latest checkpoint is included so a suite-level timeout still names the last
+ * transition it reached.
+ *
  * Exit code is always 0: this runs in an `if: failure()` step and must not mask
  * the real failure.
  */
@@ -23,7 +27,11 @@ import { existsSync, readdirSync } from 'node:fs';
 
 type JsonError = { message?: string; stack?: string };
 type JsonResult = { status?: string; error?: JsonError };
-type JsonTest = { status?: string; results?: JsonResult[] };
+type JsonTest = {
+  status?: string;
+  results?: JsonResult[];
+  annotations?: { type?: string; description?: string }[];
+};
 type JsonSpec = { title?: string; file?: string; line?: number; ok?: boolean; tests?: JsonTest[] };
 type JsonSuite = { file?: string; specs?: JsonSpec[]; suites?: JsonSuite[] };
 
@@ -56,10 +64,14 @@ function walk(suite: JsonSuite, file: string) {
       // Keep Playwright's Expected/Received lines on one readable annotation;
       // these often contain the actual engine state (waiting_for, selected card)
       // that the short first line omits. The workflow command caps this below.
-      const message = (first.error?.message ?? first.status ?? 'fallo sin mensaje')
+      const summary = (first.error?.message ?? first.status ?? 'fallo sin mensaje')
         .split('\n')
         .filter(Boolean)
         .join(' · ');
+      const checkpoint = [...(test.annotations ?? [])]
+        .reverse()
+        .find((entry) => entry.type === 'e2e-checkpoint' && entry.description)?.description;
+      const message = checkpoint ? `último checkpoint: ${checkpoint} · ${summary}` : summary;
       annotation(currentFile || spec.file || 'tests/e2e', spec.line ?? 1, spec.title ?? 'prueba sin título', message);
       emitted += 1;
     }

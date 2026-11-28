@@ -44,24 +44,35 @@ async function waitForPrioritySync(page: Page, mode: string, stops?: number) {
   if (stops !== undefined) await expect(controls).toHaveAttribute('data-engine-stop-count', String(stops), { timeout: 30_000 });
 }
 
+function checkpoint(description: string) {
+  test.info().annotations.push({ type: 'e2e-checkpoint', description });
+}
+
 test('modos temporales y alcances por asiento se sincronizan con Phase', async ({ page }) => {
   test.setTimeout(180_000);
+  page.setDefaultTimeout(15_000);
+  checkpoint('abrir la fixture priority-stack');
   await openScenario(page, 'priority-stack');
+  checkpoint('abrir opciones avanzadas');
   await openMoreOptions(page);
   const controls = advanced(page);
+  checkpoint('sincronizar el modo FullControl inicial');
   await waitForPrioritySync(page, 'FullControl', 0);
 
   const standard = controls.locator('button[data-priority-mode="Standard"]');
+  checkpoint('enviar y sincronizar Standard');
   await standard.click();
   await expect(standard).toHaveAttribute('aria-pressed', 'true');
   await waitForPrioritySync(page, 'Standard', 0);
 
   const skipLow = controls.locator('button[data-priority-mode="SkipLowUseWindows"]');
+  checkpoint('enviar y sincronizar SkipLowUseWindows');
   await skipLow.click();
   await expect(skipLow).toHaveAttribute('aria-pressed', 'true');
   await waitForPrioritySync(page, 'SkipLowUseWindows', 0);
 
   const full = controls.locator('button[data-priority-mode="FullControl"]');
+  checkpoint('activar y sincronizar FullControl temporal');
   await full.click();
   await expect(full).toHaveAttribute('aria-pressed', 'true');
   await waitForPrioritySync(page, 'FullControl', 0);
@@ -69,14 +80,17 @@ test('modos temporales y alcances por asiento se sincronizan con Phase', async (
   const persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('mesa:priorityPreferences') ?? '{}'));
   expect(persisted['0']).toEqual({ mode: 'SkipLowUseWindows', stops: {} });
 
+  checkpoint('desactivar FullControl y restaurar SkipLowUseWindows');
   await full.click();
   await expect(full).toHaveAttribute('aria-pressed', 'false');
   await waitForPrioritySync(page, 'SkipLowUseWindows', 0);
 
+  checkpoint('abrir controles de paradas de fase');
   await controls.locator('[data-open-phase-stops]').click();
   const currentStop = page.locator('.stop-bar button[data-step="PreCombatMain"]');
   await expect(currentStop).toBeFocused();
   for (const scope of ['AllTurns', 'OwnTurn', 'OpponentsTurns']) {
+    checkpoint(`enviar y sincronizar parada ${scope}`);
     await currentStop.click();
     await expect(currentStop).toHaveAttribute('data-stop-scope', scope);
     await waitForPrioritySync(page, 'SkipLowUseWindows', 1);
@@ -84,10 +98,12 @@ test('modos temporales y alcances por asiento se sincronizan con Phase', async (
   // P0 is active in this Phase fixture, so an opponents-only stop is configured
   // but does not claim that the current P0 window is stopped.
   await expect(page.locator('.stop-bar .state')).toHaveAttribute('data-active', 'false');
+  checkpoint('desactivar y sincronizar la parada de fase');
   await currentStop.click();
   await expect(currentStop).toHaveAttribute('data-stop-scope', 'off');
   await waitForPrioritySync(page, 'SkipLowUseWindows', 0);
 
+  checkpoint('comprobar las preferencias persistidas finales');
   const finalPreferences = await page.evaluate(() => JSON.parse(localStorage.getItem('mesa:priorityPreferences') ?? '{}'));
   expect(finalPreferences['0']).toEqual({ mode: 'SkipLowUseWindows', stops: {} });
 });
@@ -182,16 +198,27 @@ test('Resolve All propio no solicita consentimiento compartido', async ({ page }
   await expect(castResponse).toBeVisible();
   const beforeResponse = await applied(page);
   await castResponse.click();
-  await expect(page.locator('.app')).toHaveAttribute('data-waiting', 'TargetSelection');
-  const responseTargets = panel(page).locator('details[data-target-list]');
-  if (!(await responseTargets.evaluate((node: HTMLDetailsElement) => node.open))) await responseTargets.locator('summary').click();
-  const boltOnStack = responseTargets.locator('button').filter({ hasText: /Elegir Lightning Bolt/ }).first();
-  await expect(boltOnStack).toBeVisible();
-  await boltOnStack.click();
+  // Counterspell has one legal target in this fixture. Phase can choose it as
+  // part of CastSpell and return directly to Priority, or request an explicit
+  // target choice; both are valid engine paths and must leave it on the stack.
+  await expect.poll(async () => {
+    const waiting = await page.locator('.app').getAttribute('data-waiting');
+    const stackCount = await page.locator('section[aria-label="Pila"] ol li').count();
+    return waiting === 'TargetSelection' || (waiting === 'Priority' && stackCount === 2);
+  }, { timeout: 15_000 }).toBe(true);
+  if (await page.locator('.app').getAttribute('data-waiting') === 'TargetSelection') {
+    const responseTargets = panel(page).locator('details[data-target-list]');
+    if (!(await responseTargets.evaluate((node: HTMLDetailsElement) => node.open))) await responseTargets.locator('summary').click();
+    const boltOnStack = responseTargets.locator('button').filter({ hasText: /Elegir Lightning Bolt/ }).first();
+    await expect(boltOnStack).toBeVisible();
+    await boltOnStack.click();
+  }
   await expect.poll(() => applied(page), { timeout: 30_000 }).toBeGreaterThan(beforeResponse);
   await expect(page.locator('.app')).toHaveAttribute('data-waiting', 'Priority');
   await expect(page.locator('.app')).toHaveAttribute('data-viewer', '1');
-  await expect(page.locator('section[aria-label="Pila"] ol li')).toHaveCount(2);
+  const stack = page.locator('section[aria-label="Pila"] ol li');
+  await expect(stack).toHaveCount(2);
+  await expect(stack.filter({ hasText: 'Counterspell' }).first()).toContainText('Lightning Bolt');
   await expect(page.locator('section[aria-label="Pila"]')).toHaveAttribute('data-empty', 'false');
 });
 
