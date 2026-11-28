@@ -69,12 +69,18 @@ test('modos temporales y alcances por asiento se sincronizan con Phase', async (
   await expect(standard).toHaveAttribute('aria-pressed', 'true');
   await waitForPrioritySync(page, 'Standard', 0);
 
+  // The engine reply can remount the decision panel and close its progressive
+  // disclosure; reopen it before the next preference control interaction.
+  checkpoint('reabrir opciones para seleccionar SkipLowUseWindows');
+  await openMoreOptions(page);
   const skipLow = controls.locator('button[data-priority-mode="SkipLowUseWindows"]');
   checkpoint('enviar y sincronizar SkipLowUseWindows');
   await skipLow.click();
   await expect(skipLow).toHaveAttribute('aria-pressed', 'true');
   await waitForPrioritySync(page, 'SkipLowUseWindows', 0);
 
+  checkpoint('reabrir opciones para seleccionar FullControl');
+  await openMoreOptions(page);
   const full = controls.locator('button[data-priority-mode="FullControl"]');
   checkpoint('activar y sincronizar FullControl temporal');
   await full.click();
@@ -84,11 +90,15 @@ test('modos temporales y alcances por asiento se sincronizan con Phase', async (
   const persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('mesa:priorityPreferences') ?? '{}'));
   expect(persisted['0']).toEqual({ mode: 'SkipLowUseWindows', stops: {} });
 
+  checkpoint('reabrir opciones para desactivar FullControl');
+  await openMoreOptions(page);
   checkpoint('desactivar FullControl y restaurar SkipLowUseWindows');
   await full.click();
   await expect(full).toHaveAttribute('aria-pressed', 'false');
   await waitForPrioritySync(page, 'SkipLowUseWindows', 0);
 
+  checkpoint('reabrir opciones para abrir las paradas de fase');
+  await openMoreOptions(page);
   checkpoint('abrir controles de paradas de fase');
   await controls.locator('[data-open-phase-stops]').click();
   const currentStop = page.locator('.stop-bar button[data-step="PreCombatMain"]');
