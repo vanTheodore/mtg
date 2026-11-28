@@ -62,13 +62,6 @@ async function importDeck(page: Page, list = DECK) {
   await expect(page.getByTestId('deck-total')).toHaveText('40 cartas');
 }
 
-/** The seat hand-off dialog blocks the board; dismiss it like a person would. */
-function answerHandoff(page: Page) {
-  return page.addLocatorHandler(page.locator('.handoff button'), async () => {
-    await page.locator('.handoff button').click({ timeout: 3_000 }).catch(() => {});
-  });
-}
-
 /** Import the 10E deck, accept the known limitation and wait for a hand. */
 async function startDeckGame(page: Page) {
   await importDeck(page);
@@ -80,8 +73,8 @@ async function startDeckGame(page: Page) {
   await expect(consent).toBeVisible();
   await consent.check();
   await page.getByRole('button', { name: 'Jugar con este mazo' }).click();
-  await answerHandoff(page);
-  await createBoardDriver(page).waitForDecision(180_000);
+  const driver = createBoardDriver(page);
+  await driver.waitForDecision(180_000);
   await expect(hand(page).locator('[data-card-id]').first()).toBeVisible({ timeout: 180_000 });
 }
 

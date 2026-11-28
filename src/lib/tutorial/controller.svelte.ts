@@ -14,8 +14,9 @@
  */
 import { loadCatalog } from '#lib/game/catalog.ts';
 import { session } from '#lib/game/session.svelte.ts';
+import type { DispatchOutcome } from '#lib/game/dispatchOutcome.ts';
 import type { EngineSnapshot, GameAction, ObjectId } from '#lib/engine/types.ts';
-import { initialState, reduce, type LessonNote, type MachineState } from './machine.ts';
+import { initialState, reduce, settleMulliganDecision, type LessonNote, type MachineState } from './machine.ts';
 import { ActionSlot } from './action-slot.ts';
 import {
   STEPS,
@@ -33,8 +34,8 @@ export type TutorialStatus = 'idle' | 'loading' | 'running' | 'completed' | 'err
 /** What the controller needs from the engine. Swapped in tests. */
 export interface TutorialEngine {
   readonly snapshot: EngineSnapshot | null;
-  /** The outcome is available, but the tutorial only needs it to settle. */
-  dispatch: (action: GameAction) => Promise<unknown>;
+  /** Phase's result settles decisions that must not be counted while queued. */
+  dispatch: (action: GameAction) => Promise<DispatchOutcome>;
 }
 
 const sessionEngine: TutorialEngine = {
@@ -241,13 +242,28 @@ export class TutorialController {
     this.publish();
     void this.engine
       .dispatch(action)
+      .then((outcome) => {
+        if (action.type !== 'MulliganDecision') return;
+        this.machine = settleMulliganDecision(this.machine, action, outcome.kind === 'accepted');
+        // The same mulligan prompt can be republished while preferences are
+        // synchronized. Only a confirmed redraw consumes the lesson's budget;
+        // re-run the reducer against the latest snapshot after it settles.
+        if (outcome.kind === 'accepted') this.localChange = true;
+      })
       .catch((failure: unknown) => {
         this.error = failure instanceof Error ? failure.message : String(failure);
+        if (action.type === 'MulliganDecision') {
+          this.machine = settleMulliganDecision(this.machine, action, false);
+        }
       })
       .finally(() => {
         this.busy = false;
         this.slot.release();
         this.publish();
+        // A settled mulligan may already have published its next decision
+        // while the pending guard was active. Re-evaluate that latest snapshot
+        // now, then send whatever it proposes.
+        if (this.localChange) this.observe();
         // The engine moved: the snapshot changed, the effect will call
         // observe() again and decide about the new state. If a decision was
         // already made while this action was in flight, it goes now.

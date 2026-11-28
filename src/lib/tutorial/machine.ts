@@ -38,8 +38,10 @@ export interface MachineState {
   acknowledged: number;
   /** The lesson reached its final screen. */
   completed: boolean;
-  /** Opening hands the engine was asked to redraw. */
+  /** Opening hands the engine accepted a redraw for. */
   mulligans: number;
+  /** One mulligan decision is being dispatched; ignore preference-only revisions. */
+  mulliganDecisionPending: boolean;
   /** The dummy's turn was seen: the learner's next turn is a new turn. */
   sawOpponentTurn: boolean;
   /** How many turns the learner has played (presentation only). */
@@ -73,6 +75,7 @@ export function initialState(): MachineState {
     acknowledged: -1,
     completed: false,
     mulligans: 0,
+    mulliganDecisionPending: false,
     sawOpponentTurn: false,
     learnerTurn: 1,
     lastActive: null,
@@ -122,13 +125,14 @@ export function reduce(
   if (manaPoolOf(snapshot, ctx.learner) > 0) next = { ...next, manaProduced: true };
 
   // 1. The engine asks for a mulligan decision: answer it for both seats.
+  // Preference synchronization can publish several revisions without changing
+  // the pending decision. Do not count or replace the same mulligan while its
+  // dispatch is in flight; the controller settles it from Phase's outcome.
   if (snapshot.state.waiting_for.type === 'MulliganDecision') {
+    if (next.mulliganDecisionPending) return { state: next };
     const action = mulliganAction(snapshot, ctx, next.mulligans);
     if (action) {
-      const redrawing = action.type === 'MulliganDecision' && isRedraw(action);
-      if (redrawing) next = note(next, 'La mano inicial no alcanzaba: Mesa pidió una nueva.', next.notes.length);
-      next = { ...next, mulligans: next.mulligans + (redrawing ? 1 : 0) };
-      return { state: next, action };
+      return { state: { ...next, mulliganDecisionPending: true }, action };
     }
   }
 
@@ -211,4 +215,22 @@ function isRedraw(action: GameAction): boolean {
   if (typeof choice === 'string') return choice === 'Mulligan';
   if (choice && typeof choice === 'object' && 'type' in choice) return String((choice as { type: unknown }).type) === 'Mulligan';
   return false;
+}
+
+/** Settle a pending mulligan only after Phase confirms that it was applied. */
+export function settleMulliganDecision(
+  state: MachineState,
+  action: GameAction,
+  accepted: boolean
+): MachineState {
+  if (action.type !== 'MulliganDecision' || !state.mulliganDecisionPending) return state;
+  const redrawing = accepted && isRedraw(action);
+  const settled: MachineState = {
+    ...state,
+    mulligans: state.mulligans + (redrawing ? 1 : 0),
+    mulliganDecisionPending: false
+  };
+  if (!redrawing) return settled;
+  const previousNoteId = settled.notes[settled.notes.length - 1]?.id ?? -1;
+  return note(settled, 'La mano inicial no alcanzaba: Mesa pidió una nueva.', previousNoteId + 1);
 }

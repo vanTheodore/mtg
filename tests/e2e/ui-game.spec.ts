@@ -34,17 +34,11 @@ test('partida completa y victoria desde controles Svelte', async ({ page }) => {
   let handoffs = 0;
   let interactions = 0;
   const dialog = page.locator('.handoff');
-  // The hot-seat modal blocks the board; Playwright's locator handler dismisses
-  // it whenever it would intercept an action, exactly like a person would.
-  await page.addLocatorHandler(page.locator('.handoff button'), async () => {
-    await page.locator('.handoff button').click({ timeout: 3_000 }).catch(() => {});
-    handoffs++;
-  });
+  // Handoff is an explicit privacy boundary, not a Playwright locator handler:
+  // confirm it through the shared driver and wait for the next seat's panel.
   async function settleSeat() {
-    if (!(await dialog.isVisible().catch(() => false))) return;
-    // The locator handler may have dismissed it already; either path is fine.
-    await dialog.locator('button').click({ timeout: 2_000 }).catch(() => {});
-    await dialog.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+    if (await dialog.isVisible().catch(() => false)) handoffs++;
+    await boardDriver.settleSeat();
   }
   /** Card clicks also cross the seat dialog; keep their timeout short and retry. */
   async function clickCard(card: Locator) {
@@ -63,15 +57,9 @@ test('partida completa y victoria desde controles Svelte', async ({ page }) => {
    * stalls. Returns whether the engine advanced.
    */
   async function press(button: Locator): Promise<boolean> {
-    await settleSeat();
-    if (!(await button.count())) return false;
-    const before = await revision();
-    await button.click({ timeout: 1_500 }).catch(() => {});
-    await page
-      .waitForFunction((n) => Number(document.querySelector('.app')?.getAttribute('data-actions-applied')) > n, before, { timeout: 3_000 })
-      .catch(() => {});
-    if ((await revision()) > before) { interactions++; return true; }
-    return false;
+    const advanced = await boardDriver.press(button, 3_000);
+    if (advanced) interactions++;
+    return advanced;
   }
   const passButton = () => decision.locator('.confirmations button:visible').filter({ hasText: /^Pasar/ }).first();
   const keepButton = () => decision.locator('button').filter({ hasText: 'Conservar mano' }).first();
@@ -199,22 +187,24 @@ test('partida completa y victoria desde controles Svelte', async ({ page }) => {
 test('la interfaz explica objetivos, maná y combate sin nombres internos', async ({ page }) => {
   await page.route('**/api.scryfall.com/**', (route) => route.abort());
   await page.goto('/?autostart');
-  await page.addLocatorHandler(page.locator('.handoff button'), async () => {
-    await page.locator('.handoff button').click({ timeout: 3_000 }).catch(() => {});
-  });
   const hand = page.locator('section[aria-label^="Tu mano"]');
-  await createBoardDriver(page).waitForDecision(90_000);
+  const driver = createBoardDriver(page);
+  await driver.waitForDecision(90_000);
   await expect(hand.locator('[data-card-id]').first()).toBeVisible({ timeout: 90_000 });
   const decision = page.locator('section[aria-label="Decisión pendiente"]');
   const keep = decision.locator('button').filter({ hasText: 'Conservar mano' }).first();
-  if (await keep.count()) await keep.click();
+  if (await keep.count()) {
+    await driver.press(keep);
+    await driver.waitForDecision(90_000);
+  }
 
   const plains = hand.locator('[data-card-id]').filter({ hasText: 'Plains' }).first();
   if (await plains.isVisible().catch(() => false)) {
     await plains.click();
     const play = decision.locator('button').filter({ hasText: 'Jugar tierra: Plains' }).first();
     if (await play.count()) {
-      await play.click({ timeout: 5_000 }).catch(() => {});
+      await driver.press(play);
+      await driver.waitForDecision(90_000);
       await expect(page.locator('section[aria-label^="Tu campo de batalla"] [data-card-id]').filter({ hasText: 'Plains' }).first()).toBeVisible({ timeout: 20_000 });
     }
     await plains.click().catch(() => {});
@@ -232,13 +222,11 @@ test('objetivo elegido con clic en el jugador y daño visible', async ({ page })
   await page.goto('/');
   await page.getByRole('radio', { name: /Duelo de chispas/ }).check();
   await page.getByRole('button', { name: 'Iniciar partida' }).click();
-  await page.addLocatorHandler(page.locator('.handoff button'), async () => {
-    await page.locator('.handoff button').click({ timeout: 3_000 }).catch(() => {});
-  });
   const hand = page.locator('section[aria-label^="Tu mano"]');
   const decision = page.locator('section[aria-label="Decisión pendiente"]');
   const app = page.locator('.app');
-  await createBoardDriver(page).waitForDecision(90_000);
+  const driver = createBoardDriver(page);
+  await driver.waitForDecision(90_000);
   await expect(hand.locator('[data-card-id]').first()).toBeVisible({ timeout: 90_000 });
 
   const keep = decision.locator('button').filter({ hasText: 'Conservar mano' }).first();
@@ -248,18 +236,29 @@ test('objetivo elegido con clic en el jugador y daño visible', async ({ page })
   for (let attempt = 0; attempt < 3; attempt++) {
     const hasMountain = await hand.locator('[data-card-id]').filter({ hasText: 'Mountain' }).count();
     if (hasMountain || attempt === 2) {
-      if (await keep.isEnabled().catch(() => false)) await keep.click({ timeout: 3_000 }).catch(() => {});
+      if (await keep.isEnabled().catch(() => false)) {
+        await driver.press(keep);
+        await driver.waitForDecision(90_000);
+      }
       break;
     }
-    if (await mulligan.isEnabled().catch(() => false)) await mulligan.click({ timeout: 3_000 }).catch(() => {});
+    if (await mulligan.isEnabled().catch(() => false)) {
+      await driver.press(mulligan);
+      await driver.waitForDecision(90_000);
+    }
   }
 
   let landed = false;
   for (let step = 0; step < 60 && !landed; step++) {
+    await driver.settleSeat();
     const waiting = await decision.getAttribute('data-waiting');
     const viewer = await app.getAttribute('data-viewer');
     const turnText = await decision.locator('.phase').first().innerText().catch(() => '');
-    if (waiting === 'MulliganDecision') { await keep.click({ timeout: 3_000 }).catch(() => {}); continue; }
+    if (waiting === 'MulliganDecision') {
+      await driver.press(keep);
+      await driver.waitForDecision(90_000);
+      continue;
+    }
     if (waiting === 'DiscardToHandSize') {
       // Phase genuinely asks the other seat to discard at cleanup. The
       // regression test must answer that *legal UI decision*, not loop forever
@@ -271,40 +270,40 @@ test('objetivo elegido con clic en el jugador y daño visible', async ({ page })
       const cards = hand.locator('[data-card-id]');
       await expect(cards).toHaveCount(7 + needed);
       for (let index = 0; index < needed; index++) {
-        await cards.nth(index).click();
+        await driver.clickCard(cards.nth(index));
       }
       const confirm = discard.getByRole('button', { name: /Confirmar descarte/ });
       await expect(confirm).toBeEnabled();
-      await confirm.click();
+      await driver.press(confirm);
       await expect(decision).not.toHaveAttribute('data-waiting', 'DiscardToHandSize');
       continue;
     }
     if (viewer !== '0' || !turnText.includes('Fase principal')) {
       const pass = decision.locator('.confirmations button').filter({ hasText: /^Pasar/ }).first();
-      if (await pass.count()) await pass.click({ timeout: 2_000 }).catch(() => {});
+      if (await pass.count()) await driver.press(pass);
       else await page.waitForTimeout(120);
       continue;
     }
     const mountain = hand.locator('[data-card-id]').filter({ hasText: 'Mountain' }).first();
     if (await mountain.isVisible().catch(() => false)) {
-      await mountain.click({ timeout: 2_000 }).catch(() => {});
+      await driver.clickCard(mountain);
       const play = decision.locator('button').filter({ hasText: 'Jugar tierra: Mountain' }).first();
-      if (await play.count()) { await play.click({ timeout: 2_000 }).catch(() => {}); await page.waitForTimeout(150); continue; }
-      await mountain.click({ timeout: 2_000 }).catch(() => {});
+      if (await play.count()) { await driver.press(play); continue; }
+      await driver.clickCard(mountain);
     }
     const bolt = hand.locator('[data-card-id]').filter({ hasText: 'Lightning Bolt' }).first();
     if (await bolt.isVisible().catch(() => false)) {
-      await bolt.click({ timeout: 2_000 }).catch(() => {});
+      await driver.clickCard(bolt);
       const cast = decision.locator('button').filter({ hasText: /^Lanzar Lightning Bolt/ }).first();
       if (await cast.count()) {
-        await cast.click({ timeout: 2_000 }).catch(() => {});
+        await driver.press(cast);
         await expect(decision).toHaveAttribute('data-waiting', /TargetSelection/, { timeout: 15_000 });
         // The interface must mark the legal target and explain what to click.
         await expect(decision).toContainText('objetivos');
         const target = page.locator('section[aria-label^="Jugador 2"] button.targetable');
         await expect(target).toBeVisible();
         await expect(target).toHaveAccessibleName(/^Elegir Jugador 2 como objetivo/);
-        await target.click();
+        await driver.press(target);
         await expect(page.locator('[data-player-id="1"]')).toHaveAttribute('data-life', '17', { timeout: 20_000 });
         await expect(page.locator('section[aria-label="Registro de la partida"]')).toContainText(/pierde 3 vidas/);
         landed = true;

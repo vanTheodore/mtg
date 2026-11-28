@@ -65,6 +65,7 @@ export function createBoardDriver(page: Page): BoardDriver {
   const rivalField = page.locator('section[aria-label^="Campo de batalla"]');
   const log = page.locator('section[aria-label="Registro de la partida"]');
   const handoff = page.locator('.handoff');
+  const gameOver = page.locator('.game-over');
   const discard = page.locator('[aria-label="Descartar hasta siete cartas"]');
 
   const revision = async () => Number(await app.getAttribute('data-actions-applied'));
@@ -78,36 +79,83 @@ export function createBoardDriver(page: Page): BoardDriver {
    * acting. The dialog is the product's own privacy guard: it is dismissed
    * here, never bypassed.
    */
-  const settleSeat = async () => {
-    if (!(await handoff.isVisible().catch(() => false))) return;
+  /** Confirm exactly the dialog the player can see; never bypass the privacy barrier. */
+  const confirmSeat = async (): Promise<boolean> => {
+    if (!(await handoff.isVisible().catch(() => false))) return false;
     checkpoint('handoff: privacy dialog detected');
+    const previousViewer = await viewer();
     await handoff.locator('button').click({ timeout: 2_000 }).catch(() => {});
-    await handoff.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
-    checkpoint(await handoff.isVisible().catch(() => false)
-      ? 'handoff: privacy dialog remains visible after confirmation'
+    // The outgoing dialog may be replaced immediately by the other seat's
+    // privacy barrier. Waiting only for `.handoff` to become hidden then burns
+    // five seconds per legitimate transition because the replacement matches
+    // the same locator. Treat a hidden dialog OR a viewer change as settled.
+    await page.waitForFunction((before) => {
+      const app = document.querySelector('.app');
+      const current = Number(app?.getAttribute('data-viewer'));
+      return !document.querySelector('.handoff') || (Number.isFinite(current) && current !== before);
+    }, previousViewer, { timeout: 5_000 }).catch(() => {});
+    const visible = await handoff.isVisible().catch(() => false);
+    checkpoint(visible
+      ? await viewer() !== previousViewer
+        ? 'handoff: next privacy dialog appeared after confirmation'
+        : 'handoff: privacy dialog remains visible after confirmation'
       : 'handoff: privacy dialog cleared after confirmation');
+    return true;
   };
 
   /**
    * Wait for either a visible decision or the privacy dialog, and confirm every
-   * dialog through its own button. This avoids waiting on a panel that the
-   * privacy barrier intentionally unmounts.
+   * dialog through its own button. The decision must stay visible across a
+   * short stability window: during a mulligan or turn transition the previous
+   * seat's panel can appear for one render just before the next privacy barrier.
    */
   const waitForDecision = async (timeout = 30_000): Promise<void> => {
     checkpoint('board-driver: wait for a decision through privacy handoffs');
     const deadline = Date.now() + timeout;
+    let stableState = '';
+    let stableSince = 0;
     while (Date.now() < deadline) {
       if (await handoff.isVisible().catch(() => false)) {
-        await settleSeat();
+        await confirmSeat();
+        stableState = '';
         continue;
       }
       if (await decision.isVisible().catch(() => false)) {
-        checkpoint('handoff: decision surface visible after confirmation');
-        return;
+        const busy = await app.getAttribute('data-busy');
+        const state = `${await revision()}:${await waiting()}:${busy}`;
+        if (busy !== 'false') {
+          stableState = '';
+        } else if (state !== stableState) {
+          stableState = state;
+          stableSince = Date.now();
+        } else if (Date.now() - stableSince >= 120
+          && !(await handoff.isVisible().catch(() => false))
+          && await decision.isVisible().catch(() => false)) {
+          checkpoint('handoff: decision surface visible after confirmation');
+          return;
+        }
+      } else {
+        stableState = '';
       }
       await page.waitForTimeout(50);
     }
     throw new Error('No apareció una decisión visible después de resolver los handoffs de privacidad.');
+  };
+
+  /**
+   * Confirm the dialog, then wait for the next seat's decision before returning.
+   * Callers can act only after both the privacy barrier and panel are settled.
+   */
+  const settleSeat = async () => {
+    if (await gameOver.isVisible().catch(() => false)) return;
+    const confirmed = await confirmSeat();
+    // A state transition can briefly unmount the panel before its handoff is
+    // rendered. Do not let callers interpret that gap as "no action available".
+    if (confirmed
+      || !(await decision.isVisible().catch(() => false))
+      || (await app.getAttribute('data-busy')) !== 'false') {
+      await waitForDecision();
+    }
   };
 
   /** Card clicks also cross the seat dialog; keep their timeout short and retry. */
@@ -141,7 +189,13 @@ export function createBoardDriver(page: Page): BoardDriver {
         { timeout }
       )
       .catch(() => {});
-    return (await revision()) > before;
+    const advanced = (await revision()) > before;
+    if (advanced && !(await gameOver.isVisible().catch(() => false))) {
+      // A successful action may switch seats and unmount the panel. Return only
+      // after the next decision is ready, not while its privacy handoff is up.
+      await waitForDecision();
+    }
+    return advanced;
   };
 
   /**

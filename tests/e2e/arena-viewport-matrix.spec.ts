@@ -377,6 +377,10 @@ test('tablet con la mesa llena: el tablero desplaza dentro y la mano no se va de
     const where = `${width}×${height}`;
     await page.setViewportSize({ width, height });
     await settle(page);
+    // Priority may have crossed to another seat during the resize. The privacy
+    // handoff intentionally unmounts the hand and decision; resolve that barrier
+    // before measuring instead of timing out on a hidden panel.
+    await driver.waitForDecision(30_000);
     const sample = await page.evaluate(() => {
       const region = document.querySelector<HTMLElement>('main.layout')!;
       region.scrollTop = 0;
@@ -534,9 +538,10 @@ test('escritorio con la mesa llena: el documento mide la pantalla y la mesa desp
     const where = `${width}×${height}`;
     await page.setViewportSize({ width, height });
     await settle(page);
-    // La decisión de Phase tiene que estar en pantalla en toda la banda; si en
-    // este estado no hay ninguna pendiente, la medición no dice nada y la
-    // prueba lo dice explícitamente.
+    // La decisión puede desmontarse temporalmente al cambiar de asiento. Resolver
+    // el handoff primero: esperar directamente al panel bloquea justo cuando la
+    // barrera de privacidad funciona como debe.
+    await driver.waitForDecision(30_000);
     await expect(decision, `no hay decisión pendiente que medir a ${where}`).toBeVisible({ timeout: 30_000 });
     // La mano no se monta mientras hay un traspaso de asiento pendiente
     // (`{#if !needsHandoff}` en Board.svelte): medido, una de cada tres corridas

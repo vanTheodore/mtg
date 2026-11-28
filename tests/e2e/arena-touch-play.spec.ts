@@ -53,15 +53,23 @@ async function revision(page: Page): Promise<number> {
 
 /** The seat dialog is the product's privacy guard: the player passes it. */
 async function passSeat(page: Page) {
+  const driver = createBoardDriver(page);
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const handoff = page.locator('.handoff');
-    if (!(await handoff.isVisible().catch(() => false))) return;
+    if (!(await handoff.isVisible().catch(() => false))) break;
     await handoff.locator('button').first().tap({ timeout: 3_000 }).catch(() => {});
-    await page.waitForTimeout(250);
+    await handoff.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => {});
+  }
+  // A handoff can be followed immediately by another seat's privacy barrier.
+  // Wait until Phase's next decision is actually visible before tapping it.
+  if (!(await page.locator('.game-over').isVisible().catch(() => false))) {
+    await driver.waitForDecision(30_000);
   }
 }
 
 async function tapDecisionButton(page: Page, label: RegExp | string): Promise<boolean> {
+  const driver = createBoardDriver(page);
+  await driver.settleSeat();
   const button = page
     .locator('section[aria-label="Decisión pendiente"] button')
     .filter({ hasText: label })
@@ -70,6 +78,9 @@ async function tapDecisionButton(page: Page, label: RegExp | string): Promise<bo
   const before = await revision(page);
   await button.tap({ timeout: 4_000 });
   await expect.poll(() => revision(page), { timeout: 15_000 }).toBeGreaterThan(before);
+  if (!(await page.locator('.game-over').isVisible().catch(() => false))) {
+    await driver.waitForDecision(30_000);
+  }
   return true;
 }
 
