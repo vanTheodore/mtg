@@ -43,10 +43,12 @@
   const unrecognizedModes = $derived(modes.filter((entry) => !MODE_OPTIONS.includes(String(entry.action.data?.mode ?? '') as PriorityMode | 'FullControl')));
 
   function openStops() {
-    // On a phone the touch-sized Phase sheet replaces the hidden desktop row.
-    // Use the chip's own dialog so focus never lands on a display:none control.
+    // The phone sheet has a touch-sized step list and may be present even while
+    // the desktop row is hidden. On desktop, leave `details` expanded so the
+    // visible PhaseStopBar is the destination (do not click its display:none
+    // mobile chip).
     const chip = document.querySelector<HTMLButtonElement>('.phase-chip .chip');
-    if (chip && getComputedStyle(chip).display !== 'none') {
+    if (chip && chip.getClientRects().length > 0) {
       chip.click();
       return;
     }
