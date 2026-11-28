@@ -1,4 +1,5 @@
 import { tick } from 'svelte';
+import { SvelteMap } from 'svelte/reactivity';
 import { EngineClient, isSnapshot } from '#lib/engine/client.ts';
 import { ENGINE_PROTOCOL_VERSION, type AttackTarget, type EnginePhaseStop, type EnginePriorityPassingMode, type EngineReply, type EngineSnapshot, type GameAction, type ObjectId, type PlayerId, type StoredAutoPassMode, type TargetRef } from '#lib/engine/types.ts';
 import {
@@ -81,8 +82,10 @@ class GameSession {
   /** Generation already reset by Board.prepareStart(); start must not reset it twice. */
   private preparedStartGeneration: number | null = null;
   private preferencesVersion = 0;
-  private readonly syncedPreferences = new Map<string, string>();
-  private readonly failedPreferenceSync = new Map<string, string>();
+  // These maps feed rendered sync status, so mutations must invalidate Svelte
+  // readers even when the engine reply itself left `busy` false already.
+  private readonly syncedPreferences = new SvelteMap<string, string>();
+  private readonly failedPreferenceSync = new SvelteMap<string, string>();
   private preferenceSyncInFlight: string | null = null;
   /**
    * Phone hand drawer. On a touch-sized screen the hand is a fixed sheet over

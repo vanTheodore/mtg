@@ -204,6 +204,7 @@ jobs:
     with:
       job_name: UX-PRIORITY state sync, boundary pass and Resolve All
       specs: tests/e2e/ux-priority.spec.ts
+      expected_tests: 6
       artifact_name: failed-ux-priority-regressions
 
   target_double_dispatch:
@@ -217,6 +218,7 @@ jobs:
         tests/e2e/ux-decision.spec.ts
         tests/e2e/arena-hand-sheet.spec.ts
       grep: 'cancelación y busy|doble pulsación produce exactamente un despacho aceptado'
+      expected_tests: 2
       artifact_name: failed-double-dispatch-regressions
 
   target_ux_hand:
@@ -228,6 +230,7 @@ jobs:
       job_name: UX-HAND target damage, explicit rejection and accepted retry
       specs: tests/e2e/arena-hand-sheet.spec.ts
       grep: 'lanzamiento con objetivo|rechazo explícito'
+      expected_tests: 2
       artifact_name: failed-ux-hand-regressions
 
   target_handoff_drivers:
@@ -243,6 +246,7 @@ jobs:
         tests/e2e/ui-deck-10e.spec.ts
         tests/e2e/ui-game.spec.ts
       grep: '390×844: la acción de la carta|320×800: la hoja más estrecha|tablet con la mesa llena|escritorio con la mesa llena|partida real: inicializa WASM|bloqueo real: asignar bloqueadora|la partida se juega hasta el final|partida completa y victoria|la interfaz explica objetivos|objetivo elegido con clic'
+      expected_tests: 10
       artifact_name: failed-handoff-driver-regressions
 
   target_tutorial:
@@ -253,6 +257,7 @@ jobs:
       job_name: Tutorial preference override and seat transitions
       specs: tests/e2e/tutorial.spec.ts
       grep: 'la lección se completa|la lección se puede usar con teclado'
+      expected_tests: 2
       artifact_name: failed-tutorial-regressions
 
   target_accessibility:
@@ -263,6 +268,7 @@ jobs:
       job_name: UX lab temporal preference and phase-sheet accessibility
       specs: tests/e2e/ux-lab.spec.ts
       grep: 'cromo de mesa nombra la prioridad|en el teléfono la ficha de fase'
+      expected_tests: 2
       artifact_name: failed-accessibility-regressions
 
   browser:

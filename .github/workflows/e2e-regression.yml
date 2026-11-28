@@ -16,6 +16,10 @@ on:
         required: false
         default: ''
         type: string
+      expected_tests:
+        description: Exact number of focused tests expected from this spec and title filter.
+        required: true
+        type: number
       artifact_name:
         description: Unique Playwright artifact name for a failed focused run.
         required: true
@@ -83,6 +87,9 @@ jobs:
           else
             bun --bun playwright test $TARGET_SPECS --reporter=list,json
           fi
+      - name: Gate skipped, missing, retried, and failed focused tests
+        if: always()
+        run: bun scripts/e2e-focused-summary.ts test-results/targeted-report.json ${{ inputs.expected_tests }}
       - name: Annotate focused Playwright failures
         if: failure()
         run: bun scripts/e2e-annotations.ts test-results/targeted-report.json

@@ -98,6 +98,15 @@ fn main() {
         P0,
         vec![ManaUnit::new(ManaType::Red, ObjectId(0), false, vec![])],
     );
+    // The opponent has a real response after the Bolt is cast. Without one,
+    // Standard priority automation may correctly pass P1's empty window before
+    // the browser reaches a stable state to press; this fixture's two-pass
+    // contract needs P1 to own a legal choice, not a timing assumption.
+    targeted.add_real_card(P1, "Spectral Sailor", Zone::Hand, &db);
+    targeted.with_mana_pool(
+        P1,
+        vec![ManaUnit::new(ManaType::Blue, ObjectId(0), false, vec![])],
+    );
     write_fixture(out, "target-cast", targeted);
 
     let mut manual = scenario();
