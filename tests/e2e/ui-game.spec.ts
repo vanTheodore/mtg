@@ -1,6 +1,7 @@
 import { expect, test, type Locator } from '@playwright/test';
 import { logBoardFailureDiagnostics } from './support/failure-diagnostics.ts';
 import { createBoardDriver } from './support/board-driver.ts';
+import { checkpoint } from './support/e2e-checkpoint.ts';
 
 test.afterEach(async ({ page }, info) => logBoardFailureDiagnostics(page, info));
 
@@ -154,31 +155,47 @@ test('partida completa y victoria desde controles Svelte', async ({ page }) => {
     await page.waitForTimeout(100);
   }
 
+  checkpoint('ui-game: assert the terminal banner is visible');
   await expect(page.locator('.game-over')).toBeVisible();
+  checkpoint('ui-game: assert the expected winner');
   await expect(page.locator('.game-over')).toContainText('Jugador 1 gana');
+  checkpoint('ui-game: assert the opposing life total reached zero');
   expect(Number(await page.locator('[data-player-id="1"]').getAttribute('data-life'))).toBeLessThanOrEqual(0);
+  checkpoint('ui-game: assert damage was observed');
   expect(sawDamage).toBe(true);
+  checkpoint('ui-game: assert the opponent reached ten life');
   expect(opponentAtOrBelowTen).toBe(true);
+  checkpoint('ui-game: assert attackers were available');
   expect(sawAttackerSelection).toBe(true);
+  checkpoint('ui-game: assert enough accepted interactions');
   expect(interactions).toBeGreaterThan(20);
+  checkpoint('ui-game: assert a privacy handoff occurred');
   expect(handoffs).toBeGreaterThan(0);
+  checkpoint('ui-game: assert the discard path remained available');
   expect(discards).toBeGreaterThanOrEqual(0);
   const history = page.locator('section[aria-label="Registro de la partida"]');
+  checkpoint('ui-game: assert the game log records combat damage');
   await expect(history).toContainText(/daño|vidas/);
+  checkpoint('ui-game: assert the compact game-log layout');
   await expect(history).toHaveAttribute('data-compact', 'true');
   // Latest event remains announced; all twelve remain on-demand in Arena.
   const latest = history.locator('.latest[aria-live="polite"]');
+  checkpoint('ui-game: assert the latest game event is announced');
   await expect(latest).toBeVisible();
   await expect(latest).not.toBeEmpty();
   const more = history.locator('details.history-entries');
+  checkpoint('ui-game: assert detailed history starts collapsed');
   await expect(more).toBeVisible();
   await expect(more).not.toHaveAttribute('open', '');
   await more.locator('summary').click();
+  checkpoint('ui-game: assert all twelve recent events are available');
   await expect(more).toHaveAttribute('open', '');
   await expect(more.locator('ol > li')).toHaveCount(12);
   await expect(more.locator('ol')).toContainText(/daño|vidas/);
   await more.locator('summary').click();
+  checkpoint('ui-game: assert detailed history can collapse');
   await expect(more).not.toHaveAttribute('open', '');
+  checkpoint('ui-game: assert no browser errors');
   expect(errors).toEqual([]);
   await page.screenshot({ path: 'test-results/ui-game-victory.png', fullPage: true });
   test.info().annotations.push({ type: 'interacciones', description: `${interactions} acciones, ${handoffs} pasos de asiento, ${discards} descartes` });
