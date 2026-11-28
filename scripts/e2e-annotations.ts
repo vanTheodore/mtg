@@ -35,8 +35,9 @@ type JsonTest = {
 type JsonSpec = { title?: string; file?: string; line?: number; ok?: boolean; tests?: JsonTest[] };
 type JsonSuite = { file?: string; specs?: JsonSpec[]; suites?: JsonSuite[] };
 
-/** Keeps one annotation readable; GitHub truncates long bodies anyway. */
-const MESSAGE_LIMIT = 400;
+/** Keep the failure and the tail of Playwright's call log in the check annotation. */
+const MESSAGE_HEAD_LIMIT = 1_300;
+const MESSAGE_TAIL_LIMIT = 600;
 
 function escape(value: string): string {
   // The workflow command grammar needs the percent-escapes; the commas and
@@ -47,7 +48,11 @@ function escape(value: string): string {
 function annotation(file: string, line: number, title: string, message: string) {
   const safeTitle = escape(title).replace(/,/g, '%2C').replace(/:/g, '%3A');
   const safeFile = escape(file).replace(/,/g, '%2C');
-  console.log(`::error file=${safeFile},line=${line},title=${safeTitle}::${escape(message.slice(0, MESSAGE_LIMIT))}`);
+  const encodedMessage = escape(message);
+  const readableMessage = encodedMessage.length > MESSAGE_HEAD_LIMIT + MESSAGE_TAIL_LIMIT
+    ? `${encodedMessage.slice(0, MESSAGE_HEAD_LIMIT)}…${encodedMessage.slice(-MESSAGE_TAIL_LIMIT)}`
+    : encodedMessage;
+  console.log(`::error file=${safeFile},line=${line},title=${safeTitle}::${readableMessage}`);
 }
 
 let emitted = 0;
@@ -65,6 +70,7 @@ function walk(suite: JsonSuite, file: string) {
       // these often contain the actual engine state (waiting_for, selected card)
       // that the short first line omits. The workflow command caps this below.
       const summary = (first.error?.message ?? first.status ?? 'fallo sin mensaje')
+        .replace(/\u001b\[[0-9;]*m/g, '')
         .split('\n')
         .filter(Boolean)
         .join(' · ');

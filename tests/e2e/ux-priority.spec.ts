@@ -42,6 +42,10 @@ async function waitForPrioritySync(page: Page, mode: string, stops?: number) {
   await expect(controls).toHaveAttribute('data-engine-priority-mode', mode, { timeout: 30_000 });
   await expect(controls).toHaveAttribute('data-priority-sync', 'synced', { timeout: 30_000 });
   if (stops !== undefined) await expect(controls).toHaveAttribute('data-engine-stop-count', String(stops), { timeout: 30_000 });
+  // A follow-up Phase action (for example, a recommendation queued after mode
+  // sync) can still be in flight even though the preference itself is synced.
+  // Wait for the controls' disabled guard to clear before issuing the next mode.
+  await expect(page.locator('.app')).toHaveAttribute('data-busy', 'false', { timeout: 30_000 });
 }
 
 function checkpoint(description: string) {
