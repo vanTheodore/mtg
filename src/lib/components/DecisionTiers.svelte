@@ -32,6 +32,12 @@
    * especialista (ventanas de objetivos o de carta seleccionada), nace abierto
    * para que ninguna opción estratégica quede escondida. */
   const openByDefault = $derived(!projection.specialistActive && projection.primary === null);
+  /** Capture the initial presentation default once, then let the native
+   * disclosure own subsequent user intent. Re-evaluating `openByDefault` on a
+   * Phase snapshot update can close a panel the player deliberately opened.
+   * DecisionPanel is removed behind a privacy handoff, so the next seat gets a
+   * fresh instance and its own initial default. */
+  let tiersOpen = $state(openByDefault);
   const deferredCount = $derived(tiers.strategic.length + tiers.secondary.length + tiers.advanced.length);
   const modeActions = $derived(tiers.advanced.filter((a) => a.action.type === 'SetPriorityPassingMode'));
   const otherAdvanced = $derived(tiers.advanced.filter((a) => a.action.type !== 'SetPriorityPassingMode' && a.panel !== 'phase-stops'));
@@ -90,7 +96,7 @@
   </div>
 {/if}
 
-<details class="tiers" data-decision-tiers open={openByDefault} data-open-by-default={openByDefault}>
+<details class="tiers" data-decision-tiers bind:open={tiersOpen} data-open-by-default={openByDefault}>
   <summary aria-controls="decision-tier-body" aria-label={`Más opciones: ${deferredCount} acciones legales bajo demanda`}>
     Más opciones <span class="count">{deferredCount}</span>
   </summary>

@@ -60,6 +60,8 @@ test('modos temporales y alcances por asiento se sincronizan con Phase', async (
   checkpoint('abrir opciones avanzadas');
   await openMoreOptions(page);
   const controls = advanced(page);
+  const tierDisclosure = panel(page).locator('details[data-decision-tiers]');
+  await expect(tierDisclosure).toHaveJSProperty('open', true);
   checkpoint('sincronizar el modo FullControl inicial');
   await waitForPrioritySync(page, 'FullControl', 0);
 
@@ -68,37 +70,35 @@ test('modos temporales y alcances por asiento se sincronizan con Phase', async (
   await standard.click();
   await expect(standard).toHaveAttribute('aria-pressed', 'true');
   await waitForPrioritySync(page, 'Standard', 0);
+  checkpoint('conservar abierta Más opciones tras sincronizar Standard');
+  await expect(tierDisclosure).toHaveJSProperty('open', true);
 
-  // The engine reply can remount the decision panel and close its progressive
-  // disclosure; reopen it before the next preference control interaction.
-  checkpoint('reabrir opciones para seleccionar SkipLowUseWindows');
-  await openMoreOptions(page);
   const skipLow = controls.locator('button[data-priority-mode="SkipLowUseWindows"]');
   checkpoint('enviar y sincronizar SkipLowUseWindows');
   await skipLow.click();
   await expect(skipLow).toHaveAttribute('aria-pressed', 'true');
   await waitForPrioritySync(page, 'SkipLowUseWindows', 0);
+  checkpoint('conservar abierta Más opciones tras sincronizar SkipLowUseWindows');
+  await expect(tierDisclosure).toHaveJSProperty('open', true);
 
-  checkpoint('reabrir opciones para seleccionar FullControl');
-  await openMoreOptions(page);
   const full = controls.locator('button[data-priority-mode="FullControl"]');
   checkpoint('activar y sincronizar FullControl temporal');
   await full.click();
   await expect(full).toHaveAttribute('aria-pressed', 'true');
   await waitForPrioritySync(page, 'FullControl', 0);
+  checkpoint('conservar abierta Más opciones tras sincronizar FullControl');
+  await expect(tierDisclosure).toHaveJSProperty('open', true);
   // Full Control is the temporary in-game override, never a persisted mode.
   const persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('mesa:priorityPreferences') ?? '{}'));
   expect(persisted['0']).toEqual({ mode: 'SkipLowUseWindows', stops: {} });
 
-  checkpoint('reabrir opciones para desactivar FullControl');
-  await openMoreOptions(page);
   checkpoint('desactivar FullControl y restaurar SkipLowUseWindows');
   await full.click();
   await expect(full).toHaveAttribute('aria-pressed', 'false');
   await waitForPrioritySync(page, 'SkipLowUseWindows', 0);
+  checkpoint('conservar abierta Más opciones tras restaurar SkipLowUseWindows');
+  await expect(tierDisclosure).toHaveJSProperty('open', true);
 
-  checkpoint('reabrir opciones para abrir las paradas de fase');
-  await openMoreOptions(page);
   checkpoint('abrir controles de paradas de fase');
   await controls.locator('[data-open-phase-stops]').click();
   const currentStop = page.locator('.stop-bar button[data-step="PreCombatMain"]');
@@ -108,6 +108,7 @@ test('modos temporales y alcances por asiento se sincronizan con Phase', async (
     await currentStop.click();
     await expect(currentStop).toHaveAttribute('data-stop-scope', scope);
     await waitForPrioritySync(page, 'SkipLowUseWindows', 1);
+    await expect(tierDisclosure).toHaveJSProperty('open', true);
   }
   // P0 is active in this Phase fixture, so an opponents-only stop is configured
   // but does not claim that the current P0 window is stopped.
@@ -116,6 +117,7 @@ test('modos temporales y alcances por asiento se sincronizan con Phase', async (
   await currentStop.click();
   await expect(currentStop).toHaveAttribute('data-stop-scope', 'off');
   await waitForPrioritySync(page, 'SkipLowUseWindows', 0);
+  await expect(tierDisclosure).toHaveJSProperty('open', true);
 
   checkpoint('comprobar las preferencias persistidas finales');
   const finalPreferences = await page.evaluate(() => JSON.parse(localStorage.getItem('mesa:priorityPreferences') ?? '{}'));
@@ -148,6 +150,10 @@ test('pasar hasta una frontera es explícito y protege la mano del siguiente asi
 test('handoff estricto oculta y después identifica la mano privada del asiento siguiente', async ({ page }) => {
   test.setTimeout(180_000);
   await openScenario(page, 'priority-empty', 'every');
+  const outgoingTiers = panel(page).locator('details[data-decision-tiers]');
+  await expect(outgoingTiers).toHaveJSProperty('open', false);
+  await outgoingTiers.locator('summary').click();
+  await expect(outgoingTiers).toHaveJSProperty('open', true);
   const pass = page.locator('[data-decision-primary]');
   await expect(pass).toContainText('Pasar');
   const before = await applied(page);
@@ -155,12 +161,16 @@ test('handoff estricto oculta y después identifica la mano privada del asiento 
   await expect.poll(() => applied(page), { timeout: 30_000 }).toBeGreaterThan(before);
   await expect(page.locator('.app')).toHaveAttribute('data-viewer', '1');
   await expect(page.locator('.handoff')).toBeVisible();
+  await expect(page.locator('details[data-decision-tiers]')).toHaveCount(0);
   await expect(page.locator('.app main[data-board-region]')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.locator('section[aria-label^="Tu mano"]')).toHaveCount(0);
   await expect(page.locator('text=Spectral Sailor')).toHaveCount(0);
 
   await page.locator('.handoff button').click();
   await expect(page.locator('.handoff')).toHaveCount(0);
+  const incomingTiers = panel(page).locator('details[data-decision-tiers]');
+  await expect(incomingTiers).toHaveAttribute('data-open-by-default', 'false');
+  await expect(incomingTiers).toHaveJSProperty('open', false);
   await expect(page.locator('section[aria-label^="Tu mano"] .fallback-name')).toContainText('Spectral Sailor');
 });
 

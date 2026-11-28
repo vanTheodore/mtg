@@ -55,7 +55,9 @@
     const details = document.querySelector<HTMLDetailsElement>('details[data-advanced-controls]');
     if (!details) return;
     details.open = true;
-    details.querySelector<HTMLButtonElement>('button[data-step]')?.focus();
+    const current = details.querySelector<HTMLButtonElement>('button[data-step][aria-current="step"]');
+    const first = details.querySelector<HTMLButtonElement>('button[data-step]');
+    (current ?? first)?.focus();
   }
 
   function selectMode(mode: PriorityMode | 'FullControl') {
